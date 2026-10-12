@@ -5501,6 +5501,7 @@ name = "rustphin-platform"
 version = "0.1.0"
 dependencies = [
  "raw-window-handle",
+ "tempfile",
  "thiserror 2.0.21",
  "wayland-backend",
  "wayland-client",

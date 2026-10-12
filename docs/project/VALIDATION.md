@@ -193,3 +193,15 @@
 - **Not verified:** use from the UI (W-020); rubber-band selection is a UI concern not covered here.
 - **Waiver:** none
 - **Follow-up:** none
+
+### 2026-10-12 — W-017: file types and icon lookup in the platform layer
+- **Phase:** 6 Implement (S2)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS, 61 tests (18 in `rustphin-platform`), all against fixture databases and themes in temporary directories.
+  - Run against the real system with the `icon_lookup` example: theme `DevTuxIcon-Devicons` read from the KDE settings; a folder, `.txt`, `.JPG`, `.tar.gz`, `.rs`, `.pdf`, `Makefile`, `.mp3` and an unknown name each resolved to the expected type, description ("Plain text document", "Rust source code", ...) and an icon file found through the theme's inheritance chain.
+  - Mutation checks: six breakages by hand (lighter glob winning; only the longest suffix tried; hi-dpi directories used at scale 1; size fit ignored; unsafe theme names accepted; directory sections leaving the theme). Five caught at once; the second survived, a test was added (`report.final.v2.txt`), and it then failed under the mutation.
+- **Security notes:** theme names from configuration and directory names from `index.theme` are rejected if they could leave the icons folder; MIME types are validated before being used as a path for descriptions. Each has a test.
+- **Not verified / limits:** types come from file names only (no content sniffing, so extensionless files are "Unknown"); glob patterns other than `*.suffix` and whole names are skipped (53 of 1,621 on this system); hi-dpi (scale 2) icon directories are not used; rendering of the found icons in the UI (W-018).
+- **Waiver:** none
+- **Follow-up:** none
