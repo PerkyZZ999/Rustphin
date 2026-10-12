@@ -41,7 +41,16 @@ pub trait Fs: Send + Sync + 'static {
     /// Reads the details of `path`, following symbolic links. A link whose
     /// target is missing reports the link itself.
     fn metadata(&self, path: &Path) -> io::Result<Metadata>;
+
+    /// Calls `on_change` whenever something directly inside the directory
+    /// `path` is created, removed, renamed or modified, or the directory itself
+    /// goes away. Calls may come in bursts and from any thread. Watching stops
+    /// when the returned guard is dropped.
+    fn watch(&self, path: &Path, on_change: Box<dyn Fn() + Send + Sync>) -> io::Result<WatchGuard>;
 }
+
+/// Keeps a [`Fs::watch`] alive; dropping it ends the watch.
+pub type WatchGuard = Box<dyn Send>;
 
 /// The real filesystem.
 #[derive(Debug, Clone, Copy, Default)]
@@ -77,5 +86,29 @@ impl Fs for RealFs {
             size: metadata.len(),
             modified: metadata.mtime(),
         })
+    }
+
+    fn watch(&self, path: &Path, on_change: Box<dyn Fn() + Send + Sync>) -> io::Result<WatchGuard> {
+        use notify::{EventKind, RecursiveMode, Watcher as _};
+
+        let mut watcher =
+            notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+                // Reads by this or any other program are not changes. An error (for
+                // example a queue overflow) may hide changes, so it counts as one.
+                if !matches!(
+                    event,
+                    Ok(notify::Event {
+                        kind: EventKind::Access(_),
+                        ..
+                    })
+                ) {
+                    on_change();
+                }
+            })
+            .map_err(io::Error::other)?;
+        watcher
+            .watch(path, RecursiveMode::NonRecursive)
+            .map_err(io::Error::other)?;
+        Ok(Box::new(watcher))
     }
 }

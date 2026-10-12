@@ -3,8 +3,8 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S1 and S2 done; S3 not started
-- **Status:** active — ready to start S3
+- **Current phase:** 6 (Vertical-slice implementation) — S3 in progress (W-025, W-026 done)
+- **Status:** active — S3 under way
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-12
 
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-12 — Implement gate, slice S2
+- Latest validation entry: VALIDATION.md, 2026-10-12 — W-025, W-026
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -25,7 +25,7 @@
 - None
 
 ## Next action
-- Start S3 with W-025 (filesystem watching in the core) from WORK_ITEMS.md. `docs/DESIGN.md` is the design reference (D-017). Verify UI changes yourself by replaying `docs/project/UI_SCENARIOS.md` through kwin-mcp. Run `rust-tc doctor` and commit after every task.
+- Continue S3 with W-027 (tabs), then W-028 (split view), W-029 (session restore), W-030 (scenarios). Verify UI changes yourself through kwin-mcp. Run `rust-tc doctor` and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

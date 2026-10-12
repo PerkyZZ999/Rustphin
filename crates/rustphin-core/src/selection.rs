@@ -1,5 +1,7 @@
 //! Which entries of a listing are selected.
 
+use std::collections::HashSet;
+
 use crate::Snapshot;
 
 /// The selected entries of one listing, with the anchor and focus that
@@ -60,6 +62,43 @@ impl Selection {
         let keep = |id: Option<u32>| id.filter(|&id| snapshot.row_of_entry(id).is_some());
         self.anchor = keep(self.anchor);
         self.focus = keep(self.focus);
+    }
+
+    /// Moves the selection from `old` to `new`, a later view of the same
+    /// directory. If the directory was read again in between, entries are
+    /// matched by name: the ones still present stay selected and the rest drop
+    /// out. Otherwise this is [`Self::sync`].
+    pub fn carry_over(&mut self, old: &Snapshot, new: &Snapshot) {
+        if old.listing() == new.listing() || self.listing != old.listing() {
+            self.sync(new);
+            return;
+        }
+        let name_of = |id: Option<u32>| {
+            let row = old.row_of_entry(id?)?;
+            Some(old.name(row))
+        };
+        let (anchor, focus) = (name_of(self.anchor), name_of(self.focus));
+        let selected: HashSet<&[u8]> = self
+            .rows(old)
+            .into_iter()
+            .map(|row| old.name(row))
+            .collect();
+
+        let mut carried = Self {
+            listing: new.listing(),
+            ..Self::default()
+        };
+        if !selected.is_empty() {
+            for row in 0..new.len() {
+                if selected.contains(new.name(row)) {
+                    carried.set(new.entry_id(row), true);
+                }
+            }
+        }
+        let id_of = |name: Option<&[u8]>| Some(new.entry_id(new.row_of(name?)?));
+        carried.anchor = id_of(anchor);
+        carried.focus = id_of(focus);
+        *self = carried;
     }
 
     /// Whether the entry shown in `row` is selected.

@@ -6,21 +6,29 @@ use std::{
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex, MutexGuard, PoisonError,
-        atomic::{AtomicU64, Ordering},
+        Arc, Mutex, MutexGuard, PoisonError, Weak,
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     thread,
+    time::{Duration, Instant},
 };
 
 use rayon::prelude::*;
 
 use crate::{
-    CHUNK_LEN, Chunk, EntryKind, EntryStore, Fs, Metadata, SortKey, details::Details, sort,
+    CHUNK_LEN, Chunk, EntryKind, EntryStore, Fs, Metadata, SortKey, WatchGuard, details::Details,
+    sort,
 };
 
 /// Entries whose details are read at a time, and the count after which the
 /// first partial result is published; later ones follow at doubling counts.
 const DETAILS_BATCH: usize = 4096;
+/// How long to wait after a change notification before re-reading the
+/// directory, so that a burst of changes causes one re-read.
+const REFRESH_DELAY: Duration = Duration::from_millis(100);
+/// After a re-read, wait this many times as long as it took before the next
+/// one, so a huge directory under constant change is not read back to back.
+const REFRESH_REST_FACTOR: u32 = 3;
 /// How often, in entries, a running listing checks whether it was superseded.
 const CANCEL_CHECK_INTERVAL: usize = 512;
 
@@ -207,6 +215,14 @@ impl Snapshot {
 pub enum ModelEvent {
     /// A new view of the directory being shown.
     Snapshot(Arc<Snapshot>),
+    /// The directory being shown no longer exists; the model has moved to its
+    /// nearest existing ancestor, whose snapshots follow.
+    Moved {
+        /// The request that shows the ancestor.
+        generation: u64,
+        /// The directory that went away.
+        from: PathBuf,
+    },
     /// A request to open `path` failed. The model's location is back where it was.
     Failed {
         /// The failed request.
@@ -252,6 +268,14 @@ struct Shared {
     generation: AtomicU64,
     history: Mutex<History>,
     complete: Mutex<Option<Complete>>,
+    /// The options of the latest request, for re-reads the model starts itself.
+    options: Mutex<ViewOptions>,
+    /// The directory being watched for changes, and what keeps the watch alive.
+    watch: Mutex<Option<(PathBuf, WatchGuard)>>,
+    /// Wakes the thread that re-reads the directory after a change.
+    changed: flume::Sender<()>,
+    /// A change arrived while no finished listing could be refreshed.
+    dirty: AtomicBool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -324,7 +348,9 @@ impl Shared {
             .filter(|&index| interim.show_hidden || !store.is_hidden(index))
             .collect();
         // Show the entries at once, before any of their details are known.
-        self.publish_rows(request, listing, true, interim_rows.clone());
+        if !request.quiet {
+            self.publish_rows(request, listing, true, interim_rows.clone());
+        }
 
         let mut entries: Vec<Option<Metadata>> = vec![None; store.len()];
         let mut publish_at = DETAILS_BATCH;
@@ -348,7 +374,7 @@ impl Shared {
                 entries[index as usize] = metadata;
             }
             let done = (batch_number + 1) * DETAILS_BATCH;
-            if done >= publish_at && done < reading_order.len() {
+            if done >= publish_at && done < reading_order.len() && !request.quiet {
                 listing.details = Some(Arc::new(Details::new(entries.clone())));
                 self.publish_rows(request, listing, true, interim_rows.clone());
                 publish_at *= 2;
@@ -359,6 +385,14 @@ impl Shared {
     }
 
     fn fail(&self, request: Request, error: LoadError) {
+        if request.quiet {
+            // A re-read the user did not ask for. If the directory is gone,
+            // move out of it; any other failure leaves the last listing shown.
+            if matches!(error, LoadError::NotFound | LoadError::NotADirectory) {
+                self.leave_vanished(request);
+            }
+            return;
+        }
         {
             let mut history = lock(&self.history);
             if !self.is_current(request.generation) {
@@ -373,7 +407,100 @@ impl Shared {
         });
     }
 
+    /// Starts watching `path` for changes, replacing any earlier watch.
+    fn watch_path(&self, path: &Path) {
+        let mut watch = lock(&self.watch);
+        if watch.as_ref().is_some_and(|(watched, _)| watched == path) {
+            return;
+        }
+        let changed = self.changed.clone();
+        let notify = Box::new(move || {
+            // A full queue or a finished model both mean there is nothing to do.
+            let _ = changed.try_send(());
+        });
+        *watch = match self.fs.watch(path, notify) {
+            Ok(guard) => Some((path.to_path_buf(), guard)),
+            Err(error) => {
+                tracing::warn!(path = %path.display(), %error, "live updates unavailable");
+                None
+            }
+        };
+    }
+
+    /// Re-reads the current directory after a change, if its listing is
+    /// finished and still current. Otherwise the change is remembered and the
+    /// listing in progress triggers the re-read when it finishes.
+    fn refresh(&self) {
+        let current = self.generation.load(Ordering::Acquire);
+        let path = lock(&self.complete)
+            .as_ref()
+            .filter(|complete| complete.generation == current)
+            .map(|complete| complete.path.clone());
+        let Some(path) = path else {
+            self.dirty.store(true, Ordering::Release);
+            return;
+        };
+        // Claim the next generation only if no request was made meanwhile, so
+        // a re-read never supersedes something the user asked for.
+        let generation = current + 1;
+        if self
+            .generation
+            .compare_exchange(current, generation, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            self.dirty.store(true, Ordering::Release);
+            return;
+        }
+        let request = Request {
+            path,
+            generation,
+            options: *lock(&self.options),
+            restore: lock(&self.history).clone(),
+            quiet: true,
+        };
+        self.list(request);
+    }
+
+    /// The directory of a re-read has gone: show its nearest existing ancestor.
+    fn leave_vanished(&self, request: Request) {
+        let Some(ancestor) = request
+            .path
+            .ancestors()
+            .skip(1)
+            .find(|ancestor| self.fs.is_dir(ancestor))
+            .map(Path::to_path_buf)
+        else {
+            return;
+        };
+        let restore = {
+            let mut history = lock(&self.history);
+            if !self.is_current(request.generation) {
+                return;
+            }
+            let position = history.position;
+            if let Some(entry) = history.entries.get_mut(position) {
+                *entry = ancestor.clone();
+            }
+            history.clone()
+        };
+        let _ = self.events.send(ModelEvent::Moved {
+            generation: request.generation,
+            from: request.path,
+        });
+        self.list(Request {
+            path: ancestor,
+            generation: request.generation,
+            options: request.options,
+            restore,
+            quiet: false,
+        });
+    }
+
     fn list(&self, request: Request) {
+        if !request.quiet {
+            // Watch before reading, so a change during the read is not missed.
+            self.watch_path(&request.path);
+        }
         let entries = match self.fs.read_dir(&request.path) {
             Ok(entries) => entries,
             Err(error) => return self.fail(request, error.into()),
@@ -401,7 +528,7 @@ impl Shared {
             if chunk.len() == CHUNK_LEN {
                 store.push_chunk(mem::take(&mut chunk));
                 // Publish at doubling sizes so the total sorting work stays linear.
-                if store.len() >= publish_at {
+                if store.len() >= publish_at && !request.quiet {
                     let partial = Listing {
                         id: request.generation,
                         store: store.clone(),
@@ -447,6 +574,25 @@ impl Shared {
             details: listing.details.clone(),
         });
         self.publish(&request, &listing, false);
+        if self.dirty.swap(false, Ordering::AcqRel) {
+            let _ = self.changed.try_send(());
+        }
+    }
+}
+
+/// Re-reads the directory after change notifications until the model is gone.
+fn refresh_loop(shared: Weak<Shared>, changes: flume::Receiver<()>) {
+    while changes.recv().is_ok() {
+        thread::sleep(REFRESH_DELAY);
+        while changes.try_recv().is_ok() {}
+        let Some(shared) = shared.upgrade() else {
+            break;
+        };
+        let started = Instant::now();
+        shared.refresh();
+        let rest = started.elapsed() * REFRESH_REST_FACTOR;
+        drop(shared);
+        thread::sleep(rest);
     }
 }
 
@@ -456,6 +602,9 @@ struct Request {
     options: ViewOptions,
     /// History to put back if the request fails.
     restore: History,
+    /// A re-read after a change: publish only the finished result, so the
+    /// view does not flicker through partial ones.
+    quiet: bool,
 }
 
 /// Navigation and listing for one view of the filesystem.
@@ -477,6 +626,7 @@ impl DirectoryModel {
             .thread_name(|index| format!("rustphin-cpu-{index}"))
             .build()
             .map_err(io::Error::other)?;
+        let (changed, changes) = flume::bounded(1);
         let shared = Arc::new(Shared {
             fs,
             events,
@@ -484,7 +634,18 @@ impl DirectoryModel {
             generation: AtomicU64::new(0),
             history: Mutex::default(),
             complete: Mutex::default(),
+            options: Mutex::new(ViewOptions::default()),
+            watch: Mutex::default(),
+            changed,
+            dirty: AtomicBool::new(false),
         });
+        let watcher = Arc::downgrade(&shared);
+        if let Err(error) = thread::Builder::new()
+            .name("rustphin-watch".to_owned())
+            .spawn(move || refresh_loop(watcher, changes))
+        {
+            tracing::warn!(%error, "live updates unavailable");
+        }
         Ok((
             Self {
                 shared,
@@ -560,6 +721,7 @@ impl DirectoryModel {
             return None;
         }
         self.options = options;
+        *lock(&self.shared.options) = options;
         let current = self.shared.generation.load(Ordering::Acquire);
         let listed = lock(&self.shared.complete)
             .as_ref()
@@ -583,6 +745,7 @@ impl DirectoryModel {
             generation,
             options,
             restore,
+            quiet: false,
         };
         let shared = Arc::clone(&self.shared);
         self.spawn("rustphin-sort", request, move |request| {
@@ -605,6 +768,7 @@ impl DirectoryModel {
                     generation,
                     options: self.options,
                     restore,
+                    quiet: false,
                 },
                 generation,
             )
@@ -633,6 +797,7 @@ impl DirectoryModel {
                     generation,
                     options,
                     restore,
+                    quiet: false,
                 },
                 error.into(),
             );
@@ -853,6 +1018,10 @@ mod tests {
                 modified: -(n as i64),
             })
         }
+
+        fn watch(&self, _: &Path, _: Box<dyn Fn() + Send + Sync>) -> io::Result<WatchGuard> {
+            Ok(Box::new(()))
+        }
     }
 
     #[test]
@@ -922,6 +1091,7 @@ mod tests {
             generation: stale,
             options: ViewOptions::default(),
             restore: History::default(),
+            quiet: false,
         };
         let listing = Listing {
             id: stale,
@@ -1286,5 +1456,246 @@ mod tests {
 
         selection.select_rows(&shown, [], false);
         assert!(selection.is_empty());
+    }
+
+    /// Waits for a finished snapshot that satisfies `wanted`, returning it and
+    /// every event seen on the way.
+    fn await_snapshot(
+        events: &flume::Receiver<ModelEvent>,
+        wanted: impl Fn(&Snapshot) -> bool,
+    ) -> (Arc<Snapshot>, Vec<ModelEvent>) {
+        let mut seen = Vec::new();
+        loop {
+            let event = events.recv_timeout(TIMEOUT).expect("the change to show up");
+            seen.push(event.clone());
+            if let ModelEvent::Snapshot(shown) = event
+                && !shown.is_loading()
+                && wanted(&shown)
+            {
+                return (shown, seen);
+            }
+        }
+    }
+
+    #[test]
+    fn a_file_created_by_another_program_appears_without_a_reload() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        let before = snapshot(&events, model.open(dir.path()));
+        assert_eq!(before.row_of(b"arrived.txt"), None);
+
+        fs::write(dir.path().join("arrived.txt"), b"").unwrap();
+
+        let (after, seen) = await_snapshot(&events, |s| s.row_of(b"arrived.txt").is_some());
+        assert_eq!(after.len(), before.len() + 1);
+        assert!(after.generation() > before.generation());
+        // A re-read shows only its finished result, never a partial one.
+        let flickered = seen
+            .iter()
+            .any(|event| matches!(event, ModelEvent::Snapshot(s) if s.is_loading()));
+        assert!(!flickered);
+    }
+
+    #[test]
+    fn removed_and_renamed_entries_follow_the_directory() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        snapshot(&events, model.open(dir.path()));
+
+        fs::remove_file(dir.path().join("Zeta.md")).unwrap();
+        fs::rename(dir.path().join("file2.txt"), dir.path().join("renamed.txt")).unwrap();
+
+        let (after, _) = await_snapshot(&events, |s| {
+            s.row_of(b"Zeta.md").is_none() && s.row_of(b"renamed.txt").is_some()
+        });
+        assert_eq!(after.row_of(b"file2.txt"), None);
+    }
+
+    #[test]
+    fn live_updates_keep_the_view_options() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        model.set_options(ViewOptions {
+            show_hidden: true,
+            details: true,
+            ..ViewOptions::default()
+        });
+        snapshot(&events, model.open(dir.path()));
+
+        fs::write(dir.path().join(".arrived"), b"12345").unwrap();
+
+        let (after, seen) = await_snapshot(&events, |s| s.row_of(b".arrived").is_some());
+        let row = after.row_of(b".arrived").unwrap();
+        assert_eq!(after.metadata(row).map(|m| m.size), Some(5));
+        // Sizes and dates must not blank out while the re-read loads them again.
+        let flickered = seen
+            .iter()
+            .any(|event| matches!(event, ModelEvent::Snapshot(s) if s.is_loading()));
+        assert!(!flickered);
+    }
+
+    #[test]
+    fn a_directory_that_vanishes_gives_way_to_its_parent() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        let sub = dir.path().join("sub");
+        snapshot(&events, model.open(&sub));
+
+        fs::remove_dir_all(&sub).unwrap();
+
+        let (shown, seen) = await_snapshot(&events, |s| s.path() == dir.path());
+        assert_eq!(shown.row_of(b"sub"), None);
+        assert_eq!(model.location().as_deref(), Some(dir.path()));
+        let told = seen
+            .iter()
+            .any(|event| matches!(event, ModelEvent::Moved { from, .. } if *from == sub));
+        assert!(told, "no Moved event");
+    }
+
+    #[test]
+    fn a_change_after_leaving_a_directory_is_ignored() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        snapshot(&events, model.open(dir.path()));
+        let inner = snapshot(&events, model.open(dir.path().join("sub")));
+
+        // The parent is no longer watched: a change there must not disturb the view.
+        fs::write(dir.path().join("elsewhere.txt"), b"").unwrap();
+        fs::write(dir.path().join("sub/here.txt"), b"").unwrap();
+
+        let (after, seen) = await_snapshot(&events, |s| s.row_of(b"here.txt").is_some());
+        assert_eq!(after.path(), inner.path());
+        let strayed = seen
+            .iter()
+            .any(|event| matches!(event, ModelEvent::Snapshot(s) if s.path() != inner.path()));
+        assert!(!strayed);
+    }
+
+    #[test]
+    fn a_directory_entered_later_is_the_one_watched() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        snapshot(&events, model.open(dir.path()));
+        snapshot(&events, model.open(dir.path().join("sub")));
+
+        fs::write(dir.path().join("sub/here.txt"), b"").unwrap();
+
+        let (after, _) = await_snapshot(&events, |s| s.row_of(b"here.txt").is_some());
+        assert_eq!(after.path(), dir.path().join("sub"));
+    }
+
+    /// A filesystem with one directory whose size the test controls and whose
+    /// change notification the test fires by hand.
+    #[derive(Default)]
+    struct LiveFs {
+        entries: std::sync::atomic::AtomicUsize,
+        on_change: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+    }
+
+    impl LiveFs {
+        fn grow_to(&self, entries: usize) {
+            self.entries.store(entries, Ordering::Release);
+            if let Some(notify) = lock(&self.on_change).as_ref() {
+                notify();
+            }
+        }
+    }
+
+    impl Fs for LiveFs {
+        fn read_dir(
+            &self,
+            _: &Path,
+        ) -> io::Result<Box<dyn Iterator<Item = io::Result<RawEntry>> + '_>> {
+            let entries = self.entries.load(Ordering::Acquire);
+            Ok(Box::new((0..entries).map(|n| {
+                Ok(RawEntry {
+                    name: format!("item{n}").into_bytes(),
+                    kind: EntryKind::File,
+                })
+            })))
+        }
+
+        fn is_dir(&self, _: &Path) -> bool {
+            false
+        }
+
+        fn metadata(&self, _: &Path) -> io::Result<Metadata> {
+            Ok(Metadata {
+                size: 1,
+                modified: 0,
+            })
+        }
+
+        fn watch(
+            &self,
+            _: &Path,
+            on_change: Box<dyn Fn() + Send + Sync>,
+        ) -> io::Result<WatchGuard> {
+            *lock(&self.on_change) = Some(on_change);
+            Ok(Box::new(()))
+        }
+    }
+
+    #[test]
+    fn re_reading_a_large_directory_shows_only_the_finished_result() {
+        let fs = Arc::new(LiveFs::default());
+        fs.grow_to(CHUNK_LEN * 3);
+        let (mut model, events) = DirectoryModel::new(Arc::clone(&fs) as Arc<dyn Fs>).unwrap();
+        snapshot(&events, model.open("/big"));
+
+        fs.grow_to(CHUNK_LEN * 3 + 1);
+
+        let (after, seen) = await_snapshot(&events, |s| s.len() == CHUNK_LEN * 3 + 1);
+        assert_eq!(after.path(), Path::new("/big"));
+        assert_eq!(
+            seen.len(),
+            1,
+            "partial results were published: {}",
+            seen.len()
+        );
+    }
+
+    #[test]
+    fn the_selection_survives_a_live_update_by_name() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        // Rows: alias, sub, file2.txt, file10.txt, Zeta.md.
+        let before = snapshot(&events, model.open(dir.path()));
+        let mut selection = crate::Selection::default();
+        selection.select_only(&before, before.row_of(b"file10.txt").unwrap());
+        selection.toggle(&before, before.row_of(b"Zeta.md").unwrap());
+        selection.toggle(&before, before.row_of(b"file2.txt").unwrap());
+
+        // One selected entry goes away and a new one sorts in above the rest.
+        fs::remove_file(dir.path().join("Zeta.md")).unwrap();
+        fs::write(dir.path().join("a-new-file.txt"), b"").unwrap();
+        let (after, _) = await_snapshot(&events, |s| {
+            s.row_of(b"a-new-file.txt").is_some() && s.row_of(b"Zeta.md").is_none()
+        });
+        selection.carry_over(&before, &after);
+
+        assert_eq!(
+            selected_names(&selection, &after),
+            ["file2.txt", "file10.txt"]
+        );
+        assert_eq!(selection.len(), 2);
+        assert_eq!(selection.focus_row(&after), after.row_of(b"file2.txt"));
+    }
+
+    #[test]
+    fn carrying_a_selection_over_a_resort_keeps_it_as_it_is() {
+        let (mut model, events, shown) = listed(5);
+        let mut selection = crate::Selection::default();
+        selection.select_only(&shown, 4);
+
+        let reversed = ViewOptions {
+            descending: true,
+            ..ViewOptions::default()
+        };
+        let resorted = snapshot(&events, model.set_options(reversed).unwrap());
+        selection.carry_over(&shown, &resorted);
+
+        assert_eq!(selected_names(&selection, &resorted), ["item4"]);
+        assert_eq!(selection.focus_row(&resorted), Some(0));
     }
 }

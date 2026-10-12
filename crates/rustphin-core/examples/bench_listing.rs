@@ -65,7 +65,7 @@ fn settle(
                 }
             }
             ModelEvent::Failed { error, .. } => return Err(error.into()),
-            ModelEvent::Snapshot(_) => {}
+            ModelEvent::Snapshot(_) | ModelEvent::Moved { .. } => {}
         }
     }
 }

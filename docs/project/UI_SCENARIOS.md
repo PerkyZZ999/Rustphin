@@ -5,7 +5,7 @@ Replayable checks of the running application, driven by an agent through the kwi
 ## Setup
 
 1. Build: `cargo build --package rustphin`.
-2. Create the fixture in a new scratch directory (never in the user's files): `tests/ui/make-fixture.sh <dir>`.
+2. Create the fixture in a new scratch directory (never in the user's files): `tests/ui/make-fixture.sh <dir>`. Scenarios U1 and U2 change it, so use a fresh one afterwards.
 3. Start an isolated session: `session_start` with `app_command` = `target/debug/rustphin <dir>`, `isolate_home: true`, `screen_width: 1280`, `screen_height: 800`.
 4. Wait about three seconds for the window before sending input.
 
@@ -49,6 +49,8 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | V4 | Ctrl+3 (or the third view button) | Details view again, with sizes and dates |
 | P1 | Set icons view, zoom in once, sort by Type, show hidden; read `<isolated home>/.config/rustphin/settings.toml` | `mode = "icons"`, `zoom = 2`, `sort = "type"`, `show_hidden = true` |
 | P2 | Kill the app and `launch_app` it again in the same session | Opens in the icons view at that zoom, sorted by type, hidden files shown |
+| U1 | Select two files; from a shell create a file, delete one of the selected files and rename another file in the fixture; wait one second | All three changes are shown without a reload; the surviving selected file is still selected; the list has not scrolled |
+| U2 | Enter "empty"; from a shell `rmdir` it; wait one second | The fixture is shown with a message that the folder no longer exists; the location bar names the fixture |
 | L1 | Launch the release build on a 500,000-entry folder (`rust-tc bench-listing` creates `target/bench/listing-500k`); press End | Status "500,000 items"; the last entry is selected and visible within a second |
 
 ## Not covered by these scenarios

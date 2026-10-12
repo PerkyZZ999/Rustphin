@@ -345,3 +345,15 @@
 - **Carried forward, not blocking:** the 80–90 ms frame gap at start-up; nothing exposed over AT-SPI (R-107, S11); frame timing only measured in a virtual session; per-folder view settings and Dolphin's column-flow compact view are not implemented; the shortcut audit against Dolphin.
 - **Waiver:** none
 - **Follow-up:** S3.
+
+### 2026-10-12 — W-025, W-026: live updates
+- **Phase:** 6 Implement (S3)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS, 115 tests. New core tests, against real directories with real inotify unless noted: a created file appears without a reload; removed and renamed entries follow; re-reads keep the view options and do not blank sizes and dates; a vanished directory gives way to its parent with a `Moved` event; a change in a directory already left is ignored; the directory entered later is the one watched; re-reading a large directory publishes only the finished result (fake filesystem); the selection survives a live update by name, and a re-sort unchanged.
+  - Mutation checks: eight breakages by hand. Five were caught at once. Three survived (partial results during a large re-read; details blanking during a re-read; the first directory staying watched), tests were added, and all three then failed.
+  - Observed in the application (isolated session): with `file10.txt` and `notes.txt` selected, creating `aaa-new.txt`, deleting `notes.txt` and renaming `main.rs` from a shell showed all three changes within the one-second wait, kept `file10.txt` selected ("1 of 17 items selected") and did not scroll. Deleting the open folder showed its parent with the message "… no longer exists. Showing the nearest folder that does."
+- **Against R-002:** changes appear within 1 second (100 ms coalescing delay plus the re-read); selection and scroll survive unless the selected entry was removed.
+- **Deviations and limits:** a change triggers a full, quiet re-read of the directory rather than patching the listing, so a 500,000-entry folder under constant change costs a re-read each time; consecutive re-reads are spaced by three times the last one's duration. Entries are matched across a re-read by name, so a renamed selected file loses its selection. Not measured: the delay on a very large folder; inotify watch limits; network and FUSE mounts, where inotify does not report remote changes.
+- **Waiver:** none
+- **Follow-up:** incremental updates if large busy folders prove slow; W-030 adds these checks to the UI scenarios.

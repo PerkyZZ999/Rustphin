@@ -139,6 +139,21 @@ pub fn bind_keys(cx: &mut App) {
 struct Failure {
     path: PathBuf,
     error: LoadError,
+    /// The folder being shown went away and the view moved to a parent,
+    /// rather than an attempt to open something failing.
+    moved: bool,
+}
+
+impl Failure {
+    /// What happened, in a sentence.
+    fn message(&self) -> String {
+        let path = display_name(self.path.as_os_str().as_encoded_bytes());
+        if self.moved {
+            format!("{path} no longer exists. Showing the nearest folder that does.")
+        } else {
+            format!("Could not open {path}: {}.", self.error)
+        }
+    }
 }
 
 /// One browsing view of the filesystem.
@@ -257,6 +272,7 @@ impl Browser {
                 this.failure = Some(Failure {
                     path: start,
                     error: error.into(),
+                    moved: false,
                 });
             }
         }
@@ -265,17 +281,41 @@ impl Browser {
 
     fn on_model_event(&mut self, event: ModelEvent, cx: &mut Context<Self>) {
         match event {
-            ModelEvent::Snapshot(snapshot) if snapshot.generation() == self.generation => {
-                // Follows the selection through a re-sort and empties it when
-                // the directory was read again.
-                self.selection.sync(&snapshot);
+            // Generations above the last one asked for are re-reads the model
+            // started itself after the directory changed.
+            ModelEvent::Snapshot(snapshot) if snapshot.generation() >= self.generation => {
+                self.generation = snapshot.generation();
+                let same_place = self
+                    .snapshot
+                    .as_ref()
+                    .filter(|shown| shown.path() == snapshot.path());
+                // Keeps the selection through a re-sort, and by name through a
+                // re-read of the same directory; a new directory starts empty.
+                match same_place {
+                    Some(shown) => self.selection.carry_over(shown, &snapshot),
+                    None => self.selection.sync(&snapshot),
+                }
+                let arrived = same_place.is_none();
                 let arrival = self.select_on_arrival.take_if(|_| !snapshot.is_loading());
-                if let Some(row) = arrival.and_then(|name| snapshot.row_of(&name)) {
+                let came_from = arrival.and_then(|name| snapshot.row_of(&name));
+                if let Some(row) = came_from {
                     self.selection.select_only(&snapshot, row);
                 }
                 self.focus_row = self.selection.focus_row(&snapshot);
                 self.snapshot = Some(snapshot);
-                self.reveal_focus();
+                // A live update must not move the view; only arriving does.
+                if arrived || came_from.is_some() {
+                    self.reveal_focus();
+                }
+            }
+            ModelEvent::Moved { generation, from } if generation >= self.generation => {
+                self.generation = generation;
+                self.select_on_arrival = None;
+                self.failure = Some(Failure {
+                    path: from,
+                    error: LoadError::NotFound,
+                    moved: true,
+                });
             }
             ModelEvent::Failed {
                 generation,
@@ -283,10 +323,16 @@ impl Browser {
                 error,
             } if generation == self.generation => {
                 self.select_on_arrival = None;
-                self.failure = Some(Failure { path, error });
+                self.failure = Some(Failure {
+                    path,
+                    error,
+                    moved: false,
+                });
             }
             // Results of a request that has since been superseded.
-            ModelEvent::Snapshot(_) | ModelEvent::Failed { .. } => return,
+            ModelEvent::Snapshot(_) | ModelEvent::Moved { .. } | ModelEvent::Failed { .. } => {
+                return;
+            }
         }
         cx.notify();
     }
@@ -943,11 +989,7 @@ impl Browser {
                     .size(px(size::ICON))
                     .flex_none(),
             )
-            .child(div().flex_1().min_w_0().child(format!(
-                "Could not open {}: {}.",
-                display_name(failure.path.as_os_str().as_encoded_bytes()),
-                failure.error
-            )))
+            .child(div().flex_1().min_w_0().child(failure.message()))
             .child(
                 Button::new("dismiss-failure")
                     .ghost()
@@ -1678,6 +1720,28 @@ impl Columns {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn messages_say_what_happened_to_which_folder() {
+        let failed = Failure {
+            path: PathBuf::from("/data/locked"),
+            error: LoadError::PermissionDenied,
+            moved: false,
+        };
+        assert_eq!(
+            failed.message(),
+            "Could not open /data/locked: you do not have permission to open this location."
+        );
+        let gone = Failure {
+            path: PathBuf::from("/data/old"),
+            error: LoadError::NotFound,
+            moved: true,
+        };
+        assert_eq!(
+            gone.message(),
+            "/data/old no longer exists. Showing the nearest folder that does."
+        );
+    }
 
     #[test]
     fn repeating_one_letter_cycles_and_a_longer_prefix_narrows() {
