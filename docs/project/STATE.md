@@ -3,8 +3,8 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S1 done; S2 not started
-- **Status:** active — ready to start S2
+- **Current phase:** 6 (Vertical-slice implementation) — S2 in progress (W-014, W-015 done)
+- **Status:** active — S2 core work under way
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-12
 
@@ -14,9 +14,10 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-12 — Implement gate, slice S1
+- Latest validation entry: VALIDATION.md, 2026-10-12 — W-014, W-015
 
 ## Open loops
+- Task: W-023 — first details load on a cold inode cache took 1.7 s for 500,000 files, over R-101's 500 ms
 - Task: W-013 — frame times and memory unmeasured (in the S2 queue)
 - Task: UI scenarios are hand-run, not a replayable script (W-022)
 - Open items carried forward from Discovery are listed in DISCOVERY.md
@@ -25,7 +26,7 @@
 - None
 
 ## Next action
-- Start S2 with W-014 (lazy metadata in the core) from WORK_ITEMS.md. Load the required skills named in AGENTS.md. Run `rust-tc doctor` and commit after every task.
+- Continue S2 with W-016 (core selection model) from WORK_ITEMS.md. Run `rust-tc doctor` and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

@@ -1,6 +1,11 @@
 //! The filesystem as the core sees it, behind a trait so tests can substitute it.
 
-use std::{ffi::OsString, fs, io, os::unix::ffi::OsStringExt, path::Path};
+use std::{
+    ffi::OsString,
+    fs, io,
+    os::unix::{ffi::OsStringExt, fs::MetadataExt},
+    path::Path,
+};
 
 use crate::EntryKind;
 
@@ -13,6 +18,15 @@ pub struct RawEntry {
     pub kind: EntryKind,
 }
 
+/// Details of an entry that cost a separate system call to learn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Metadata {
+    /// Size in bytes. For a symbolic link, the size of what it points to.
+    pub size: u64,
+    /// Last modification, in seconds since the Unix epoch.
+    pub modified: i64,
+}
+
 /// Filesystem access used by the core.
 pub trait Fs: Send + Sync + 'static {
     /// Lists a directory. Entries arrive in filesystem order; "." and ".." are omitted.
@@ -23,6 +37,10 @@ pub trait Fs: Send + Sync + 'static {
 
     /// Whether `path`, following symbolic links, is a directory.
     fn is_dir(&self, path: &Path) -> bool;
+
+    /// Reads the details of `path`, following symbolic links. A link whose
+    /// target is missing reports the link itself.
+    fn metadata(&self, path: &Path) -> io::Result<Metadata>;
 }
 
 /// The real filesystem.
@@ -51,5 +69,13 @@ impl Fs for RealFs {
 
     fn is_dir(&self, path: &Path) -> bool {
         path.is_dir()
+    }
+
+    fn metadata(&self, path: &Path) -> io::Result<Metadata> {
+        let metadata = fs::metadata(path).or_else(|_| fs::symlink_metadata(path))?;
+        Ok(Metadata {
+            size: metadata.len(),
+            modified: metadata.mtime(),
+        })
     }
 }

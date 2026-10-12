@@ -172,3 +172,16 @@
 - **Evidence:** every S1 acceptance point in ROADMAP.md is demonstrated in the two entries above and "Slice S1 checks". Requirements advanced: R-001 (navigation part), R-101 (first entries and sorted listing; input during loading and frame rate move to S2 as W-013), R-104 (names), R-105 (window, blur, fallback, contrast tests), R-109.
 - **Waiver:** none
 - **Follow-up:** W-013 in S2; the UI scenarios should become a replayable script.
+
+### 2026-10-12 — W-014, W-015: details and sorting in the core
+- **Phase:** 6 Implement (S2)
+- **Result:** pass, with one measured shortfall recorded below
+- **Evidence:**
+  - `rust-tc doctor`: PASS, 36 tests.
+  - `rust-tc bench-listing`, 500,000 files, XFS, inode cache warm: load sizes and dates 153 ms; re-sort by size 52 ms, by modified 37 ms, by type 60 ms, by name descending 47 ms; first entries 3.3 ms; complete sorted listing 173 ms. All within R-101's limits.
+  - Same benchmark immediately after the folder had only been listed, never stat-ed (inode cache cold): the first load of sizes and dates took **1,748 ms**, over R-101's 500 ms for a re-sort. A second run took 162 ms. During the load the model has already published the entries in name order with the loading flag set, so the view is populated and responsive; only the sorted result is late.
+  - Mutation checks on the new tests: six breakages applied by hand (descending ignored; folders ordered by their own size; hidden files given an extension; size sort not loading details; unreadable details reported as zero; listing id changing on every re-sort). Five were caught at once. The second survived because both sample folders had the same size; the sample was changed and the mutation then failed two tests.
+- **Deviations from the plan:** details load for all entries at once, not visible rows first (ARCHITECTURE.md); sorting by type uses the file extension, not the MIME description Dolphin uses.
+- **Not verified:** Btrfs, network or FUSE mounts; behaviour when files change during the load.
+- **Waiver:** none
+- **Follow-up:** W-023 (progressive, visible-first details). The benchmark now reports the details load without a limit, because the program cannot control the inode cache; the re-sorts after it are gated.

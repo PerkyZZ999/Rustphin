@@ -12,7 +12,11 @@ use std::{
     thread,
 };
 
-use crate::{CHUNK_LEN, Chunk, EntryKind, EntryStore, Fs, sort};
+use rayon::prelude::*;
+
+use crate::{
+    CHUNK_LEN, Chunk, EntryKind, EntryStore, Fs, Metadata, SortKey, details::Details, sort,
+};
 
 /// How often, in entries, a running listing checks whether it was superseded.
 const CANCEL_CHECK_INTERVAL: usize = 512;
@@ -24,6 +28,20 @@ pub struct ViewOptions {
     pub show_hidden: bool,
     /// List directories, and links to directories, before everything else.
     pub folders_first: bool,
+    /// What to order entries by.
+    pub sort: SortKey,
+    /// Reverse the order. Folders stay first when `folders_first` is set.
+    pub descending: bool,
+    /// Load each entry's size and modification time even when the sort key
+    /// does not need them, because the view shows them.
+    pub details: bool,
+}
+
+impl ViewOptions {
+    /// Whether these options need each entry's [`Metadata`].
+    pub fn needs_details(&self) -> bool {
+        self.details || self.sort.needs_details()
+    }
 }
 
 impl Default for ViewOptions {
@@ -31,6 +49,9 @@ impl Default for ViewOptions {
         Self {
             show_hidden: false,
             folders_first: true,
+            sort: SortKey::Name,
+            descending: false,
+            details: false,
         }
     }
 }
@@ -70,11 +91,32 @@ pub struct Snapshot {
     generation: u64,
     loading: bool,
     options: ViewOptions,
+    listing: u64,
     store: EntryStore,
+    details: Option<Arc<Details>>,
     order: Vec<u32>,
 }
 
 impl Snapshot {
+    /// Identifies the listing this snapshot was built from. It stays the same
+    /// while only the options change, and changes when the directory is read
+    /// again; [`Self::entry_id`] values are comparable only within one listing.
+    pub fn listing(&self) -> u64 {
+        self.listing
+    }
+
+    /// A stable identifier of the entry shown in `row` within its listing.
+    pub fn entry_id(&self, row: usize) -> u32 {
+        self.order[row]
+    }
+
+    /// The entry's size and modification time, once they have been loaded.
+    /// `None` while they are loading, when the options do not ask for them, or
+    /// when they could not be read.
+    pub fn metadata(&self, row: usize) -> Option<Metadata> {
+        self.details.as_ref()?.get(self.order[row])
+    }
+
     /// The directory this snapshot shows.
     pub fn path(&self) -> &Path {
         &self.path
@@ -169,7 +211,16 @@ impl History {
 struct Complete {
     generation: u64,
     path: PathBuf,
+    listing: u64,
     store: EntryStore,
+    details: Option<Arc<Details>>,
+}
+
+/// A listing on its way to being published.
+struct Listing {
+    id: u64,
+    store: EntryStore,
+    details: Option<Arc<Details>>,
 }
 
 struct Shared {
@@ -191,10 +242,10 @@ impl Shared {
         self.generation.load(Ordering::Acquire) == generation
     }
 
-    fn publish(&self, request: &Request, store: &EntryStore, loading: bool) {
-        let order = self
-            .pool
-            .install(|| sort::build_order(store, request.options));
+    fn publish(&self, request: &Request, listing: &Listing, loading: bool) {
+        let order = self.pool.install(|| {
+            sort::build_order(&listing.store, listing.details.as_deref(), request.options)
+        });
         if !self.is_current(request.generation) {
             return;
         }
@@ -203,11 +254,31 @@ impl Shared {
             generation: request.generation,
             loading,
             options: request.options,
-            store: store.clone(),
+            listing: listing.id,
+            store: listing.store.clone(),
+            details: listing.details.clone(),
             order,
         };
         // The consumer having gone away is not an error for a worker.
         let _ = self.events.send(ModelEvent::Snapshot(Arc::new(snapshot)));
+    }
+
+    /// Reads the metadata of every entry on the CPU pool. Returns `None` when
+    /// the request was superseded meanwhile.
+    fn load_details(&self, request: &Request, store: &EntryStore) -> Option<Details> {
+        let entries = self.pool.install(|| {
+            (0..store.len() as u32)
+                .into_par_iter()
+                .map(|index| {
+                    if !self.is_current(request.generation) {
+                        return None;
+                    }
+                    let path = request.path.join(OsStr::from_bytes(store.name(index)));
+                    Some(self.fs.metadata(&path).ok())
+                })
+                .collect::<Option<Vec<_>>>()
+        })?;
+        Some(Details::new(entries))
     }
 
     fn fail(&self, request: Request, error: LoadError) {
@@ -254,7 +325,12 @@ impl Shared {
                 store.push_chunk(mem::take(&mut chunk));
                 // Publish at doubling sizes so the total sorting work stays linear.
                 if store.len() >= publish_at {
-                    self.publish(&request, &store, true);
+                    let partial = Listing {
+                        id: request.generation,
+                        store: store.clone(),
+                        details: None,
+                    };
+                    self.publish(&request, &partial, true);
                     publish_at *= 2;
                 }
             }
@@ -265,23 +341,39 @@ impl Shared {
         if skipped > 0 {
             tracing::warn!(path = %request.path.display(), skipped, "unreadable directory entries");
         }
-        self.finish(request, store);
+        let listing = Listing {
+            id: request.generation,
+            store,
+            details: None,
+        };
+        self.finish(request, listing);
     }
 
-    /// Records a completed listing and publishes its final snapshot.
+    /// Completes a listing: loads details if the options need them, records
+    /// the result for reuse, and publishes the final snapshot.
     ///
-    /// The record is stored first: a consumer reacting to the snapshot must
-    /// already find the listing reusable.
-    fn finish(&self, request: Request, store: EntryStore) {
+    /// The record is stored before the final snapshot is published: a consumer
+    /// reacting to the snapshot must already find the listing reusable.
+    fn finish(&self, request: Request, mut listing: Listing) {
+        if request.options.needs_details() && listing.details.is_none() {
+            // Show the entries in name order while their details load.
+            self.publish(&request, &listing, true);
+            let Some(details) = self.load_details(&request, &listing.store) else {
+                return;
+            };
+            listing.details = Some(Arc::new(details));
+        }
         if !self.is_current(request.generation) {
             return;
         }
         *lock(&self.complete) = Some(Complete {
             generation: request.generation,
             path: request.path.clone(),
-            store: store.clone(),
+            listing: listing.id,
+            store: listing.store.clone(),
+            details: listing.details.clone(),
         });
-        self.publish(&request, &store, false);
+        self.publish(&request, &listing, false);
     }
 }
 
@@ -399,11 +491,18 @@ impl DirectoryModel {
         let listed = lock(&self.shared.complete)
             .as_ref()
             .filter(|complete| complete.generation == current)
-            .map(|complete| (complete.path.clone(), complete.store.clone()));
-        let Some((path, store)) = listed else {
+            .map(|complete| {
+                let listing = Listing {
+                    id: complete.listing,
+                    store: complete.store.clone(),
+                    details: complete.details.clone(),
+                };
+                (complete.path.clone(), listing)
+            });
+        let Some((path, listing)) = listed else {
             return self.reload();
         };
-        // The listing is complete: re-sort it without touching the filesystem.
+        // The listing is complete: reuse it without reading the directory again.
         let generation = self.shared.generation.fetch_add(1, Ordering::AcqRel) + 1;
         let restore = lock(&self.shared.history).clone();
         let request = Request {
@@ -414,7 +513,7 @@ impl DirectoryModel {
         };
         let shared = Arc::clone(&self.shared);
         self.spawn("rustphin-sort", request, move |request| {
-            shared.finish(request, store)
+            shared.finish(request, listing);
         });
         Some(generation)
     }
@@ -548,6 +647,7 @@ mod tests {
         let options = ViewOptions {
             show_hidden: true,
             folders_first: false,
+            ..ViewOptions::default()
         };
         let shown = snapshot(&events, model.set_options(options).unwrap());
         assert_eq!(
@@ -664,6 +764,22 @@ mod tests {
         fn is_dir(&self, _: &Path) -> bool {
             false
         }
+
+        fn metadata(&self, path: &Path) -> io::Result<Metadata> {
+            // "item<n>" is n bytes long and was modified at second -n; every
+            // seventh entry cannot be read.
+            let n: u64 = path
+                .file_name()
+                .and_then(|name| name.to_str()?.strip_prefix("item")?.parse().ok())
+                .ok_or(io::ErrorKind::NotFound)?;
+            if n % 7 == 6 {
+                return Err(io::ErrorKind::PermissionDenied.into());
+            }
+            Ok(Metadata {
+                size: n,
+                modified: -(n as i64),
+            })
+        }
     }
 
     #[test]
@@ -734,10 +850,91 @@ mod tests {
             options: ViewOptions::default(),
             restore: History::default(),
         };
-        model
-            .shared
-            .publish(&request, &EntryStore::default(), false);
+        let listing = Listing {
+            id: stale,
+            store: EntryStore::default(),
+            details: None,
+        };
+        model.shared.publish(&request, &listing, false);
 
         assert!(matches!(events.try_recv(), Err(flume::TryRecvError::Empty)));
+    }
+
+    #[test]
+    fn details_load_only_when_the_options_ask_for_them() {
+        let (mut model, events) = DirectoryModel::new(Arc::new(FakeFs { entries: 10 })).unwrap();
+        let plain = snapshot(&events, model.open("/dir"));
+        assert_eq!(plain.metadata(0), None);
+
+        let options = ViewOptions {
+            details: true,
+            ..ViewOptions::default()
+        };
+        let detailed = snapshot(&events, model.set_options(options).unwrap());
+        assert_eq!(names(&detailed)[3], "item3");
+        assert_eq!(
+            detailed.metadata(3),
+            Some(Metadata {
+                size: 3,
+                modified: -3
+            })
+        );
+        // An entry whose details cannot be read is still listed, without them.
+        assert_eq!(names(&detailed)[6], "item6");
+        assert_eq!(detailed.metadata(6), None);
+    }
+
+    #[test]
+    fn sorting_by_size_orders_by_loaded_details() {
+        let (mut model, events) = DirectoryModel::new(Arc::new(FakeFs { entries: 6 })).unwrap();
+        snapshot(&events, model.open("/dir"));
+        let options = ViewOptions {
+            sort: SortKey::Size,
+            descending: true,
+            ..ViewOptions::default()
+        };
+        let shown = snapshot(&events, model.set_options(options).unwrap());
+        assert_eq!(
+            names(&shown),
+            ["item5", "item4", "item3", "item2", "item1", "item0"]
+        );
+    }
+
+    #[test]
+    fn opening_with_a_details_sort_shows_names_first_then_the_sorted_result() {
+        let (mut model, events) = DirectoryModel::new(Arc::new(FakeFs { entries: 4 })).unwrap();
+        model.set_options(ViewOptions {
+            sort: SortKey::Modified,
+            ..ViewOptions::default()
+        });
+        let generation = model.open("/dir");
+
+        let ModelEvent::Snapshot(interim) = events.recv_timeout(TIMEOUT).unwrap() else {
+            panic!("expected a snapshot");
+        };
+        assert!(interim.is_loading());
+        assert_eq!(names(&interim), ["item0", "item1", "item2", "item3"]);
+        let done = snapshot(&events, generation);
+        // Modified at second -n: the largest n is the oldest.
+        assert_eq!(names(&done), ["item3", "item2", "item1", "item0"]);
+    }
+
+    #[test]
+    fn entry_ids_survive_a_resort_and_the_listing_changes_on_reload() {
+        let (mut model, events) = DirectoryModel::new(Arc::new(FakeFs { entries: 5 })).unwrap();
+        let first = snapshot(&events, model.open("/dir"));
+        let id_of_item4 = first.entry_id(first.row_of(b"item4").unwrap());
+
+        let reversed = ViewOptions {
+            descending: true,
+            ..ViewOptions::default()
+        };
+        let resorted = snapshot(&events, model.set_options(reversed).unwrap());
+        assert_eq!(resorted.listing(), first.listing());
+        assert_eq!(resorted.row_of(b"item4"), Some(0));
+        assert_eq!(resorted.entry_id(0), id_of_item4);
+
+        let reloaded = snapshot(&events, model.reload().unwrap());
+        assert_ne!(reloaded.listing(), first.listing());
     }
 }

@@ -2,7 +2,8 @@
 //!
 //! Usage: `bench_listing <directory> [entries]`. The directory is created and
 //! filled on first use. Exits with status 1 when a threshold of requirement
-//! R-101 is missed: first entries within 200 ms, sorted listing within 500 ms.
+//! R-101 is missed: first entries within 200 ms, sorted listing within 500 ms,
+//! and re-sorting by any column within 500 ms.
 
 use std::{
     error::Error,
@@ -13,7 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use rustphin_core::{DirectoryModel, ModelEvent, RealFs};
+use rustphin_core::{DirectoryModel, ModelEvent, RealFs, SortKey, ViewOptions};
 
 const DEFAULT_ENTRIES: usize = 500_000;
 const RUNS: usize = 5;
@@ -47,29 +48,78 @@ fn populate(dir: &Path, entries: usize) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Returns the time to the first snapshot and to the complete one.
-fn measure(dir: &Path, entries: usize) -> Result<(Duration, Duration), Box<dyn Error>> {
-    let (mut model, events) = DirectoryModel::new(Arc::new(RealFs))?;
-    let start = Instant::now();
-    let generation = model.open(dir);
+/// Waits for the complete snapshot of `generation`; returns when the first
+/// snapshot of it arrived and how many rows the complete one has.
+fn settle(
+    events: &flume::Receiver<ModelEvent>,
+    generation: u64,
+    start: Instant,
+) -> Result<(Duration, usize), Box<dyn Error>> {
     let mut first = None;
     loop {
         match events.recv()? {
             ModelEvent::Snapshot(snapshot) if snapshot.generation() == generation => {
-                first.get_or_insert(start.elapsed());
+                let first = *first.get_or_insert(start.elapsed());
                 if !snapshot.is_loading() {
-                    if snapshot.len() != entries {
-                        return Err(
-                            format!("listed {} of {entries} entries", snapshot.len()).into()
-                        );
-                    }
-                    return Ok((first.unwrap_or_default(), start.elapsed()));
+                    return Ok((first, snapshot.len()));
                 }
             }
             ModelEvent::Failed { error, .. } => return Err(error.into()),
             ModelEvent::Snapshot(_) => {}
         }
     }
+}
+
+/// Time to load details, then a label and time for each re-sort.
+type Resorts = (Duration, Vec<(String, Duration)>);
+
+/// Times loading every entry's size and date, then re-sorting by each column.
+///
+/// The details load is reported but not held to a limit: its cost depends on
+/// whether the kernel still has the files' inodes cached, which this program
+/// cannot control. The re-sorts that follow reuse the loaded details.
+fn measure_resorts(dir: &Path) -> Result<Resorts, Box<dyn Error>> {
+    let (mut model, events) = DirectoryModel::new(Arc::new(RealFs))?;
+    settle(&events, model.open(dir), Instant::now())?;
+
+    let mut switch = |options: ViewOptions| -> Result<Duration, Box<dyn Error>> {
+        let start = Instant::now();
+        let generation = model.set_options(options).ok_or("options did not change")?;
+        settle(&events, generation, start)?;
+        Ok(start.elapsed())
+    };
+    let base = ViewOptions {
+        details: true,
+        ..ViewOptions::default()
+    };
+    let details = switch(base)?;
+    let mut timings = Vec::new();
+    for (label, sort, descending) in [
+        ("size", SortKey::Size, false),
+        ("modified", SortKey::Modified, false),
+        ("type", SortKey::Type, false),
+        ("name, descending", SortKey::Name, true),
+    ] {
+        let options = ViewOptions {
+            sort,
+            descending,
+            ..base
+        };
+        timings.push((label.to_owned(), switch(options)?));
+    }
+    Ok((details, timings))
+}
+
+/// Returns the time to the first snapshot and to the complete one.
+fn measure(dir: &Path, entries: usize) -> Result<(Duration, Duration), Box<dyn Error>> {
+    let (mut model, events) = DirectoryModel::new(Arc::new(RealFs))?;
+    let start = Instant::now();
+    let generation = model.open(dir);
+    let (first, listed) = settle(&events, generation, start)?;
+    if listed != entries {
+        return Err(format!("listed {listed} of {entries} entries").into());
+    }
+    Ok((first, start.elapsed()))
 }
 
 fn run() -> Result<bool, Box<dyn Error>> {
@@ -95,12 +145,28 @@ fn run() -> Result<bool, Box<dyn Error>> {
         );
         worst = (worst.0.max(first), worst.1.max(sorted));
     }
-    let pass = worst.0 <= FIRST_ENTRIES_LIMIT && worst.1 <= SORTED_LIMIT;
+    let mut worst_resort = Duration::ZERO;
+    let (details, resorts) = measure_resorts(dir)?;
     println!(
-        "{entries} entries, worst of {RUNS}: first entries {:.1} ms (limit {}), sorted listing {:.1} ms (limit {}) => {}",
+        "load sizes and dates       {:>6.1} ms (no limit: depends on the inode cache)",
+        details.as_secs_f64() * 1e3
+    );
+    for (label, elapsed) in resorts {
+        println!(
+            "re-sort by {label:<16} {:>6.1} ms",
+            elapsed.as_secs_f64() * 1e3
+        );
+        worst_resort = worst_resort.max(elapsed);
+    }
+    let pass =
+        worst.0 <= FIRST_ENTRIES_LIMIT && worst.1 <= SORTED_LIMIT && worst_resort <= SORTED_LIMIT;
+    println!(
+        "{entries} entries, worst of {RUNS}: first entries {:.1} ms (limit {}), sorted listing {:.1} ms (limit {}), slowest re-sort {:.1} ms (limit {}) => {}",
         worst.0.as_secs_f64() * 1e3,
         FIRST_ENTRIES_LIMIT.as_millis(),
         worst.1.as_secs_f64() * 1e3,
+        SORTED_LIMIT.as_millis(),
+        worst_resort.as_secs_f64() * 1e3,
         SORTED_LIMIT.as_millis(),
         if pass { "PASS" } else { "FAIL" }
     );
