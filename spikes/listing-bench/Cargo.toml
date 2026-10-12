@@ -1,0 +1,12 @@
+# DISPOSABLE SPIKE — Discovery measurement of directory listing, stat and sort costs.
+[package]
+name = "rustphin-spike-listing"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+[workspace]
+
+[dependencies]
+rayon = "1"

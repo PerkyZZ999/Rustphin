@@ -1,0 +1,122 @@
+# Architecture
+
+Status: drafted 2026-10-12, consistent with locked decisions D-001 to D-003 and D-006 to D-011.
+
+## Overview
+
+Rustphin is a single desktop process built as a Cargo workspace of three layers plus a thin binary. Dependencies point one way: the UI depends on the platform layer and the core; the platform layer depends on the core; the core depends on neither. All filesystem and desktop work happens off the UI thread; the UI renders immutable snapshots and sends commands.
+
+```mermaid
+flowchart LR
+    subgraph ui["rustphin-ui (GPUI-Kit)"]
+        views["Views: places, tabs, location bar,<br/>item views, palette, dialogs"]
+        bridge["Bridge: channels → GPUI entities"]
+    end
+    subgraph platform["rustphin-platform"]
+        wl["Wayland: blur, file clipboard"]
+        dbus["D-Bus: UDisks2, FileManager1"]
+        desk["Trash, thumbnails, places,<br/>MIME, icons, open-with"]
+    end
+    subgraph core["rustphin-core (headless)"]
+        model["Directory model + snapshots"]
+        workers["Worker pools: list, stat, sort"]
+        ops["Operation engine + undo"]
+        logic["Batch rename, fuzzy match, history"]
+    end
+    views -- commands --> bridge
+    bridge -- commands --> model
+    bridge -- commands --> ops
+    model -- snapshots, events --> bridge
+    ops -- progress, results --> bridge
+    model --> workers
+    ui --> platform
+    platform --> core
+    core --> fs[("Filesystem")]
+    platform --> sys[("Compositor, D-Bus, XDG data")]
+```
+
+## Components
+
+| Crate | Responsibility | Notes |
+|---|---|---|
+| `rustphin-core` | Directory model, entry storage, listing, lazy metadata, sorting, filtering, selection, navigation history, operation engine, undo, batch-rename planner, fuzzy matcher, config schema | No UI, Wayland or D-Bus dependencies. Synchronous, cancellable API on its own worker pools (D-009). Filesystem reached through an `Fs` trait so tests can inject faults. |
+| `rustphin-platform` | Wayland integrations (blur, file clipboard), UDisks2 devices, `FileManager1` service, freedesktop trash, thumbnail cache and generators, shared places file and place groups, MIME detection, icon-theme lookup, launching applications, atomic config I/O | Each capability is a trait with a real implementation and a fallback or mock (D-010). No GPUI dependency, apart from accepting raw window handles for blur. |
+| `rustphin-ui` | Theme tokens, views, actions and key bindings, the bridge that turns core channels into GPUI entity updates | Only crate that depends on `gpui-kit` (D-001, D-002). Never calls the filesystem directly (D-011). |
+| `rustphin` (binary) | Composition root: parses arguments, builds platform services, starts the core and the UI | Thin; holds no logic. |
+| `xtask` | Developer commands: benchmarks, dependency-direction check, licence check | Not shipped. |
+
+### Core internals
+
+- **Entry store.** One store per open directory. Names live in a single byte arena (names are bytes, not assumed UTF-8); per-entry fields (kind, size, modified time, name offset) are kept in parallel columns. Metadata columns are filled lazily.
+- **Lister.** Reads the directory in batches on an I/O worker and publishes the first batch immediately. Metadata is fetched in priority order: visible rows first, then the rest in the background; all of it up front only when the active sort key needs it.
+- **Sorter.** Produces an index (a vector of entry indices) on the CPU pool. Natural, case-insensitive comparison; folders-first as an option.
+- **Snapshot.** An immutable, cheaply shared view: entry store reference, sort index, filter, generation number. The UI reads row *n* in constant time. New snapshots replace old ones; selection is carried across by entry identity.
+- **Watcher.** inotify events are coalesced into batched changes applied to the store, followed by an incremental re-sort.
+- **Operation engine.** Plan → validate → execute → journal. Plans are data, so they can be previewed (conflicts, batch rename) and tested. Execution follows the D-011 rules. The journal feeds undo.
+
+## Data flow
+
+1. The user acts in a view; the view dispatches an action.
+2. The bridge sends a command over a channel to the core (for example "open directory", "sort by size", "copy these to there").
+3. Core workers do the work and publish snapshots, progress or results on a channel.
+4. The bridge, running on GPUI's executor, receives them and updates the owning entity; GPUI redraws only the visible rows.
+5. Desktop effects (clipboard, mount, trash, blur) are calls from the UI or the core's operation engine into platform traits.
+
+Stale results are discarded by generation number, so a fast navigation never shows a previous directory's late results.
+
+## Trust & boundaries
+
+- **Authn/z:** none of its own. Rustphin runs with the user's permissions and never elevates (L-014 is later work).
+- **Untrusted input:** directory contents (names with control characters or invalid UTF-8), file contents handed to thumbnailers, `.desktop` files, the shared places file, clipboard and drag payloads from other applications, and `FileManager1` requests from any local process. All are parsed defensively; none can trigger execution. Activating an executable or `.desktop` file asks first.
+- **Thumbnailing:** uses memory-safe decoders with size and time limits, on workers isolated from the UI thread; failures yield a placeholder.
+- **Data sensitivity:** paths and names of the user's files. They stay on the machine: no network use, no telemetry (R-108). Logs record paths only at debug level.
+- **Data retention/deletion:** Rustphin owns its config, place-group file and palette history under XDG directories; history is clearable. It shares, and must keep valid, the places file, the trash and the thumbnail cache.
+- **External calls:** Wayland compositor, session D-Bus (UDisks2, FileManager1), launched applications. No network sockets.
+
+## Failure modes
+
+| Failure | Detection | Response / recovery |
+|---|---|---|
+| Directory unreadable or vanishes while open | Error from listing or watcher | Inline error state; navigate to nearest existing parent on removal |
+| Copy or move interrupted (crash, power loss, cancel) | Temporary-name files left behind; journal entry incomplete | Sources intact by construction (D-011); leftover temporary files reported and cleaned on next start |
+| Destination full or permission denied mid-operation | I/O error from worker | Operation pauses with skip / retry / cancel; completed items stay journaled for undo |
+| Shared places file changed or malformed | Watch event; parse error | Reload; on parse error keep last good in-memory state and never write over the file |
+| Place-group file refers to a vanished place ID | Reconciliation at load and on change | Drop the member silently; keep the group |
+| Blur protocol missing or request fails | Runtime protocol detection | Opaque theme (D-007, D-010) |
+| Data-control protocol missing | Runtime protocol detection | In-app clipboard only, with a one-time notice |
+| UDisks2 absent or unresponsive | D-Bus error or timeout | Devices section hidden with a notice; rest of the app unaffected |
+| Thumbnail decoder fails or exceeds limits | Error or timeout on worker | Placeholder icon; entry marked failed in the shared cache per the spec |
+| Worker panic | Panic caught at pool boundary | Task reported failed; pool keeps running; error logged |
+| Toolkit upgrade breaks borrowed Wayland connection | Regression ui-tests from the spike scenarios | Stay on the pinned version until fixed (D-001) |
+
+## Test strategy
+
+- **Unit and property tests (core):** sorting, natural comparison, snapshot consistency, selection carry-over, rename planner, fuzzy ranking, operation plans. Property tests generate directory trees and operation sequences and check invariants (no data loss, undo restores state).
+- **Fault injection (core):** the `Fs` trait fails or "crashes" at every step of copy, move and batch rename; assertions check the D-011 rules. Kill tests run a child process against a temporary directory.
+- **Integration and contract tests (platform):** places file round trips against fixtures from a real Dolphin; trash and thumbnail cache against their specifications; UDisks2 and FileManager1 against a mocked bus.
+- **Benchmarks:** headless listing, metadata and sort on generated 500,000-entry directories; results tracked over time (R-101, R-102).
+- **UI tests:** scripted scenarios in an isolated KWin session with an isolated home, alongside the installed Dolphin: navigation, drag-and-drop, clipboard, tabs, palette. Frame timing collected for scrolling.
+- **Fuzzing:** parsers for the places file, `.desktop` files, URI lists.
+- **Manual checklists:** keyboard-only operation, visual review on the real desktop, Orca pass, real USB drive, a non-KDE drop target.
+- **Risk-specific:** no file-operation UI is usable on real data until the engine's fault-injection suite passes.
+
+## Operability
+
+- **Config:** TOML under `$XDG_CONFIG_HOME/rustphin/` (settings, key bindings, place groups) and state under `$XDG_STATE_HOME/rustphin/` (session tabs, history). Each file carries a schema version; older versions are migrated on load and the previous file kept as a backup. Writes are atomic.
+- **Secrets:** none are stored or handled.
+- **Logging/metrics:** structured logs through `tracing` to stderr and a rotating file in the state directory; level set by an environment variable. A hidden diagnostics view shows frame time and worker queue depth. No telemetry.
+- **Migrations:** only Rustphin's own config files; shared files are never migrated.
+- **Rollback sketch:** Rustphin never replaces Dolphin. Reverting means changing the default file manager back; shared data (places, trash, thumbnails) stays valid for Dolphin at all times. Releases are tagged so a previous build can be reinstalled.
+- **Checks:** format, lints, tests, headless benchmarks, dependency-direction check and licence check, run locally through `xtask` before each commit, on Rust 1.95 and current stable. The repository is local only; there is no hosted CI (D-016).
+
+## Alignment to locks
+
+- D-001 → only `rustphin-ui` depends on `gpui-kit`, pinned `=0.7.3`; upgrades are roadmap items.
+- D-002 → three layers with one-way dependencies, enforced by an `xtask` check.
+- D-003 → every crate declares GPL-3.0-or-later; licence check in `xtask`.
+- D-006 → Wayland-only features compiled; no X11 backend.
+- D-007 → theme tokens in `rustphin-ui`; opaque mode driven by the platform blur trait.
+- D-008 → `places` module in the platform layer reads/writes the shared file and a separate groups file keyed by place ID.
+- D-009 → core-owned worker pools, snapshots over channels, no async runtime in the core.
+- D-010 → blur and clipboard traits in `rustphin-platform` with runtime detection and fallbacks.
+- D-011 → single operation engine in the core; UI has no filesystem access; `Fs` trait for fault injection.

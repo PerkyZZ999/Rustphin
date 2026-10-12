@@ -1,0 +1,23 @@
+# DISPOSABLE SPIKE — builds the same sources as ../gpui-toolkit against GPUI-Kit 0.7.3
+# (gpui-pre 0.3.9 snapshot) instead of Zed HEAD. Not production code.
+[package]
+name = "rustphin-spike-gpui-kit"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+[workspace]
+
+[[bin]]
+name = "rustphin-spike-gpui-kit"
+path = "../gpui-toolkit/src/main.rs"
+
+[dependencies]
+gpui = { package = "gpui-kit", version = "=0.7.3" }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = ["wayland"] }
+raw-window-handle = "0.6"
+wayland-backend = { version = "0.3", features = ["client_system"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+wl-clipboard-rs = "0.9.4"

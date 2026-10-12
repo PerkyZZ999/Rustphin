@@ -1,0 +1,19 @@
+# DISPOSABLE SPIKE — Discovery phase toolkit check. Not production code; do not build on it.
+[package]
+name = "rustphin-spike-gpui"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+[workspace]
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed", rev = "7eccdcecb5c5fe150a9e94f98b55af30b7d486b6", default-features = false, features = ["wayland"] }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "7eccdcecb5c5fe150a9e94f98b55af30b7d486b6", features = ["wayland"] }
+# Direct Wayland access for the blur workaround (versions match GPUI's lockfile).
+raw-window-handle = "0.6"
+wayland-backend = { version = "0.3", features = ["client_system"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+wl-clipboard-rs = "0.9.4"
