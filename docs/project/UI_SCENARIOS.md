@@ -38,7 +38,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | S4 | Escape | Nothing selected; status "17 items, 1 hidden" |
 | S5 | Click the last row, type `p` | Selection wraps to "Pictures" |
 | S6 | Shift+Down twice | Three consecutive rows selected |
-| S8 | Press the mouse button on the fifth row, move down five rows, release (use `mouse_button_down`, `mouse_move`, `mouse_button_up`) | An outlined band while dragging; the six rows it crossed stay selected after release |
+| S8 | Press the mouse button on the fifth row to the right of its name (in the Size column), move down five rows, release (use `mouse_button_down`, `mouse_move`, `mouse_button_up`) | An outlined band while dragging; the six rows it crossed stay selected after release |
 | S7 | Ctrl+A | All selected: "17 of 17 items selected" |
 | O1 | Click the Size heading twice | Largest first (video.mp4, report.pdf, …), folders still on top, a down arrow on Size |
 | O2 | Click the Modified heading | Oldest first among files: photo.JPG (2023), notes.txt (2024), video.mp4 (2025) |
@@ -74,12 +74,22 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | X2 | From a shell in the session: `kioclient move <fixture>/notes.txt trash:/`; look at the trash view | notes.txt is listed too, without a reload |
 | X3 | Click notes.txt, click Restore | "Restored “notes.txt” from the trash." and the file is back in the fixture |
 | X4 | Click "Empty trash…", Return | A dialog "Empty the trash? It holds 2 items."; after Return the list is empty, the line reads "Emptied the trash." with no Undo button, and `Trash/files` and `Trash/info` are empty on disk |
+| C1 | Select a file whose name has spaces and non-ASCII characters, Ctrl+X | The row is drawn faded; "Cut “…”. Paste to move." |
+| C2 | Start `dolphin <fixture>/Documents` in the session, click its view, Ctrl+V | The file is in Documents and gone from the fixture, name intact |
+| C3 | In Dolphin, Ctrl+X on that file; click Rustphin's title bar, Ctrl+V | The file is back in the fixture: "Moved “…” to “ops-fixture”." |
+| G1 | Drag a file by its name onto a folder row (waypoints, about 100 ms each) | A chip with the name follows the pointer; the folder row is highlighted; on release a dialog "Move or copy “…” into “…”?" with Cancel, Copy here (C), Move here (Enter); Return moves it |
+| G2 | The same drag holding Ctrl | The file is copied without a question; the original stays |
+| G3 | F3, then drag a file from the left pane onto a folder in the right pane holding Shift | The file is moved without a question |
+| G4 | With Dolphin open on a folder, drag a file from Dolphin onto Rustphin's list | The same move-or-copy dialog; `C` copies it into the folder shown |
+| G5 | Tile Rustphin to the left (Super+Left), drag a file by its name into Dolphin's view | Dolphin shows its own Move/Copy/Link menu; "Copy Here" copies the file, name intact |
+| G6 | Press in a row's Size column and drag down across rows | A rubber band selects the rows, as before drags existed |
 | L1 | Launch the release build on a 500,000-entry folder (`rust-tc bench-listing` creates `target/bench/listing-500k`); press End | Status "500,000 items"; the last entry is selected and visible within a second |
 
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.
 - Narrow-window column dropping, frame rate, and anything that needs a second application.
-- Reordering tabs by dragging with the mouse.
+- Reordering tabs by dragging with the mouse, and dropping entries on a tab.
+- Dragging to an application that is not a KDE one, and a session without a data-control protocol: neither is available in the test session.
 - The trashes of other volumes: the banner lists the real ones of the machine, which belong to the user and are not opened in tests.
 - The failure dialog (it needs an entry that fails mid-operation) and the dialogs' buttons by mouse.

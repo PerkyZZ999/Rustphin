@@ -178,6 +178,9 @@ impl Theme {
         components.radius = px(size::RADIUS);
         components.font_family = text::FAMILY_BODY.into();
         components.mono_font_family = text::FAMILY_DATA.into();
+        // Components read their colours from the tokens, which are only
+        // derived from the fields above when a whole theme is applied.
+        components.tokens = components.colors.into();
     }
 }
 

@@ -59,7 +59,7 @@ Conventions:
 - **Priority:** must
 - **Acceptance:**
   - [x] A tab can be split into two panes with independent locations, each with its own view settings.
-  - [ ] Copy and move between panes work by drag-and-drop and by keyboard. (Keyboard: done in S4 with Ctrl+C/X/V; drag-and-drop: S5.)
+  - [x] Copy and move between panes work by drag-and-drop and by keyboard. (Keyboard: done in S4 with Ctrl+C/X/V; drag-and-drop: S5.)
 - **Validation:** ui-test
 
 ### R-007 — File operations
@@ -92,19 +92,19 @@ Conventions:
 ### R-010 — Drag-and-drop
 - **Priority:** must
 - **Acceptance:**
-  - [ ] Dragging within and between Rustphin panes, tabs and windows copies or moves, with a modifier or menu to choose.
-  - [ ] Dragging files out to Dolphin and to at least one non-KDE application delivers them.
-  - [ ] Files dropped from other applications are accepted onto a view or a folder.
-  - [ ] Names with spaces and non-ASCII characters survive the round trip.
+  - [x] Dragging within and between Rustphin panes, tabs and windows copies or moves, with a modifier or menu to choose.
+  - [ ] Dragging files out to Dolphin and to at least one non-KDE application delivers them. (Dolphin: done. A non-KDE application: not yet tried.)
+  - [x] Files dropped from other applications are accepted onto a view or a folder.
+  - [x] Names with spaces and non-ASCII characters survive the round trip.
 - **Validation:** ui-test (with Dolphin), manual (non-KDE app)
 
 ### R-011 — File clipboard
 - **Priority:** must
 - **Acceptance:**
-  - [ ] Copy and cut in Rustphin paste correctly in Dolphin; copy and cut in Dolphin paste correctly in Rustphin, with cut resulting in a move.
-  - [ ] Cut items are shown dimmed until pasted or the clipboard changes.
-  - [ ] Names with spaces and non-ASCII characters survive the round trip.
-  - [ ] Where the compositor lacks a data-control protocol, copy and paste still work inside Rustphin and the limitation is reported once.
+  - [x] Copy and cut in Rustphin paste correctly in Dolphin; copy and cut in Dolphin paste correctly in Rustphin, with cut resulting in a move.
+  - [x] Cut items are shown dimmed until pasted or the clipboard changes.
+  - [x] Names with spaces and non-ASCII characters survive the round trip.
+  - [ ] Where the compositor lacks a data-control protocol, copy and paste still work inside Rustphin and the limitation is reported once. (Implemented and unit-tested; no such compositor was available to try it on.)
 - **Validation:** ui-test (with Dolphin), test (URI encoding)
 
 ### R-012 — Places and place groups

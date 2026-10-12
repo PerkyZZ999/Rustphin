@@ -41,14 +41,14 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** R-010 and R-011 criteria, including names with spaces and non-ASCII characters and the no-data-control fallback.
 - **Requirements:** R-010, R-011
 - **Validation:** ui-test (with Dolphin), test (URI encoding), manual (non-KDE app)
-- **Status:** todo — next
+- **Status:** done 2026-10-12 (see VALIDATION.md). Open: a drop target that is not a KDE application, and a compositor without data-control, could not be tried.
 
 ## Slice S6 — Places, place groups, devices
 - **Outcome:** Places panel shared with KDE, user-defined collapsible groups, and mountable devices.
 - **Acceptance:** R-012 and R-013 criteria; the shared places file stays valid for Dolphin after every edit.
 - **Requirements:** R-012, R-013
 - **Validation:** test (fixtures, mocked UDisks2), ui-test, manual (Dolphin, USB drive)
-- **Status:** todo
+- **Status:** todo — next
 
 ## Slice S7 — Thumbnails
 - **Outcome:** Image thumbnails that load as you scroll and are shared with Dolphin's cache.

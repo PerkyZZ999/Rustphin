@@ -89,6 +89,13 @@ pub enum Question {
         /// What would be deleted.
         paths: Vec<PathBuf>,
     },
+    /// Entries were dropped without a key saying whether to copy or move.
+    Drop {
+        /// The dropped entries.
+        sources: Vec<PathBuf>,
+        /// The folder they were dropped on.
+        into: PathBuf,
+    },
     /// Emptying the trash needs the user's explicit yes.
     ConfirmEmpty {
         /// Number of trashed entries.
@@ -96,6 +103,15 @@ pub enum Question {
         /// Everything to remove: the entries and their records.
         paths: Vec<PathBuf>,
     },
+}
+
+/// What a drop does with the dropped entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropAction {
+    /// Leave the originals where they are.
+    Copy,
+    /// Take the originals away.
+    Move,
 }
 
 /// A message about something that just happened.
@@ -344,6 +360,42 @@ impl Hub {
         cx.notify();
     }
 
+    /// Copies or moves dropped `sources` into `into`; asks which when
+    /// `action` is `None`. Entries that are already there, or that contain
+    /// the destination, are left out without a word.
+    pub fn drop_files(
+        &mut self,
+        sources: Vec<PathBuf>,
+        into: PathBuf,
+        action: Option<DropAction>,
+        cx: &mut Context<Self>,
+    ) {
+        let sources = droppable(sources, &into);
+        if sources.is_empty() {
+            return;
+        }
+        match action {
+            Some(DropAction::Copy) => self.start(Request::Copy { sources, into }),
+            Some(DropAction::Move) => self.start(Request::Move { sources, into }),
+            None => self.questions.push_back(Question::Drop { sources, into }),
+        }
+        cx.notify();
+    }
+
+    /// Answers the drop question being shown; `None` cancels the drop.
+    pub fn answer_drop(&mut self, action: Option<DropAction>, cx: &mut Context<Self>) {
+        if let Some(Question::Drop { .. }) = self.questions.front()
+            && let Some(Question::Drop { sources, into }) = self.questions.pop_front()
+        {
+            match action {
+                Some(DropAction::Copy) => self.start(Request::Copy { sources, into }),
+                Some(DropAction::Move) => self.start(Request::Move { sources, into }),
+                None => {}
+            }
+        }
+        cx.notify();
+    }
+
     /// Reads the clipboard again, in the background.
     fn refresh_clip(&mut self, cx: &mut Context<Self>) {
         let clipboard = self.clipboard.clone();
@@ -539,7 +591,9 @@ impl Hub {
                     Question::Conflict { id: asker, .. } | Question::Failed { id: asker, .. } => {
                         *asker != id
                     }
-                    Question::ConfirmDelete { .. } | Question::ConfirmEmpty { .. } => true,
+                    Question::ConfirmDelete { .. }
+                    | Question::ConfirmEmpty { .. }
+                    | Question::Drop { .. } => true,
                 });
                 let (done, undo) = finished
                     .as_ref()
@@ -551,6 +605,15 @@ impl Hub {
         }
         cx.notify();
     }
+}
+
+/// The entries of a drop that can go into `into`: not those already in it,
+/// not the folder itself and not a folder that contains it.
+fn droppable(sources: Vec<PathBuf>, into: &Path) -> Vec<PathBuf> {
+    sources
+        .into_iter()
+        .filter(|source| source.parent() != Some(into) && !into.starts_with(source))
+        .collect()
 }
 
 /// What to say after a copy or cut. The first time on a desktop without a
@@ -974,6 +1037,18 @@ mod tests {
             pick_up_notice(&clip, false, true),
             "Cut “report.pdf”. Paste to move."
         );
+    }
+
+    #[test]
+    fn a_drop_leaves_out_what_is_already_there_or_contains_the_destination() {
+        let sources = ["/a/x.txt", "/b/y.txt", "/b", "/b/c", "/other/z"]
+            .map(PathBuf::from)
+            .to_vec();
+        assert_eq!(
+            droppable(sources, Path::new("/b/c")),
+            ["/a/x.txt", "/b/y.txt", "/other/z"].map(PathBuf::from)
+        );
+        assert!(droppable(vec!["/a/x".into()], Path::new("/a")).is_empty());
     }
 
     #[test]

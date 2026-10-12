@@ -10,11 +10,12 @@ use std::{
 };
 
 use gpui_kit::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, EventEmitter, FocusHandle,
-    Focusable as _, InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, Modifiers,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point,
-    Render, ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, UniformListScrollHandle, Window, actions,
+    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, EventEmitter,
+    ExternalDragPayload, ExternalPaths, FileDragPaths, FocusHandle, Focusable as _,
+    InteractiveElement, IntoElement, KeyBinding, KeyDownEvent, Modifiers, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render,
+    ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
+    UniformListScrollHandle, Window, actions,
     component::{
         Disableable as _, Icon, IconName, Selectable as _, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -216,6 +217,8 @@ pub struct Browser {
     trash_dir: Option<PathBuf>,
     /// Whether something in the folder shown is cut; refreshed every redraw.
     has_cut: bool,
+    /// Set by an entry when the mouse button goes down on its draggable part.
+    press_on_entry: bool,
     /// The user's other trash directories, on other volumes, while a trash is shown.
     other_trashes: Vec<PathBuf>,
     focus: FocusHandle,
@@ -291,6 +294,7 @@ impl Browser {
             refocus: false,
             trash_dir: None,
             has_cut: false,
+            press_on_entry: false,
             other_trashes: Vec::new(),
             focus,
             types: None,
@@ -503,6 +507,10 @@ impl Browser {
     fn on_mouse_down(&mut self, event: &MouseDownEvent, _: &mut Window, _: &mut Context<Self>) {
         self.ignore_click = false;
         self.band = None;
+        // The press landed on something draggable: no rubber band.
+        if std::mem::take(&mut self.press_on_entry) {
+            return;
+        }
         let in_list = self
             .scroll
             .0
@@ -1478,6 +1486,114 @@ impl Browser {
         }
     }
 
+    /// The entries a drag that started on `row` carries: the whole selection
+    /// when the row is part of it, otherwise that row alone.
+    fn drag_paths(&self, row: usize) -> Vec<PathBuf> {
+        match &self.snapshot {
+            Some(snapshot) if row < snapshot.len() => {
+                if self.selection.contains(snapshot, row) {
+                    self.selected_paths()
+                } else {
+                    vec![snapshot.entry_path(row)]
+                }
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Makes `handle` the part of an entry that can be dragged: within the
+    /// application to copy or move, and out of the window to other applications.
+    fn drag_source(
+        handle: gpui_kit::Stateful<gpui_kit::Div>,
+        row: usize,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let dragged = DraggedEntries {
+            source: cx.entity().downgrade(),
+            row,
+        };
+        handle
+            // Seen before the view's own handler: this press is the start of
+            // a possible drag, not of a rubber band.
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, _| this.press_on_entry = true),
+            )
+            .on_drag(dragged, |dragged, _, _, cx| {
+                let label = operations::what(&dragged.paths(cx));
+                cx.new(|_| DragPreview(label.into()))
+            })
+            .external_drag_payload(|dragged: &DraggedEntries, _, cx| {
+                let paths = dragged.paths(cx);
+                let folders = dragged.folders(cx);
+                (!paths.is_empty()).then(|| {
+                    ExternalDragPayload::Files(FileDragPaths::new(paths.into_iter().zip(folders)))
+                })
+            })
+    }
+
+    /// Makes `element` accept dropped entries: into the folder at `row`, or
+    /// into the folder shown when `row` is `None`. A folder under the pointer
+    /// is highlighted while something is dragged over it.
+    fn drop_target<E: InteractiveElement>(
+        element: E,
+        row: Option<usize>,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> E {
+        let highlight = move |style: gpui_kit::StyleRefinement| match row {
+            Some(_) => style.bg(theme.hover),
+            None => style,
+        };
+        let view = cx.entity().downgrade();
+        element
+            .drag_over::<DraggedEntries>(move |style, _, _, _| highlight(style))
+            .drag_over::<ExternalPaths>(move |style, _, _, _| highlight(style))
+            // Not `cx.listener`: the dragged entries are read from their source
+            // view, which may be this one, and a view cannot be read while it
+            // is being updated.
+            .on_drop({
+                let view = view.clone();
+                move |dragged: &DraggedEntries, window, cx| {
+                    let sources = dragged.paths(cx);
+                    let _ = view.update(cx, |this, cx| this.drop_into(row, sources, window, cx));
+                }
+            })
+            .on_drop(move |dropped: &ExternalPaths, window, cx| {
+                let sources = dropped.paths().to_vec();
+                let _ = view.update(cx, |this, cx| this.drop_into(row, sources, window, cx));
+            })
+    }
+
+    /// Copies or moves `sources` into the folder at `row`, or into the folder
+    /// shown. Ctrl copies, Shift moves; without either the user is asked.
+    fn drop_into(
+        &mut self,
+        row: Option<usize>,
+        sources: Vec<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.trash_dir.is_some() {
+            return;
+        }
+        let into = match (row, &self.snapshot) {
+            (Some(row), Some(snapshot)) if row < snapshot.len() => Some(snapshot.entry_path(row)),
+            (Some(_), _) => None,
+            (None, _) => self.location(),
+        };
+        let Some(into) = into else { return };
+        let modifiers = window.modifiers();
+        let action = if modifiers.control {
+            Some(operations::DropAction::Copy)
+        } else if modifiers.shift {
+            Some(operations::DropAction::Move)
+        } else {
+            None
+        };
+        hub(cx).update(cx, |hub, cx| hub.drop_files(sources, into, action, cx));
+    }
+
     /// A middle click on a folder asks for it in a new tab.
     fn entry_middle_click(
         row: usize,
@@ -1598,8 +1714,25 @@ impl Browser {
                                     .min_w_0()
                                     .items_center()
                                     .gap(px(space::SM))
-                                    .child(entry.icon(layout.icon, theme))
-                                    .child(this.name_cell(&entry, theme).flex_1().min_w_0()),
+                                    // Icon and name are what gets dragged; the rest
+                                    // of the row is free for a rubber band.
+                                    .child(Self::drag_source(
+                                        div()
+                                            .id(("entry-handle", row))
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(space::SM))
+                                            .min_w_0()
+                                            .when(entry.renaming, |handle| handle.flex_1())
+                                            .child(entry.icon(layout.icon, theme))
+                                            .child(
+                                                this.name_cell(&entry, theme)
+                                                    .min_w_0()
+                                                    .when(entry.renaming, |name| name.flex_1()),
+                                            ),
+                                        row,
+                                        cx,
+                                    )),
                             )
                             .child(
                                 div()
@@ -1632,14 +1765,19 @@ impl Browser {
                                         .child(description),
                                 )
                             });
-                        div()
+                        let line = div()
                             .id(row)
                             .w_full()
                             .h(px(layout.row_height))
                             .px(px(space::SM))
                             .child(line)
                             .on_click(Self::entry_click(row, cx))
-                            .on_mouse_down(MouseButton::Middle, Self::entry_middle_click(row, cx))
+                            .on_mouse_down(MouseButton::Middle, Self::entry_middle_click(row, cx));
+                        if entry.container {
+                            Self::drop_target(line, Some(row), theme, cx)
+                        } else {
+                            line
+                        }
                     })
                     .collect::<Vec<_>>()
             }),
@@ -1709,18 +1847,28 @@ impl Browser {
                                     .child(icon)
                                     .child(this.name_cell(&entry, theme).flex_1().min_w_0())
                             };
-                            div()
-                                .id(row)
-                                .flex_none()
-                                .w(px(cell_width))
-                                .h_full()
-                                .p(px(space::XS / 2.))
-                                .child(cell)
-                                .on_click(Self::entry_click(row, cx))
-                                .on_mouse_down(
-                                    MouseButton::Middle,
-                                    Self::entry_middle_click(row, cx),
-                                )
+                            let is_folder = entry.container;
+                            let cell = Self::drag_source(
+                                div()
+                                    .id(row)
+                                    .flex_none()
+                                    .w(px(cell_width))
+                                    .h_full()
+                                    .p(px(space::XS / 2.))
+                                    .child(cell)
+                                    .on_click(Self::entry_click(row, cx))
+                                    .on_mouse_down(
+                                        MouseButton::Middle,
+                                        Self::entry_middle_click(row, cx),
+                                    ),
+                                row,
+                                cx,
+                            );
+                            if is_folder {
+                                Self::drop_target(cell, Some(row), theme, cx)
+                            } else {
+                                cell
+                            }
                         });
                         div()
                             .flex()
@@ -2008,7 +2156,8 @@ impl Render for Browser {
             .child(
                 // The file list sits on a more solid surface than the glass
                 // toolbar and status line, so columns of text stay readable.
-                div()
+                // Dropping on the view itself puts the entries in this folder.
+                Self::drop_target(div(), None, theme, cx)
                     .flex()
                     .flex_1()
                     .flex_col()
@@ -2030,6 +2179,60 @@ impl Render for Browser {
             .children(self.band_outline(theme));
         self.frames.end(frame_started);
         view
+    }
+}
+
+/// Entries being dragged out of a view. What they are is looked up when
+/// needed, so starting a drag costs nothing however many are selected.
+pub struct DraggedEntries {
+    source: gpui_kit::WeakEntity<Browser>,
+    row: usize,
+}
+
+impl DraggedEntries {
+    /// The dragged entries, as full paths.
+    pub fn paths(&self, cx: &App) -> Vec<PathBuf> {
+        self.source
+            .upgrade()
+            .map_or_else(Vec::new, |browser| browser.read(cx).drag_paths(self.row))
+    }
+
+    /// For each of [`Self::paths`], whether it is a folder.
+    fn folders(&self, cx: &App) -> Vec<bool> {
+        let Some(browser) = self.source.upgrade() else {
+            return Vec::new();
+        };
+        let browser = browser.read(cx);
+        let Some(snapshot) = &browser.snapshot else {
+            return Vec::new();
+        };
+        if self.row < snapshot.len() && !browser.selection.contains(snapshot, self.row) {
+            return vec![snapshot.is_container(self.row)];
+        }
+        browser
+            .selection
+            .rows(snapshot)
+            .into_iter()
+            .map(|row| snapshot.is_container(row))
+            .collect()
+    }
+}
+
+/// What follows the pointer during a drag: the name of the entry, or how many.
+struct DragPreview(SharedString);
+
+impl Render for DragPreview {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = *cx.global::<Theme>();
+        div()
+            .px(px(space::MD))
+            .py(px(space::XS))
+            .rounded(px(size::RADIUS))
+            .bg(theme.selection)
+            .text_color(theme.on_selection)
+            .font_family(text::FAMILY_BODY)
+            .text_size(px(text::SMALL))
+            .child(self.0.clone())
     }
 }
 

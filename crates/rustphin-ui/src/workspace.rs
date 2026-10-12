@@ -22,7 +22,7 @@ use rustphin_core::{
 };
 
 use crate::{
-    browser::{Browser, BrowserEvent},
+    browser::{Browser, BrowserEvent, DraggedEntries},
     format,
     operations::{self, Hub, Notice, Question, Running, hub},
     session::{Session, SessionTab},
@@ -55,6 +55,7 @@ actions!(
         DialogKeepBoth,
         DialogReplace,
         DialogToggleAll,
+        DialogCopy,
     ]
 );
 
@@ -81,6 +82,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("k", DialogKeepBoth, Some(DIALOG_CONTEXT)),
         KeyBinding::new("r", DialogReplace, Some(DIALOG_CONTEXT)),
         KeyBinding::new("a", DialogToggleAll, Some(DIALOG_CONTEXT)),
+        KeyBinding::new("c", DialogCopy, Some(DIALOG_CONTEXT)),
     ]);
 }
 
@@ -454,6 +456,31 @@ impl Workspace {
                         })
                     })
                     .drag_over::<DraggedTab>(move |tab, _, _, _| tab.bg(theme.hover))
+                    // Entries dropped on a tab go into the folder it shows.
+                    .drag_over::<DraggedEntries>(move |tab, _, _, _| tab.bg(theme.hover))
+                    .on_drop(
+                        cx.listener(move |this, dragged: &DraggedEntries, window, cx| {
+                            let into = this
+                                .tabs
+                                .iter()
+                                .nth(index)
+                                .and_then(|tab| tab.browser().read(cx).location());
+                            if let Some(into) = into {
+                                let sources = dragged.paths(cx);
+                                let modifiers = window.modifiers();
+                                let action = if modifiers.control {
+                                    Some(operations::DropAction::Copy)
+                                } else if modifiers.shift {
+                                    Some(operations::DropAction::Move)
+                                } else {
+                                    None
+                                };
+                                hub(cx).update(cx, |hub, cx| {
+                                    hub.drop_files(sources, into, action, cx)
+                                });
+                            }
+                        }),
+                    )
                     .on_drop(cx.listener(move |this, dragged: &DraggedTab, _, cx| {
                         this.tabs.move_tab(dragged.index, index);
                         cx.notify();
@@ -843,6 +870,35 @@ impl Workspace {
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
+            Question::Drop { sources, into } => (
+                format!(
+                    "Move or copy {} into \u{201c}{}\u{201d}?",
+                    operations::what(sources),
+                    folder_label(into)
+                ),
+                vec![
+                    div()
+                        .text_color(theme.text_muted)
+                        .child(
+                            "Hold Shift while dropping to move, Ctrl to copy, without being asked.",
+                        )
+                        .into_any_element(),
+                ],
+                vec![
+                    Button::new("dialog-cancel")
+                        .ghost()
+                        .label("Cancel (Esc)")
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx))),
+                    Button::new("dialog-copy")
+                        .outline()
+                        .label("Copy here (C)")
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Copy, cx))),
+                    Button::new("dialog-accept")
+                        .primary()
+                        .label("Move here (Enter)")
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
+                ],
+            ),
             Question::ConfirmDelete { paths } => (
                 format!("Delete {} for good?", operations::what(paths)),
                 vec![
@@ -918,6 +974,9 @@ impl Workspace {
                     .on_action(cx.listener(|this, _: &DialogReplace, _, cx| {
                         this.answer(Answer::Replace, cx);
                     }))
+                    .on_action(cx.listener(|this, _: &DialogCopy, _, cx| {
+                        this.answer(Answer::Copy, cx);
+                    }))
                     .on_action(cx.listener(|this, _: &DialogToggleAll, _, cx| {
                         this.apply_to_all = !this.apply_to_all;
                         cx.notify();
@@ -966,7 +1025,7 @@ impl Workspace {
                     Answer::Skip => ConflictChoice::Skip,
                     Answer::Cancel => ConflictChoice::Cancel,
                     Answer::Replace if conflict.can_overwrite => ConflictChoice::Overwrite,
-                    Answer::Replace => return,
+                    Answer::Replace | Answer::Copy => return,
                 };
                 hub.resolve(choice, all, cx);
             }
@@ -977,6 +1036,13 @@ impl Workspace {
             (Some(Question::ConfirmDelete { .. }), Answer::Cancel) => hub.confirm_delete(false, cx),
             (Some(Question::ConfirmEmpty { .. }), Answer::Accept) => hub.confirm_empty(true, cx),
             (Some(Question::ConfirmEmpty { .. }), Answer::Cancel) => hub.confirm_empty(false, cx),
+            (Some(Question::Drop { .. }), Answer::Accept) => {
+                hub.answer_drop(Some(operations::DropAction::Move), cx);
+            }
+            (Some(Question::Drop { .. }), Answer::Copy) => {
+                hub.answer_drop(Some(operations::DropAction::Copy), cx);
+            }
+            (Some(Question::Drop { .. }), Answer::Cancel) => hub.answer_drop(None, cx),
             _ => {}
         });
         self.apply_to_all = false;
@@ -991,6 +1057,8 @@ enum Answer {
     Accept,
     Skip,
     Replace,
+    /// Copy the dropped entries.
+    Copy,
     /// Stop the operation, or keep the files.
     Cancel,
 }

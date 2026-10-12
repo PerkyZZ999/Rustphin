@@ -158,6 +158,9 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 - GPUI cannot blur content inside the window. Menus, the palette and dialogs are solid surfaces by design (D-017, `docs/DESIGN.md`).
 - The user's Dolphin reports Ctrl+V as an ambiguous shortcut; in UI tests paste through Dolphin's context menu.
 - Key bindings that also edit text (arrows, Enter, Backspace, Home, End) must use the `Browser && !Input` context, or they fire while the user types in a text field.
+- Never read an entity inside its own `cx.listener` or `update`: GPUI panics ("cannot read … while it is already being updated"). Drop handlers read the dragged entries from their source view, which may be the same view, so they are plain closures that read first and update afterwards.
+- Setting colours on GPUI-Kit's theme does not reach its components until `tokens` is rebuilt from `colors` (see `Theme::apply_to_components`).
+- In kwin-mcp, drags need waypoints with pauses of about 100 ms, or the application does not see a drag. A crashed test instance may ignore `pkill`; use `pkill -9 -x rustphin`.
 - Dialogs use the `Dialog` key context and single-letter keys; workspace shortcuts that must not fire behind a dialog need `&& !Dialog` in their context.
 - A file operation's first progress report arrives when its plan is ready, before any change; tests that cancel "after n reports" count from there.
 - GPUI-Kit's root element paints an opaque background under the app view. The window is opened with a root whose background is cleared (`crates/rustphin-ui/src/lib.rs`); keep that, or translucency silently disappears.

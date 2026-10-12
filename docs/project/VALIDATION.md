@@ -465,3 +465,23 @@
 - **Carried forward, not blocking:** see the open loops in STATE.md: screens not yet observed, no sync to disk, no partial undo of an operation that replaced something, internal clipboard until S5, cross-filesystem and reflink behaviour only simulated or unreachable in tests.
 - **Waiver:** none
 - **Follow-up:** S5.
+
+### 2026-10-12 — W-041 to W-045: file clipboard and drag-and-drop
+- **Phase:** 6 Implement (S5)
+- **Result:** pass, with two points not verifiable in the test session
+- **Evidence:**
+  - `rust-tc doctor` PASS, 242 tests. New tests: `file://` URIs for names with spaces, non-ASCII text, `%`, `#`, a line break and bytes outside UTF-8, round trip; lists in the forms other applications send (host, short form, comments, bare line ends, lower-case escapes); URIs that are not local files skipped; the clipboard formats byte for byte (`text/uri-list`, KDE cut marker, GNOME copied-files, plain text); what is offered reads back the same through a KDE-style, a GNOME-style and a plain reader; a clipboard without files; the in-application fallback; the once-only notice; which dropped entries are left out.
+  - Observed in an isolated session with Dolphin (scenarios C1–C3, G1–G6), using a file named `aaa été 日本.txt`: cut in Rustphin faded the row, and Ctrl+V in Dolphin moved the file; cut in Dolphin and Ctrl+V in Rustphin moved it back, content intact. A plain drag onto a folder asked "Move or copy", and Return moved; a Ctrl-drag copied without asking; a Shift-drag between the two panes of a split moved. A file dragged from Dolphin onto Rustphin was accepted and copied. A file dragged from Rustphin into Dolphin opened Dolphin's own drop menu, and "Copy Here" copied it with its name intact. A press in the Size column still drew a rubber band.
+  - Found and fixed while testing: dropping crashed the application (a view was read while being updated); the default dialog button had no visible label once its colour was set, because the toolkit's components read a second set of tokens.
+- **Not verifiable here:** dragging to an application that is not a KDE one (R-010, needs the live desktop); a compositor without a data-control protocol (R-011: the fallback and its notice are unit-tested only).
+- **Not verified:** copy (as opposed to cut) across the two applications on screen, though it differs only in the marker, which is unit-tested; dropping on a tab; drags in the icons and compact views; drags between two Rustphin windows; several entries dragged at once.
+- **Observation, not part of this slice:** in this session Rustphin's window was see-through without blur. Recorded as an open loop in STATE.md.
+- **Waiver:** none
+- **Follow-up:** the manual non-KDE drag when the user is at the desktop.
+
+### 2026-10-12 — Implement gate, slice S5
+- **Phase:** 6 Implement
+- **Result:** pass with the two open points above
+- **Evidence:** `rust-tc doctor` PASS with 242 tests. R-010: drag within and between panes with modifier or question (G1–G3), out to Dolphin (G5), in from Dolphin (G4), names preserved; the non-KDE target is open. R-011: cut both ways with Dolphin resulting in a move (C1–C3), cut entries faded, names preserved, fallback implemented and unit-tested.
+- **Waiver:** none
+- **Follow-up:** S6.

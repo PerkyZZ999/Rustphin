@@ -3,7 +3,7 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S1–S4 done; S5 next
+- **Current phase:** 6 (Vertical-slice implementation) — S1–S5 done; S6 next
 - **Status:** active — between slices
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-12
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-12 — Implement gate, slice S4
+- Latest validation entry: VALIDATION.md, 2026-10-12 — Implement gate, slice S5
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -24,13 +24,16 @@
 - Task: file operations not yet seen on screen: the failure dialog, stopping with the stop button, rename in the icons and compact views, new file, the speed display, another volume's trash
 - Task: copied data is not synced to disk, so power loss during a copy is not covered (killing the process is)
 - Product: an operation that replaced or deleted something cannot be undone at all, even its reversible parts
+- Manual: drag a file from Rustphin into an application that is not a KDE one (R-010); needs the user's desktop
+- Task: in isolated test sessions the window was see-through without blur (other windows showed behind it unblurred). To check: whether the compositor accepts the blur request while its blur effect is off, and whether the opaque theme should be used then
+- Task: not seen on screen in S5: dropping on a tab, drags in the icons and compact views, copy (not cut) between Rustphin and Dolphin, the clipboard fallback notice
 - Open items carried forward from Discovery are listed in DISCOVERY.md
 
 ## Blockers
 - None
 
 ## Next action
-- Start S5 (clipboard and drag-and-drop): write its work items; replace the internal copy/cut/paste with the system file clipboard through the platform layer (D-010, D-015), then drag-and-drop. Verify UI changes through kwin-mcp in an isolated home. Run `rust-tc doctor` and commit after every task.
+- Start S6 (places, place groups, devices): write its work items from ROADMAP.md. Verify UI changes through kwin-mcp in an isolated home. Run `rust-tc doctor` and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake
