@@ -27,6 +27,7 @@ use crate::{
     operations::{self, Hub, Notice, Question, Running, hub},
     session::{Session, SessionTab},
     settings::Settings,
+    sidebar::{Sidebar, SidebarEvent},
     tabs::Tabs,
     theme::{Theme, size, space, text},
 };
@@ -56,6 +57,8 @@ actions!(
         DialogReplace,
         DialogToggleAll,
         DialogCopy,
+        ToggleSidebar,
+        AddPlace,
     ]
 );
 
@@ -72,6 +75,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-pageup", MoveTabLeft, context),
         KeyBinding::new("ctrl-shift-pagedown", MoveTabRight, context),
         KeyBinding::new("f3", ToggleSplit, context),
+        KeyBinding::new("f9", ToggleSidebar, context),
+        KeyBinding::new("ctrl-d", AddPlace, Some("Workspace && !Input && !Dialog")),
         // Tab moves between the two panes, except while typing in a field.
         KeyBinding::new("tab", OtherPane, Some("Workspace && !Input")),
         // Not while typing: there Ctrl+Z undoes the typing.
@@ -142,7 +147,10 @@ pub struct Workspace {
     apply_to_all: bool,
     /// The zone dates are shown in.
     zone: TimeZone,
+    sidebar: Entity<Sidebar>,
+    sidebar_visible: bool,
     _hub: Subscription,
+    _sidebar: Subscription,
 }
 
 impl Workspace {
@@ -196,6 +204,8 @@ impl Workspace {
                 active: 0,
             })
         });
+        let sidebar = cx.new(|cx| Sidebar::new(window, cx));
+        let sidebar_events = cx.subscribe_in(&sidebar, window, Self::on_sidebar_event);
         let workspace = Self {
             tabs,
             settings_path,
@@ -208,6 +218,9 @@ impl Workspace {
             zone: TimeZone::system(),
             // Progress, questions and messages change outside this view.
             _hub: cx.observe(&hub(cx), |_, _, cx| cx.notify()),
+            sidebar,
+            sidebar_visible: true,
+            _sidebar: sidebar_events,
         };
         workspace.focus_active(window, cx);
         workspace
@@ -280,6 +293,31 @@ impl Workspace {
     ) {
         match event {
             BrowserEvent::OpenInNewTab(path) => self.open_tab(path.clone(), false, window, cx),
+        }
+    }
+
+    fn on_sidebar_event(
+        &mut self,
+        _: &Entity<Sidebar>,
+        event: &SidebarEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            SidebarEvent::Open(path) => {
+                let path = path.clone();
+                self.tabs
+                    .active()
+                    .browser()
+                    .update(cx, |browser, cx| browser.go_to(path, cx));
+            }
+            SidebarEvent::OpenInNewTab(path) => self.open_tab(path.clone(), false, window, cx),
+            SidebarEvent::OpenTrash => {
+                self.tabs
+                    .active()
+                    .browser()
+                    .update(cx, |browser, cx| browser.open_trash(cx));
+            }
         }
     }
 
@@ -370,11 +408,25 @@ impl Workspace {
 
     fn other_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let index = self.tabs.active_index();
-        if self.tabs.active().panes.len() == 2 {
-            self.edit_tab(index, |tab| tab.active = 1 - tab.active);
+        let panes = self.tabs.active().panes.len();
+        let in_sidebar = self.sidebar.read(cx).is_focused(window, cx);
+        let active = self.tabs.active().active;
+        if in_sidebar {
+            // From the places panel to the first pane.
+            self.edit_tab(index, |tab| tab.active = 0);
             self.focus_active(window, cx);
-            cx.notify();
+        } else if active + 1 < panes {
+            self.edit_tab(index, |tab| tab.active = active + 1);
+            self.focus_active(window, cx);
+        } else if self.sidebar_visible {
+            // From the last pane on to the places panel.
+            self.sidebar
+                .update(cx, |sidebar, cx| sidebar.focus(window, cx));
+        } else if panes > 1 {
+            self.edit_tab(index, |tab| tab.active = 0);
+            self.focus_active(window, cx);
         }
+        cx.notify();
     }
 
     /// Applies `edit` to the tab at `index`, if there is one.
@@ -548,6 +600,11 @@ impl Render for Workspace {
         }
         self.dialog_open = dialog_open;
 
+        // The places panel marks the place of the folder being shown.
+        let location = self.tabs.active().browser().read(cx).location();
+        self.sidebar
+            .update(cx, |sidebar, cx| sidebar.set_current(location, cx));
+
         let title = format!("{} \u{2014} Rustphin", Self::label(self.tabs.active(), cx));
         if title != self.title {
             window.set_window_title(&title);
@@ -556,8 +613,14 @@ impl Render for Workspace {
 
         let tab = self.tabs.active();
         let split = tab.panes.len() > 1;
-        // Panes share the window's width equally.
-        let pane_width = f32::from(window.viewport_size().width) / tab.panes.len() as f32;
+        // Panes share equally the width the places panel leaves.
+        let panel_width = if self.sidebar_visible {
+            size::SIDEBAR
+        } else {
+            0.
+        };
+        let pane_width =
+            (f32::from(window.viewport_size().width) - panel_width) / tab.panes.len() as f32;
         for pane in &tab.panes {
             pane.browser
                 .update(cx, |browser, _| browser.set_width(pane_width));
@@ -617,6 +680,20 @@ impl Render for Workspace {
             )
             .on_action(cx.listener(|this, _: &OtherPane, window, cx| this.other_pane(window, cx)))
             .on_action(|_: &Undo, _, cx| operations::hub(cx).update(cx, Hub::undo))
+            .on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| {
+                this.sidebar_visible = !this.sidebar_visible;
+                if !this.sidebar_visible {
+                    this.focus_active(window, cx);
+                }
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &AddPlace, _, cx| {
+                let folder = this.tabs.active().browser().read(cx).location();
+                if let Some(folder) = folder {
+                    this.sidebar
+                        .update(cx, |sidebar, cx| sidebar.add_place(folder, None, cx));
+                }
+            }))
             .relative()
             .flex()
             .flex_col()
@@ -627,7 +704,14 @@ impl Render for Workspace {
             .when(self.tabs.len() > 1, |workspace| {
                 workspace.child(self.tab_strip(theme, cx))
             })
-            .child(div().flex().flex_1().min_h_0().children(panes))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h_0()
+                    .when(self.sidebar_visible, |row| row.child(self.sidebar.clone()))
+                    .children(panes),
+            )
             .children(activity)
             .children(dialog)
     }

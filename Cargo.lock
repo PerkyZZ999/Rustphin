@@ -5642,6 +5642,7 @@ version = "0.1.0"
 dependencies = [
  "jiff",
  "raw-window-handle",
+ "roxmltree 0.21.1",
  "rustix",
  "rustphin-core",
  "tempfile",

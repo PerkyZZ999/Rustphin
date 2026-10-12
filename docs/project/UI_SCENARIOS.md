@@ -83,6 +83,13 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | G4 | With Dolphin open on a folder, drag a file from Dolphin onto Rustphin's list | The same move-or-copy dialog; `C` copies it into the folder shown |
 | G5 | Tile Rustphin to the left (Super+Left), drag a file by its name into Dolphin's view | Dolphin shows its own Move/Copy/Link menu; "Copy Here" copies the file, name intact |
 | G6 | Press in a row's Size column and drag down across rows | A rubber band selects the rows, as before drags existed |
+| K1 | In a fresh isolated home, look at the left panel | "Places" with two buttons, and "No places yet. Add the folder shown with Ctrl+D, or drag a folder here." |
+| K2 | Ctrl+D; enter a folder; Ctrl+D | Both folders are listed; the one being shown has an accent bar and a highlighted row; `<isolated home>/.local/share/user-places.xbel` holds two `<bookmark>` elements |
+| K3 | Tab (focus the panel), Ctrl+Shift+G, type `Work`, Return, Up, G | A heading "Work" with an arrow; the place above it moves under the heading, indented; `<isolated home>/.config/rustphin/place-groups.toml` lists the group with that place's identifier |
+| K4 | F2 on a place, type a new name, Return; then start `dolphin /tmp` in the session | Dolphin's Places lists both places, ungrouped, with the new name; within a second Rustphin's panel also lists the "Home" and "Trash" entries Dolphin added to the file |
+| K5 | Kill and relaunch Rustphin | The group and its place are back as they were |
+| K6 | Drag a place onto a group heading; drag a folder from the file list onto the panel | The place moves into the group; the folder is added to the places |
+| K7 | Focus a group heading, Left, then Delete | Left folds the group (arrow points right, a count appears); Delete removes the heading and its places stay, ungrouped |
 | L1 | Launch the release build on a 500,000-entry folder (`rust-tc bench-listing` creates `target/bench/listing-500k`); press End | Status "500,000 items"; the last entry is selected and visible within a second |
 
 ## Not covered by these scenarios

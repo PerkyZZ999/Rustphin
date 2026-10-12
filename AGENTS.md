@@ -161,6 +161,8 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 - Never read an entity inside its own `cx.listener` or `update`: GPUI panics ("cannot read … while it is already being updated"). Drop handlers read the dragged entries from their source view, which may be the same view, so they are plain closures that read first and update afterwards.
 - Setting colours on GPUI-Kit's theme does not reach its components until `tokens` is rebuilt from `colors` (see `Theme::apply_to_components`).
 - In kwin-mcp, drags need waypoints with pauses of about 100 ms, or the application does not see a drag. A crashed test instance may ignore `pkill`; use `pkill -9 -x rustphin`.
+- KDE adds its built-in places (Home, Trash, Network, …) to `user-places.xbel` the first time one of its applications reads a file that lacks them, so the file changes under Rustphin right after Dolphin starts in a fresh home.
+- A debug build can take ten seconds or more to show its window in a kwin-mcp session; a 4 KB screenshot means nothing is on screen yet, not that the app crashed.
 - Dialogs use the `Dialog` key context and single-letter keys; workspace shortcuts that must not fire behind a dialog need `&& !Dialog` in their context.
 - A file operation's first progress report arrives when its plan is ready, before any change; tests that cancel "after n reports" count from there.
 - GPUI-Kit's root element paints an opaque background under the app view. The window is opened with a root whose background is cleared (`crates/rustphin-ui/src/lib.rs`); keep that, or translucency silently disappears.

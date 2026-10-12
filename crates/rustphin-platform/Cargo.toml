@@ -23,6 +23,7 @@ jiff.workspace = true
 rustix = { workspace = true, features = ["process"] }
 rustphin-core.workspace = true
 raw-window-handle.workspace = true
+roxmltree.workspace = true
 thiserror.workspace = true
 wayland-backend.workspace = true
 wayland-client.workspace = true

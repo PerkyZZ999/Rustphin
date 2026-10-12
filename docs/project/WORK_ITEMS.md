@@ -1,14 +1,19 @@
 # Work items (current slice)
 
 ## Current slice
-S5 — Clipboard and drag-and-drop
+S6 — Places, place groups, devices
 
-**Done when:** every R-010 and R-011 acceptance point is demonstrated and recorded in VALIDATION.md, or recorded as not verifiable with the reason.
+**Done when:** every R-012 and R-013 acceptance point is demonstrated and recorded in VALIDATION.md, or recorded as not verifiable with the reason; the shared places file stays valid for Dolphin after every edit.
 
 ## Queue
-- None. S5 is closed; S6 is planned in ROADMAP.md and its work items are written when it starts.
+- [ ] W-049 — Platform: devices over UDisks2 (list, mount, unmount, safely remove, changes), tested against a mock service (R-013, D-013)
+- [ ] W-050 — UI: devices in the places panel with capacity; mount on activation; unmount and safely remove; failures shown with their reason (R-013)
+- [ ] W-051 — Device scenarios, and whatever of R-013 can be observed without real hardware, added to UI_SCENARIOS.md and run (R-013)
 
 ## Done (recent)
+- [x] W-048 — Places panel: shows the shared places and the groups; open, open in a new tab, add (Ctrl+D, button, or drag a folder in), rename (F2), remove or hide (Delete, H), reorder (Alt+Up/Down), collapse (Left/Right), move between groups (G, or drag), new group (Ctrl+Shift+G); follows edits other applications make; F9 shows and hides it; Tab moves between it and the panes. Scenarios K1–K7 run with Dolphin (R-012)
+- [x] W-047 — Place groups in `place-groups.toml`: name, order, collapsed state, member identifiers; a place is in at most one group; deleting a group keeps its places; vanished places are forgotten only after a successful read of the shared file (R-012, D-008)
+- [x] W-046 — `rustphin_platform::places`: reads KDE's `user-places.xbel` and edits it in place (add, rename, hide, remove, reorder), changing only the bytes concerned and refusing a result that does not parse (R-012, D-008)
 - [x] S5 — Clipboard and drag-and-drop: W-041 to W-045, closed 2026-10-12 with two points not verifiable in tests (see VALIDATION.md)
 - [x] W-045 — Clipboard and drag scenarios C1–C3 and G1–G6 added to UI_SCENARIOS.md and run with Dolphin in an isolated session (R-010, R-011)
 - [x] W-044 — Entries can be dragged out to other applications, and files dropped from other applications are accepted onto a view or a folder (R-010)

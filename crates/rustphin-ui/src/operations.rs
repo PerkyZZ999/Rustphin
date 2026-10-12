@@ -512,6 +512,11 @@ impl Hub {
         .detach();
     }
 
+    /// Shows `text` as the latest message.
+    pub fn say(&mut self, text: String, is_error: bool, cx: &mut Context<Self>) {
+        self.set_notice(text, is_error, cx);
+    }
+
     /// Dismisses the message being shown.
     pub fn dismiss_notice(&mut self, cx: &mut Context<Self>) {
         self.notice = None;

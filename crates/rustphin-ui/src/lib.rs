@@ -7,10 +7,12 @@ mod browser;
 mod diagnostics;
 mod filetypes;
 mod format;
+mod groups;
 mod layout;
 mod operations;
 mod session;
 mod settings;
+mod sidebar;
 mod tabs;
 mod theme;
 mod workspace;
@@ -76,6 +78,7 @@ pub fn run(options: Options) {
             operations::init(cx);
             browser::bind_keys(cx);
             workspace::bind_keys(cx);
+            sidebar::bind_keys(cx);
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
                     cx.quit();

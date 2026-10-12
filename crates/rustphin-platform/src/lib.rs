@@ -9,6 +9,7 @@ pub mod clipboard;
 pub mod config;
 pub mod icons;
 pub mod mime;
+pub mod places;
 pub mod trash;
 pub mod uri;
 pub mod xdg;

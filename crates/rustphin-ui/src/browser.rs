@@ -941,8 +941,14 @@ impl Browser {
         .detach();
     }
 
+    /// Shows `folder`.
+    pub fn go_to(&mut self, folder: PathBuf, cx: &mut Context<Self>) {
+        self.open(folder);
+        cx.notify();
+    }
+
     /// Shows the trash.
-    fn open_trash(&mut self, cx: &mut Context<Self>) {
+    pub fn open_trash(&mut self, cx: &mut Context<Self>) {
         let Some(trash) = hub(cx).read(cx).trash() else {
             return;
         };
@@ -2197,6 +2203,15 @@ impl DraggedEntries {
             .map_or_else(Vec::new, |browser| browser.read(cx).drag_paths(self.row))
     }
 
+    /// The folders among the dragged entries.
+    pub fn folder_paths(&self, cx: &App) -> Vec<PathBuf> {
+        self.paths(cx)
+            .into_iter()
+            .zip(self.folders(cx))
+            .filter_map(|(path, is_folder)| is_folder.then_some(path))
+            .collect()
+    }
+
     /// For each of [`Self::paths`], whether it is a folder.
     fn folders(&self, cx: &App) -> Vec<bool> {
         let Some(browser) = self.source.upgrade() else {
@@ -2413,7 +2428,7 @@ fn theme_icon_size(drawn: f32) -> u32 {
 fn crumbs_for_width(width: f32) -> usize {
     match width {
         w if w >= 1000. => 4,
-        w if w >= 700. => 3,
+        w if w >= 780. => 3,
         w if w >= 520. => 2,
         _ => 1,
     }

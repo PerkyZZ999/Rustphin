@@ -47,6 +47,8 @@ pub mod size {
     pub const WIDTH_FOR_TYPE: f32 = 760.;
     /// Icons in empty and error states.
     pub const ICON_LARGE: f32 = 32.;
+    /// Width of the places panel.
+    pub const SIDEBAR: f32 = 220.;
     /// Width of a dialog.
     pub const DIALOG: f32 = 440.;
     /// Height of a progress bar.
