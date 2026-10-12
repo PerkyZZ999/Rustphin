@@ -517,3 +517,23 @@
 - **Evidence:** `rust-tc doctor` PASS with 276 tests. R-012: all five points demonstrated (entry of 2026-10-12 for W-046 to W-048). R-013: volumes appear with name and usage (V5); mount, unmount, safe removal, change notification and the busy reason are implemented and pass against a mock service, and are not yet tried on hardware. The shared places file stayed valid for Dolphin after Rustphin's edits (K4).
 - **Waiver:** none
 - **Follow-up:** S7.
+
+### 2026-10-12 — W-052 to W-054: thumbnails
+- **Phase:** 6 Implement (S7)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS, 291 tests. New tests: the cache file name equals the specification's own example (MD5 of the URI); a thumbnail fits its size class, keeps proportions and content, records the original's URI, modification time and dimensions, and is private (0600 in a 0700 folder); a small image is not scaled up; a cached thumbnail is reused, not rewritten, until the file's time changes, and each size class is separate; a thumbnail written by another application with only the required keys is used as it is; truncated, random, textual and empty files give no thumbnail, are marked as failed and are not tried again until they change; a PNG header claiming 60,000 × 60,000 pixels is refused without being decoded; the cache does not thumbnail itself; requests are answered on background threads, failures included; beyond 64 waiting requests the oldest are dropped and handed back. UI side: which types are thumbnailed, forgetting a folder's files, not re-asking for a known failure, bounded memory of answers.
+  - Mutation checks through `rust-tc quick`: 10 breakages by hand; 9 failed at once, 1 survived (a known failure being asked for again), its test was strengthened, and it then failed.
+  - Observed in an isolated session (scenario H1): in the icons view a wide, a tall and a square picture showed their content with proportions kept; a file named `broken.png` that is not an image kept its type icon and nothing crashed; the isolated home's cache held three thumbnails in `normal/` and one failure marker; a thumbnail's text chunks carried the file's URI, modification time and original size.
+- **Against R-014 and R-104:** type icons from the theme (S2); thumbnails made off the UI thread and only for entries being drawn, with waiting work dropped on leaving a folder or when it piles up; read from and written to the shared cache in the specified format; damaged and oversized images are harmless.
+- **Not verified:** a thumbnail made by Dolphin being picked up on screen, and Dolphin picking up ours (both follow from the shared name and format, which are tested); JPEG, GIF and WebP on screen; behaviour while scrolling thousands of pictures; very slow decodes (there is no time limit, only size limits).
+- **Limits:** no thumbnails for video, PDF, SVG or RAW files; none in the details and compact views at their default icon sizes; a decode in progress is not interrupted when its entry scrolls away, only waiting ones are dropped.
+- **Waiver:** none
+- **Follow-up:** none blocking.
+
+### 2026-10-12 — Implement gate, slice S7
+- **Phase:** 6 Implement
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` PASS with 291 tests; the entry above covers R-014's four points and the image part of R-104.
+- **Waiver:** none
+- **Follow-up:** S8.

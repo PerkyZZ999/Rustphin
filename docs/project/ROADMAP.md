@@ -55,14 +55,14 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** R-014 thumbnail criteria; malformed and oversized images are harmless.
 - **Requirements:** R-014 (thumbnails), R-104 (images)
 - **Validation:** test, manual
-- **Status:** todo — next
+- **Status:** done 2026-10-12 (see VALIDATION.md)
 
 ## Slice S8 — Command palette and progressive disclosure
 - **Outcome:** One shortcut reaches every action and any recent folder; the default window is pared back to the essentials.
 - **Acceptance:** R-015 and R-106 criteria.
 - **Requirements:** R-015, R-106
 - **Validation:** test, bench, ui-test, manual design checklist
-- **Status:** todo
+- **Status:** todo — next
 
 ## Slice S9 — Advanced batch rename
 - **Outcome:** Rename many files with patterns, regular expressions and counters, with a live preview and one-step undo.

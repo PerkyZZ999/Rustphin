@@ -39,6 +39,7 @@ use crate::{
     operations::{self, hub},
     settings::Settings,
     theme::{Theme, size, space, text},
+    thumbs::{self, thumbs},
 };
 
 const KEY_CONTEXT: &str = "Browser";
@@ -48,6 +49,8 @@ const LIST_CONTEXT: &str = "Browser && !Input";
 const BAND_THRESHOLD: f32 = 4.;
 /// A pause longer than this starts a new type-ahead search.
 const TYPE_AHEAD_PAUSE: Duration = Duration::from_millis(1000);
+/// Icons smaller than this stay type icons: a thumbnail would be a smudge.
+const MIN_THUMBNAIL_EDGE: f32 = 32.;
 /// Rows moved by Page Up and Page Down.
 const PAGE_ROWS: isize = 15;
 
@@ -270,6 +273,8 @@ impl Browser {
             cx.subscribe_in(&rename_input, window, Self::on_rename_input),
             // Cut entries are drawn dimmed, and the clipboard changes elsewhere.
             cx.observe(&hub(cx), |_, _, cx| cx.notify()),
+            // Thumbnails arrive from background threads.
+            cx.observe(&thumbs(cx), |_, _, cx| cx.notify()),
         ];
         // Whatever contains this view decides when it gets the keyboard focus:
         // a view created for a background tab must not take it.
@@ -363,6 +368,12 @@ impl Browser {
                 let arrived = same_place.is_none();
                 if arrived {
                     self.detect_trash(snapshot.path().to_owned(), cx);
+                    // What the previous folder was waiting for is not wanted now.
+                    thumbs(cx).update(cx, |thumbs, _| thumbs.drop_waiting());
+                } else if same_place.is_some_and(|shown| shown.listing() != snapshot.listing()) {
+                    // The folder was read again: its pictures may have changed.
+                    let folder = snapshot.path().to_owned();
+                    thumbs(cx).update(cx, |thumbs, _| thumbs.forget_folder(&folder));
                 }
                 let arrival = self.select_on_arrival.take_if(|_| !snapshot.is_loading());
                 let came_from = arrival.and_then(|name| snapshot.row_of(&name));
@@ -1471,7 +1482,31 @@ impl Browser {
             renaming: self.renaming.as_deref() == Some(rows.name(row)),
             cut: self.has_cut && hub(cx).read(cx).is_cut(&rows.entry_path(row)),
             info: self.type_info_for(rows.name(row), container, cx),
+            thumb: self.thumbnail_for(rows, row, container, cx),
         }
+    }
+
+    /// The thumbnail of the entry at `row`, if it is an image, the icons are
+    /// large enough to show one, and it is ready. Asking is what gets it made,
+    /// so only entries that are drawn ever get one.
+    fn thumbnail_for(
+        &mut self,
+        rows: &Snapshot,
+        row: usize,
+        container: bool,
+        cx: &mut Context<Self>,
+    ) -> Option<Arc<Path>> {
+        let edge = self.mode.layout(self.zoom).icon;
+        if container || edge < MIN_THUMBNAIL_EDGE || self.trash_dir.is_some() {
+            return None;
+        }
+        let mime = self.types.as_ref()?.mime_type(rows.name(row), false);
+        if !thumbs::has_thumbnail(mime) {
+            return None;
+        }
+        let size = rustphin_platform::thumbnails::ThumbSize::for_edge(edge as u32);
+        let file = rows.entry_path(row);
+        thumbs(cx).update(cx, |thumbs, _| thumbs.get(&file, size))
     }
 
     /// The name of an entry on one line, or the field to edit it while it is
@@ -2354,6 +2389,8 @@ struct Entry {
     renaming: bool,
     /// Cut and waiting to be pasted.
     cut: bool,
+    /// Its thumbnail, shown in place of the type icon.
+    thumb: Option<Arc<Path>>,
     info: Option<TypeInfo>,
 }
 
@@ -2370,6 +2407,15 @@ impl Entry {
     /// The file-type icon from the system theme, or a generic one until it is
     /// known or when the theme has none.
     fn icon(&self, edge: f32, theme: Theme) -> AnyElement {
+        // A thumbnail keeps the picture's proportions inside the icon's square.
+        if let Some(thumb) = &self.thumb {
+            use gpui_kit::StyledImage as _;
+            return img(thumb.clone())
+                .size(px(edge))
+                .flex_none()
+                .object_fit(gpui_kit::ObjectFit::Contain)
+                .into_any_element();
+        }
         match self.info.as_ref().and_then(|info| info.icon.clone()) {
             Some(path) => img(path).size(px(edge)).flex_none().into_any_element(),
             None => Icon::new(if self.container {

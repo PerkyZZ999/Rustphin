@@ -43,3 +43,11 @@ pub fn state_home() -> Option<PathBuf> {
         .filter(|path| path.is_absolute())
         .or_else(|| home().map(|home| home.join(".local/state")))
 }
+
+/// The directory holding the user's caches.
+pub fn cache_home() -> Option<PathBuf> {
+    env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| home().map(|home| home.join(".cache")))
+}

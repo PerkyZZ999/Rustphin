@@ -3,7 +3,7 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S1–S6 done; S7 next
+- **Current phase:** 6 (Vertical-slice implementation) — S1–S7 done; S8 next
 - **Status:** active — between slices
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-12
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-12 — Implement gate, slice S6
+- Latest validation entry: VALIDATION.md, 2026-10-12 — Implement gate, slice S7
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -29,13 +29,14 @@
 - Task: not seen on screen in S5: dropping on a tab, drags in the icons and compact views, copy (not cut) between Rustphin and Dolphin, the clipboard fallback notice
 - Manual: mount, unmount and safely remove a real USB drive from the places panel, and unmount one in use to see the reason (R-013); needs the user
 - Task: places panel not yet seen on screen: hiding a place, reordering by keyboard, an edit made in Dolphin other than adding; its width is fixed and its visibility is not remembered
+- Task: thumbnails not yet observed: reuse of a thumbnail Dolphin made and the reverse on screen (the cache format is unit-tested against the specification's example); JPEG, GIF and WebP files; scrolling a large picture folder
 - Open items carried forward from Discovery are listed in DISCOVERY.md
 
 ## Blockers
 - None
 
 ## Next action
-- Start S7 (thumbnails): write its work items from ROADMAP.md. Verify UI changes through kwin-mcp in an isolated home. Use `rust-tc` for every check and commit after every task.
+- Start S8 (command palette and progressive disclosure): write its work items from ROADMAP.md. Verify UI changes through kwin-mcp in an isolated home. Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

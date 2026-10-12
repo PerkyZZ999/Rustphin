@@ -47,6 +47,22 @@ pub fn file_uri(path: &Path) -> String {
     format!("file://{}", percent_encode(path.as_os_str().as_bytes()))
 }
 
+/// The `file://` URI of an absolute path as GLib and Qt write it: the
+/// characters a URI path may contain literally (`!$&'()*+,;=:@`) are left
+/// alone. The thumbnail cache is keyed by a hash of exactly this form, so it
+/// must match what other applications produce.
+pub fn canonical_file_uri(path: &Path) -> String {
+    let mut out = String::from("file://");
+    for &byte in path.as_os_str().as_bytes() {
+        if byte.is_ascii_alphanumeric() || b"-_.~/!$&'()*+,;=:@".contains(&byte) {
+            out.push(byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
 /// The local path a `file:` URI names, or `None` for other schemes, other
 /// hosts and relative paths.
 pub fn path_from_uri(uri: &[u8]) -> Option<PathBuf> {
@@ -129,6 +145,18 @@ mod tests {
         let body = "https://example.org/x\nfile://otherhost/tmp/x\nfile:relative\n\
                     sftp://host/x\nfile:///ok\nfile:///nul%00byte\n";
         assert_eq!(paths_from_uri_list(body.as_bytes()), [PathBuf::from("/ok")]);
+    }
+
+    #[test]
+    fn the_canonical_form_escapes_only_what_a_uri_path_cannot_hold() {
+        assert_eq!(
+            canonical_file_uri(Path::new("/home/u/My Pics/a+b (1)&c=d,e;f@g:h!.png")),
+            "file:///home/u/My%20Pics/a+b%20(1)&c=d,e;f@g:h!.png"
+        );
+        assert_eq!(
+            canonical_file_uri(Path::new("/tmp/é#?%[]")),
+            "file:///tmp/%C3%A9%23%3F%25%5B%5D"
+        );
     }
 
     #[test]

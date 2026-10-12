@@ -5640,7 +5640,11 @@ dependencies = [
 name = "rustphin-platform"
 version = "0.1.0"
 dependencies = [
+ "flume 0.11.1",
+ "image",
  "jiff",
+ "md-5",
+ "png 0.18.1",
  "raw-window-handle",
  "roxmltree 0.21.1",
  "rustix",

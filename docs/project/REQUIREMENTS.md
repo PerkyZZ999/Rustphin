@@ -129,10 +129,10 @@ Conventions:
 ### R-014 — Thumbnails and icons
 - **Priority:** must
 - **Acceptance:**
-  - [ ] File-type icons come from the system icon theme by MIME type.
-  - [ ] Images show thumbnails, generated off the UI thread and only for visible or nearly visible entries; scrolling away cancels pending work.
-  - [ ] Thumbnails are read from and written to the shared freedesktop thumbnail cache, so they are reused by and from Dolphin.
-  - [ ] A corrupt or oversized image never crashes or stalls the application.
+  - [x] File-type icons come from the system icon theme by MIME type.
+  - [x] Images show thumbnails, generated off the UI thread and only for visible or nearly visible entries; scrolling away cancels pending work.
+  - [x] Thumbnails are read from and written to the shared freedesktop thumbnail cache, so they are reused by and from Dolphin.
+  - [x] A corrupt or oversized image never crashes or stalls the application.
 - **Validation:** test (cache format, malformed inputs), manual
 
 ### R-015 — Command palette and fuzzy jump

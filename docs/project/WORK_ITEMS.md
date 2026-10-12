@@ -1,14 +1,18 @@
 # Work items (current slice)
 
 ## Current slice
-S6 — Places, place groups, devices
+S8 — Command palette and progressive disclosure (not started)
 
-**Done when:** every R-012 and R-013 acceptance point is demonstrated and recorded in VALIDATION.md, or recorded as not verifiable with the reason; the shared places file stays valid for Dolphin after every edit.
+**Done when:** see ROADMAP.md; work items are written when the slice starts.
 
 ## Queue
-- None. S6 is closed; S7 is planned in ROADMAP.md and its work items are written when it starts.
+- None. S7 is closed; S8 is planned in ROADMAP.md and its work items are written when it starts.
 
 ## Done (recent)
+- [x] S7 — Thumbnails: W-052 to W-054, closed 2026-10-12 (see VALIDATION.md)
+- [x] W-054 — Scenario H1 for thumbnails added to UI_SCENARIOS.md and run (R-014)
+- [x] W-053 — Views show thumbnails in place of the type icon for PNG, JPEG, GIF, WebP and BMP files when icons are 32 px or larger; only entries being drawn are asked for; leaving a folder drops what it was waiting for; a folder that is read again has its pictures checked again (R-014)
+- [x] W-052 — `rustphin_platform::thumbnails`: the freedesktop thumbnail cache (names, size classes, text chunks, private permissions, failure markers) and a background thumbnailer that serves the newest request first and drops the oldest beyond 64; decoding bounded in file size, dimensions and memory, with decoder panics contained (R-014, R-104)
 - [x] S6 — Places, place groups, devices: W-046 to W-051, closed 2026-10-12; mounting and unmounting were not exercised on real hardware (see VALIDATION.md)
 - [x] W-051 — Scenario V5 for the devices section added to UI_SCENARIOS.md and run; nothing was mounted or unmounted on the machine's own drives (R-013)
 - [x] W-050 — Devices in the places panel: name, a usage bar with free and total space for mounted volumes, mount on activation, unmount or safely remove (button or E), failures reported with their reason; the system and home volumes cannot be unmounted from the panel (R-013)

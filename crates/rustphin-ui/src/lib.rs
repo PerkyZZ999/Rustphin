@@ -15,6 +15,7 @@ mod settings;
 mod sidebar;
 mod tabs;
 mod theme;
+mod thumbs;
 mod workspace;
 
 use std::path::PathBuf;
@@ -76,6 +77,7 @@ pub fn run(options: Options) {
                 cx,
             );
             operations::init(cx);
+            thumbs::init(cx);
             browser::bind_keys(cx);
             workspace::bind_keys(cx);
             sidebar::bind_keys(cx);
