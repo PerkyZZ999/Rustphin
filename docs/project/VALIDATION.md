@@ -393,3 +393,15 @@
 - **Deviations:** a folder is copied into a temporary folder and renamed as a whole, so a folder appears only when complete; if the user skips a failing file inside it, the folder is put in place without that file and the skip is reported. Devices, pipes and sockets are not copied.
 - **Waiver:** none
 - **Follow-up:** W-033 trash, W-034 undo, W-036 property tests and the gate record.
+
+### 2026-10-12 — W-033: trash and permanent delete
+- **Phase:** 6 Implement (S4)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS, 189 tests. New tests, all on real temporary directories: the `.trashinfo` record is byte-for-byte what the specification asks for (absolute path in the home trash, path relative to the volume's top in a volume trash, percent-encoding including bytes outside UTF-8, local-time date); trash directories are created private (0700); equal names get distinct trash names and restore to their own places; restore refuses to replace what took the place; orphaned content in the trash is not replaced; the shared `.Trash` folder is used only with the sticky bit; an entry stays when its volume cannot hold a trash; the trash, its parents and its contents cannot be trashed; records in the styles Dolphin and GLib write are read; trashing with the process dying at each step leaves the entry either where it was or whole in the trash.
+  - Engine: trash and delete requests, with skip, retry and cancel; delete removes a tree but never what a link points to; a file that cannot be deleted keeps its folders and is reported once.
+  - Mutation checks: 16 breakages by hand across the trash and the engine's delete path; 13 caught at once, 3 survived (trash replacing orphaned content, a record left after a failed move, the trash-contains-itself check), tests were added, and all 3 then failed.
+- **Not verified:** interoperability against a running Dolphin (W-040); a real second filesystem (volumes are simulated: the test filesystem reports a different device number for a folder); the `directorysizes` cache, which is optional in the specification and not written.
+- **Decision within D-011:** when no trash can be used on an entry's own volume, trashing fails and the entry stays; it is never copied to the home trash across filesystems and never deleted instead.
+- **Waiver:** none
+- **Follow-up:** W-034 undo.

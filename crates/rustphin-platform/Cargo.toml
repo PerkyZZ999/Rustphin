@@ -19,6 +19,9 @@ todo = "deny"
 undocumented_unsafe_blocks = "deny"
 
 [dependencies]
+jiff.workspace = true
+rustix = { workspace = true, features = ["process"] }
+rustphin-core.workspace = true
 raw-window-handle.workspace = true
 thiserror.workspace = true
 wayland-backend.workspace = true
@@ -26,4 +29,5 @@ wayland-client.workspace = true
 wayland-protocols.workspace = true
 
 [dev-dependencies]
+rustphin-core = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true

@@ -154,6 +154,17 @@ pub trait Fs: Send + Sync + 'static {
     fn set_attributes(&self, _path: &Path, _info: &FileInfo) -> io::Result<()> {
         Err(io::ErrorKind::Unsupported.into())
     }
+
+    /// Reads a whole small file, such as a trash record.
+    fn read(&self, _path: &Path) -> io::Result<Vec<u8>> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
+    /// Creates the file `path` with `content`. Fails with
+    /// [`io::ErrorKind::AlreadyExists`] when something is there.
+    fn write_new(&self, _path: &Path, _content: &[u8]) -> io::Result<()> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
 }
 
 /// Keeps a [`Fs::watch`] alive; dropping it ends the watch.
@@ -325,6 +336,16 @@ impl Fs for RealFs {
             },
         };
         Ok(utimensat(CWD, path, &times, AtFlags::empty())?)
+    }
+
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+        fs::read(path)
+    }
+
+    fn write_new(&self, path: &Path, content: &[u8]) -> io::Result<()> {
+        let mut file = fs::File::create_new(path)?;
+        file.write_all(content)?;
+        file.sync_all()
     }
 }
 

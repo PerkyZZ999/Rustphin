@@ -1,4 +1,7 @@
 //! Test support: the real filesystem with faults injected at chosen steps.
+//!
+//! Compiled for this crate's tests and, with the `test-support` feature, for
+//! the tests of crates that build on the [`Fs`] trait.
 
 use std::{
     io,
@@ -11,7 +14,7 @@ use crate::{FileInfo, Fs, Metadata, RawEntry, RealFs, WatchGuard};
 
 /// What happens at the chosen step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Fault {
+pub enum Fault {
     /// That one call fails; later calls work.
     Error,
     /// That call and every later call fail, as if the process had died there:
@@ -36,7 +39,7 @@ struct State {
 /// the n-th one fail. A failing file copy first writes half the file, the
 /// worst a real failure can leave.
 #[derive(Default)]
-pub(crate) struct FaultFs {
+pub struct FaultFs {
     state: Mutex<State>,
     /// Directories that behave as separate filesystems: a rename from inside
     /// one to outside it fails with `CrossesDevices`.
@@ -48,31 +51,31 @@ pub(crate) struct FaultFs {
 
 impl FaultFs {
     /// No faults.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
     /// Makes the changing call number `step` (from 0) suffer `fault`.
-    pub(crate) fn failing_at(step: usize, fault: Fault) -> Self {
+    pub fn failing_at(step: usize, fault: Fault) -> Self {
         let fs = Self::default();
         fs.lock().fault = Some((step, fault));
         fs
     }
 
     /// Treats `root` as a filesystem of its own.
-    pub(crate) fn with_device(mut self, root: &Path) -> Self {
+    pub fn with_device(mut self, root: &Path) -> Self {
         self.devices.push(root.to_owned());
         self
     }
 
     /// Runs `meddler` right before each changing call.
-    pub(crate) fn with_meddler(mut self, meddler: impl Fn(usize) + Send + Sync + 'static) -> Self {
+    pub fn with_meddler(mut self, meddler: impl Fn(usize) + Send + Sync + 'static) -> Self {
         self.meddler = Some(Box::new(meddler));
         self
     }
 
     /// Whether the fault was reached.
-    pub(crate) fn hit(&self) -> bool {
+    pub fn hit(&self) -> bool {
         self.lock().hit
     }
 
@@ -163,7 +166,12 @@ impl Fs for FaultFs {
 
     fn info(&self, path: &Path) -> io::Result<FileInfo> {
         self.alive()?;
-        RealFs.info(path)
+        let mut info = RealFs.info(path)?;
+        if let Some(device) = self.device(path) {
+            // A device number of its own for each pretended filesystem.
+            info.device = u64::MAX - device as u64;
+        }
+        Ok(info)
     }
 
     fn create_dir(&self, path: &Path, mode: u32) -> io::Result<()> {
@@ -235,5 +243,15 @@ impl Fs for FaultFs {
     fn set_attributes(&self, path: &Path, info: &FileInfo) -> io::Result<()> {
         self.plain_step()?;
         RealFs.set_attributes(path, info)
+    }
+
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+        self.alive()?;
+        RealFs.read(path)
+    }
+
+    fn write_new(&self, path: &Path, content: &[u8]) -> io::Result<()> {
+        self.plain_step()?;
+        RealFs.write_new(path, content)
     }
 }

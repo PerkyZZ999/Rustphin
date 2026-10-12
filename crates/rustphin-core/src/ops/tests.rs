@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, VecDeque},
     ffi::OsString,
-    fs,
+    fs, io,
     os::unix::{
         ffi::{OsStrExt, OsStringExt},
         fs::{MetadataExt, PermissionsExt, symlink},
@@ -155,7 +155,7 @@ fn move_(sources: &[PathBuf], into: &Path) -> Request {
 }
 
 fn go(request: &Request, script: &mut Script) -> Outcome {
-    run(&RealFs, request, script).unwrap()
+    run(&RealFs, &NoTrash, request, script).unwrap()
 }
 
 #[test]
@@ -195,6 +195,7 @@ fn creating_over_an_existing_entry_is_refused_and_leaves_it_alone() {
 
     let error = run(
         &RealFs,
+        &NoTrash,
         &Request::CreateFile {
             parent: d.src.clone(),
             name: "taken".into(),
@@ -253,6 +254,7 @@ fn renaming_onto_an_existing_name_is_refused_and_both_survive() {
 
     let error = run(
         &RealFs,
+        &NoTrash,
         &Request::Rename {
             path: d.src.join("a"),
             new_name: "b".into(),
@@ -514,6 +516,7 @@ fn a_move_to_another_filesystem_copies_then_removes_the_source() {
     let mut script = Script::default();
     let outcome = run(
         &fs,
+        &NoTrash,
         &move_(&[d.src.join("folder"), d.src.join("single.txt")], &d.dst),
         &mut script,
     )
@@ -607,7 +610,8 @@ fn requests_that_cannot_work_are_refused_before_anything_changes() {
     file(d.dst.join("ok.txt"), "other ok");
     let (before_src, before_dst) = (tree(&d.src), tree(&d.dst));
     let ok = d.src.join("ok.txt");
-    let refused = |request: Request| run(&RealFs, &request, &mut Script::default()).unwrap_err();
+    let refused =
+        |request: Request| run(&RealFs, &NoTrash, &request, &mut Script::default()).unwrap_err();
 
     assert!(matches!(
         refused(copy(
@@ -645,7 +649,13 @@ fn a_failing_file_can_be_skipped_and_the_rest_of_the_folder_is_copied() {
     let fs = FaultFs::failing_at(2, faults::Fault::Error);
 
     let mut script = Script::failures(&[Recovery::Skip]);
-    let outcome = run(&fs, &copy(&[d.src.join("folder")], &d.dst), &mut script).unwrap();
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &copy(&[d.src.join("folder")], &d.dst),
+        &mut script,
+    )
+    .unwrap();
 
     let copied = names(&d.dst);
     assert_eq!(copied.len(), 3, "{copied:?}");
@@ -663,7 +673,13 @@ fn retrying_a_failed_file_copies_it_whole() {
     let fs = FaultFs::failing_at(0, faults::Fault::Error);
 
     let mut script = Script::failures(&[Recovery::Retry]);
-    let outcome = run(&fs, &copy(&[d.src.join("a.txt")], &d.dst), &mut script).unwrap();
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &copy(&[d.src.join("a.txt")], &d.dst),
+        &mut script,
+    )
+    .unwrap();
 
     assert_eq!(names(&d.dst), ["a.txt"]);
     assert_eq!(read(d.dst.join("a.txt")), "the whole content");
@@ -679,7 +695,13 @@ fn a_cross_filesystem_move_keeps_the_originals_it_could_not_copy() {
     let fs = FaultFs::failing_at(2, faults::Fault::Error).with_device(&d.dst);
 
     let mut script = Script::failures(&[Recovery::Skip]);
-    let outcome = run(&fs, &move_(&[d.src.join("folder")], &d.dst), &mut script).unwrap();
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &move_(&[d.src.join("folder")], &d.dst),
+        &mut script,
+    )
+    .unwrap();
 
     let kept = script.failed[0].strip_prefix(&d.src).unwrap().to_owned();
     assert_eq!(names(&d.src), ["folder", kept.to_str().unwrap()]);
@@ -720,6 +742,7 @@ fn a_source_that_changes_during_a_cross_filesystem_move_is_not_removed() {
 
     let outcome = run(
         &fs,
+        &NoTrash,
         &move_(std::slice::from_ref(&source), &d.dst),
         &mut Meddler(&source),
     )
@@ -743,7 +766,13 @@ fn an_entry_that_appears_just_before_a_move_is_asked_about_not_replaced() {
     });
 
     let mut script = Script::conflicts(&[(ConflictChoice::Skip, false)]);
-    run(&fs, &move_(&[d.src.join("a.txt")], &d.dst), &mut script).unwrap();
+    run(
+        &fs,
+        &NoTrash,
+        &move_(&[d.src.join("a.txt")], &d.dst),
+        &mut script,
+    )
+    .unwrap();
 
     assert_eq!(script.asked[0].target, target);
     assert_eq!(read(&target), "arrived meanwhile");
@@ -784,6 +813,161 @@ fn cancelling_in_the_middle_of_a_large_file_leaves_nothing_behind() {
     assert!(!outcome.completed);
     assert!(names(&d.dst).is_empty(), "{:?}", names(&d.dst));
     assert!(outcome.changes.is_empty());
+}
+
+/// A trash that is a plain folder: entries are renamed into it.
+pub(super) struct FolderTrash(pub(super) PathBuf);
+
+impl Trash for FolderTrash {
+    fn trash(&self, path: &Path) -> io::Result<TrashedItem> {
+        let content = self.0.join(path.file_name().unwrap());
+        RealFs.rename_new(path, &content)?;
+        Ok(TrashedItem {
+            original: path.to_owned(),
+            record: content.with_extension("record"),
+            content,
+        })
+    }
+
+    fn restore(&self, item: &TrashedItem) -> io::Result<()> {
+        RealFs.rename_new(&item.content, &item.original)
+    }
+}
+
+#[test]
+fn trashing_moves_entries_into_the_trash_and_records_where() {
+    let d = dirs();
+    file(d.src.join("folder/inner"), "inner");
+    file(d.src.join("a.txt"), "a");
+    file(d.src.join("stays"), "stays");
+    let trash = FolderTrash(d.dst.clone());
+
+    let outcome = run(
+        &RealFs,
+        &trash,
+        &Request::Trash {
+            paths: vec![d.src.join("folder"), d.src.join("a.txt")],
+        },
+        &mut Script::default(),
+    )
+    .unwrap();
+
+    assert_eq!(names(&d.src), ["stays"]);
+    assert_eq!(names(&d.dst), ["a.txt", "folder", "folder/inner"]);
+    assert!(matches!(
+        &outcome.changes[..],
+        [Change::Trashed { item: first }, Change::Trashed { item: second }]
+            if first.original == d.src.join("folder") && second.content == d.dst.join("a.txt")
+    ));
+}
+
+#[test]
+fn an_entry_that_cannot_be_trashed_stays_and_is_reported() {
+    let d = dirs();
+    file(d.src.join("a.txt"), "a");
+
+    let mut script = Script::failures(&[Recovery::Skip]);
+    let outcome = run(
+        &RealFs,
+        &NoTrash,
+        &Request::Trash {
+            paths: vec![d.src.join("a.txt")],
+        },
+        &mut script,
+    )
+    .unwrap();
+
+    assert_eq!(read(d.src.join("a.txt")), "a");
+    assert!(outcome.changes.is_empty());
+    assert_eq!(outcome.skipped[0].path, d.src.join("a.txt"));
+}
+
+fn delete(paths: &[PathBuf]) -> Request {
+    Request::Delete {
+        paths: paths.to_vec(),
+    }
+}
+
+#[test]
+fn deleting_removes_a_whole_tree_but_never_what_a_link_points_to() {
+    let d = dirs();
+    file(d.src.join("folder/sub/deep"), "deep");
+    file(d.src.join("folder/top"), "top");
+    file(d.dst.join("precious/data"), "precious");
+    symlink(d.dst.join("precious"), d.src.join("folder/link-to-folder")).unwrap();
+    symlink(d.dst.join("precious"), d.src.join("link")).unwrap();
+    file(d.src.join("stays"), "stays");
+
+    let outcome = go(
+        &delete(&[d.src.join("folder"), d.src.join("link")]),
+        &mut Script::default(),
+    );
+
+    assert_eq!(names(&d.src), ["stays"]);
+    assert_eq!(read(d.dst.join("precious/data")), "precious");
+    assert_eq!(
+        outcome.changes,
+        [
+            Change::Deleted {
+                path: d.src.join("folder")
+            },
+            Change::Deleted {
+                path: d.src.join("link")
+            }
+        ]
+    );
+}
+
+#[test]
+fn a_delete_that_names_a_folder_and_something_inside_it_removes_both_once() {
+    let d = dirs();
+    file(d.src.join("folder/inner"), "inner");
+
+    let mut script = Script::default();
+    let outcome = go(
+        &delete(&[d.src.join("folder/inner"), d.src.join("folder")]),
+        &mut script,
+    );
+
+    assert!(names(&d.src).is_empty());
+    assert!(outcome.skipped.is_empty());
+    assert_eq!(script.reports.last().unwrap().items_total, 2);
+}
+
+#[test]
+fn a_file_that_cannot_be_deleted_keeps_its_folders_and_is_reported_once() {
+    let d = dirs();
+    file(d.src.join("folder/a"), "a");
+    file(d.src.join("folder/b"), "b");
+    // Steps: remove first file (fails), remove second file, …
+    let fs = FaultFs::failing_at(0, faults::Fault::Error);
+
+    let mut script = Script::failures(&[Recovery::Skip]);
+    let outcome = run(&fs, &NoTrash, &delete(&[d.src.join("folder")]), &mut script).unwrap();
+
+    let kept = script.failed[0].clone();
+    assert_eq!(tree(&d.src).len(), 2, "the folder and the kept file");
+    assert!(kept.exists());
+    assert_eq!(outcome.skipped.len(), 1);
+    assert!(outcome.changes.is_empty());
+}
+
+#[test]
+fn cancelling_a_delete_stops_before_the_next_entry() {
+    let d = dirs();
+    for name in ["a", "b", "c"] {
+        file(d.src.join(name), name);
+    }
+    let sources = ["a", "b", "c"].map(|name| d.src.join(name));
+
+    let mut script = Script {
+        cancel_after: Some(1),
+        ..Script::default()
+    };
+    let outcome = go(&delete(&sources), &mut script);
+
+    assert!(!outcome.completed);
+    assert_eq!(names(&d.src), ["b", "c"]);
 }
 
 // ---- The safety gate: a fault at every step ----
@@ -896,7 +1080,7 @@ fn sweep(fault: faults::Fault, moving: bool, across_filesystems: bool) -> usize 
             ..Script::default()
         };
 
-        let outcome = run(&fs, &request, &mut script).unwrap();
+        let outcome = run(&fs, &NoTrash, &request, &mut script).unwrap();
 
         let context = format!("{fault:?} at step {step}");
         assert_nothing_lost(
@@ -997,7 +1181,13 @@ fn an_entry_that_appears_while_copying_is_asked_about_not_replaced() {
         asked: 0,
     };
 
-    run(&RealFs, &copy(&[d.src.join("a.txt")], &d.dst), &mut racer).unwrap();
+    run(
+        &RealFs,
+        &NoTrash,
+        &copy(&[d.src.join("a.txt")], &d.dst),
+        &mut racer,
+    )
+    .unwrap();
 
     assert_eq!(racer.asked, 1);
     assert_eq!(read(d.dst.join("a.txt")), "arrived meanwhile");
@@ -1021,6 +1211,7 @@ fn kill_child() {
     let mut script = Script::conflicts(&[(ConflictChoice::Overwrite, true)]);
     run(
         &fs,
+        &NoTrash,
         &move_(&[src.join("folder"), src.join("one.txt")], &dst),
         &mut script,
     )

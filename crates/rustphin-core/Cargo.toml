@@ -10,6 +10,10 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# The fault-injecting filesystem, for other crates' tests.
+test-support = []
+
 [dependencies]
 flume.workspace = true
 notify.workspace = true

@@ -64,6 +64,61 @@ pub enum Request {
         /// Existing directory to move into.
         into: PathBuf,
     },
+    /// Put each of `paths` in the trash, from where it can be restored.
+    Trash {
+        /// Entries to trash.
+        paths: Vec<PathBuf>,
+    },
+    /// Remove each of `paths` for good, with everything inside it. The caller
+    /// must have had the user confirm exactly this; nothing can bring the
+    /// entries back.
+    Delete {
+        /// Entries to delete. A symbolic link is removed, not what it points to.
+        paths: Vec<PathBuf>,
+    },
+}
+
+/// An entry that is in the trash.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrashedItem {
+    /// Where the entry was before it was trashed.
+    pub original: PathBuf,
+    /// Where its content is now.
+    pub content: PathBuf,
+    /// The trash's record of it.
+    pub record: PathBuf,
+}
+
+/// The desktop's trash. Implemented by the platform layer.
+pub trait Trash: Send + Sync {
+    /// Moves `path` into the trash. Must not copy across filesystems or
+    /// delete anything: when the entry cannot be moved to a trash on its own
+    /// filesystem, it fails and the entry stays.
+    fn trash(&self, path: &Path) -> io::Result<TrashedItem>;
+
+    /// Moves `item` back to where it was. Fails with
+    /// [`io::ErrorKind::AlreadyExists`] when something else is there now.
+    fn restore(&self, item: &TrashedItem) -> io::Result<()>;
+}
+
+/// A system without a trash: trashing always fails.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoTrash;
+
+impl Trash for NoTrash {
+    fn trash(&self, _: &Path) -> io::Result<TrashedItem> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "no trash is available",
+        ))
+    }
+
+    fn restore(&self, _: &TrashedItem) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "no trash is available",
+        ))
+    }
 }
 
 /// Why a request was refused before anything was changed.
@@ -230,6 +285,17 @@ pub enum Change {
         /// The destination, which holds what was moved.
         to: PathBuf,
     },
+    /// An entry was put in the trash.
+    Trashed {
+        /// Where it went.
+        item: TrashedItem,
+    },
+    /// An entry was removed for good by explicit choice. The operation cannot
+    /// be undone past this point.
+    Deleted {
+        /// The removed entry.
+        path: PathBuf,
+    },
     /// A folder that was empty after its contents were merged into another
     /// folder by a move, and was removed.
     RemovedEmptyDir {
@@ -265,11 +331,13 @@ pub struct Outcome {
 /// controller and the result is an [`Outcome`].
 pub fn run(
     fs: &dyn Fs,
+    trash: &dyn Trash,
     request: &Request,
     controller: &mut dyn Controller,
 ) -> Result<Outcome, OpError> {
     let mut engine = Engine {
         fs,
+        trash,
         controller,
         changes: Vec::new(),
         skipped: Vec::new(),
@@ -297,6 +365,14 @@ pub fn run(
         Request::Move { sources, into } => {
             let plan = engine.plan_transfer(sources, into, true)?;
             engine.transfer(plan, into, true).is_ok()
+        }
+        Request::Trash { paths } => {
+            let plan = engine.plan_removal(paths, false)?;
+            engine.trash_all(plan).is_ok()
+        }
+        Request::Delete { paths } => {
+            let plan = engine.plan_removal(paths, true)?;
+            engine.delete_all(plan).is_ok()
         }
     };
     Ok(Outcome {
@@ -364,6 +440,7 @@ impl Node {
 
 struct Engine<'a> {
     fs: &'a dyn Fs,
+    trash: &'a dyn Trash,
     controller: &'a mut dyn Controller,
     changes: Vec<Change>,
     skipped: Vec<Skipped>,
@@ -524,6 +601,92 @@ impl Engine<'_> {
             plan.push(node);
         }
         Ok(plan)
+    }
+
+    /// Checks a trash or delete request and reads what a delete has to remove.
+    fn plan_removal(&mut self, paths: &[PathBuf], deep: bool) -> Result<Vec<Node>, OpError> {
+        let mut plan = Vec::new();
+        for path in paths {
+            file_name(path)?;
+            if paths
+                .iter()
+                .any(|other| other != path && path.starts_with(other))
+            {
+                // Already covered by its folder, which is also in the request.
+                continue;
+            }
+            let node = if deep {
+                self.scan(path.clone()).map_err(io_error(path))?
+            } else {
+                Node {
+                    info: self.fs.info(path).map_err(io_error(path))?,
+                    path: path.clone(),
+                    children: Vec::new(),
+                    unreadable: None,
+                }
+            };
+            self.progress.items_total += node.count().0;
+            plan.push(node);
+        }
+        Ok(plan)
+    }
+
+    fn trash_all(&mut self, plan: Vec<Node>) -> Result<(), Stop> {
+        let trash = self.trash;
+        for node in plan {
+            self.checkpoint(&node.path)?;
+            match self.attempt(&node.path, |_| Ok(trash.trash(&node.path)))? {
+                Ok(item) => {
+                    self.changes.push(Change::Trashed { item });
+                    self.finished(1);
+                }
+                Err(reason) => self.skip(&node, reason),
+            }
+        }
+        Ok(())
+    }
+
+    fn delete_all(&mut self, plan: Vec<Node>) -> Result<(), Stop> {
+        for node in plan {
+            if self.delete_tree(&node)? {
+                self.changes.push(Change::Deleted {
+                    path: node.path.clone(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Removes `node` and everything inside it; says whether all of it went.
+    fn delete_tree(&mut self, node: &Node) -> Result<bool, Stop> {
+        self.checkpoint(&node.path)?;
+        let fs = self.fs;
+        let is_dir = node.info.kind == EntryKind::Directory;
+        let mut emptied = true;
+        for child in &node.children {
+            emptied &= self.delete_tree(child)?;
+        }
+        if !emptied {
+            // It still holds something that was kept, so it stays too; that
+            // is not a second problem to report.
+            self.finished(1);
+            return Ok(false);
+        }
+        let removed = self.attempt(&node.path, |_| {
+            Ok(match node.unreadable {
+                Some(kind) => Err(kind.into()),
+                None if is_dir => fs.remove_dir(&node.path),
+                None => fs.remove_file(&node.path),
+            })
+        })?;
+        if let Err(reason) = &removed {
+            self.skipped.push(Skipped {
+                path: node.path.clone(),
+                reason: reason.clone(),
+            });
+        }
+        self.finished(1);
+        Ok(removed.is_ok())
     }
 
     fn transfer(&mut self, plan: Vec<Node>, into: &Path, moving: bool) -> Result<(), Stop> {
@@ -1013,8 +1176,8 @@ enum Placed {
     LeftOut,
 }
 
-#[cfg(test)]
-pub(crate) mod faults;
+#[cfg(any(test, feature = "test-support"))]
+pub mod faults;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;

@@ -8,4 +8,5 @@ pub mod blur;
 pub mod config;
 pub mod icons;
 pub mod mime;
+pub mod trash;
 pub mod xdg;
