@@ -205,3 +205,16 @@
 - **Not verified / limits:** types come from file names only (no content sniffing, so extensionless files are "Unknown"); glob patterns other than `*.suffix` and whole names are skipped (53 of 1,621 on this system); hi-dpi (scale 2) icon directories are not used; rendering of the found icons in the UI (W-018).
 - **Waiver:** none
 - **Follow-up:** none
+
+### 2026-10-12 — W-018: details view
+- **Phase:** 6 Implement (S2)
+- **Result:** pass in the isolated session; real-desktop review pending
+- **Evidence:**
+  - `rust-tc doctor` PASS, 68 tests. New unit tests cover size and date formatting, counts, the column breakpoints, and token contrast on the new list surface (text and secondary text at WCAG AA over a white window).
+  - Observed in an isolated KWin session (isolated home, so the default `breeze-dark` theme): columns Name, Size, Modified, Type; folders without a size; sizes as `42 B`, `1.5 KiB`, `120.6 KiB`, `5.0 MiB`; dates as set on the test files; type names from the MIME database ("Rust source code", "Tar archive (gzip-compress…" truncated with an ellipsis); a distinct theme icon per type; hover highlight on a row.
+  - Clicking the Size heading twice gave descending order by size with folders still first and a down arrow on the heading.
+- **Design decisions applied (design skills):** all values from tokens; row icons 20 px to match the 20 px text line; headings and secondary cells in the secondary text colour, the active heading in primary plus an arrow (never colour alone); numeric column right-aligned.
+- **Not verified:** the user's own icon theme and blur in this view on the real desktop; the column-dropping breakpoints visually (unit-tested only); sorting by Modified and Type by click (covered in core tests); dates use the system time zone, not exercised beyond UTC and a fixed offset in tests; the icon-missing-when-unfocused oddity seen in the Discovery spike was not looked for.
+- **Deviation:** date and size formats are fixed (ISO-style date, binary units), not locale-aware.
+- **Waiver:** none
+- **Follow-up:** user review of the details view on the real desktop before the icons and compact views (W-019) are built.

@@ -1,6 +1,7 @@
 //! The browser view: toolbar, entry list and status line for one location.
 
 use std::{
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -15,15 +16,20 @@ use gpui_kit::{
         button::{Button, ButtonVariants as _},
         input::{Input, InputEvent, InputState},
     },
-    div,
+    div, img,
     prelude::FluentBuilder as _,
     px, uniform_list,
 };
+use jiff::tz::TimeZone;
 use rustphin_core::{
-    DirectoryModel, LoadError, ModelEvent, RealFs, Snapshot, ViewOptions, display_name,
+    DirectoryModel, LoadError, ModelEvent, RealFs, Snapshot, SortKey, ViewOptions, display_name,
 };
 
-use crate::theme::{Theme, size, space, text};
+use crate::{
+    filetypes::{Database, TypeInfo},
+    format::{self, count, plural},
+    theme::{Theme, size, space, text},
+};
 
 const KEY_CONTEXT: &str = "Browser";
 /// The browser while no text field inside it has focus.
@@ -106,6 +112,14 @@ pub struct Browser {
     editing_location: bool,
     location_input: Entity<InputState>,
     focus: FocusHandle,
+    /// The system's file-type databases, once loaded in the background.
+    types: Option<Arc<Database>>,
+    /// Icon and description per MIME type, filled in as rows need them.
+    type_info: HashMap<String, TypeInfo>,
+    /// Types whose lookup is running, so each is requested once.
+    types_pending: HashSet<String>,
+    /// The zone dates are shown in.
+    zone: TimeZone,
     scroll: UniformListScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
@@ -130,12 +144,22 @@ impl Browser {
             editing_location: false,
             location_input,
             focus,
+            types: None,
+            type_info: HashMap::new(),
+            types_pending: HashSet::new(),
+            zone: TimeZone::system(),
             scroll: UniformListScrollHandle::new(),
             _subscriptions: subscriptions,
         };
         match DirectoryModel::new(Arc::new(RealFs)) {
-            Ok((model, events)) => {
+            Ok((mut model, events)) => {
+                // The details view shows sizes and dates, so always load them.
+                model.set_options(ViewOptions {
+                    details: true,
+                    ..ViewOptions::default()
+                });
                 this.model = Some(model);
+                this.load_file_types(cx);
                 cx.spawn(async move |view, cx| {
                     while let Ok(event) = events.recv_async().await {
                         if view
@@ -262,6 +286,70 @@ impl Browser {
         if let Some(generation) = self.model.as_mut().and_then(step) {
             self.generation = generation;
             self.failure = None;
+            cx.notify();
+        }
+    }
+
+    /// Reads the file-type databases on a background thread.
+    fn load_file_types(&mut self, cx: &mut Context<Self>) {
+        let loading = cx
+            .background_executor()
+            .spawn(async { Arc::new(Database::load()) });
+        cx.spawn(async move |view, cx| {
+            let database = loading.await;
+            // The view may be gone by the time loading finishes.
+            let _ = view.update(cx, |view, cx| {
+                view.types = Some(database);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// The icon and description for an entry, if already known. An unknown
+    /// type is looked up in the background and the view redrawn when it arrives.
+    fn type_info_for(
+        &mut self,
+        name: &[u8],
+        is_dir: bool,
+        cx: &mut Context<Self>,
+    ) -> Option<TypeInfo> {
+        let database = self.types.as_ref()?;
+        let mime = database.mime_type(name, is_dir);
+        if let Some(info) = self.type_info.get(mime) {
+            return Some(info.clone());
+        }
+        if self.types_pending.insert(mime.to_owned()) {
+            let mime = mime.to_owned();
+            let database = Arc::clone(database);
+            let lookup = cx.background_executor().spawn({
+                let mime = mime.clone();
+                async move { database.resolve(&mime, size::ICON_LOOKUP) }
+            });
+            cx.spawn(async move |view, cx| {
+                let info = lookup.await;
+                let _ = view.update(cx, |view, cx| {
+                    view.types_pending.remove(&mime);
+                    view.type_info.insert(mime, info);
+                    cx.notify();
+                });
+            })
+            .detach();
+        }
+        None
+    }
+
+    /// Orders by `key`; choosing the current key again reverses the direction.
+    fn sort_by(&mut self, key: SortKey, cx: &mut Context<Self>) {
+        let Some(model) = &mut self.model else { return };
+        let options = model.options();
+        let options = ViewOptions {
+            sort: key,
+            descending: options.sort == key && !options.descending,
+            ..options
+        };
+        if let Some(generation) = model.set_options(options) {
+            self.generation = generation;
             cx.notify();
         }
     }
@@ -527,31 +615,140 @@ impl Browser {
             )
     }
 
+    /// One clickable column heading. The active one shows its direction with
+    /// an arrow as well as brighter text.
+    fn heading(
+        &self,
+        label: &'static str,
+        key: SortKey,
+        options: ViewOptions,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let active = options.sort == key;
+        div()
+            .id(label)
+            .flex()
+            .items_center()
+            .gap(px(space::XS))
+            .h_full()
+            .cursor_pointer()
+            .text_color(if active { theme.text } else { theme.text_muted })
+            .hover(|heading| heading.text_color(theme.text))
+            .child(label)
+            .when(active, |heading| {
+                heading.child(
+                    Icon::new(if options.descending {
+                        IconName::ChevronDown
+                    } else {
+                        IconName::ChevronUp
+                    })
+                    .size(px(size::ICON_SMALL)),
+                )
+            })
+            .on_click(cx.listener(move |this, _, _, cx| this.sort_by(key, cx)))
+    }
+
+    /// The details view: column headings over a virtualised list of entries.
     fn list(
         &self,
         snapshot: &Arc<Snapshot>,
+        columns: Columns,
         theme: Theme,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = self.selected_row;
         let rows = Arc::clone(snapshot);
-        uniform_list(
+        let options = snapshot.options();
+        let zone = self.zone.clone();
+        // Headings line up with the row text: same gutter, accent bar and padding.
+        let gutter = space::SM * 2. + size::SELECTION_BAR;
+
+        let headings = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(space::MD))
+            .h(px(size::ROW))
+            .px(px(gutter))
+            .border_b_1()
+            .border_color(theme.border)
+            .text_size(px(text::SMALL))
+            .child(
+                self.heading("Name", SortKey::Name, options, theme, cx)
+                    .flex_1()
+                    .min_w_0(),
+            )
+            .child(
+                self.heading("Size", SortKey::Size, options, theme, cx)
+                    .w(px(size::COLUMN_SIZE))
+                    .justify_end(),
+            )
+            .when(columns.modified, |headings| {
+                headings.child(
+                    self.heading("Modified", SortKey::Modified, options, theme, cx)
+                        .w(px(size::COLUMN_MODIFIED)),
+                )
+            })
+            .when(columns.kind, |headings| {
+                headings.child(
+                    self.heading("Type", SortKey::Type, options, theme, cx)
+                        .w(px(size::COLUMN_TYPE)),
+                )
+            });
+
+        let list = uniform_list(
             "entries",
             snapshot.len(),
-            cx.processor(move |_, range: std::ops::Range<usize>, _, cx| {
+            cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                 range
                     .map(|row| {
                         let is_selected = selected == Some(row);
                         let container = rows.is_container(row);
                         let name: SharedString = display_name(rows.name(row)).into_owned().into();
+                        let info = this.type_info_for(rows.name(row), container, cx);
+                        let metadata = rows.metadata(row);
+                        let secondary = if is_selected {
+                            theme.on_selection
+                        } else {
+                            theme.text_muted
+                        };
+                        // Folders show no size: a folder's own size says nothing useful.
+                        let size_text = metadata
+                            .filter(|_| !container)
+                            .map(|metadata| format::size(metadata.size))
+                            .unwrap_or_default();
+                        let modified_text = metadata
+                            .map(|metadata| format::timestamp(metadata.modified, &zone))
+                            .unwrap_or_default();
+                        let description = info
+                            .as_ref()
+                            .map(|info| info.description.clone())
+                            .unwrap_or_default();
+                        let icon = match info.and_then(|info| info.icon) {
+                            Some(path) => img(path)
+                                .size(px(size::ICON_ROW))
+                                .flex_none()
+                                .into_any_element(),
+                            // Until the theme icon is known, or if the theme has none.
+                            None => Icon::new(if container {
+                                IconName::Folder
+                            } else {
+                                IconName::File
+                            })
+                            .size(px(size::ICON_ROW))
+                            .flex_none()
+                            .text_color(if container { theme.accent } else { secondary })
+                            .into_any_element(),
+                        };
                         let entry = div()
                             .flex()
                             .items_center()
-                            .gap(px(space::SM))
+                            .gap(px(space::MD))
                             .size_full()
                             .px(px(space::SM))
                             .rounded(px(size::RADIUS))
-                            .border_l_2()
+                            .border_l(px(size::SELECTION_BAR))
                             .border_color(gpui_kit::transparent_black())
                             .text_color(theme.text)
                             .when(is_selected, |entry| {
@@ -565,22 +762,42 @@ impl Browser {
                                 entry.hover(|entry| entry.bg(theme.hover))
                             })
                             .child(
-                                Icon::new(if container {
-                                    IconName::Folder
-                                } else {
-                                    IconName::File
-                                })
-                                .size(px(size::ICON))
-                                .flex_none()
-                                .text_color(
-                                    match (is_selected, container) {
-                                        (true, _) => theme.on_selection,
-                                        (false, true) => theme.accent,
-                                        (false, false) => theme.text_muted,
-                                    },
-                                ),
+                                div()
+                                    .flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .items_center()
+                                    .gap(px(space::SM))
+                                    .child(icon)
+                                    .child(div().flex_1().min_w_0().truncate().child(name)),
                             )
-                            .child(div().flex_1().min_w_0().truncate().child(name));
+                            .child(
+                                div()
+                                    .w(px(size::COLUMN_SIZE))
+                                    .flex_none()
+                                    .text_right()
+                                    .text_color(secondary)
+                                    .child(size_text),
+                            )
+                            .when(columns.modified, |entry| {
+                                entry.child(
+                                    div()
+                                        .w(px(size::COLUMN_MODIFIED))
+                                        .flex_none()
+                                        .text_color(secondary)
+                                        .child(modified_text),
+                                )
+                            })
+                            .when(columns.kind, |entry| {
+                                entry.child(
+                                    div()
+                                        .w(px(size::COLUMN_TYPE))
+                                        .flex_none()
+                                        .truncate()
+                                        .text_color(secondary)
+                                        .child(description),
+                                )
+                            });
                         div()
                             .id(row)
                             .w_full()
@@ -599,7 +816,15 @@ impl Browser {
         )
         .track_scroll(&self.scroll)
         .flex_1()
-        .py(px(space::XS))
+        .py(px(space::XS));
+
+        div()
+            .flex()
+            .flex_1()
+            .flex_col()
+            .min_h_0()
+            .child(headings)
+            .child(list)
     }
 
     /// Shown instead of the list when it has no rows: says why and what to do.
@@ -686,9 +911,10 @@ impl Browser {
 }
 
 impl Render for Browser {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.global::<Theme>();
         let snapshot = self.snapshot.clone();
+        let columns = Columns::for_width(f32::from(window.viewport_size().width));
 
         div()
             .key_context(KEY_CONTEXT)
@@ -746,13 +972,23 @@ impl Render for Browser {
             .when_some(self.failure.as_ref(), |view, failure| {
                 view.child(self.failure_banner(failure, theme, cx))
             })
-            .map(|view| match &snapshot {
-                Some(snapshot) if !snapshot.is_empty() => {
-                    view.child(self.list(snapshot, theme, cx))
-                }
-                Some(snapshot) => view.child(self.empty_state(snapshot, theme, cx)),
-                None => view.child(div().flex_1()),
-            })
+            .child(
+                // The file list sits on a more solid surface than the glass
+                // toolbar and status line, so columns of text stay readable.
+                div()
+                    .flex()
+                    .flex_1()
+                    .flex_col()
+                    .min_h_0()
+                    .bg(theme.content)
+                    .map(|content| match &snapshot {
+                        Some(snapshot) if !snapshot.is_empty() => {
+                            content.child(self.list(snapshot, columns, theme, cx))
+                        }
+                        Some(snapshot) => content.child(self.empty_state(snapshot, theme, cx)),
+                        None => content,
+                    }),
+            )
             .child(self.status(theme))
     }
 }
@@ -800,21 +1036,22 @@ fn expand_path(typed: &str, base: Option<&Path>) -> Option<PathBuf> {
     })
 }
 
-/// Formats a count with thousands separators.
-fn count(value: usize) -> String {
-    let digits = value.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(digit);
-    }
-    out
+/// Which optional columns fit the window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Columns {
+    modified: bool,
+    kind: bool,
 }
 
-fn plural<'a>(value: usize, one: &'a str, many: &'a str) -> &'a str {
-    if value == 1 { one } else { many }
+impl Columns {
+    /// Narrow windows drop the type column first, then the date, so the name
+    /// always keeps a usable width.
+    fn for_width(width: f32) -> Self {
+        Self {
+            modified: width >= size::WIDTH_FOR_MODIFIED,
+            kind: width >= size::WIDTH_FOR_TYPE,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -855,12 +1092,13 @@ mod tests {
     }
 
     #[test]
-    fn counts_use_thousands_separators() {
-        assert_eq!(count(0), "0");
-        assert_eq!(count(999), "999");
-        assert_eq!(count(1000), "1,000");
-        assert_eq!(count(500_000), "500,000");
-        assert_eq!(count(1_234_567), "1,234,567");
+    fn narrow_windows_drop_the_type_column_then_the_date() {
+        let wide = Columns::for_width(1200.);
+        assert!(wide.modified && wide.kind);
+        let medium = Columns::for_width(size::WIDTH_FOR_TYPE - 1.);
+        assert!(medium.modified && !medium.kind);
+        let narrow = Columns::for_width(size::WIDTH_FOR_MODIFIED - 1.);
+        assert!(!narrow.modified && !narrow.kind);
     }
 
     #[test]

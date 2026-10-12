@@ -25,8 +25,26 @@ pub mod size {
     pub const TOOLBAR: f32 = 44.;
     /// Height of the status line.
     pub const STATUS: f32 = 28.;
-    /// Icons in dense lists and toolbars.
+    /// Icons in toolbars and banners.
     pub const ICON: f32 = 16.;
+    /// Sort arrows and other inline indicators.
+    pub const ICON_SMALL: f32 = 12.;
+    /// File-type icons in list rows: the height of the text line beside them.
+    pub const ICON_ROW: f32 = 20.;
+    /// The size asked of the icon theme for list rows. Themes commonly ship 22.
+    pub const ICON_LOOKUP: u32 = 22;
+    /// Width of the accent bar marking a selected row.
+    pub const SELECTION_BAR: f32 = 2.;
+    /// Width of the size column.
+    pub const COLUMN_SIZE: f32 = 88.;
+    /// Width of the modified column.
+    pub const COLUMN_MODIFIED: f32 = 144.;
+    /// Width of the type column.
+    pub const COLUMN_TYPE: f32 = 184.;
+    /// Narrowest window that still shows the modified column.
+    pub const WIDTH_FOR_MODIFIED: f32 = 560.;
+    /// Narrowest window that still shows the type column.
+    pub const WIDTH_FOR_TYPE: f32 = 760.;
     /// Icons in empty and error states.
     pub const ICON_LARGE: f32 = 32.;
     /// Corner radius shared by controls, rows and panels.
@@ -52,6 +70,9 @@ pub struct Theme {
     pub window: Rgba,
     /// Toolbar and status line, layered over the window background.
     pub chrome: Rgba,
+    /// The file list's surface, layered over the window background. More
+    /// solid than the chrome so columns of text stay readable.
+    pub content: Rgba,
     /// Dividers and outlines.
     pub border: Rgba,
     /// Primary text.
@@ -89,9 +110,14 @@ impl Theme {
                 rgb(0x0f1116)
             },
             chrome: if translucent {
-                rgba(0x0b0d1266)
+                rgba(0x0b0d1233)
             } else {
                 rgb(0x141821)
+            },
+            content: if translucent {
+                rgba(0x0b0d1299)
+            } else {
+                rgb(0x0f1116)
             },
             border: rgba(0xffffff1f),
             text: rgb(0xe6e9f0),
@@ -160,9 +186,17 @@ mod tests {
     fn assert_readable(theme: Theme) {
         let window = over(theme.window, WHITE);
         let chrome = over(theme.chrome, window);
-        let hover = over(theme.hover, window);
+        let content = over(theme.content, window);
+        let hover = over(theme.hover, content);
         for (name, foreground, background) in [
             ("text on window", theme.text, window),
+            ("text on content", theme.text, content),
+            ("muted text on content", theme.text_muted, content),
+            (
+                "danger text on content",
+                theme.danger,
+                over(theme.danger_surface, content),
+            ),
             ("muted text on window", theme.text_muted, window),
             ("text on chrome", theme.text, chrome),
             ("muted text on chrome", theme.text_muted, chrome),

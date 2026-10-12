@@ -4,6 +4,8 @@
 //! commands. It never reads the filesystem itself.
 
 mod browser;
+mod filetypes;
+mod format;
 mod theme;
 
 use std::path::PathBuf;
