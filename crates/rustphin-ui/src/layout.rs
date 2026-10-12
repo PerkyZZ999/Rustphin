@@ -75,6 +75,56 @@ impl Layout {
     }
 }
 
+/// A rectangle in list coordinates: pixels from the left edge of the first
+/// column and the top of the first row, growing right and down.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rect {
+    /// Left edge.
+    pub left: f32,
+    /// Top edge.
+    pub top: f32,
+    /// Right edge.
+    pub right: f32,
+    /// Bottom edge.
+    pub bottom: f32,
+}
+
+impl Rect {
+    /// The rectangle spanning two opposite corners given in any order.
+    pub fn between(a: (f32, f32), b: (f32, f32)) -> Self {
+        Self {
+            left: a.0.min(b.0),
+            top: a.1.min(b.1),
+            right: a.0.max(b.0),
+            bottom: a.1.max(b.1),
+        }
+    }
+}
+
+impl Layout {
+    /// The rows a rubber band touches in a list of `len` entries drawn
+    /// `per_row` to a line. In a full-width list every row the band's height
+    /// crosses counts, whatever its horizontal position.
+    pub fn rows_in(&self, band: Rect, per_row: usize, len: usize) -> Vec<usize> {
+        let per_row = per_row.max(1);
+        if band.bottom < 0. || band.right < 0. || len == 0 {
+            return Vec::new();
+        }
+        let cell = |edge: f32, size: f32| (edge.max(0.) / size).floor() as usize;
+        let last_line = (len - 1) / per_row;
+        let lines =
+            cell(band.top, self.row_height)..=cell(band.bottom, self.row_height).min(last_line);
+        let columns = match self.cell_width {
+            Some(width) => cell(band.left, width)..=cell(band.right, width).min(per_row - 1),
+            None => 0..=0,
+        };
+        lines
+            .flat_map(|line| columns.clone().map(move |column| line * per_row + column))
+            .filter(|&row| row < len)
+            .collect()
+    }
+}
+
 /// The zoom level after stepping `delta` levels from `zoom`, kept in range.
 pub fn step_zoom(zoom: usize, delta: isize) -> usize {
     zoom.saturating_add_signed(delta).min(ZOOM_LEVELS - 1)
@@ -138,6 +188,61 @@ mod tests {
         assert_eq!(layout.columns(128. * 6.), 6);
         // A window narrower than one cell still shows a column.
         assert_eq!(layout.columns(50.), 1);
+    }
+
+    #[test]
+    fn a_band_over_a_list_selects_every_row_its_height_crosses() {
+        let layout = ViewMode::Details.layout(DEFAULT_ZOOM); // 28-pixel rows
+        let band = Rect::between((400., 30.), (10., 85.));
+        assert_eq!(layout.rows_in(band, 1, 100), [1, 2, 3]);
+        // A band inside one row selects that row.
+        assert_eq!(
+            layout.rows_in(Rect::between((0., 2.), (5., 9.)), 1, 100),
+            [0]
+        );
+    }
+
+    #[test]
+    fn a_band_over_a_grid_selects_only_the_cells_it_touches() {
+        let layout = ViewMode::Icons.layout(DEFAULT_ZOOM); // 128-pixel cells
+        // Columns 1-2 of lines 0-1, five cells per line.
+        let band = Rect::between((130., 10.), (300., 200.));
+        assert_eq!(layout.rows_in(band, 5, 100), [1, 2, 6, 7]);
+    }
+
+    #[test]
+    fn a_band_is_clipped_to_the_entries_that_exist() {
+        let layout = ViewMode::Icons.layout(DEFAULT_ZOOM);
+        // Seven entries, five per line: the second line has only two cells.
+        let band = Rect::between((0., 0.), (2000., 2000.));
+        assert_eq!(layout.rows_in(band, 5, 7), [0, 1, 2, 3, 4, 5, 6]);
+        let lower_right = Rect::between((300., 130.), (640., 250.));
+        assert_eq!(layout.rows_in(lower_right, 5, 7), Vec::<usize>::new());
+        let list = ViewMode::Details.layout(DEFAULT_ZOOM);
+        assert_eq!(
+            list.rows_in(Rect::between((0., 0.), (10., 5000.)), 1, 3),
+            [0, 1, 2]
+        );
+    }
+
+    #[test]
+    fn a_band_entirely_above_or_left_of_the_entries_selects_nothing() {
+        let layout = ViewMode::Icons.layout(DEFAULT_ZOOM);
+        assert!(
+            layout
+                .rows_in(Rect::between((10., -50.), (60., -5.)), 5, 100)
+                .is_empty()
+        );
+        assert!(
+            layout
+                .rows_in(Rect::between((-50., 10.), (-5., 60.)), 5, 100)
+                .is_empty()
+        );
+        // Starting above the first row still reaches down into it.
+        assert_eq!(
+            layout.rows_in(Rect::between((10., -50.), (60., 5.)), 5, 100),
+            [0]
+        );
     }
 
     #[test]

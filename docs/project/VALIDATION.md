@@ -308,3 +308,14 @@
 - **Not verified:** how the list looks while details arrive on a slow filesystem (rows fill in top-down); network and FUSE mounts.
 - **Waiver:** none
 - **Follow-up:** decide with the user whether R-101's re-sort limit should apply only once details are loaded.
+
+### 2026-10-12 — W-024: rubber-band selection
+- **Phase:** 6 Implement (S2)
+- **Result:** pass for what was exercised
+- **Evidence:**
+  - `rust-tc doctor` PASS, 105 tests. New tests: which rows a band touches in a list and in a grid, clipping to the entries that exist, bands above or left of the entries, and `Selection::select_rows` replacing or adding.
+  - Observed in an isolated KWin session against the UI fixture: in the details view, pressing at one row and dragging down five rows drew an outlined band and selected the six rows it crossed ("6 of 17 items selected"); the selection was still there after releasing the button and after switching to the icons view. In the icons view a band across the second to fourth cells of the first line selected exactly those three.
+- **Known interim behaviour:** a drag anywhere in the list starts a band, including from on top of an entry. When drag-and-drop arrives in S5, dragging from an entry will have to start a drag instead.
+- **Not verified:** Ctrl+drag adding to a selection (unit-tested in the core only); bands in the compact view; a band while the list is scrolled; the list does not scroll when the pointer reaches its edge.
+- **Waiver:** none
+- **Follow-up:** S5 must split "drag from an entry" from "drag from empty space"; edge auto-scroll.

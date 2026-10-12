@@ -6,9 +6,9 @@ S2 — Views, sorting, selection
 **Done when:** every S2 acceptance point in ROADMAP.md (R-003, R-004, the icon part of R-014, the sort and scroll parts of R-101, R-102) is demonstrated and recorded in VALIDATION.md.
 
 ## Queue
-- [ ] W-024 — UI rubber-band selection by dragging over the list, split out of W-020 (R-004)
 
 ## Done (recent)
+- [x] W-024 — Rubber-band selection by dragging over the list or grid, with Ctrl to add to the selection; band geometry in the tested layout module (R-004)
 - [x] W-023 — Core: details are read from the top of the list downward in batches and published as they arrive; rows keep name order until a size or date sort has every value. Top-first follows the display order, not the actual scroll position (R-101)
 - [x] W-013 — Frame timing and memory on 500,000 entries, measured with an opt-in frame log (`RUSTPHIN_FRAME_LOG`) and a self-driven scroll (`RUSTPHIN_SCROLL_BENCH`) (R-101, R-102)
 - [x] W-022 — Replayable UI scenarios in `docs/project/UI_SCENARIOS.md` with a fixture script (`tests/ui/make-fixture.sh`); run by an agent through kwin-mcp in an isolated session. They are instructions for an agent, not an unattended script (R-001, R-003, R-004)

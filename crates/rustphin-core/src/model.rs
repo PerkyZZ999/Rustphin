@@ -1267,4 +1267,24 @@ mod tests {
             assert_eq!(shown.len(), 5);
         }
     }
+
+    #[test]
+    fn a_rubber_band_replaces_the_selection_or_adds_to_it() {
+        let (_model, _events, shown) = listed(6);
+        let mut selection = crate::Selection::default();
+        selection.select_only(&shown, 0);
+
+        selection.select_rows(&shown, [2, 3], false);
+        assert_eq!(selected_names(&selection, &shown), ["item2", "item3"]);
+        assert_eq!(selection.focus_row(&shown), Some(3));
+
+        selection.select_rows(&shown, [5, 99], true);
+        assert_eq!(
+            selected_names(&selection, &shown),
+            ["item2", "item3", "item5"]
+        );
+
+        selection.select_rows(&shown, [], false);
+        assert!(selection.is_empty());
+    }
 }

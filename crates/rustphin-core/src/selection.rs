@@ -128,6 +128,27 @@ impl Selection {
         }
     }
 
+    /// Selects the given rows (a rubber band). With `add`, they join the
+    /// current selection; otherwise they replace it. Rows outside the list are
+    /// ignored. The anchor and focus move to the last row given.
+    pub fn select_rows(
+        &mut self,
+        snapshot: &Snapshot,
+        rows: impl IntoIterator<Item = usize>,
+        add: bool,
+    ) {
+        if self.listing != snapshot.listing() || !add {
+            self.clear();
+            self.listing = snapshot.listing();
+        }
+        for row in rows.into_iter().filter(|&row| row < snapshot.len()) {
+            let id = snapshot.entry_id(row);
+            self.set(id, true);
+            self.anchor = Some(id);
+            self.focus = Some(id);
+        }
+    }
+
     /// Selects every shown entry.
     pub fn select_all(&mut self, snapshot: &Snapshot) {
         self.replace(snapshot, |_| true);

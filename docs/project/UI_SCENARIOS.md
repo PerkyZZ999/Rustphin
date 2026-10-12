@@ -38,6 +38,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | S4 | Escape | Nothing selected; status "17 items, 1 hidden" |
 | S5 | Click the last row, type `p` | Selection wraps to "Pictures" |
 | S6 | Shift+Down twice | Three consecutive rows selected |
+| S8 | Press the mouse button on the fifth row, move down five rows, release (use `mouse_button_down`, `mouse_move`, `mouse_button_up`) | An outlined band while dragging; the six rows it crossed stay selected after release |
 | S7 | Ctrl+A | All selected: "17 of 17 items selected" |
 | O1 | Click the Size heading twice | Largest first (video.mp4, report.pdf, …), folders still on top, a down arrow on Size |
 | O2 | Click the Modified heading | Oldest first among files: photo.JPG (2023), notes.txt (2024), video.mp4 (2025) |

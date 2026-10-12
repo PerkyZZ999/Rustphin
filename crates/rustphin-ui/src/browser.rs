@@ -9,9 +9,10 @@ use std::{
 
 use gpui_kit::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Entity, FocusHandle,
-    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, Modifiers, ParentElement as _,
-    Render, ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, UniformListScrollHandle, Window, actions,
+    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, Modifiers, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render,
+    ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
+    UniformListScrollHandle, Window, actions,
     component::{
         Disableable as _, Icon, IconName, Selectable as _, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -31,7 +32,7 @@ use crate::{
     diagnostics::FrameLog,
     filetypes::{Database, TypeInfo},
     format::{self, count, plural},
-    layout::{self, Layout, ViewMode},
+    layout::{self, Layout, Rect, ViewMode},
     settings::Settings,
     theme::{Theme, size, space, text},
 };
@@ -41,6 +42,8 @@ const KEY_CONTEXT: &str = "Browser";
 const LIST_CONTEXT: &str = "Browser && !Input";
 /// Ancestors shown in the location bar before the rest collapse into an ellipsis.
 const MAX_CRUMBS: usize = 4;
+/// How far the pointer must move with the button down before a rubber band starts.
+const BAND_THRESHOLD: f32 = 4.;
 /// A pause longer than this starts a new type-ahead search.
 const TYPE_AHEAD_PAUSE: Duration = Duration::from_millis(1000);
 /// Rows moved by Page Up and Page Down.
@@ -177,6 +180,10 @@ pub struct Browser {
     /// The settings as last written, to skip writes that change nothing.
     saved: Settings,
     frames: FrameLog,
+    /// A rubber-band selection being dragged, if any.
+    band: Option<Band>,
+    /// Set when a band ends, so the click that the same press produces is ignored.
+    ignore_click: bool,
     scroll: UniformListScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
@@ -222,6 +229,8 @@ impl Browser {
             settings_path,
             saved: settings.clone(),
             frames: FrameLog::from_env(),
+            band: None,
+            ignore_click: false,
             scroll: UniformListScrollHandle::new(),
             _subscriptions: subscriptions,
         };
@@ -344,6 +353,107 @@ impl Browser {
             },
             cx,
         );
+    }
+
+    /// A window position in list coordinates: relative to the first row's
+    /// top-left corner, whatever the scroll position. `None` before the list
+    /// has been drawn.
+    fn list_point(&self, position: Point<Pixels>) -> Option<(f32, f32)> {
+        let state = self.scroll.0.borrow();
+        let bounds = state.base_handle.bounds();
+        if bounds.size.height <= px(0.) {
+            return None;
+        }
+        let offset = state.base_handle.offset();
+        Some((
+            f32::from(position.x - bounds.origin.x) - space::SM,
+            f32::from(position.y - bounds.origin.y - offset.y) - space::XS,
+        ))
+    }
+
+    fn on_mouse_down(&mut self, event: &MouseDownEvent, _: &mut Window, _: &mut Context<Self>) {
+        self.ignore_click = false;
+        self.band = None;
+        let in_list = self
+            .scroll
+            .0
+            .borrow()
+            .base_handle
+            .bounds()
+            .contains(&event.position);
+        if in_list
+            && !self.editing_location
+            && let Some(start) = self.list_point(event.position)
+        {
+            self.band = Some(Band {
+                start,
+                pressed_at: event.position,
+                pointer: event.position,
+                active: false,
+                add: event.modifiers.control,
+            });
+        }
+    }
+
+    fn on_mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(mut band) = self.band else {
+            return;
+        };
+        if !event.dragging() {
+            self.band = None;
+            return;
+        }
+        band.pointer = event.position;
+        let moved = event.position - band.pressed_at;
+        if f32::from(moved.x).abs().max(f32::from(moved.y).abs()) >= BAND_THRESHOLD {
+            band.active = true;
+        }
+        self.band = Some(band);
+        if !band.active {
+            return;
+        }
+        let (Some(end), Some(snapshot)) = (self.list_point(event.position), self.snapshot.clone())
+        else {
+            return;
+        };
+        let layout = self.mode.layout(self.zoom);
+        let rows = layout.rows_in(Rect::between(band.start, end), self.per_row, snapshot.len());
+        self.selection.select_rows(&snapshot, rows, band.add);
+        // The view does not scroll to follow a band.
+        self.focus_row = self.selection.focus_row(&snapshot);
+        cx.notify();
+    }
+
+    fn on_mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(band) = self.band.take() {
+            self.ignore_click = band.active;
+            cx.notify();
+        }
+    }
+
+    /// The outline of the band being dragged, in window coordinates.
+    fn band_outline(&self, theme: Theme) -> Option<impl IntoElement + use<>> {
+        let band = self.band.filter(|band| band.active)?;
+        let (left, right) = (
+            band.pressed_at.x.min(band.pointer.x),
+            band.pressed_at.x.max(band.pointer.x),
+        );
+        let (top, bottom) = (
+            band.pressed_at.y.min(band.pointer.y),
+            band.pressed_at.y.max(band.pointer.y),
+        );
+        Some(
+            div()
+                .absolute()
+                .left(left)
+                .top(top)
+                .w(right - left)
+                .h(bottom - top)
+                .rounded(px(space::XS))
+                .border_1()
+                .border_color(theme.accent)
+                .bg(theme.hover),
+        )
     }
 
     /// Left and right move between neighbours in a grid; a list has none.
@@ -903,6 +1013,9 @@ impl Browser {
         cx: &mut Context<Self>,
     ) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
         cx.listener(move |this, event: &ClickEvent, _, cx| {
+            if std::mem::take(&mut this.ignore_click) {
+                return;
+            }
             let modifiers = event.modifiers();
             this.click_row(row, modifiers, cx);
             let plain = !modifiers.shift && !modifiers.control;
@@ -1249,6 +1362,10 @@ impl Render for Browser {
         }
 
         let view = div()
+            .relative()
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .on_mouse_move(cx.listener(Self::on_mouse_move))
+            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus)
             .on_action(cx.listener(|this, _: &SelectPrevious, _, cx| {
@@ -1384,7 +1501,8 @@ impl Render for Browser {
                         None => content,
                     }),
             )
-            .child(self.status(theme));
+            .child(self.status(theme))
+            .children(self.band_outline(theme));
         self.frames.end(frame_started);
         view
     }
@@ -1442,6 +1560,20 @@ fn expand_path(typed: &str, base: Option<&Path>) -> Option<PathBuf> {
         Some(base) if path.is_relative() => base.join(path),
         _ => path,
     })
+}
+
+/// A rubber-band selection in progress.
+#[derive(Debug, Clone, Copy)]
+struct Band {
+    /// Where the drag began, in list coordinates, so it stays put if the list scrolls.
+    start: (f32, f32),
+    /// Where the button went down and where the pointer is now, in window coordinates.
+    pressed_at: Point<Pixels>,
+    pointer: Point<Pixels>,
+    /// Whether the pointer has moved far enough for this to be a band and not a click.
+    active: bool,
+    /// Ctrl was held: add to the selection instead of replacing it.
+    add: bool,
 }
 
 /// One entry as a row or cell draws it.
