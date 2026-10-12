@@ -1,14 +1,16 @@
 # Work items (current slice)
 
 ## Current slice
-S4 — File operations, undo, trash
+S5 — Clipboard and drag-and-drop
 
-**Done when:** the operation engine passes its fault-injection and kill tests (gate, before any operation UI), then every R-007, R-008, R-009 and R-103 acceptance point is demonstrated and recorded in VALIDATION.md.
-
-Order matters: W-031 to W-036 are the engine and its gate; W-037 onwards (UI) may not start before W-036 is recorded as passed.
+**Done when:** every R-010 and R-011 acceptance point is demonstrated and recorded in VALIDATION.md, or recorded as not verifiable with the reason.
 
 ## Queue
-- None. S4 is closed; S5 is planned in ROADMAP.md and its work items are written when it starts.
+- [ ] W-041 — Platform: file clipboard behind a trait (data-control through `wl-clipboard-rs`, with an in-application fallback), offering `text/uri-list`, KDE's cut marker and GNOME's copied-files format; URI encoding and decoding for any byte sequence (R-011, D-010, D-015)
+- [ ] W-042 — UI: copy, cut and paste through the system clipboard; cut entries dimmed until pasted or the clipboard changes; the missing-protocol limitation reported once (R-011)
+- [ ] W-043 — UI: drag entries within and between panes and tabs onto a view or a folder, with Ctrl to copy, Shift to move and a question otherwise; a press on an entry starts a drag, not a rubber band (R-010)
+- [ ] W-044 — UI: drag out to other applications and accept files dropped from them (R-010)
+- [ ] W-045 — Clipboard and drag scenarios with Dolphin in an isolated session, added to UI_SCENARIOS.md and run (R-010, R-011)
 
 ## Done (recent)
 - [x] S4 — File operations, undo, trash: W-031 to W-040, closed 2026-10-12 (see VALIDATION.md)

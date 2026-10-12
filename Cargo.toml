@@ -27,6 +27,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tempfile = "3"
 proptest = { version = "1", default-features = false, features = ["std"] }
 rustix = { version = "1", features = ["fs"] }
+wl-clipboard-rs = "0.9"
 
 # UI toolkit, pinned exactly (decision D-001). Upgrade only as a planned work item.
 gpui-kit = "=0.7.3"

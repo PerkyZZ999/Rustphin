@@ -19,6 +19,8 @@ use rustphin_core::{
     ops::{Trash, TrashedItem},
 };
 
+use crate::uri::{percent_decode, percent_encode};
+
 /// One entry found in a trash directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrashEntry {
@@ -383,38 +385,6 @@ fn stored_name(name: &OsStr, attempt: u32) -> OsString {
         stored.extend_from_slice(format!(" ({attempt})").as_bytes());
     }
     OsString::from_vec(stored)
-}
-
-/// Percent-encodes a path as in a URI: unreserved characters and `/` stay.
-fn percent_encode(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len());
-    for &byte in bytes {
-        if byte.is_ascii_alphanumeric() || b"-_.~/".contains(&byte) {
-            out.push(byte as char);
-        } else {
-            out.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    out
-}
-
-fn percent_decode(text: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(text.len());
-    let mut rest = text;
-    while let [byte, tail @ ..] = rest {
-        let hex = |digit: u8| (digit as char).to_digit(16).map(|value| value as u8);
-        match (byte, tail) {
-            (b'%', [high, low, after @ ..]) if hex(*high).is_some() && hex(*low).is_some() => {
-                out.push(hex(*high).unwrap_or(0) << 4 | hex(*low).unwrap_or(0));
-                rest = after;
-            }
-            _ => {
-                out.push(*byte);
-                rest = tail;
-            }
-        }
-    }
-    out
 }
 
 /// Reads the original path and the deletion date out of a `.trashinfo` file.

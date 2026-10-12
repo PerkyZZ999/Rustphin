@@ -27,6 +27,7 @@ thiserror.workspace = true
 wayland-backend.workspace = true
 wayland-client.workspace = true
 wayland-protocols.workspace = true
+wl-clipboard-rs.workspace = true
 
 [dev-dependencies]
 rustphin-core = { workspace = true, features = ["test-support"] }

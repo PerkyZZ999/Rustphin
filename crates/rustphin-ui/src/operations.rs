@@ -20,7 +20,10 @@ use rustphin_core::{
         Recovery, Request, Resolution, Trash,
     },
 };
-use rustphin_platform::trash::FreedesktopTrash;
+use rustphin_platform::{
+    clipboard::{self, FileClip, FileClipboard},
+    trash::FreedesktopTrash,
+};
 
 use crate::format::{self, count, plural};
 
@@ -107,15 +110,6 @@ pub struct Notice {
     pub offers_undo: bool,
 }
 
-/// Entries picked up with copy or cut, waiting to be pasted.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Clip {
-    /// The entries.
-    pub paths: Vec<PathBuf>,
-    /// Whether pasting moves them instead of copying.
-    pub cut: bool,
-}
-
 /// The application's file operations and their state.
 pub struct Hub {
     ops: Operations,
@@ -130,8 +124,14 @@ pub struct Hub {
     pub questions: VecDeque<Question>,
     /// The latest message, if not yet dismissed.
     pub notice: Option<Notice>,
-    /// Entries picked up for pasting.
-    pub clip: Option<Clip>,
+    /// The file clipboard: the desktop's, or a private one where the
+    /// desktop offers none to share.
+    clipboard: Arc<dyn FileClipboard>,
+    /// The files on the clipboard as last read: ours or another application's.
+    pub clip: Option<FileClip>,
+    /// Whether the user has been told that the clipboard is not shared.
+    told_unshared: bool,
+    _clipboard_watch: Option<clipboard::WatchGuard>,
     /// Counts notices, so a timer only dismisses the one it was set for.
     notice_serial: u64,
 }
@@ -152,7 +152,26 @@ pub fn init(cx: &mut App) {
         }
     };
     let (ops, events) = Operations::new(fs, engine_trash);
+    let clipboard = clipboard::for_session();
+    if !clipboard.is_shared() {
+        tracing::warn!("no shared file clipboard; copy and paste stay inside Rustphin");
+    }
     let hub = cx.new(|cx: &mut Context<Hub>| {
+        // Follow what other applications put on the clipboard.
+        let (changed, changes) = flume::unbounded::<()>();
+        let watch = clipboard.watch(Box::new(move || {
+            let _ = changed.send(());
+        }));
+        cx.spawn(async move |hub, cx| {
+            while changes.recv_async().await.is_ok() {
+                // A copy announces itself once per format; read once.
+                while changes.try_recv().is_ok() {}
+                if hub.update(cx, |hub, cx| hub.refresh_clip(cx)).is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
         cx.spawn(async move |hub, cx| {
             while let Ok(event) = events.recv_async().await {
                 if hub.update(cx, |hub, cx| hub.on_event(event, cx)).is_err() {
@@ -168,7 +187,10 @@ pub fn init(cx: &mut App) {
             running: Vec::new(),
             questions: VecDeque::new(),
             notice: None,
+            clipboard,
             clip: None,
+            told_unshared: false,
+            _clipboard_watch: watch,
             notice_serial: 0,
         }
     });
@@ -322,41 +344,120 @@ impl Hub {
         cx.notify();
     }
 
-    /// Picks up `paths` for a later paste.
+    /// Reads the clipboard again, in the background.
+    fn refresh_clip(&mut self, cx: &mut Context<Self>) {
+        let clipboard = self.clipboard.clone();
+        cx.spawn(async move |hub, cx| {
+            let read = cx.background_spawn(async move { clipboard.read() }).await;
+            let _ = hub.update(cx, |hub, cx| {
+                // An unreadable clipboard holds nothing for us.
+                let clip = read.ok().flatten();
+                if hub.clip != clip {
+                    hub.clip = clip;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Whether `path` was cut and is waiting to be pasted somewhere.
+    pub fn is_cut(&self, path: &Path) -> bool {
+        self.clip
+            .as_ref()
+            .is_some_and(|clip| clip.cut && clip.paths.iter().any(|cut| cut == path))
+    }
+
+    /// Whether anything in the folder `folder` is cut. Cheap enough to ask
+    /// before checking every row.
+    pub fn has_cut_in(&self, folder: &Path) -> bool {
+        self.clip.as_ref().is_some_and(|clip| {
+            clip.cut && clip.paths.iter().any(|cut| cut.parent() == Some(folder))
+        })
+    }
+
+    /// Puts `paths` on the clipboard, to be copied or, with `cut`, moved by
+    /// the next paste, here or in another application.
     pub fn pick_up(&mut self, paths: Vec<PathBuf>, cut: bool, cx: &mut Context<Self>) {
         if paths.is_empty() {
             return;
         }
-        let what = what(&paths);
-        let text = if cut {
-            format!("Cut {what}. Paste to move.")
-        } else {
-            format!("Copied {what}. Paste to copy.")
-        };
-        self.clip = Some(Clip { paths, cut });
-        self.set_notice(text, false, cx);
+        let clip = FileClip { paths, cut };
+        let clipboard = self.clipboard.clone();
+        cx.spawn(async move |hub, cx| {
+            let written = {
+                let clip = clip.clone();
+                cx.background_spawn(async move { clipboard.write(&clip) })
+                    .await
+            };
+            let _ = hub.update(cx, |hub, cx| match written {
+                Ok(()) => {
+                    let text = pick_up_notice(&clip, hub.clipboard.is_shared(), hub.told_unshared);
+                    hub.told_unshared = true;
+                    hub.clip = Some(clip);
+                    hub.set_notice(text, false, cx);
+                }
+                Err(error) => {
+                    hub.set_notice(
+                        format!("The clipboard could not be written: {error}."),
+                        true,
+                        cx,
+                    );
+                }
+            });
+        })
+        .detach();
     }
 
-    /// Copies or moves the picked-up entries into `into`.
+    /// Copies or moves the files on the clipboard into `into`.
     pub fn paste(&mut self, into: PathBuf, cx: &mut Context<Self>) {
-        let Some(clip) = self.clip.clone() else {
-            self.set_notice("Nothing has been copied or cut yet.".to_owned(), false, cx);
-            return;
-        };
-        if clip.cut {
-            // A move happens once; the entries are no longer where they were.
-            self.clip = None;
-            self.start(Request::Move {
-                sources: clip.paths,
-                into,
+        let clipboard = self.clipboard.clone();
+        cx.spawn(async move |hub, cx| {
+            let read = {
+                let clipboard = clipboard.clone();
+                cx.background_spawn(async move { clipboard.read() }).await
+            };
+            let clip = match read {
+                Ok(Some(clip)) => clip,
+                Ok(None) => {
+                    let _ = hub.update(cx, |hub, cx| {
+                        hub.set_notice("The clipboard holds no files.".to_owned(), false, cx);
+                    });
+                    return;
+                }
+                Err(error) => {
+                    let _ = hub.update(cx, |hub, cx| {
+                        hub.set_notice(
+                            format!("The clipboard could not be read: {error}."),
+                            true,
+                            cx,
+                        );
+                    });
+                    return;
+                }
+            };
+            if clip.cut {
+                // A move happens once: the entries are no longer where the
+                // clipboard says, so it is emptied, as other file managers do.
+                let _ = cx.background_spawn(async move { clipboard.clear() }).await;
+            }
+            let _ = hub.update(cx, |hub, cx| {
+                if clip.cut {
+                    hub.clip = None;
+                    hub.start(Request::Move {
+                        sources: clip.paths,
+                        into,
+                    });
+                } else {
+                    hub.start(Request::Copy {
+                        sources: clip.paths,
+                        into,
+                    });
+                }
+                cx.notify();
             });
-        } else {
-            self.start(Request::Copy {
-                sources: clip.paths,
-                into,
-            });
-        }
-        cx.notify();
+        })
+        .detach();
     }
 
     /// Dismisses the message being shown.
@@ -450,6 +551,23 @@ impl Hub {
         }
         cx.notify();
     }
+}
+
+/// What to say after a copy or cut. The first time on a desktop without a
+/// shared clipboard, also that other applications will not see it.
+fn pick_up_notice(clip: &FileClip, shared: bool, told_unshared: bool) -> String {
+    let what = what(&clip.paths);
+    let mut text = if clip.cut {
+        format!("Cut {what}. Paste to move.")
+    } else {
+        format!("Copied {what}. Paste to copy.")
+    };
+    if !shared && !told_unshared {
+        text.push_str(
+            " This desktop offers no shared file clipboard, so pasting works only inside Rustphin.",
+        );
+    }
+    text
 }
 
 fn quoted(name: &std::ffi::OsStr) -> String {
@@ -836,6 +954,26 @@ mod tests {
             "1 of 4 · 1.0 MiB of 4.0 MiB · 512.0 KiB/s"
         );
         assert_eq!(fraction(&Progress::default()), None);
+    }
+
+    #[test]
+    fn the_missing_shared_clipboard_is_mentioned_once() {
+        let clip = FileClip {
+            paths: vec!["/a/report.pdf".into()],
+            cut: true,
+        };
+        assert_eq!(
+            pick_up_notice(&clip, true, false),
+            "Cut “report.pdf”. Paste to move."
+        );
+        assert_eq!(
+            pick_up_notice(&clip, false, false),
+            "Cut “report.pdf”. Paste to move. This desktop offers no shared file clipboard, so pasting works only inside Rustphin."
+        );
+        assert_eq!(
+            pick_up_notice(&clip, false, true),
+            "Cut “report.pdf”. Paste to move."
+        );
     }
 
     #[test]

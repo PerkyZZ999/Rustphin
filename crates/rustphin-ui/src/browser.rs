@@ -214,6 +214,8 @@ pub struct Browser {
     refocus: bool,
     /// The trash directory whose contents this view is showing, if it is one.
     trash_dir: Option<PathBuf>,
+    /// Whether something in the folder shown is cut; refreshed every redraw.
+    has_cut: bool,
     /// The user's other trash directories, on other volumes, while a trash is shown.
     other_trashes: Vec<PathBuf>,
     focus: FocusHandle,
@@ -263,6 +265,8 @@ impl Browser {
         let subscriptions = vec![
             cx.subscribe_in(&location_input, window, Self::on_location_input),
             cx.subscribe_in(&rename_input, window, Self::on_rename_input),
+            // Cut entries are drawn dimmed, and the clipboard changes elsewhere.
+            cx.observe(&hub(cx), |_, _, cx| cx.notify()),
         ];
         // Whatever contains this view decides when it gets the keyboard focus:
         // a view created for a background tab must not take it.
@@ -286,6 +290,7 @@ impl Browser {
             rename_requested: None,
             refocus: false,
             trash_dir: None,
+            has_cut: false,
             other_trashes: Vec::new(),
             focus,
             types: None,
@@ -1450,6 +1455,7 @@ impl Browser {
             selected: self.selection.contains(rows, row),
             focused: self.focus_row == Some(row),
             renaming: self.renaming.as_deref() == Some(rows.name(row)),
+            cut: self.has_cut && hub(cx).read(cx).is_cut(&rows.entry_path(row)),
             info: self.type_info_for(rows.name(row), container, cx),
         }
     }
@@ -1850,6 +1856,9 @@ impl Render for Browser {
             window.request_animation_frame();
         }
 
+        self.has_cut = self
+            .location()
+            .is_some_and(|folder| hub(cx).read(cx).has_cut_in(&folder));
         if std::mem::take(&mut self.refocus) {
             cx.defer_in(window, |this, window, cx| this.focus.focus(window, cx));
         }
@@ -2125,6 +2134,8 @@ struct Entry {
     focused: bool,
     /// Its name is being edited in place.
     renaming: bool,
+    /// Cut and waiting to be pasted.
+    cut: bool,
     info: Option<TypeInfo>,
 }
 
@@ -2179,6 +2190,8 @@ impl Entry {
                     .when(self.focused, |surface| surface.border_color(theme.accent))
                     .hover(|surface| surface.bg(theme.hover))
             })
+            // Cut entries are on their way out: drawn faded until pasted.
+            .when(self.cut, |surface| surface.opacity(0.5))
     }
 }
 
