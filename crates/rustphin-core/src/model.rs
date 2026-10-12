@@ -110,6 +110,11 @@ impl Snapshot {
         self.order[row]
     }
 
+    /// The row showing the entry with this id, if it is shown.
+    pub fn row_of_entry(&self, id: u32) -> Option<usize> {
+        self.order.iter().position(|&index| index == id)
+    }
+
     /// The entry's size and modification time, once they have been loaded.
     /// `None` while they are loading, when the options do not ask for them, or
     /// when they could not be read.
@@ -936,5 +941,150 @@ mod tests {
 
         let reloaded = snapshot(&events, model.reload().unwrap());
         assert_ne!(reloaded.listing(), first.listing());
+    }
+
+    /// Lists "item0".."item<n-1>" (name order, all files) for selection tests.
+    fn listed(entries: usize) -> (DirectoryModel, flume::Receiver<ModelEvent>, Arc<Snapshot>) {
+        let (mut model, events) = DirectoryModel::new(Arc::new(FakeFs { entries })).unwrap();
+        let shown = snapshot(&events, model.open("/dir"));
+        (model, events, shown)
+    }
+
+    fn selected_names(selection: &crate::Selection, shown: &Snapshot) -> Vec<String> {
+        selection
+            .rows(shown)
+            .into_iter()
+            .map(|row| String::from_utf8_lossy(shown.name(row)).into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn a_plain_click_selects_only_that_entry() {
+        let (_model, _events, shown) = listed(5);
+        let mut selection = crate::Selection::default();
+        selection.select_only(&shown, 1);
+        selection.select_only(&shown, 3);
+
+        assert_eq!(selected_names(&selection, &shown), ["item3"]);
+        assert_eq!(selection.len(), 1);
+        assert_eq!(selection.focus_row(&shown), Some(3));
+        assert!(selection.contains(&shown, 3) && !selection.contains(&shown, 1));
+    }
+
+    #[test]
+    fn toggling_adds_and_removes_entries() {
+        let (_model, _events, shown) = listed(5);
+        let mut selection = crate::Selection::default();
+        selection.select_only(&shown, 0);
+        selection.toggle(&shown, 2);
+        selection.toggle(&shown, 4);
+        selection.toggle(&shown, 2);
+
+        assert_eq!(selected_names(&selection, &shown), ["item0", "item4"]);
+        assert_eq!(selection.len(), 2);
+    }
+
+    #[test]
+    fn extending_selects_the_range_from_the_anchor_in_either_direction() {
+        let (_model, _events, shown) = listed(6);
+        let mut selection = crate::Selection::default();
+        selection.select_only(&shown, 3);
+        selection.extend_to(&shown, 5);
+        assert_eq!(
+            selected_names(&selection, &shown),
+            ["item3", "item4", "item5"]
+        );
+
+        // Extending again replaces the range; the anchor stays where it was.
+        selection.extend_to(&shown, 1);
+        assert_eq!(
+            selected_names(&selection, &shown),
+            ["item1", "item2", "item3"]
+        );
+        assert_eq!(selection.focus_row(&shown), Some(1));
+    }
+
+    #[test]
+    fn extending_without_an_anchor_selects_just_that_row() {
+        let (_model, _events, shown) = listed(4);
+        let mut selection = crate::Selection::default();
+        selection.extend_to(&shown, 2);
+        assert_eq!(selected_names(&selection, &shown), ["item2"]);
+    }
+
+    #[test]
+    fn select_all_and_invert_cover_the_shown_entries() {
+        let (_model, _events, shown) = listed(4);
+        let mut selection = crate::Selection::default();
+        selection.select_all(&shown);
+        assert_eq!(selection.len(), 4);
+
+        selection.toggle(&shown, 1);
+        selection.invert(&shown);
+        assert_eq!(selected_names(&selection, &shown), ["item1"]);
+        selection.clear();
+        assert!(selection.is_empty());
+    }
+
+    #[test]
+    fn rows_outside_the_list_are_ignored() {
+        let (_model, _events, shown) = listed(2);
+        let mut selection = crate::Selection::default();
+        selection.select_only(&shown, 9);
+        selection.toggle(&shown, 2);
+        selection.extend_to(&shown, 2);
+        assert!(selection.is_empty());
+    }
+
+    #[test]
+    fn the_selection_follows_its_entries_through_a_resort() {
+        let (mut model, events, shown) = listed(5);
+        let mut selection = crate::Selection::default();
+        selection.select_only(&shown, 0);
+        selection.toggle(&shown, 1);
+
+        let reversed = ViewOptions {
+            descending: true,
+            ..ViewOptions::default()
+        };
+        let resorted = snapshot(&events, model.set_options(reversed).unwrap());
+        selection.sync(&resorted);
+
+        assert_eq!(selection.rows(&resorted), [3, 4]);
+        assert_eq!(selected_names(&selection, &resorted), ["item1", "item0"]);
+        assert_eq!(selection.focus_row(&resorted), Some(3));
+    }
+
+    #[test]
+    fn reading_the_directory_again_empties_the_selection() {
+        let (mut model, events, shown) = listed(3);
+        let mut selection = crate::Selection::default();
+        selection.select_all(&shown);
+
+        let reloaded = snapshot(&events, model.reload().unwrap());
+        assert!(!selection.contains(&reloaded, 0));
+        selection.sync(&reloaded);
+        assert!(selection.is_empty());
+    }
+
+    #[test]
+    fn entries_that_stop_being_shown_leave_the_selection() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        let all = ViewOptions {
+            show_hidden: true,
+            ..ViewOptions::default()
+        };
+        model.set_options(all);
+        let shown = snapshot(&events, model.open(dir.path()));
+        let mut selection = crate::Selection::default();
+        selection.select_only(&shown, shown.row_of(b".hidden").unwrap());
+        selection.toggle(&shown, shown.row_of(b"Zeta.md").unwrap());
+
+        let visible_only = snapshot(&events, model.set_options(ViewOptions::default()).unwrap());
+        selection.sync(&visible_only);
+
+        assert_eq!(selected_names(&selection, &visible_only), ["Zeta.md"]);
+        assert_eq!(selection.len(), 1);
     }
 }

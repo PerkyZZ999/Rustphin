@@ -185,3 +185,11 @@
 - **Not verified:** Btrfs, network or FUSE mounts; behaviour when files change during the load.
 - **Waiver:** none
 - **Follow-up:** W-023 (progressive, visible-first details). The benchmark now reports the details load without a limit, because the program cannot control the inode cache; the re-sorts after it are gated.
+
+### 2026-10-12 — W-016: selection model in the core
+- **Phase:** 6 Implement (S2)
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` PASS, 45 tests. Nine behaviour tests through the public `Selection` and model API. Five hand-applied mutations (filtered-out entries staying selected; invert doing nothing; a range missing its last row; toggle never deselecting; the selection surviving a re-read) each failed at least one test.
+- **Not verified:** use from the UI (W-020); rubber-band selection is a UI concern not covered here.
+- **Waiver:** none
+- **Follow-up:** none

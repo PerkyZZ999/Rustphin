@@ -8,9 +8,11 @@ mod details;
 mod entry;
 mod fs;
 mod model;
+mod selection;
 mod sort;
 
 pub use entry::{CHUNK_LEN, Chunk, EntryKind, EntryStore, display_name};
 pub use fs::{Fs, Metadata, RawEntry, RealFs};
 pub use model::{DirectoryModel, LoadError, ModelEvent, Snapshot, ViewOptions};
+pub use selection::Selection;
 pub use sort::{SortKey, natural_cmp};
