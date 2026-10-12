@@ -1123,6 +1123,8 @@ impl Browser {
                                     .w(px(size::COLUMN_SIZE))
                                     .flex_none()
                                     .text_right()
+                                    .font_family(text::FAMILY_DATA)
+                                    .text_size(px(text::DATA))
                                     .text_color(secondary)
                                     .child(size_text),
                             )
@@ -1131,6 +1133,8 @@ impl Browser {
                                     div()
                                         .w(px(size::COLUMN_MODIFIED))
                                         .flex_none()
+                                        .font_family(text::FAMILY_DATA)
+                                        .text_size(px(text::DATA))
                                         .text_color(secondary)
                                         .child(modified_text),
                                 )
@@ -1280,6 +1284,7 @@ impl Browser {
             .child(Icon::new(icon).size(px(size::ICON_LARGE)))
             .child(
                 div()
+                    .font_family(text::FAMILY_HEADING)
                     .text_size(px(text::HEADING))
                     .text_color(theme.text)
                     .child(heading),
@@ -1336,6 +1341,7 @@ impl Browser {
             .bg(theme.chrome)
             .border_t_1()
             .border_color(theme.border)
+            .font_family(text::FAMILY_DATA)
             .text_size(px(text::SMALL))
             .text_color(theme.text_muted)
             .child(message)
@@ -1474,6 +1480,7 @@ impl Render for Browser {
             .size_full()
             .bg(theme.window)
             .text_color(theme.text)
+            .font_family(text::FAMILY_BODY)
             .text_size(px(text::BODY))
             .line_height(px(text::LINE))
             .child(self.toolbar(theme, cx))

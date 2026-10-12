@@ -1,4 +1,5 @@
 //! Design tokens: the single source of colour, spacing, size and radius values.
+//! They implement `docs/DESIGN.md`, which is the reference for the design.
 //!
 //! Views take every visual value from here. Colours are named for their role,
 //! not their hue. Spacing follows a 4-pixel grid.
@@ -45,11 +46,19 @@ pub mod size {
     /// Icons in empty and error states.
     pub const ICON_LARGE: f32 = 32.;
     /// Corner radius shared by controls, rows and panels.
-    pub const RADIUS: f32 = 6.;
+    pub const RADIUS: f32 = 2.;
 }
 
 /// Type scale in pixels.
 pub mod text {
+    /// Interface and file-name text (`body-md`, `body-sm`).
+    pub const FAMILY_BODY: &str = "Inter";
+    /// Sizes, dates, paths and counts (`data-md`, `data-sm`).
+    pub const FAMILY_DATA: &str = "JetBrains Mono";
+    /// Headings in empty and error states (`headline-sm`).
+    pub const FAMILY_HEADING: &str = "Space Grotesk";
+    /// Data cells (`data-md`).
+    pub const DATA: f32 = 13.;
     /// Secondary information: status line, captions.
     pub const SMALL: f32 = 12.;
     /// Body text and list rows.
@@ -102,22 +111,22 @@ impl Theme {
     pub fn obsidian(translucent: bool) -> Self {
         Self {
             window: if translucent {
-                rgba(0x0b0d12b8)
+                rgba(0x0b0f17b8)
             } else {
-                rgb(0x0f1116)
+                rgb(0x0b0f17)
             },
             chrome: if translucent {
-                rgba(0x0b0d1233)
+                rgba(0x0b0f1733)
             } else {
-                rgb(0x141821)
+                rgb(0x101521)
             },
             content: if translucent {
-                rgba(0x0b0d1299)
+                rgba(0x0b0f1799)
             } else {
-                rgb(0x0f1116)
+                rgb(0x0b0f17)
             },
             border: rgba(0xffffff1f),
-            text: rgb(0xe6e9f0),
+            text: rgb(0xdfe2ef),
             text_muted: rgb(0xc3cad9),
             accent: rgb(0x8fa8ff),
             selection: rgb(0x3457d5),
@@ -138,6 +147,8 @@ impl Theme {
         components.primary_foreground = self.on_selection.into();
         components.ring = self.accent.into();
         components.radius = px(size::RADIUS);
+        components.font_family = text::FAMILY_BODY.into();
+        components.mono_font_family = text::FAMILY_DATA.into();
     }
 }
 

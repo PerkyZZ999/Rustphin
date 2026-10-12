@@ -1,6 +1,6 @@
 # Architecture
 
-Status: drafted 2026-10-12, consistent with locked decisions D-001 to D-003 and D-006 to D-011.
+Status: drafted 2026-10-12, consistent with locked decisions D-001 to D-003, D-006, D-008 to D-011 and D-017.
 
 ## Overview
 
@@ -82,7 +82,7 @@ Stale results are discarded by generation number, so a fast navigation never sho
 | Destination full or permission denied mid-operation | I/O error from worker | Operation pauses with skip / retry / cancel; completed items stay journaled for undo |
 | Shared places file changed or malformed | Watch event; parse error | Reload; on parse error keep last good in-memory state and never write over the file |
 | Place-group file refers to a vanished place ID | Reconciliation at load and on change | Drop the member silently; keep the group |
-| Blur protocol missing or request fails | Runtime protocol detection | Opaque theme (D-007, D-010) |
+| Blur protocol missing or request fails | Runtime protocol detection | Opaque theme (D-017, D-010) |
 | Data-control protocol missing | Runtime protocol detection | In-app clipboard only, with a one-time notice |
 | UDisks2 absent or unresponsive | D-Bus error or timeout | Devices section hidden with a notice; rest of the app unaffected |
 | Thumbnail decoder fails or exceeds limits | Error or timeout on worker | Placeholder icon; entry marked failed in the shared cache per the spec |
@@ -115,7 +115,7 @@ Stale results are discarded by generation number, so a fast navigation never sho
 - D-002 → three layers with one-way dependencies, enforced by `rust-tc layers` and a `gpui-kit` ban in `deny.toml`.
 - D-003 → every crate declares GPL-3.0-or-later; licences checked by `cargo-deny`.
 - D-006 → Wayland-only features compiled; no X11 backend.
-- D-007 → theme tokens in `rustphin-ui`; opaque mode driven by the platform blur trait.
+- D-017 (supersedes D-007) → theme tokens in `rustphin-ui` implement `docs/DESIGN.md`; opaque mode driven by the platform blur trait.
 - D-008 → `places` module in the platform layer reads/writes the shared file and a separate groups file keyed by place ID.
 - D-009 → core-owned worker pools, snapshots over channels, no async runtime in the core.
 - D-010 → blur and clipboard traits in `rustphin-platform` with runtime detection and fallbacks.

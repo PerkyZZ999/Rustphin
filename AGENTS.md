@@ -24,10 +24,13 @@ The project follows a gated workflow. Its documents are the source of truth and 
 | `ARCHITECTURE.md` | Crates, data flow, trust boundaries, failure modes, test strategy. |
 | `VALIDATION.md` | Evidence log. Append an entry for every gate or check you actually ran. |
 | `DISCOVERY.md` | Constraints, risks and measurements from the feasibility phase. |
+| `UI_SCENARIOS.md` | The UI checks to replay through kwin-mcp after UI changes. |
+
+`docs/DESIGN.md` is the reference for the visual design (decision D-017). Its front-matter tokens are authoritative and `crates/rustphin-ui/src/theme.rs` implements them: change the document first, then the theme, and keep its "Implementation status" section true. After editing it, run `npx @google/design.md lint docs/DESIGN.md` and fix any errors.
 
 Rules that follow from it:
 
-- **Locked decisions are binding.** D-001, D-002, D-003, D-006 to D-011 may not be changed or worked around. If one blocks you, stop and raise it with the user; changing it needs their approval and a superseding record.
+- **Locked decisions are binding.** D-001, D-002, D-003, D-006, D-008 to D-011 and D-017 may not be changed or worked around. If one blocks you, stop and raise it with the user; changing it needs their approval and a superseding record.
 - **Evidence over claims.** Never record a check as passed unless you ran it. Say what was observed, inferred or not verified.
 - **One slice at a time.** Implement the current slice's work items; do not start later slices' features.
 - Ask the user before: changing MVP scope, locking or changing a decision, anything destructive, publishing anything.
@@ -55,7 +58,7 @@ Load and follow these skills whenever the work matches. They are mandatory for t
 Notes on applying them here:
 
 - Testing: every new test must pass the two litmus tests (fails when the behaviour breaks; survives a refactor). Prove new tests by breaking the code under test and seeing them fail. A bug fix starts with a failing regression test.
-- The two design skills are written for web CSS. Apply their rules, tables and quality gates to GPUI: all visual values come from the tokens in `crates/rustphin-ui/src/theme.rs` (4-pixel spacing grid, semantic colour names, one corner radius); text meets WCAG AA and is covered by the contrast tests there; state is never shown by colour alone; every empty, loading and error state says what happened and what to do; icons come from GPUI-Kit's bundled Lucide set, sized on the 4/8-pixel grid, and icon-only buttons carry a tooltip.
+- The two design skills are written for web CSS. Apply their rules, tables and quality gates to GPUI: all visual values come from `docs/DESIGN.md` through the tokens in `crates/rustphin-ui/src/theme.rs` (4-pixel spacing grid, semantic colour names, one 2-pixel corner radius); text meets WCAG AA and is covered by the contrast tests there; state is never shown by colour alone; every empty, loading and error state says what happened and what to do; icons come from GPUI-Kit's bundled Lucide set, sized on the 4/8-pixel grid, and icon-only buttons carry a tooltip.
 
 ## Architecture rules
 
@@ -152,7 +155,7 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 ## Known gotchas
 
 - GPUI's own clipboard cannot exchange files with other applications, and its blur uses a protocol current KWin does not offer. Use the platform layer's implementations.
-- GPUI cannot blur content inside the window. Menus, the palette and dialogs are tinted opaque surfaces by design (D-007).
+- GPUI cannot blur content inside the window. Menus, the palette and dialogs are solid surfaces by design (D-017, `docs/DESIGN.md`).
 - The user's Dolphin reports Ctrl+V as an ambiguous shortcut; in UI tests paste through Dolphin's context menu.
 - Key bindings that also edit text (arrows, Enter, Backspace, Home, End) must use the `Browser && !Input` context, or they fire while the user types in a text field.
 - GPUI-Kit's root element paints an opaque background under the app view. The window is opened with a root whose background is cleared (`crates/rustphin-ui/src/lib.rs`); keep that, or translucency silently disappears.

@@ -1,194 +1,243 @@
 ---
-name: Obsidian Telemetry OS
+version: alpha
+name: Rustphin Obsidian
+description: Dark obsidian-glass theme with royal-blue accents for the Rustphin file manager (GPUI, KDE Plasma on Wayland).
 colors:
-  surface: '#0f131c'
-  surface-dim: '#0f131c'
-  surface-bright: '#353943'
-  surface-container-lowest: '#0a0e17'
-  surface-container-low: '#181b25'
-  surface-container: '#1c1f29'
-  surface-container-high: '#262a34'
-  surface-container-highest: '#31353f'
-  on-surface: '#dfe2ef'
-  on-surface-variant: '#c7c4d8'
-  inverse-surface: '#dfe2ef'
-  inverse-on-surface: '#2c303a'
-  outline: '#918fa1'
-  outline-variant: '#464555'
-  surface-tint: '#c3c0ff'
-  primary: '#c3c0ff'
-  on-primary: '#1d00a5'
-  primary-container: '#4f46e5'
-  on-primary-container: '#dad7ff'
-  inverse-primary: '#4d44e3'
-  secondary: '#7bd0ff'
-  on-secondary: '#00354a'
-  secondary-container: '#00a6e0'
-  on-secondary-container: '#00374d'
-  tertiary: '#4edea3'
-  on-tertiary: '#003824'
-  tertiary-container: '#006e4b'
-  on-tertiary-container: '#67f4b7'
-  error: '#ffb4ab'
-  on-error: '#690005'
-  error-container: '#93000a'
-  on-error-container: '#ffdad6'
-  primary-fixed: '#e2dfff'
-  primary-fixed-dim: '#c3c0ff'
-  on-primary-fixed: '#0f0069'
-  on-primary-fixed-variant: '#3323cc'
-  secondary-fixed: '#c4e7ff'
-  secondary-fixed-dim: '#7bd0ff'
-  on-secondary-fixed: '#001e2c'
-  on-secondary-fixed-variant: '#004c69'
-  tertiary-fixed: '#6ffbbe'
-  tertiary-fixed-dim: '#4edea3'
-  on-tertiary-fixed: '#002113'
-  on-tertiary-fixed-variant: '#005236'
-  background: '#0f131c'
-  on-background: '#dfe2ef'
-  surface-variant: '#31353f'
+  # Surfaces. The three "glass" values are layered over the compositor-blurred desktop.
+  window-glass: "rgba(11, 15, 23, 0.72)"
+  chrome-glass: "rgba(11, 15, 23, 0.20)"
+  content-glass: "rgba(11, 15, 23, 0.60)"
+  # Their solid replacements when blur is unavailable or switched off.
+  window-solid: "#0B0F17"
+  chrome-solid: "#101521"
+  content-solid: "#0B0F17"
+  # Menus, palette, dialogs, tooltips: always solid.
+  surface-raised: "#0F172A"
+  # Text.
+  text: "#DFE2EF"
+  text-muted: "#C3CAD9"
+  # Royal blue.
+  primary: "#3457D5"
+  primary-hover: "#2F4FC4"
+  on-primary: "#F4F6FB"
+  primary-bright: "#8FA8FF"
+  # Supporting signals.
+  secondary: "#38BDF8"
+  tertiary: "#10B981"
+  error: "#FF9B9B"
+  error-surface: "#3A1A1F"
+  # Lines and states.
+  border: "rgba(255, 255, 255, 0.08)"
+  border-strong: "rgba(255, 255, 255, 0.12)"
+  border-accent: "rgba(65, 105, 225, 0.45)"
+  hover: "rgba(255, 255, 255, 0.08)"
 typography:
-  headline-xl:
-    fontFamily: Space Grotesk
-    fontSize: 2.25rem
-    fontWeight: '700'
-    lineHeight: 2.75rem
-    letterSpacing: -0.03em
-  headline-lg:
-    fontFamily: Space Grotesk
-    fontSize: 1.75rem
-    fontWeight: '600'
-    lineHeight: 2.25rem
-    letterSpacing: -0.02em
   headline-md:
     fontFamily: Space Grotesk
-    fontSize: 1.25rem
-    fontWeight: '600'
-    lineHeight: 1.75rem
+    fontSize: 20px
+    fontWeight: 600
+    lineHeight: 28px
     letterSpacing: -0.01em
   headline-sm:
     fontFamily: Space Grotesk
-    fontSize: 1rem
-    fontWeight: '600'
-    lineHeight: 1.5rem
-    letterSpacing: 0em
-  body-lg:
-    fontFamily: JetBrains Mono
-    fontSize: 0.9375rem
-    fontWeight: '400'
-    lineHeight: 1.5rem
-    letterSpacing: -0.01em
+    fontSize: 16px
+    fontWeight: 600
+    lineHeight: 24px
   body-md:
-    fontFamily: JetBrains Mono
-    fontSize: 0.8125rem
-    fontWeight: '400'
-    lineHeight: 1.25rem
-    letterSpacing: 0em
+    fontFamily: Inter
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 20px
   body-sm:
+    fontFamily: Inter
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 16px
+  data-md:
     fontFamily: JetBrains Mono
-    fontSize: 0.75rem
-    fontWeight: '400'
-    lineHeight: 1.125rem
-    letterSpacing: 0.01em
-  label-md:
+    fontSize: 13px
+    fontWeight: 400
+    lineHeight: 20px
+  data-sm:
     fontFamily: JetBrains Mono
-    fontSize: 0.75rem
-    fontWeight: '500'
-    lineHeight: 1rem
-    letterSpacing: 0.04em
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 16px
   label-sm:
     fontFamily: JetBrains Mono
-    fontSize: 0.6875rem
-    fontWeight: '500'
-    lineHeight: 0.875rem
+    fontSize: 11px
+    fontWeight: 500
+    lineHeight: 16px
     letterSpacing: 0.06em
-  label-xs:
-    fontFamily: JetBrains Mono
-    fontSize: 0.625rem
-    fontWeight: '600'
-    lineHeight: 0.75rem
-    letterSpacing: 0.08em
+rounded:
+  sm: 2px
 spacing:
-  gutter: 0.75rem
-  gutter-desktop: 1rem
-  margin: 0.75rem
-  margin-desktop: 1.25rem
-  space-xs: 0.25rem
-  space-sm: 0.5rem
-  space-md: 0.75rem
-  space-lg: 1rem
-  space-xl: 1.5rem
-  space-2xl: 2rem
+  xs: 4px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  xl: 24px
+  2xl: 32px
+components:
+  toolbar:
+    backgroundColor: "{colors.chrome-glass}"
+    height: 44px
+    padding: "{spacing.sm}"
+  toolbar-button:
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+    size: 28px
+  toolbar-button-hover:
+    backgroundColor: "{colors.hover}"
+  toolbar-button-selected:
+    backgroundColor: "{colors.border-strong}"
+  column-heading:
+    textColor: "{colors.text-muted}"
+    typography: "{typography.body-sm}"
+    height: 28px
+  column-heading-active:
+    textColor: "{colors.text}"
+  entry-row:
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.sm}"
+    height: 28px
+    padding: "{spacing.sm}"
+  entry-row-hover:
+    backgroundColor: "{colors.hover}"
+  entry-row-selected:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+  entry-data-cell:
+    textColor: "{colors.text-muted}"
+    typography: "{typography.data-md}"
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.sm}"
+  button-primary-hover:
+    backgroundColor: "{colors.primary-hover}"
+  input:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.text}"
+    typography: "{typography.data-md}"
+    rounded: "{rounded.sm}"
+    height: 28px
+  banner-error:
+    backgroundColor: "{colors.error-surface}"
+    textColor: "{colors.error}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.md}"
+  floating-surface:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+  status-line:
+    backgroundColor: "{colors.chrome-glass}"
+    textColor: "{colors.text-muted}"
+    typography: "{typography.data-sm}"
+    height: 28px
 ---
 
-## Brand & Style
+# Rustphin design
 
-This design system establishes an ultra-precise, cyber-utilitarian command deck and desktop shell. Engineered for systems engineers, technical operators, and demanding power users, the environment prioritizes uncompromised density, structural geometry, and clinical legibility over decorative embellishments.
+The main reference for how Rustphin looks. Token values in the front matter are authoritative; the prose explains how to apply them. The implementation of these tokens is `crates/rustphin-ui/src/theme.rs`, whose tests check the contrast rules below.
 
-The visual ethos fuses high-performance telemetry console architecture with an obsidian backdrop. Pure right-angled edges, stark borders, and concentrated electric sapphire energy corridors define the aesthetic. Every view functions as an instrument: stark monolithic surfaces, precise hairline boundaries, optical scans, and glowing functional focal points deliver immediate orientation across vast hierarchies of structured data and disk volumes.
+## Overview
+
+Rustphin is a file manager for KDE Plasma, used every day by people who move through large folders quickly. The interface is a precise instrument: dense, geometric and legible, with nothing decorative competing with the files.
+
+Three ideas hold it together:
+
+- **Obsidian glass.** The window is dark, translucent glass over the desktop, which the compositor blurs. The toolbar and status line are the clearest glass; the file list sits on a more solid pane so columns of text stay readable over anything behind.
+- **Royal blue as the only energy.** One accent colour marks selection, focus and the primary action. Cyan and emerald appear only as status signals.
+- **Progressive disclosure.** The default window shows the location, the files and a status line. Secondary controls appear on hover, on selection, by shortcut or through the command palette, and everything reachable by hover is also reachable by keyboard.
+
+Density is high but never cramped: a 4-pixel grid, 28-pixel rows at the default zoom, and hairline dividers instead of boxes.
 
 ## Colors
 
-The palette is anchored in cold, lightless obsidian and carbon tones, punctuated by high-potency photon luminescences:
-
-- **Canvas & Shell Base (`#05070B` to `#090D16`):** Deep, light-absorbent backdrops that recede entirely into physical displays, reducing ocular strain across extended operational cycles.
-- **Surface Panels (`#0F172A` with 70–85% alpha overlays):** Structured panes for file trees, split panes, terminal docks, and telemetry inspectors.
-- **Primary Energy (`#4F46E5` / Royal Electric Indigo):** Denotes execution paths, affirmative focus, active partition selection, and persistent system states.
-- **Secondary Telemetry (`#38BDF8` / Electric Cyan):** Reserved for live read/write indicators, active symlinks, transit meters, and dynamic metadata filters.
-- **Tertiary Diagnostic (`#10B981` / Emerald Status):** Reflects parity verification, clean integrity states, and online filesystem daemons.
-- **Hairline Structural Borders (`rgba(99, 102, 241, 0.18)` to `rgba(255, 255, 255, 0.08)`): Crisp, un-aliased demarcations mapping panel divisions.
+- **Glass surfaces** (`window-glass`, `chrome-glass`, `content-glass`) are obsidian at partial opacity. They are stacked: window first, then chrome or content on top of it. Never place text directly on `window-glass` without one of the other two.
+- **Solid surfaces** (`window-solid`, `chrome-solid`, `content-solid`) replace the glass when the compositor offers no blur or the user turns transparency off. Every rule in this document must hold in both modes.
+- **Raised surface** (`surface-raised`) is for anything that floats inside the window: menus, the command palette, dialogs, tooltips. It is always solid, because the toolkit cannot blur content inside the window.
+- **Text** uses `text` for names and primary content and `text-muted` for secondary data, headings of inactive columns and the status line. Both meet WCAG AA (4.5:1) on every surface, including glass over a white window behind.
+- **Primary** (`primary`, with `on-primary` text) fills the selected entry and the one primary button in a view. `primary-hover` is its pointer-over state.
+- **Primary bright** (`primary-bright`) is the accent on dark surfaces where a fill would be too heavy: the selection bar, the keyboard-focus bar, focus rings, folder glyphs and links. It meets 3:1 against every surface.
+- **Secondary** (cyan) signals live activity: transfers in progress, loading. **Tertiary** (emerald) signals a healthy or completed state. Neither is used for decoration or as a second accent.
+- **Error** text sits on `error-surface` with an `error`-coloured outline and an icon; colour alone never carries the message.
+- **Borders** are hairlines: `border` between regions, `border-strong` around controls, `border-accent` around floating surfaces.
 
 ## Typography
 
-The typographic hierarchy implements an uncompromising division of labor:
+Three families, each with one job:
 
-- **Display & Section Headers (`Space Grotesk`):** Brings mechanical rhythm and geometric authority to volume labels, window framing, system dialogues, and top-level navigation hubs.
-- **Core Telemetry, System Readouts, and Body Data (`JetBrains Mono`):** Standardizes all file paths, binary checksums, byte dimensions, permission flags (`rwxr-xr-x`), and content tables. Monospaced character alignment guarantees tabular precision across vertical data stacks, preventing visual drift during real-time sorting and filtering.
-- **Case Conventions:** Metadata badges, status tags, and hardware readouts utilize uppercase styling with expanded letter spacing to ensure rapid scanning under low-light operating conditions.
+- **Inter** (`body-md`, `body-sm`) for file names and interface text. Names are proportional so long ones fit.
+- **JetBrains Mono** (`data-md`, `data-sm`, `label-sm`) for data that is compared down a column or read character by character: sizes, dates, paths, counts, permissions. Its fixed width keeps columns aligned while sorting.
+- **Space Grotesk** (`headline-md`, `headline-sm`) for the few headings: empty and error states, dialog titles, section labels.
 
-## Layout & Spacing
+`label-sm` is set in capitals for short tags only (for example a `SYMLINK` badge). Nothing is smaller than 11 pixels. Body text uses a 20-pixel line, which is also the icon size beside it in rows.
 
-Layout geometry follows an exact 4px modular base grid optimized for multi-pane split viewing, pinned telemetry decks, and file matrix displays:
+All three families are installed on the reference system. They are not bundled yet; when one is missing the system interface font is used.
 
-- **Grid Architecture:** Desktop workspace structures depend on a docked pane engine: primary left navigation rail (collapsible between 56px and 240px), dynamic multi-column file workspace (fluid), and a contextual inspector flyout (fixed 320px).
-- **Gutter & Border Discipline:** Internal panel splits utilize fixed 1px partition dividers with explicit `0.75rem` or `1rem` inner guttering. Dense data arrangements preserve screen real estate, letting high-volume directory structures sit alongside concurrent inspection windows.
-- **Adaptive Reflow:** When canvas constraints contract below 1024px, the inspector collapses into an overlay drawer, and breadcrumb trees abbreviate leading directories via progressive root notation (`~/…/src/lib`).
+## Layout
+
+Everything sits on a 4-pixel grid; use only the `spacing` tokens.
+
+- **Window, top to bottom:** toolbar (44 px), an inline message when something failed, the file area (fills the rest), status line (28 px). Hairline `border` lines separate them.
+- **Toolbar:** back, forward and up on the left; the location as clickable segments that turn into a path field; view-mode and hidden-files controls on the right.
+- **File area:** one of three views. Details has a 28 px heading row and columns for name (fills), size (88 px, right-aligned), modified (144 px) and type (184 px). Icons and compact are grids whose cells grow with the five zoom levels. Rows and cells have an 8 px side gutter.
+- **Narrow windows:** below 760 px the type column goes, below 560 px the date column; the name always keeps its width. The location collapses leading folders into an ellipsis and shows the last four.
+- **Planned, not built:** a places rail on the left, collapsible between 56 and 240 px; an information panel on the right, 320 px, becoming an overlay below 1024 px.
 
 ## Elevation & Depth
 
-Elevation eschews soft, diffuse dropshadows in favor of sharp, planar stacking, crisp edge lighting, and optical translucent depth:
+Depth comes from stacked planes and edge light, not soft shadows.
 
-- **Surface Layering:**
-  - *Tier 0 (Root Workspace Canvas):* Solid `#05070B` matte base.
-  - *Tier 1 (Explorer Windows & Split Panels):* Obsidian tint `rgba(11, 15, 23, 0.82)` with `backdrop-filter: blur(20px)` and a top-edge 1px specular line `rgba(255, 255, 255, 0.08)`.
-  - *Tier 2 (Floating Popovers, Context Menus & Command Palette):* Elevated obsidian `rgba(15, 23, 42, 0.94)` with `backdrop-filter: blur(28px)` bounded by an energetic 1px edge highlight `rgba(79, 70, 229, 0.45)`.
-- **Glow & Photon Bleed:** Hover states, active node selections, and focused command entries cast a tight 0px blur, 1px spread border paired with an exterior luminescence: `0 0 16px -2px rgba(79, 70, 229, 0.35)`.
+- **Level 0, the desktop:** whatever is behind the window, blurred by the compositor.
+- **Level 1, window glass:** `window-glass`, with `chrome-glass` for the toolbar and status line.
+- **Level 2, content pane:** `content-glass` under the file views.
+- **Level 3, floating surfaces:** `surface-raised`, solid, outlined with a 1 px `border-accent` line and a tight glow (`0 0 16px -2px` of the accent at about 35%) to lift them off the content.
+
+Blur exists only between level 0 and the window. Do not design anything that needs to blur the window's own content.
+
+When blur is unavailable every glass token is replaced by its solid counterpart and the levels are told apart by their borders alone.
 
 ## Shapes
 
-The design system is strictly zero-radius (`0px`). Curves are deliberately excluded.
-
-Every element—including windows, search inputs, contextual menus, status tags, selection bounding boxes, and action buttons—is rendered with razor-sharp orthogonal corners. This reinforces mechanical instrument precision, maximizes usable pixel surface area for tabular directory streams, and delivers a cold, futuristic workstation aesthetic.
+One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, menus and the rubber band. It only takes the hardness off the corner; the look stays orthogonal. There are no pills and no circles, and nothing uses a larger radius.
 
 ## Components
 
-### Buttons & Action Controls
-- **Primary Execution:** Solid `#4F46E5` fill, `#FFFFFF` mono text, 0px corners, enclosed in a 1px border `rgba(255, 255, 255, 0.2)`. Focus emits a sharp `#38BDF8` perimeter glow.
-- **Secondary Shell Action:** Translucent fill `rgba(255, 255, 255, 0.04)` framed by a 1px hairline `rgba(255, 255, 255, 0.12)`. On hover, background shifts to `rgba(79, 70, 229, 0.18)` with edge illumination.
-- **Micro Toolbar Triggers:** 28px square hitboxes, raw icon glyphs centered, transitioning to `rgba(255, 255, 255, 0.08)` on active interaction.
+- **Toolbar buttons:** 28 px square, icon only, each with a tooltip that names the action and its shortcut. Hover shows `hover`; a toggled button (current view mode, hidden files shown) keeps a `border-strong` fill. Disabled buttons are dimmed and do not react.
+- **Column headings:** `text-muted`; the column being sorted by uses `text` and shows an up or down arrow, so direction is never shown by colour alone.
+- **Entries (rows and cells):** icon from the system icon theme, then the name. Hover shows `hover`. A selected entry has the `primary` fill, `on-primary` text and a 2 px `primary-bright` bar on its left edge. An entry that has the keyboard focus without being selected keeps the bar only.
+- **Data cells:** size, date and type in `text-muted`; sizes right-aligned; folders show no size.
+- **Primary button:** `primary` fill, one per view at most (for example "Show hidden files" in an empty state). Other actions are plain text buttons.
+- **Inputs:** the path field and, later, search: `surface-raised` with a `border-strong` outline that becomes `primary-bright` on focus.
+- **Messages:** failures appear inline above the files, in an `error-surface` banner with an icon, a sentence saying what happened, and a way to dismiss it. The file list stays as it was.
+- **Empty and loading states:** a large icon, a `headline-sm` line saying what is the case, a `text-muted` line saying why, and one action when there is something useful to do.
+- **Rubber band:** a 1 px `primary-bright` outline with a `hover` fill.
+- **Floating surfaces:** as level 3 above. Menu items follow the entry hover and selection rules.
 
-### Contextual Chips & Telemetry Tags
-- **Filter Tags:** Rectangular zero-radius tags with background `rgba(15, 23, 42, 0.85)` and border `rgba(79, 70, 229, 0.3)`. Selected filters activate a solid `#4F46E5` 2px left-indicator accent stripe.
-- **System Attributes:** File flags (`HIDDEN`, `SYSTEM`, `SYMLINK`, `READ-ONLY`) display in `label-xs` micro-caps mono typography with tinted borders reflecting node permissions.
+## Do's and Don'ts
 
-### File Explorer Grid & Directory Lists
-- **Item Rows:** Alternating hairline demarcations or hover-activated horizontal raster bars with `rgba(79, 70, 229, 0.1)`. Selected items trigger a sharp 1px `#4F46E5` outer border and left inset tick mark.
-- **Tree View Connectors:** Monospaced structural guide-wires connecting nested folders, preserving visual parent-child lineage across deep hierarchies.
+- Do take every colour, size, spacing and radius from the tokens; add a token before adding a literal.
+- Do check both glass and solid modes for any new surface or text colour, and add the pair to the contrast tests.
+- Do pair colour with a shape, icon or text for every state: selection, focus, sort direction, errors.
+- Do give every icon-only control a tooltip, and every hover-revealed control a keyboard or palette path.
+- Do use JetBrains Mono only where alignment or exact reading matters.
+- Don't blur, or rely on blurring, anything inside the window.
+- Don't introduce a second accent, gradients, or soft drop shadows.
+- Don't put text on bare `window-glass`, and don't go below 11 px.
+- Don't add a radius other than 2 px.
+- Don't follow the system colour scheme; do use the system icon theme for file types.
 
-### Form Inputs & Omnibar Search
-- **Search Command Field:** Flat obsidian box framed with a 1px border `rgba(255, 255, 255, 0.1)`. Focus instantly swaps border to `#4F46E5` accompanied by an inner cyan coordinate prompt indicator.
-- **Toggle Switches & Checkboxes:** Sharp square checkboxes (14x14px) with hairline outer frames. Checked state renders a solid `#4F46E5` core with high-contrast glyph center.
+## Implementation status
 
-### Inspector Panels & Glassmorphic Cards
-- **Telemetry Inspector:** Docked modular card containers featuring distinct header strips, mono key-value metadata pairings (`SIZE`, `MODIFIED`, `SHA-256`, `PERMISSIONS`), and inline live hex/ASCII previewers bordered by crisp obsidian lines.
+As of 2026-10-12 the application implements the surfaces, text colours, selection, hover, error banner, toolbar, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings).
+
+Not yet applied in code: `surface-raised`, `border-accent` and the glow for floating surfaces (there are no menus or palette yet), the cyan and emerald signals (nothing reports progress yet), `primary-bright` on focused inputs, and the type column, which still uses Inter.
+
+Changed from the first draft of this document, by the user's decision on 2026-10-12: the accent is royal blue, not indigo; corners are 2 px, not square; monospace is for data only, with Inter for file names. Removed because the toolkit cannot do it: backdrop blur on popovers and panels inside the window. Removed because Rustphin has no such feature planned for its first release: terminal docks, checksum and hex inspectors, tree connectors.

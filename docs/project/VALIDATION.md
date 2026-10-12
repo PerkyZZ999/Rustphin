@@ -319,3 +319,29 @@
 - **Not verified:** Ctrl+drag adding to a selection (unit-tested in the core only); bands in the compact view; a band while the list is scrolled; the list does not scroll when the pointer reaches its edge.
 - **Waiver:** none
 - **Follow-up:** S5 must split "drag from an entry" from "drag from empty space"; edge auto-scroll.
+
+### 2026-10-12 — Design document reviewed, refined and applied
+- **Phase:** 6 Implement (S2); change-impact loop on D-007
+- **Result:** pass
+- **Evidence:**
+  - `docs/DESIGN.md` as received (commit `e4db833`) was reviewed against the brief, D-007, the toolkit and the running app. Findings: its token block and its prose gave different values for the same colours; it was titled for a different product and described features Rustphin does not have; its accent was indigo where the user had asked for royal blue; it required square corners, monospace for all text, and backdrop blur on in-window surfaces, which GPUI cannot do.
+  - The user decided: royal-blue accent, 2-pixel corners, monospace for data only. D-007 is superseded by D-017, confirmed by the user.
+  - The document was rewritten in the Google Labs DESIGN.md format. `npx @google/design.md lint docs/DESIGN.md`: 0 errors, 7 warnings, all "token not referenced by a component" for colours that components use through borders or states the format has no property for.
+  - Applied to the app: radius 6 → 2 px, base colour `#0B0D12` → `#0B0F17`, primary text `#E6E9F0` → `#DFE2EF`, Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings. Token contrast tests pass with the new values.
+  - Observed in an isolated session: proportional names, monospace sizes, dates and status line, and near-square corners on the selected row.
+- **Not verified:** the new look with blur on the live desktop; Space Grotesk in an empty-state heading (not opened in this run); behaviour when one of the three fonts is missing.
+- **Waiver:** none
+- **Follow-up:** decide whether to bundle the fonts; apply floating-surface styling when menus and the palette exist.
+
+### 2026-10-12 — Implement gate, slice S2
+- **Phase:** 6 Implement
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` PASS with 105 tests at the last run before this entry. Per requirement:
+  - R-003 (view modes, sorting, zoom): three modes, sortable columns with natural folders-first order, zoom in all modes, settings remembered — W-015, W-018, W-019, W-021 and scenarios O1–O3, V1–V4, P1–P2.
+  - R-004 (selection and keyboard): click, Ctrl+click, Shift+click, rubber band, select all, invert, arrows, Home/End, Page keys, type-ahead — W-016, W-020, W-024 and scenarios S1–S8. "Every action has a keyboard path" holds for what exists so far; "shortcuts match Dolphin's" was not audited key by key.
+  - R-014 (icons part): icons from the system theme by MIME type — W-017, W-018.
+  - R-101: first entries 3 ms, sorted listing 155–175 ms, re-sorts 37–110 ms on an idle machine; one frame per 60 Hz period while scrolling after loading; reworded today for the first details read (see REQUIREMENTS.md).
+  - R-102: 137 MB with 500,000 entries; 31 MB above the small-folder figure after leaving.
+- **Carried forward, not blocking:** the 80–90 ms frame gap at start-up; nothing exposed over AT-SPI (R-107, S11); frame timing only measured in a virtual session; per-folder view settings and Dolphin's column-flow compact view are not implemented; the shortcut audit against Dolphin.
+- **Waiver:** none
+- **Follow-up:** S3.

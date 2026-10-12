@@ -20,14 +20,14 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** R-003 and R-004 criteria; lazy metadata keeps R-101 sort and scroll targets; memory target of R-102; icons from the system theme by MIME type; view settings persist.
 - **Requirements:** R-003, R-004, R-014 (icons part), R-101 (sort, scroll), R-102
 - **Validation:** test, bench, ui-test with frame timing
-- **Status:** todo — next
+- **Status:** done (2026-10-12; evidence in VALIDATION.md)
 
 ## Slice S3 — Live updates, tabs, split view
 - **Outcome:** The view follows outside changes; work in several tabs and two panes; session restored on start.
 - **Acceptance:** R-002, R-005, R-006 criteria (pane-to-pane copy arrives with S4/S5).
 - **Requirements:** R-002, R-005, R-006
 - **Validation:** test, ui-test
-- **Status:** todo
+- **Status:** todo — next
 
 ## Slice S4 — File operations, undo, trash
 - **Outcome:** Create, rename, copy, move, trash and delete with progress, conflict handling and undo.

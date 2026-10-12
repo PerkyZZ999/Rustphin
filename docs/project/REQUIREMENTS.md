@@ -174,7 +174,7 @@ Conventions:
 - **Priority:** must
 - **Acceptance:** on the reference machine, in a directory of 500,000 entries on a local filesystem:
   - [ ] First entries are visible within 200 ms of opening (warm cache) and the UI accepts input throughout loading.
-  - [ ] Re-sorting by any column completes within 500 ms.
+  - [ ] Re-sorting by any column completes within 500 ms once the sizes and dates it needs have been read. The first read has no fixed limit, but the list is shown in name order with a loading indicator while it runs, and details appear from the top of the list first. (Reworded 2026-10-12 with the user's agreement: on a cold disk cache the read is bounded by the disk, 5.3 s for 500,000 files.)
   - [ ] Scrolling holds 60 frames per second at the 95th percentile.
   - [ ] No UI-thread task exceeds 16 ms in listing, sorting, metadata or thumbnail code paths.
 - **Validation:** bench (headless core), ui-test with frame timing
@@ -204,7 +204,7 @@ Conventions:
 ### R-105 — Visual design
 - **Priority:** must
 - **Acceptance:**
-  - [ ] A single dark theme: obsidian translucent surfaces with compositor blur behind the window, royal-blue accent.
+  - [ ] A single dark theme as specified in `docs/DESIGN.md`: obsidian translucent surfaces with compositor blur behind the window, royal-blue accent, 2-pixel corners, Inter / JetBrains Mono / Space Grotesk.
   - [ ] Floating surfaces inside the window (menus, palette, dialogs) are tinted opaque, since in-window blur is unavailable.
   - [ ] Where the compositor offers no blur protocol, or the user turns transparency off, the window is opaque and every text element still meets WCAG AA contrast (4.5:1).
   - [ ] Text meets WCAG AA contrast over the blurred background in the worst case tested (a white window behind).
