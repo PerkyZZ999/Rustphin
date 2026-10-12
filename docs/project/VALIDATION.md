@@ -218,3 +218,21 @@
 - **Deviation:** date and size formats are fixed (ISO-style date, binary units), not locale-aware.
 - **Waiver:** none
 - **Follow-up:** user review of the details view on the real desktop before the icons and compact views (W-019) are built.
+
+### 2026-10-12 — User review of the details view (W-018)
+- **Phase:** 6 Implement (S2)
+- **Result:** pass
+- **Evidence:** the user ran the release build on the real desktop and reported "everything works great". No specifics were given on the icon theme, blur or column dropping, so those are covered only by that general statement.
+- **Waiver:** none
+- **Follow-up:** none
+
+### 2026-10-12 — W-020: multi-selection and type-ahead in the UI
+- **Phase:** 6 Implement (S2)
+- **Result:** pass for what was exercised
+- **Evidence:**
+  - `rust-tc doctor` PASS, 71 tests. New tests: type-ahead prefix search in the core (match, case, wrap-around, absent and empty prefixes) and the type-ahead query rule in the UI (one repeated letter cycles, a longer prefix narrows).
+  - Observed in an isolated KWin session: a click then two Ctrl+clicks left three separate rows selected with "3 of 11 items selected" in the status line; typing `p` with the focus on the last row wrapped to "Pictures"; Shift+Down twice then selected Pictures, Projects and backup.tar.gz.
+- **Not verified:** Shift+click was performed but its screenshot was overwritten before being viewed; Ctrl+A, invert, Escape, and Shift+Home/End/Page keys are wired but were not exercised in the UI (their logic is covered by the core `Selection` tests); behaviour with 500,000 rows selected.
+- **Deviation:** rubber-band selection is not built; split into W-024.
+- **Waiver:** none
+- **Follow-up:** W-024; W-022 should script these interactions.

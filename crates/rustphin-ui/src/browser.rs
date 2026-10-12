@@ -4,13 +4,14 @@ use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 use gpui_kit::{
     App, AppContext as _, ClickEvent, Context, Entity, FocusHandle, InteractiveElement as _,
-    IntoElement, KeyBinding, ParentElement as _, Render, ScrollStrategy, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Subscription, UniformListScrollHandle, Window,
-    actions,
+    IntoElement, KeyBinding, KeyDownEvent, Modifiers, ParentElement as _, Render, ScrollStrategy,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
+    UniformListScrollHandle, Window, actions,
     component::{
         Disableable as _, Icon, IconName, Selectable as _, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -22,7 +23,8 @@ use gpui_kit::{
 };
 use jiff::tz::TimeZone;
 use rustphin_core::{
-    DirectoryModel, LoadError, ModelEvent, RealFs, Snapshot, SortKey, ViewOptions, display_name,
+    DirectoryModel, LoadError, ModelEvent, RealFs, Selection, Snapshot, SortKey, ViewOptions,
+    display_name,
 };
 
 use crate::{
@@ -36,6 +38,8 @@ const KEY_CONTEXT: &str = "Browser";
 const LIST_CONTEXT: &str = "Browser && !Input";
 /// Ancestors shown in the location bar before the rest collapse into an ellipsis.
 const MAX_CRUMBS: usize = 4;
+/// A pause longer than this starts a new type-ahead search.
+const TYPE_AHEAD_PAUSE: Duration = Duration::from_millis(1000);
 /// Rows moved by Page Up and Page Down.
 const PAGE_ROWS: isize = 15;
 
@@ -48,6 +52,14 @@ actions!(
         SelectLast,
         PageUp,
         PageDown,
+        ExtendPrevious,
+        ExtendNext,
+        ExtendFirst,
+        ExtendLast,
+        ExtendPageUp,
+        ExtendPageDown,
+        SelectAll,
+        InvertSelection,
         Activate,
         GoUp,
         GoBack,
@@ -74,6 +86,14 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("end", SelectLast, list),
         KeyBinding::new("pageup", PageUp, list),
         KeyBinding::new("pagedown", PageDown, list),
+        KeyBinding::new("shift-up", ExtendPrevious, list),
+        KeyBinding::new("shift-down", ExtendNext, list),
+        KeyBinding::new("shift-home", ExtendFirst, list),
+        KeyBinding::new("shift-end", ExtendLast, list),
+        KeyBinding::new("shift-pageup", ExtendPageUp, list),
+        KeyBinding::new("shift-pagedown", ExtendPageDown, list),
+        KeyBinding::new("ctrl-a", SelectAll, list),
+        KeyBinding::new("ctrl-shift-a", InvertSelection, list),
         KeyBinding::new("enter", Activate, list),
         KeyBinding::new("backspace", GoUp, list),
         KeyBinding::new("alt-up", GoUp, view),
@@ -101,11 +121,13 @@ pub struct Browser {
     snapshot: Option<Arc<Snapshot>>,
     /// The newest request; older snapshots are ignored.
     generation: u64,
-    /// Name of the selected entry. Kept by name so it survives re-sorted snapshots.
-    selected: Option<Vec<u8>>,
-    /// Row of [`Self::selected`] in the current snapshot, looked up once per
-    /// snapshot instead of on every frame.
-    selected_row: Option<usize>,
+    selection: Selection,
+    /// Row of the selection's focus in the current snapshot, looked up once
+    /// per snapshot instead of on every frame.
+    focus_row: Option<usize>,
+    /// Characters typed so far in a type-ahead search, and when the last arrived.
+    typed: String,
+    typed_at: Option<Instant>,
     /// Entry to select once the directory being opened has been listed.
     select_on_arrival: Option<Vec<u8>>,
     failure: Option<Failure>,
@@ -137,8 +159,10 @@ impl Browser {
             model: None,
             snapshot: None,
             generation: 0,
-            selected: None,
-            selected_row: None,
+            selection: Selection::default(),
+            focus_row: None,
+            typed: String::new(),
+            typed_at: None,
             select_on_arrival: None,
             failure: None,
             editing_location: false,
@@ -187,26 +211,16 @@ impl Browser {
     fn on_model_event(&mut self, event: ModelEvent, cx: &mut Context<Self>) {
         match event {
             ModelEvent::Snapshot(snapshot) if snapshot.generation() == self.generation => {
-                let same_place = self
-                    .snapshot
-                    .as_ref()
-                    .is_some_and(|shown| shown.path() == snapshot.path());
-                if !same_place {
-                    self.selected = None;
-                }
+                // Follows the selection through a re-sort and empties it when
+                // the directory was read again.
+                self.selection.sync(&snapshot);
                 let arrival = self.select_on_arrival.take_if(|_| !snapshot.is_loading());
-                if let Some(name) = arrival {
-                    self.selected = Some(name);
+                if let Some(row) = arrival.and_then(|name| snapshot.row_of(&name)) {
+                    self.selection.select_only(&snapshot, row);
                 }
-                self.selected_row = self
-                    .selected
-                    .as_ref()
-                    .and_then(|name| snapshot.row_of(name));
-                if self.selected_row.is_none() {
-                    self.selected = None;
-                }
+                self.focus_row = self.selection.focus_row(&snapshot);
                 self.snapshot = Some(snapshot);
-                self.reveal_selection();
+                self.reveal_focus();
             }
             ModelEvent::Failed {
                 generation,
@@ -229,28 +243,100 @@ impl Browser {
         }
     }
 
-    fn select_row(&mut self, row: usize, cx: &mut Context<Self>) {
-        let Some(snapshot) = &self.snapshot else {
+    /// Changes the selection against the current snapshot and redraws.
+    fn change_selection(
+        &mut self,
+        change: impl FnOnce(&mut Selection, &Snapshot),
+        cx: &mut Context<Self>,
+    ) {
+        let Some(snapshot) = self.snapshot.clone() else {
             return;
         };
-        if row < snapshot.len() {
-            self.selected = Some(snapshot.name(row).to_vec());
-            self.selected_row = Some(row);
-            self.reveal_selection();
-            cx.notify();
-        }
+        change(&mut self.selection, &snapshot);
+        self.focus_row = self.selection.focus_row(&snapshot);
+        self.reveal_focus();
+        cx.notify();
     }
 
-    fn reveal_selection(&self) {
-        if let Some(row) = self.selected_row {
+    /// A click on a row: plain selects it alone, Ctrl toggles it, Shift
+    /// selects the range from the anchor.
+    fn click_row(&mut self, row: usize, modifiers: Modifiers, cx: &mut Context<Self>) {
+        self.change_selection(
+            |selection, snapshot| {
+                if modifiers.shift {
+                    selection.extend_to(snapshot, row);
+                } else if modifiers.control {
+                    selection.toggle(snapshot, row);
+                } else {
+                    selection.select_only(snapshot, row);
+                }
+            },
+            cx,
+        );
+    }
+
+    fn reveal_focus(&self) {
+        if let Some(row) = self.focus_row {
             self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
         }
     }
 
-    fn move_selection(&mut self, motion: Motion, cx: &mut Context<Self>) {
+    /// Moves the focus by keyboard; with `extend`, selects the range to it.
+    fn move_selection(&mut self, motion: Motion, extend: bool, cx: &mut Context<Self>) {
         let len = self.snapshot.as_ref().map_or(0, |snapshot| snapshot.len());
-        if let Some(row) = target_row(self.selected_row, len, motion) {
-            self.select_row(row, cx);
+        let Some(row) = target_row(self.focus_row, len, motion) else {
+            return;
+        };
+        self.change_selection(
+            |selection, snapshot| {
+                if extend {
+                    selection.extend_to(snapshot, row);
+                } else {
+                    selection.select_only(snapshot, row);
+                }
+            },
+            cx,
+        );
+    }
+
+    /// Jumps to the next entry whose name starts with what has been typed.
+    fn type_ahead(&mut self, typed: &str, cx: &mut Context<Self>) {
+        let now = Instant::now();
+        if self
+            .typed_at
+            .is_none_or(|at| now.duration_since(at) > TYPE_AHEAD_PAUSE)
+        {
+            self.typed.clear();
+        }
+        self.typed.push_str(typed);
+        self.typed_at = Some(now);
+
+        let (prefix, advance) = type_ahead_query(&self.typed);
+        let from = self.focus_row.map_or(0, |row| row + usize::from(advance));
+        let found = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.find_prefix(prefix.as_bytes(), from));
+        if let Some(row) = found {
+            self.change_selection(
+                |selection, snapshot| selection.select_only(snapshot, row),
+                cx,
+            );
+        }
+    }
+
+    fn on_key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let modifiers = event.keystroke.modifiers;
+        if self.editing_location || modifiers.control || modifiers.alt || modifiers.platform {
+            return;
+        }
+        if let Some(typed) = event
+            .keystroke
+            .key_char
+            .as_deref()
+            .filter(|text| !text.is_empty() && !text.chars().any(char::is_control))
+        {
+            self.type_ahead(typed, cx);
         }
     }
 
@@ -657,7 +743,6 @@ impl Browser {
         theme: Theme,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let selected = self.selected_row;
         let rows = Arc::clone(snapshot);
         let options = snapshot.options();
         let zone = self.zone.clone();
@@ -703,7 +788,8 @@ impl Browser {
             cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                 range
                     .map(|row| {
-                        let is_selected = selected == Some(row);
+                        let is_selected = this.selection.contains(&rows, row);
+                        let is_focus = this.focus_row == Some(row);
                         let container = rows.is_container(row);
                         let name: SharedString = display_name(rows.name(row)).into_owned().into();
                         let info = this.type_info_for(rows.name(row), container, cx);
@@ -759,7 +845,10 @@ impl Browser {
                                     .text_color(theme.on_selection)
                             })
                             .when(!is_selected, |entry| {
-                                entry.hover(|entry| entry.bg(theme.hover))
+                                // The keyboard focus without selection keeps the bar only.
+                                entry
+                                    .when(is_focus, |entry| entry.border_color(theme.accent))
+                                    .hover(|entry| entry.bg(theme.hover))
                             })
                             .child(
                                 div()
@@ -805,8 +894,10 @@ impl Browser {
                             .px(px(space::SM))
                             .child(entry)
                             .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
-                                this.select_row(row, cx);
-                                if event.click_count() >= 2 {
+                                let modifiers = event.modifiers();
+                                this.click_row(row, modifiers, cx);
+                                let plain = !modifiers.shift && !modifiers.control;
+                                if plain && event.click_count() >= 2 {
                                     this.activate_row(row, cx);
                                 }
                             }))
@@ -885,7 +976,17 @@ impl Browser {
             Some(snapshot) => {
                 let shown = snapshot.len();
                 let hidden = snapshot.total() - shown;
-                let mut message = format!("{} {}", count(shown), plural(shown, "item", "items"));
+                let selected = self.selection.len();
+                let mut message = if selected > 0 {
+                    format!(
+                        "{} of {} {} selected",
+                        count(selected),
+                        count(shown),
+                        plural(shown, "item", "items")
+                    )
+                } else {
+                    format!("{} {}", count(shown), plural(shown, "item", "items"))
+                };
                 if hidden > 0 {
                     message.push_str(&format!(", {} hidden", count(hidden)));
                 }
@@ -920,28 +1021,53 @@ impl Render for Browser {
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus)
             .on_action(cx.listener(|this, _: &SelectPrevious, _, cx| {
-                this.move_selection(Motion::By(-1), cx);
+                this.move_selection(Motion::By(-1), false, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectNext, _, cx| {
-                this.move_selection(Motion::By(1), cx);
+                this.move_selection(Motion::By(1), false, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectFirst, _, cx| {
-                this.move_selection(Motion::First, cx);
+                this.move_selection(Motion::First, false, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectLast, _, cx| {
-                this.move_selection(Motion::Last, cx);
+                this.move_selection(Motion::Last, false, cx);
             }))
             .on_action(cx.listener(|this, _: &PageUp, _, cx| {
-                this.move_selection(Motion::By(-PAGE_ROWS), cx);
+                this.move_selection(Motion::By(-PAGE_ROWS), false, cx);
             }))
             .on_action(cx.listener(|this, _: &PageDown, _, cx| {
-                this.move_selection(Motion::By(PAGE_ROWS), cx);
+                this.move_selection(Motion::By(PAGE_ROWS), false, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendPrevious, _, cx| {
+                this.move_selection(Motion::By(-1), true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendNext, _, cx| {
+                this.move_selection(Motion::By(1), true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendFirst, _, cx| {
+                this.move_selection(Motion::First, true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendLast, _, cx| {
+                this.move_selection(Motion::Last, true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendPageUp, _, cx| {
+                this.move_selection(Motion::By(-PAGE_ROWS), true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendPageDown, _, cx| {
+                this.move_selection(Motion::By(PAGE_ROWS), true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectAll, _, cx| {
+                this.change_selection(Selection::select_all, cx);
+            }))
+            .on_action(cx.listener(|this, _: &InvertSelection, _, cx| {
+                this.change_selection(Selection::invert, cx);
             }))
             .on_action(cx.listener(|this, _: &Activate, _, cx| {
-                if let Some(row) = this.selected_row {
+                if let Some(row) = this.focus_row {
                     this.activate_row(row, cx);
                 }
             }))
+            .on_key_down(cx.listener(Self::on_key_down))
             .on_action(cx.listener(|this, _: &GoUp, _, cx| this.go_up(cx)))
             .on_action(
                 cx.listener(|this, _: &GoBack, _, cx| this.navigate(DirectoryModel::back, cx)),
@@ -958,9 +1084,13 @@ impl Render for Browser {
             .on_action(
                 cx.listener(|this, _: &EditLocation, window, cx| this.edit_location(window, cx)),
             )
-            .on_action(
-                cx.listener(|this, _: &CancelEdit, window, cx| this.stop_editing(window, cx)),
-            )
+            .on_action(cx.listener(|this, _: &CancelEdit, window, cx| {
+                if this.editing_location {
+                    this.stop_editing(window, cx);
+                } else {
+                    this.change_selection(|selection, _| selection.clear(), cx);
+                }
+            }))
             .flex()
             .flex_col()
             .size_full()
@@ -990,6 +1120,17 @@ impl Render for Browser {
                     }),
             )
             .child(self.status(theme))
+    }
+}
+
+/// What a type-ahead buffer searches for: the prefix, and whether to start
+/// after the focused row. Pressing one letter repeatedly cycles through the
+/// names starting with it; anything else narrows the search in place.
+fn type_ahead_query(typed: &str) -> (&str, bool) {
+    let mut chars = typed.chars();
+    match chars.next() {
+        Some(first) if chars.all(|c| c == first) => (&typed[..first.len_utf8()], true),
+        _ => (typed, false),
     }
 }
 
@@ -1057,6 +1198,15 @@ impl Columns {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repeating_one_letter_cycles_and_a_longer_prefix_narrows() {
+        assert_eq!(type_ahead_query("f"), ("f", true));
+        assert_eq!(type_ahead_query("fff"), ("f", true));
+        assert_eq!(type_ahead_query("fi"), ("fi", false));
+        assert_eq!(type_ahead_query("\u{e9}\u{e9}"), ("\u{e9}", true));
+        assert_eq!(type_ahead_query(""), ("", false));
+    }
 
     #[test]
     fn end_selects_the_last_row_even_with_nothing_selected() {

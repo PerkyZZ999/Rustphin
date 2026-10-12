@@ -110,6 +110,20 @@ impl Snapshot {
         self.order[row]
     }
 
+    /// The first row at or after `from`, wrapping around, whose name starts
+    /// with `prefix` without regard to ASCII case. Used for type-ahead.
+    pub fn find_prefix(&self, prefix: &[u8], from: usize) -> Option<usize> {
+        let len = self.len();
+        if prefix.is_empty() || len == 0 {
+            return None;
+        }
+        (0..len).map(|step| (from + step) % len).find(|&row| {
+            self.name(row)
+                .get(..prefix.len())
+                .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+        })
+    }
+
     /// The row showing the entry with this id, if it is shown.
     pub fn row_of_entry(&self, id: u32) -> Option<usize> {
         self.order.iter().position(|&index| index == id)
@@ -1086,5 +1100,32 @@ mod tests {
 
         assert_eq!(selected_names(&selection, &visible_only), ["Zeta.md"]);
         assert_eq!(selection.len(), 1);
+    }
+
+    #[test]
+    fn type_ahead_finds_the_next_name_with_the_prefix_and_wraps() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        // Rows: alias, sub, file2.txt, file10.txt, Zeta.md.
+        let shown = snapshot(&events, model.open(dir.path()));
+
+        assert_eq!(shown.find_prefix(b"f", 0), Some(2));
+        assert_eq!(shown.find_prefix(b"F", 3), Some(3));
+        assert_eq!(shown.find_prefix(b"file1", 0), Some(3));
+        assert_eq!(shown.find_prefix(b"zeta", 1), Some(4));
+        // Past the last match the search wraps to the top.
+        assert_eq!(shown.find_prefix(b"a", 1), Some(0));
+        assert_eq!(shown.find_prefix(b"s", 4), Some(1));
+    }
+
+    #[test]
+    fn type_ahead_finds_nothing_for_an_absent_or_empty_prefix() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        let shown = snapshot(&events, model.open(dir.path()));
+
+        assert_eq!(shown.find_prefix(b"q", 0), None);
+        assert_eq!(shown.find_prefix(b"", 0), None);
+        assert_eq!(shown.find_prefix(b"file2.txt.more", 0), None);
     }
 }
