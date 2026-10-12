@@ -123,6 +123,7 @@ Follow the testing-suite skill. Layout and tools:
 - Unit tests live in `#[cfg(test)] mod tests` beside the code; runner is `cargo-nextest` through `rust-tc`.
 - Core: behaviour through the public model API where possible; fakes of the `Fs` trait instead of mocks; fault injection through `Fs` for every file operation; no sleeps (wait on model events).
 - Platform: fixture and contract tests; D-Bus services against a mocked bus.
+- UI: verify it yourself. After any change to `rustphin-ui`, replay the relevant scenarios in `docs/project/UI_SCENARIOS.md` through the kwin-mcp tools (load the `anthropic-skills:kwin-mcp` skill) and record what you saw. Do not ask the user to launch the app and report back; ask them only about matters of taste, or what the tools cannot show.
 - UI: pure logic (selection movement, path expansion, formatting, token contrast) is unit-tested. Interaction is checked by scripted scenarios in an **isolated KWin session with an isolated home directory** (kwin-mcp `session_start` with `isolate_home: true`). Never run test instances of Rustphin or Dolphin against the user's real home, and never use the user's real files as test data. Wait for the window before sending input: the app takes a moment to start.
 - File-operation UI must not be enabled before the operation engine's fault-injection suite passes.
 

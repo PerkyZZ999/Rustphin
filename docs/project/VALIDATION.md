@@ -259,3 +259,22 @@
 - **Deviation:** settings are global, not per folder as Dolphin can do.
 - **Waiver:** none
 - **Follow-up:** none
+
+### 2026-10-12 — W-022: UI scenarios written and run
+- **Phase:** 6 Implement (S2)
+- **Result:** pass for the scenarios run
+- **Evidence:** in an isolated KWin session with an isolated home, against the fixture from `tests/ui/make-fixture.sh`, observed by screenshot:
+  - S2: click then Shift+click selected rows 1–4, "4 of 17 items selected".
+  - S3: Ctrl+Shift+A selected the other 13; the focused unselected row kept its accent bar.
+  - S4: Escape cleared the selection.
+  - O2: clicking Modified ordered files 2023, 2024, 2025, then today's, with an up arrow on the heading.
+  - O3 and V1/V3: clicking Type, then the icons view button, then Ctrl+- showed the smallest icon grid ordered Makefile, mystery, backup.tar.gz, photo.JPG, video.mp4, report.pdf, main.rs, then the text files.
+  - P1/P2: after Ctrl+0 the settings file held `mode = "icons"`, `zoom = 1`, `sort = "type"`; after a restart, clicking the details button showed the list still sorted by Type with its arrow.
+  - Earlier today, recorded under their work items: N1–N7, S1, S5, S6, O1, V2, L1.
+- **Not run this time:** S7 (Ctrl+A) on its own; V4 by keyboard.
+- **Findings:**
+  - The application does not appear in `list_windows` and exposes nothing to `find_ui_elements` in these sessions, so no accessibility tree is reachable over AT-SPI. This matters for R-107 (accessibility baseline) and is carried to S11.
+  - On selected rows, the theme's small monochrome icons are hard to see against the selection fill. Cosmetic; depends on the icon theme.
+- **Limits:** the scenarios are instructions an agent replays with screenshots and coordinates, not an unattended test; coordinates depend on the window layout.
+- **Waiver:** none
+- **Follow-up:** accessibility exposure (S11).
