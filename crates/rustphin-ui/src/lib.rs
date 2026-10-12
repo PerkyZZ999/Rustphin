@@ -8,6 +8,7 @@ mod diagnostics;
 mod filetypes;
 mod format;
 mod layout;
+mod operations;
 mod session;
 mod settings;
 mod tabs;
@@ -72,6 +73,7 @@ pub fn run(options: Options) {
                 None,
                 cx,
             );
+            operations::init(cx);
             browser::bind_keys(cx);
             workspace::bind_keys(cx);
             cx.on_window_closed(|cx, _| {

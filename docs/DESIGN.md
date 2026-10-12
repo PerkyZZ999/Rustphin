@@ -13,6 +13,8 @@ colors:
   content-solid: "#0B0F17"
   # Menus, palette, dialogs, tooltips: always solid.
   surface-raised: "#0F172A"
+  # Dims the window behind a dialog.
+  scrim: "rgba(4, 6, 10, 0.60)"
   # Text.
   text: "#DFE2EF"
   text-muted: "#C3CAD9"
@@ -220,6 +222,9 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 - **Empty and loading states:** a large icon, a `headline-sm` line saying what is the case, a `text-muted` line saying why, and one action when there is something useful to do.
 - **Tab strip:** 32 px high on `surface-chrome`, shown only when a window has more than one tab. Tabs are `body-sm`; inactive tabs use `text-muted`, the active tab uses `text` with a 2 px `primary-bright` underline. Each tab has a close button; a `+` button after the last tab opens a new one.
 - **Split panes:** two equal panes separated by a 1 px `border` line. A 2 px `primary-bright` line above a pane marks the one that receives keyboard input; it is only drawn while a tab is split.
+- **Rename field:** shown in place of the entry's name. `surface-raised` with `text`, so it reads the same on a selected and an unselected row. It opens with the name selected up to the extension.
+- **Dialogs:** a floating surface 440 px wide, centred over the window dimmed with `scrim`. A `headline-sm` title that states the question, the facts needed to answer it in `data-md`, and the buttons right-aligned: the safe default is the `button-primary`, a destructive default uses the error colours, the others are outlined. Every button shows its key. Dialogs appear only when a decision is needed: a name conflict, a failed entry, a permanent delete.
+- **Activity lines:** under the panes, on `chrome-glass`, only while there is something to say. A running operation that has lasted 300 ms shows what it is doing, a 4 px progress bar (`secondary` on a `hover` track), counts and speed in `data-sm`, and a stop button. The result of the last operation shows as one line with an Undo button; it leaves by itself after 6 seconds, unless it reports a problem, which uses the error colours and stays until dismissed.
 - **Rubber band:** a 1 px `primary-bright` outline with a `hover` fill.
 - **Floating surfaces:** as level 3 above. Menu items follow the entry hover and selection rules.
 
@@ -238,8 +243,8 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 
 ## Implementation status
 
-As of 2026-10-12 the application implements the surfaces, text colours, selection, hover, error banner, toolbar, tab strip, split panes, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings).
+As of 2026-10-12 the application implements the surfaces, text colours, selection, hover, error banner, toolbar, tab strip, split panes, dialogs, activity lines, the rename field, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings).
 
-Not yet applied in code: `surface-raised`, `border-accent` and the glow for floating surfaces (there are no menus or palette yet), the cyan and emerald signals (nothing reports progress yet), `primary-bright` on focused inputs, and the type column, which still uses Inter.
+Floating surfaces (`surface-raised`, `border-accent`, the glow) are used by dialogs; menus and the palette do not exist yet. The cyan signal is used by the progress bar. Not yet applied in code: the emerald signal, `primary-bright` on focused inputs, and the type column, which still uses Inter.
 
 Changed from the first draft of this document, by the user's decision on 2026-10-12: the accent is royal blue, not indigo; corners are 2 px, not square; monospace is for data only, with Inter for file names. Removed because the toolkit cannot do it: backdrop blur on popovers and panels inside the window. Removed because Rustphin has no such feature planned for its first release: terminal docks, checksum and hex inspectors, tree connectors.

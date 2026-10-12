@@ -1,0 +1,738 @@
+//! File operations as the interface sees them: what is running, what is
+//! waiting for an answer, what just happened, and the entries picked up for
+//! copying or moving.
+//!
+//! All changes to files go through [`Hub::start`], which hands them to the
+//! core's operation engine on its own threads.
+
+use std::{
+    collections::VecDeque,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+use gpui_kit::{App, AppContext as _, Context, Entity, Global};
+use rustphin_core::{
+    RealFs, display_name,
+    ops::{
+        Conflict, ConflictChoice, Finished, NoTrash, OpEvent, OpId, Operations, Outcome, Progress,
+        Recovery, Request, Resolution, Trash,
+    },
+};
+use rustphin_platform::trash::FreedesktopTrash;
+
+use crate::format::{self, count, plural};
+
+/// How long an operation may run before its progress is shown. Most finish
+/// sooner and would only flash on screen.
+pub const QUIET_PERIOD: Duration = Duration::from_millis(300);
+/// How long a message about a finished operation stays.
+const NOTICE_TIME: Duration = Duration::from_secs(6);
+
+/// An operation in progress.
+pub struct Running {
+    /// Its id, for cancelling.
+    pub id: OpId,
+    /// What it is doing, as a sentence fragment: "Copying 3 items to “x”".
+    pub label: String,
+    /// The latest report.
+    pub progress: Progress,
+    /// What it will have done, in lower case: "copied 3 items to “x”".
+    done: String,
+    /// Whether it reverts an earlier operation.
+    undo: bool,
+    started: Instant,
+}
+
+impl Running {
+    /// Whether it has run long enough to be worth showing.
+    pub fn is_visible(&self) -> bool {
+        self.started.elapsed() >= QUIET_PERIOD
+    }
+
+    /// Done part of the whole, from 0 to 1, when the size is known.
+    pub fn fraction(&self) -> Option<f32> {
+        fraction(&self.progress)
+    }
+
+    /// Counts and speed: "12 of 340 · 1.2 GiB of 4.0 GiB · 85.0 MiB/s".
+    pub fn detail(&self) -> String {
+        detail(&self.progress, self.started.elapsed())
+    }
+}
+
+/// Something an operation needs decided before it can go on.
+#[derive(Debug, Clone)]
+pub enum Question {
+    /// A name is taken at the destination.
+    Conflict {
+        /// The operation that asks.
+        id: OpId,
+        /// What collides with what.
+        conflict: Conflict,
+    },
+    /// An entry failed.
+    Failed {
+        /// The operation that asks.
+        id: OpId,
+        /// The entry.
+        path: PathBuf,
+        /// Why.
+        message: String,
+    },
+    /// Permanent deletion needs the user's explicit yes.
+    ConfirmDelete {
+        /// What would be deleted.
+        paths: Vec<PathBuf>,
+    },
+}
+
+/// A message about something that just happened.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Notice {
+    /// The message, a full sentence.
+    pub text: String,
+    /// Whether something went wrong. Such a message stays until dismissed.
+    pub is_error: bool,
+    /// Whether it reports an operation that can be undone, so an undo
+    /// button belongs beside it.
+    pub offers_undo: bool,
+}
+
+/// Entries picked up with copy or cut, waiting to be pasted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Clip {
+    /// The entries.
+    pub paths: Vec<PathBuf>,
+    /// Whether pasting moves them instead of copying.
+    pub cut: bool,
+}
+
+/// The application's file operations and their state.
+pub struct Hub {
+    ops: Operations,
+    /// Operations in progress, oldest first.
+    pub running: Vec<Running>,
+    /// Open questions; the first is the one shown.
+    pub questions: VecDeque<Question>,
+    /// The latest message, if not yet dismissed.
+    pub notice: Option<Notice>,
+    /// Entries picked up for pasting.
+    pub clip: Option<Clip>,
+    /// Counts notices, so a timer only dismisses the one it was set for.
+    notice_serial: u64,
+}
+
+struct GlobalHub(Entity<Hub>);
+
+impl Global for GlobalHub {}
+
+/// Creates the application's [`Hub`]. Call once at start-up.
+pub fn init(cx: &mut App) {
+    let fs = Arc::new(RealFs);
+    let trash: Arc<dyn Trash> = match FreedesktopTrash::for_user(fs.clone()) {
+        Some(trash) => Arc::new(trash),
+        None => {
+            tracing::warn!("no data directory is known, so there is no trash");
+            Arc::new(NoTrash)
+        }
+    };
+    let (ops, events) = Operations::new(fs, trash);
+    let hub = cx.new(|cx: &mut Context<Hub>| {
+        cx.spawn(async move |hub, cx| {
+            while let Ok(event) = events.recv_async().await {
+                if hub.update(cx, |hub, cx| hub.on_event(event, cx)).is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
+        Hub {
+            ops,
+            running: Vec::new(),
+            questions: VecDeque::new(),
+            notice: None,
+            clip: None,
+            notice_serial: 0,
+        }
+    });
+    cx.set_global(GlobalHub(hub));
+}
+
+/// The application's [`Hub`].
+pub fn hub(cx: &App) -> Entity<Hub> {
+    cx.global::<GlobalHub>().0.clone()
+}
+
+impl Hub {
+    /// Starts a file operation in the background.
+    pub fn start(&mut self, request: Request) {
+        self.ops.start(request);
+    }
+
+    /// Reverts the latest operation, or says that there is none.
+    pub fn undo(&mut self, cx: &mut Context<Self>) {
+        if self.ops.undo().is_none() {
+            self.set_notice("There is nothing to undo.".to_owned(), false, cx);
+        }
+    }
+
+    /// Asks operation `id` to stop.
+    pub fn cancel(&mut self, id: OpId) {
+        self.ops.cancel(id);
+    }
+
+    /// Asks for confirmation, then deletes `paths` for good.
+    pub fn delete_after_confirming(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        if !paths.is_empty() {
+            self.questions.push_back(Question::ConfirmDelete { paths });
+            cx.notify();
+        }
+    }
+
+    /// Answers the conflict being shown.
+    pub fn resolve(&mut self, choice: ConflictChoice, apply_to_all: bool, cx: &mut Context<Self>) {
+        if let Some(Question::Conflict { id, .. }) = self.questions.front() {
+            self.ops.resolve(
+                *id,
+                Resolution {
+                    choice,
+                    apply_to_all,
+                },
+            );
+            self.questions.pop_front();
+            cx.notify();
+        }
+    }
+
+    /// Answers the failure being shown.
+    pub fn recover(&mut self, recovery: Recovery, cx: &mut Context<Self>) {
+        if let Some(Question::Failed { id, .. }) = self.questions.front() {
+            self.ops.recover(*id, recovery);
+            self.questions.pop_front();
+            cx.notify();
+        }
+    }
+
+    /// Answers the delete confirmation being shown.
+    pub fn confirm_delete(&mut self, confirmed: bool, cx: &mut Context<Self>) {
+        if let Some(Question::ConfirmDelete { .. }) = self.questions.front()
+            && let Some(Question::ConfirmDelete { paths }) = self.questions.pop_front()
+            && confirmed
+        {
+            self.start(Request::Delete { paths });
+        }
+        cx.notify();
+    }
+
+    /// Picks up `paths` for a later paste.
+    pub fn pick_up(&mut self, paths: Vec<PathBuf>, cut: bool, cx: &mut Context<Self>) {
+        if paths.is_empty() {
+            return;
+        }
+        let what = what(&paths);
+        let text = if cut {
+            format!("Cut {what}. Paste to move.")
+        } else {
+            format!("Copied {what}. Paste to copy.")
+        };
+        self.clip = Some(Clip { paths, cut });
+        self.set_notice(text, false, cx);
+    }
+
+    /// Copies or moves the picked-up entries into `into`.
+    pub fn paste(&mut self, into: PathBuf, cx: &mut Context<Self>) {
+        let Some(clip) = self.clip.clone() else {
+            self.set_notice("Nothing has been copied or cut yet.".to_owned(), false, cx);
+            return;
+        };
+        if clip.cut {
+            // A move happens once; the entries are no longer where they were.
+            self.clip = None;
+            self.start(Request::Move {
+                sources: clip.paths,
+                into,
+            });
+        } else {
+            self.start(Request::Copy {
+                sources: clip.paths,
+                into,
+            });
+        }
+        cx.notify();
+    }
+
+    /// Dismisses the message being shown.
+    pub fn dismiss_notice(&mut self, cx: &mut Context<Self>) {
+        self.notice = None;
+        cx.notify();
+    }
+
+    fn set_notice(&mut self, text: String, is_error: bool, cx: &mut Context<Self>) {
+        self.show(text, is_error, false, cx);
+    }
+
+    fn show(&mut self, text: String, is_error: bool, offers_undo: bool, cx: &mut Context<Self>) {
+        self.notice_serial += 1;
+        let serial = self.notice_serial;
+        self.notice = Some(Notice {
+            text,
+            is_error,
+            offers_undo,
+        });
+        if !is_error {
+            cx.spawn(async move |hub, cx| {
+                cx.background_executor().timer(NOTICE_TIME).await;
+                let _ = hub.update(cx, |hub, cx| {
+                    if hub.notice_serial == serial {
+                        hub.notice = None;
+                        cx.notify();
+                    }
+                });
+            })
+            .detach();
+        }
+        cx.notify();
+    }
+
+    fn on_event(&mut self, event: OpEvent, cx: &mut Context<Self>) {
+        match event {
+            OpEvent::Started { id, request, undo } => {
+                self.running.push(Running {
+                    id,
+                    label: activity(&request, undo),
+                    done: past(&request),
+                    undo,
+                    progress: Progress::default(),
+                    started: Instant::now(),
+                });
+                // Redraw when it has run long enough to be shown.
+                cx.spawn(async move |hub, cx| {
+                    cx.background_executor().timer(QUIET_PERIOD).await;
+                    let _ = hub.update(cx, |_, cx| cx.notify());
+                })
+                .detach();
+            }
+            OpEvent::Progress { id, progress } => {
+                if let Some(running) = self.running.iter_mut().find(|running| running.id == id) {
+                    running.progress = progress;
+                }
+            }
+            OpEvent::Conflict { id, conflict } => {
+                self.questions
+                    .push_back(Question::Conflict { id, conflict });
+            }
+            OpEvent::Failed { id, path, message } => {
+                self.questions
+                    .push_back(Question::Failed { id, path, message });
+            }
+            OpEvent::Finished { id, result } => {
+                let finished = self
+                    .running
+                    .iter()
+                    .position(|running| running.id == id)
+                    .map(|index| self.running.remove(index));
+                // Questions it can no longer hear the answer to.
+                self.questions.retain(|question| match question {
+                    Question::Conflict { id: asker, .. } | Question::Failed { id: asker, .. } => {
+                        *asker != id
+                    }
+                    Question::ConfirmDelete { .. } => true,
+                });
+                let (done, undo) = finished
+                    .as_ref()
+                    .map_or(("", false), |running| (running.done.as_str(), running.undo));
+                if let Some(notice) = result_notice(done, undo, &result) {
+                    self.show(notice.text, notice.is_error, notice.offers_undo, cx);
+                }
+            }
+        }
+        cx.notify();
+    }
+}
+
+fn quoted(name: &std::ffi::OsStr) -> String {
+    format!("“{}”", display_name(name.as_encoded_bytes()))
+}
+
+fn folder_name(path: &Path) -> String {
+    match path.file_name() {
+        Some(name) => quoted(name),
+        None => "“/”".to_owned(),
+    }
+}
+
+/// The entries of a request in words: the name of one, the number of several.
+pub fn what(paths: &[PathBuf]) -> String {
+    match paths {
+        [one] => folder_name(one),
+        many => format!(
+            "{} {}",
+            count(many.len()),
+            plural(many.len(), "item", "items")
+        ),
+    }
+}
+
+/// What a request does, for the progress line: "Copying 3 items to “x”".
+/// With `undo`, what reverting it does.
+pub fn activity(request: &Request, undo: bool) -> String {
+    if undo {
+        return format!("Undoing: {}", past(request));
+    }
+    match request {
+        Request::CreateDir { name, .. } => format!("Creating folder {}", quoted(name)),
+        Request::CreateFile { name, .. } => format!("Creating file {}", quoted(name)),
+        Request::Rename { path, new_name } => {
+            format!("Renaming {} to {}", folder_name(path), quoted(new_name))
+        }
+        Request::Copy { sources, into } => {
+            format!("Copying {} to {}", what(sources), folder_name(into))
+        }
+        Request::Move { sources, into } => {
+            format!("Moving {} to {}", what(sources), folder_name(into))
+        }
+        Request::Trash { paths } => format!("Moving {} to the trash", what(paths)),
+        Request::Delete { paths } => format!("Deleting {}", what(paths)),
+    }
+}
+
+/// What a request did, in lower case: "copied 3 items to “x”".
+pub fn past(request: &Request) -> String {
+    match request {
+        Request::CreateDir { name, .. } => format!("created folder {}", quoted(name)),
+        Request::CreateFile { name, .. } => format!("created file {}", quoted(name)),
+        Request::Rename { path, new_name } => {
+            format!("renamed {} to {}", folder_name(path), quoted(new_name))
+        }
+        Request::Copy { sources, into } => {
+            format!("copied {} to {}", what(sources), folder_name(into))
+        }
+        Request::Move { sources, into } => {
+            format!("moved {} to {}", what(sources), folder_name(into))
+        }
+        Request::Trash { paths } => format!("moved {} to the trash", what(paths)),
+        Request::Delete { paths } => format!("deleted {}", what(paths)),
+    }
+}
+
+/// The message for a finished operation, if it deserves one. `done` says
+/// what the operation did, in lower case; `undo` whether it was a revert.
+/// Creating and renaming succeed silently: the result is visible in the list.
+fn result_notice(done: &str, undo: bool, result: &Finished) -> Option<Notice> {
+    match result {
+        Finished::Done(outcome) => outcome_notice(done, outcome),
+        Finished::Refused(reason) => Some(Notice {
+            text: format!("Not done: {reason}."),
+            is_error: true,
+            offers_undo: false,
+        }),
+        Finished::Undone => Some(Notice {
+            text: format!("Undid: {done}."),
+            is_error: false,
+            offers_undo: false,
+        }),
+        Finished::UndoFailed(reason) if undo => Some(Notice {
+            text: format!("Could not undo ({done}): {reason}."),
+            is_error: true,
+            offers_undo: false,
+        }),
+        Finished::UndoFailed(reason) => Some(Notice {
+            text: format!("Could not undo: {reason}."),
+            is_error: true,
+            offers_undo: false,
+        }),
+    }
+}
+
+fn outcome_notice(done: &str, outcome: &Outcome) -> Option<Notice> {
+    let quiet = done.starts_with("created") || done.starts_with("renamed");
+    let left_out = outcome.skipped.len();
+    if left_out == 0 && outcome.completed {
+        return (!quiet).then(|| Notice {
+            text: format!("{}.", upper_first(done)),
+            is_error: false,
+            offers_undo: !outcome.changes.is_empty(),
+        });
+    }
+    let mut text = if outcome.completed {
+        format!("{}, with problems.", upper_first(done))
+    } else {
+        format!("Stopped part-way: {done}. What was done stays.")
+    };
+    if let Some(first) = outcome.skipped.first() {
+        let name = first
+            .path
+            .file_name()
+            .map(quoted)
+            .unwrap_or_else(|| first.path.display().to_string());
+        text.push_str(&format!(
+            " {} {} left out; {name}: {}.",
+            count(left_out),
+            plural(left_out, "entry was", "entries were"),
+            first.reason
+        ));
+    }
+    Some(Notice {
+        text,
+        is_error: left_out > 0,
+        offers_undo: false,
+    })
+}
+
+fn upper_first(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
+fn fraction(progress: &Progress) -> Option<f32> {
+    if progress.bytes_total > 0 {
+        Some((progress.bytes_done as f64 / progress.bytes_total as f64) as f32)
+    } else if progress.items_total > 0 {
+        Some((progress.items_done as f64 / progress.items_total as f64) as f32)
+    } else {
+        None
+    }
+}
+
+fn detail(progress: &Progress, elapsed: Duration) -> String {
+    let mut text = format!(
+        "{} of {}",
+        count(progress.items_done as usize),
+        count(progress.items_total as usize)
+    );
+    if progress.bytes_total > 0 {
+        text.push_str(&format!(
+            " · {} of {}",
+            format::size(progress.bytes_done),
+            format::size(progress.bytes_total)
+        ));
+        let seconds = elapsed.as_secs_f64();
+        if seconds > 0.5 && progress.bytes_done > 0 {
+            let rate = (progress.bytes_done as f64 / seconds) as u64;
+            text.push_str(&format!(" · {}/s", format::size(rate)));
+        }
+    }
+    text
+}
+
+/// A free name like `base`, `base 2`, `base 3`, … given a test for taken names.
+pub fn free_name(base: &str, is_taken: impl Fn(&str) -> bool) -> String {
+    if !is_taken(base) {
+        return base.to_owned();
+    }
+    (2..)
+        .map(|n| format!("{base} {n}"))
+        .find(|name| !is_taken(name))
+        .unwrap_or_else(|| base.to_owned())
+}
+
+/// The part of a file name to select when renaming starts: everything before
+/// the extension, so typing replaces the name and keeps the type.
+pub fn stem_len(name: &str, is_folder: bool) -> usize {
+    if is_folder {
+        return name.len();
+    }
+    match name.rfind('.') {
+        Some(dot) if dot > 0 => dot,
+        _ => name.len(),
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use rustphin_core::ops::Skipped;
+
+    use super::*;
+
+    fn copy(sources: &[&str], into: &str) -> Request {
+        Request::Copy {
+            sources: sources.iter().map(PathBuf::from).collect(),
+            into: into.into(),
+        }
+    }
+
+    #[test]
+    fn one_entry_is_named_and_several_are_counted() {
+        assert_eq!(
+            activity(&copy(&["/a/report.pdf"], "/home/u/Documents"), false),
+            "Copying “report.pdf” to “Documents”"
+        );
+        assert_eq!(
+            activity(&copy(&["/a/1", "/a/2", "/a/3"], "/"), false),
+            "Copying 3 items to “/”"
+        );
+        assert_eq!(
+            activity(
+                &Request::Trash {
+                    paths: vec!["/a/old".into()]
+                },
+                false
+            ),
+            "Moving “old” to the trash"
+        );
+    }
+
+    #[test]
+    fn an_undo_says_what_it_reverts() {
+        let request = Request::Rename {
+            path: "/a/old.txt".into(),
+            new_name: "new.txt".into(),
+        };
+        assert_eq!(
+            activity(&request, true),
+            "Undoing: renamed “old.txt” to “new.txt”"
+        );
+    }
+
+    fn done(completed: bool, skipped: &[(&str, &str)]) -> Finished {
+        Finished::Done(Outcome {
+            completed,
+            changes: Vec::new(),
+            skipped: skipped
+                .iter()
+                .map(|(path, reason)| Skipped {
+                    path: path.into(),
+                    reason: (*reason).to_owned(),
+                })
+                .collect(),
+        })
+    }
+
+    #[test]
+    fn creating_and_renaming_succeed_without_a_message() {
+        assert_eq!(
+            result_notice("created folder “x”", false, &done(true, &[])),
+            None
+        );
+        assert_eq!(
+            result_notice("renamed “a” to “b”", false, &done(true, &[])),
+            None
+        );
+    }
+
+    #[test]
+    fn a_finished_copy_is_confirmed_and_an_undo_is_named() {
+        assert_eq!(
+            result_notice("copied 3 items to “x”", false, &done(true, &[])),
+            Some(Notice {
+                text: "Copied 3 items to “x”.".into(),
+                is_error: false,
+                offers_undo: false,
+            })
+        );
+        assert_eq!(
+            result_notice("moved 3 items to “x”", true, &Finished::Undone),
+            Some(Notice {
+                text: "Undid: moved 3 items to “x”.".into(),
+                is_error: false,
+                offers_undo: false,
+            })
+        );
+    }
+
+    #[test]
+    fn problems_say_what_was_left_out_and_why_and_stay_until_dismissed() {
+        let notice = result_notice(
+            "copied 3 items to “x”",
+            false,
+            &done(
+                true,
+                &[("/a/locked.txt", "permission denied"), ("/a/b", "busy")],
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            notice.text,
+            "Copied 3 items to “x”, with problems. 2 entries were left out; “locked.txt”: permission denied."
+        );
+        assert!(notice.is_error);
+
+        let refused = result_notice(
+            "renamed “a” to “b”",
+            false,
+            &Finished::Refused("\"/x/b\" already exists".into()),
+        )
+        .unwrap();
+        assert_eq!(refused.text, "Not done: \"/x/b\" already exists.");
+        assert!(refused.is_error);
+
+        let undo = result_notice(
+            "moved “a” to “x”",
+            true,
+            &Finished::UndoFailed("something else is now at \"/a\"".into()),
+        )
+        .unwrap();
+        assert_eq!(
+            undo.text,
+            "Could not undo (moved “a” to “x”): something else is now at \"/a\"."
+        );
+        assert!(undo.is_error);
+    }
+
+    #[test]
+    fn a_finished_operation_that_changed_something_offers_undo() {
+        let outcome = Outcome {
+            completed: true,
+            changes: vec![rustphin_core::ops::Change::Deleted { path: "/a".into() }],
+            skipped: Vec::new(),
+        };
+        let notice = result_notice("moved “a” to the trash", false, &Finished::Done(outcome));
+        assert!(notice.unwrap().offers_undo);
+    }
+
+    #[test]
+    fn a_cancelled_operation_says_that_finished_work_stays() {
+        let notice = result_notice("moved 9 items to “x”", false, &done(false, &[])).unwrap();
+        assert_eq!(
+            notice.text,
+            "Stopped part-way: moved 9 items to “x”. What was done stays."
+        );
+        assert!(!notice.is_error);
+    }
+
+    #[test]
+    fn progress_is_measured_in_bytes_when_known_and_in_entries_otherwise() {
+        let mut progress = Progress {
+            items_done: 1,
+            items_total: 4,
+            ..Progress::default()
+        };
+        assert_eq!(fraction(&progress), Some(0.25));
+        assert_eq!(detail(&progress, Duration::from_secs(2)), "1 of 4");
+        progress.bytes_done = 1024 * 1024;
+        progress.bytes_total = 4 * 1024 * 1024;
+        assert_eq!(fraction(&progress), Some(0.25));
+        assert_eq!(
+            detail(&progress, Duration::from_secs(2)),
+            "1 of 4 · 1.0 MiB of 4.0 MiB · 512.0 KiB/s"
+        );
+        assert_eq!(fraction(&Progress::default()), None);
+    }
+
+    #[test]
+    fn a_new_entry_gets_the_first_free_name() {
+        let taken = ["New Folder", "New Folder 2"];
+        assert_eq!(
+            free_name("New Folder", |name| taken.contains(&name)),
+            "New Folder 3"
+        );
+        assert_eq!(
+            free_name("New File", |name| taken.contains(&name)),
+            "New File"
+        );
+    }
+
+    #[test]
+    fn renaming_preselects_the_name_without_the_extension() {
+        assert_eq!(stem_len("report.final.pdf", false), "report.final".len());
+        assert_eq!(stem_len(".bashrc", false), ".bashrc".len());
+        assert_eq!(stem_len("README", false), "README".len());
+        assert_eq!(stem_len("photos.2024", true), "photos.2024".len());
+    }
+}

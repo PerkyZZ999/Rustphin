@@ -47,6 +47,12 @@ pub mod size {
     pub const WIDTH_FOR_TYPE: f32 = 760.;
     /// Icons in empty and error states.
     pub const ICON_LARGE: f32 = 32.;
+    /// Width of a dialog.
+    pub const DIALOG: f32 = 440.;
+    /// Height of a progress bar.
+    pub const PROGRESS: f32 = 4.;
+    /// Width of a progress bar in the activity line.
+    pub const PROGRESS_WIDTH: f32 = 160.;
     /// Corner radius shared by controls, rows and panels.
     pub const RADIUS: f32 = 2.;
 }
@@ -81,8 +87,16 @@ pub struct Theme {
     /// The file list's surface, layered over the window background. More
     /// solid than the chrome so columns of text stay readable.
     pub content: Rgba,
+    /// Dialogs and other surfaces that float inside the window. Always solid.
+    pub raised: Rgba,
+    /// Dims the window behind a dialog.
+    pub scrim: Rgba,
     /// Dividers and outlines.
     pub border: Rgba,
+    /// Outline of floating surfaces and of the default button in a dialog.
+    pub border_accent: Rgba,
+    /// Live activity: the filled part of a progress bar.
+    pub activity: Rgba,
     /// Primary text.
     pub text: Rgba,
     /// Secondary text and inactive icons.
@@ -127,7 +141,11 @@ impl Theme {
             } else {
                 rgb(0x0b0f17)
             },
+            raised: rgb(0x0f172a),
+            scrim: rgba(0x04060a99),
             border: rgba(0xffffff1f),
+            border_accent: rgba(0x4169e173),
+            activity: rgb(0x38bdf8),
             text: rgb(0xdfe2ef),
             text_muted: rgb(0xc3cad9),
             accent: rgb(0x8fa8ff),
@@ -147,6 +165,15 @@ impl Theme {
         components.primary_hover = self.selection_hover.into();
         components.primary_active = self.selection.into();
         components.primary_foreground = self.on_selection.into();
+        components.button_primary = self.selection.into();
+        components.button_primary_hover = self.selection_hover.into();
+        components.button_primary_active = self.selection_hover.into();
+        components.button_primary_foreground = self.on_selection.into();
+        // Text fields are solid, so typing stays readable on a selected row.
+        components.background = self.raised.into();
+        components.foreground = self.text.into();
+        components.input = self.border_accent.into();
+        components.caret = self.text.into();
         components.ring = self.accent.into();
         components.radius = px(size::RADIUS);
         components.font_family = text::FAMILY_BODY.into();
@@ -218,6 +245,9 @@ mod tests {
                 theme.selection_hover,
             ),
             ("danger on its surface", theme.danger, theme.danger_surface),
+            ("text on a dialog", theme.text, theme.raised),
+            ("muted text on a dialog", theme.text_muted, theme.raised),
+            ("danger text on a dialog", theme.danger, theme.raised),
         ] {
             let ratio = contrast(foreground, background);
             assert!(
@@ -229,6 +259,13 @@ mod tests {
         // The selected row is marked by an accent bar as well as its fill.
         let ratio = contrast(theme.accent, window);
         assert!(ratio >= 3., "accent on window: {ratio:.2}:1 is below 3:1");
+        // The filled part of a progress bar against its track on the chrome.
+        let track = over(theme.hover, chrome);
+        let ratio = contrast(theme.activity, track);
+        assert!(
+            ratio >= 3.,
+            "progress on its track: {ratio:.2}:1 is below 3:1"
+        );
     }
 
     #[test]

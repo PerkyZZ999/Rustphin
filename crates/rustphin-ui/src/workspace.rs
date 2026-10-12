@@ -3,21 +3,28 @@
 use std::path::{Path, PathBuf};
 
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement, KeyBinding,
-    MouseButton, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Window, actions,
+    AnyElement, App, AppContext as _, BoxShadow, Context, Entity, FocusHandle,
+    InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions,
     component::{
-        IconName, Sizable as _,
+        Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
+        checkbox::Checkbox,
     },
-    div,
+    div, point,
     prelude::FluentBuilder as _,
     px,
 };
-use rustphin_core::display_name;
+use jiff::tz::TimeZone;
+use rustphin_core::{
+    FileInfo, display_name,
+    ops::{ConflictChoice, Recovery},
+};
 
 use crate::{
     browser::{Browser, BrowserEvent},
+    format,
+    operations::{self, Hub, Notice, Question, Running, hub},
     session::{Session, SessionTab},
     settings::Settings,
     tabs::Tabs,
@@ -25,6 +32,8 @@ use crate::{
 };
 
 const KEY_CONTEXT: &str = "Workspace";
+/// A dialog that is waiting for an answer.
+const DIALOG_CONTEXT: &str = "Dialog";
 /// Widest a tab's label may be before it is cut short.
 const TAB_MAX_WIDTH: f32 = 200.;
 
@@ -39,6 +48,13 @@ actions!(
         MoveTabRight,
         ToggleSplit,
         OtherPane,
+        Undo,
+        DialogAccept,
+        DialogCancel,
+        DialogSkip,
+        DialogKeepBoth,
+        DialogReplace,
+        DialogToggleAll,
     ]
 );
 
@@ -57,6 +73,14 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("f3", ToggleSplit, context),
         // Tab moves between the two panes, except while typing in a field.
         KeyBinding::new("tab", OtherPane, Some("Workspace && !Input")),
+        // Not while typing: there Ctrl+Z undoes the typing.
+        KeyBinding::new("ctrl-z", Undo, Some("Workspace && !Input && !Dialog")),
+        KeyBinding::new("enter", DialogAccept, Some(DIALOG_CONTEXT)),
+        KeyBinding::new("escape", DialogCancel, Some(DIALOG_CONTEXT)),
+        KeyBinding::new("s", DialogSkip, Some(DIALOG_CONTEXT)),
+        KeyBinding::new("k", DialogKeepBoth, Some(DIALOG_CONTEXT)),
+        KeyBinding::new("r", DialogReplace, Some(DIALOG_CONTEXT)),
+        KeyBinding::new("a", DialogToggleAll, Some(DIALOG_CONTEXT)),
     ]);
 }
 
@@ -107,6 +131,16 @@ pub struct Workspace {
     /// The session as last written, to skip writes that change nothing.
     saved: Session,
     title: String,
+    /// Holds the keyboard focus while a dialog is open.
+    dialog_focus: FocusHandle,
+    /// Whether a dialog was open at the last redraw, to move the focus when
+    /// one opens or the last one closes.
+    dialog_open: bool,
+    /// The "do this for all" box of the conflict dialog.
+    apply_to_all: bool,
+    /// The zone dates are shown in.
+    zone: TimeZone,
+    _hub: Subscription,
 }
 
 impl Workspace {
@@ -166,6 +200,12 @@ impl Workspace {
             session_path,
             saved: Session::default(),
             title: String::new(),
+            dialog_focus: cx.focus_handle(),
+            dialog_open: false,
+            apply_to_all: false,
+            zone: TimeZone::system(),
+            // Progress, questions and messages change outside this view.
+            _hub: cx.observe(&hub(cx), |_, _, cx| cx.notify()),
         };
         workspace.focus_active(window, cx);
         workspace
@@ -466,6 +506,19 @@ impl Render for Workspace {
         // the session is kept up to date.
         self.save_session(cx);
 
+        // A dialog takes the keyboard while it is open and gives it back to
+        // the active pane when the last one closes.
+        let hub = hub(cx);
+        let dialog_open = !hub.read(cx).questions.is_empty();
+        if dialog_open && !self.dialog_focus.is_focused(window) {
+            let focus = self.dialog_focus.clone();
+            cx.defer_in(window, move |_, window, cx| focus.focus(window, cx));
+        } else if !dialog_open && self.dialog_open {
+            self.apply_to_all = false;
+            cx.defer_in(window, |this, window, cx| this.focus_active(window, cx));
+        }
+        self.dialog_open = dialog_open;
+
         let title = format!("{} \u{2014} Rustphin", Self::label(self.tabs.active(), cx));
         if title != self.title {
             window.set_window_title(&title);
@@ -502,6 +555,10 @@ impl Render for Workspace {
                 .child(div().flex_1().min_h_0().child(pane.browser.clone()))
         });
 
+        let activity = self.activity(hub.read(cx), theme);
+        let question = hub.read(cx).questions.front().cloned();
+        let dialog = question.map(|question| self.dialog(&question, theme, cx));
+
         div()
             .key_context(KEY_CONTEXT)
             .on_action(cx.listener(|this, _: &NewTab, window, cx| this.new_tab(window, cx)))
@@ -530,6 +587,8 @@ impl Render for Workspace {
                 cx.listener(|this, _: &ToggleSplit, window, cx| this.toggle_split(window, cx)),
             )
             .on_action(cx.listener(|this, _: &OtherPane, window, cx| this.other_pane(window, cx)))
+            .on_action(|_: &Undo, _, cx| operations::hub(cx).update(cx, Hub::undo))
+            .relative()
             .flex()
             .flex_col()
             .size_full()
@@ -540,7 +599,374 @@ impl Render for Workspace {
                 workspace.child(self.tab_strip(theme, cx))
             })
             .child(div().flex().flex_1().min_h_0().children(panes))
+            .children(activity)
+            .children(dialog)
     }
+}
+
+impl Workspace {
+    /// What file operations are doing and what they last did, as lines under
+    /// the panes. Nothing is shown while there is nothing to say.
+    fn activity(&self, hub: &Hub, theme: Theme) -> Option<impl IntoElement + use<>> {
+        let running: Vec<AnyElement> = hub
+            .running
+            .iter()
+            .filter(|running| running.is_visible())
+            .map(|running| Self::progress_line(running, theme).into_any_element())
+            .collect();
+        let notice = hub
+            .notice
+            .as_ref()
+            .map(|notice| Self::notice_line(notice, theme));
+        if running.is_empty() && notice.is_none() {
+            return None;
+        }
+        Some(
+            div()
+                .flex()
+                .flex_col()
+                .flex_none()
+                .bg(theme.chrome)
+                .text_size(px(text::SMALL))
+                .children(running)
+                .children(notice),
+        )
+    }
+
+    fn progress_line(running: &Running, theme: Theme) -> impl IntoElement + use<> {
+        let id = running.id;
+        let fraction = running.fraction().unwrap_or(0.).clamp(0., 1.);
+        div()
+            .flex()
+            .items_center()
+            .gap(px(space::MD))
+            .h(px(size::STATUS))
+            .px(px(space::LG))
+            .border_t_1()
+            .border_color(theme.border)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(running.label.clone()),
+            )
+            .child(
+                // The bar says how far; the numbers beside it say the same in text.
+                div()
+                    .flex_none()
+                    .w(px(size::PROGRESS_WIDTH))
+                    .h(px(size::PROGRESS))
+                    .rounded(px(size::RADIUS))
+                    .bg(theme.hover)
+                    .child(
+                        div()
+                            .h_full()
+                            .w(px(size::PROGRESS_WIDTH * fraction))
+                            .rounded(px(size::RADIUS))
+                            .bg(theme.activity),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .font_family(text::FAMILY_DATA)
+                    .text_color(theme.text_muted)
+                    .child(running.detail()),
+            )
+            .child(
+                Button::new(("stop-operation", id.as_u64()))
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::Close)
+                    .tooltip("Stop. What is already done stays.")
+                    .on_click(move |_, _, cx| hub(cx).update(cx, |hub, _| hub.cancel(id))),
+            )
+    }
+
+    fn notice_line(notice: &Notice, theme: Theme) -> impl IntoElement + use<> {
+        let (icon, color) = if notice.is_error {
+            (IconName::TriangleAlert, theme.danger)
+        } else {
+            (IconName::Info, theme.text_muted)
+        };
+        div()
+            .flex()
+            .items_center()
+            .gap(px(space::SM))
+            .min_h(px(size::STATUS))
+            .px(px(space::LG))
+            .py(px(space::XS))
+            .border_t_1()
+            .border_color(theme.border)
+            .when(notice.is_error, |line| line.bg(theme.danger_surface))
+            .text_color(if notice.is_error {
+                theme.danger
+            } else {
+                theme.text
+            })
+            .child(
+                Icon::new(icon)
+                    .size(px(size::ICON))
+                    .flex_none()
+                    .text_color(color),
+            )
+            .child(div().flex_1().min_w_0().child(notice.text.clone()))
+            .when(notice.offers_undo, |line| {
+                line.child(
+                    Button::new("undo-notice")
+                        .ghost()
+                        .xsmall()
+                        .label("Undo (Ctrl+Z)")
+                        .on_click(|_, _, cx| hub(cx).update(cx, Hub::undo)),
+                )
+            })
+            .child(
+                Button::new("dismiss-notice")
+                    .ghost()
+                    .xsmall()
+                    .label("Dismiss")
+                    .on_click(|_, _, cx| hub(cx).update(cx, Hub::dismiss_notice)),
+            )
+    }
+
+    /// One side of a conflict in words: "1.2 MiB, modified 2026-10-12 10:17".
+    fn describe(&self, info: &FileInfo) -> String {
+        let modified = format::timestamp(
+            info.modified_ns.div_euclid(1_000_000_000) as i64,
+            &self.zone,
+        );
+        if info.kind == rustphin_core::EntryKind::Directory {
+            format!("folder, modified {modified}")
+        } else {
+            format!("{}, modified {modified}", format::size(info.size))
+        }
+    }
+
+    /// The dialog for the question at the front of the queue, over a dimmed window.
+    fn dialog(&self, question: &Question, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+        let fact = |label: &'static str, value: String| {
+            div()
+                .flex()
+                .gap(px(space::SM))
+                .child(
+                    div()
+                        .w(px(72.))
+                        .flex_none()
+                        .text_color(theme.text_muted)
+                        .child(label),
+                )
+                .child(
+                    div()
+                        .font_family(text::FAMILY_DATA)
+                        .text_size(px(text::DATA))
+                        .child(value),
+                )
+        };
+        let (title, body, buttons): (String, Vec<AnyElement>, Vec<Button>) = match question {
+            Question::Conflict { conflict, .. } => {
+                let folder = conflict.target_info.kind == rustphin_core::EntryKind::Directory;
+                let name = folder_label(&conflict.target);
+                let place = conflict
+                    .target
+                    .parent()
+                    .map(folder_label)
+                    .unwrap_or_default();
+                let all = self.apply_to_all;
+                (
+                    format!("\u{201c}{name}\u{201d} already exists in \u{201c}{place}\u{201d}"),
+                    vec![
+                        fact("Existing", self.describe(&conflict.target_info)).into_any_element(),
+                        fact("Incoming", self.describe(&conflict.source_info)).into_any_element(),
+                        Checkbox::new("apply-to-all")
+                            .label("Do the same for all other conflicts (A)")
+                            .checked(all)
+                            .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                this.apply_to_all = *checked;
+                                cx.notify();
+                            }))
+                            .into_any_element(),
+                    ],
+                    vec![
+                        Button::new("dialog-cancel")
+                            .ghost()
+                            .label("Stop (Esc)")
+                            .on_click(
+                                cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx)),
+                            ),
+                        Button::new("dialog-skip")
+                            .outline()
+                            .label("Skip (S)")
+                            .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Skip, cx))),
+                        Button::new("dialog-replace")
+                            .outline()
+                            .label(if folder { "Merge (R)" } else { "Replace (R)" })
+                            .disabled(!conflict.can_overwrite)
+                            .on_click(
+                                cx.listener(|this, _, _, cx| this.answer(Answer::Replace, cx)),
+                            ),
+                        Button::new("dialog-accept")
+                            .primary()
+                            .label("Keep both (Enter)")
+                            .on_click(
+                                cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx)),
+                            ),
+                    ],
+                )
+            }
+            Question::Failed { path, message, .. } => (
+                format!(
+                    "\u{201c}{}\u{201d} could not be processed",
+                    folder_label(path)
+                ),
+                vec![
+                    div().child(format!("{message}.")).into_any_element(),
+                    div()
+                        .text_color(theme.text_muted)
+                        .child("Skip leaves this entry out and continues with the rest.")
+                        .into_any_element(),
+                ],
+                vec![
+                    Button::new("dialog-cancel")
+                        .ghost()
+                        .label("Stop (Esc)")
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx))),
+                    Button::new("dialog-skip")
+                        .outline()
+                        .label("Skip (S)")
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Skip, cx))),
+                    Button::new("dialog-accept")
+                        .primary()
+                        .label("Try again (Enter)")
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
+                ],
+            ),
+            Question::ConfirmDelete { paths } => (
+                format!("Delete {} for good?", operations::what(paths)),
+                vec![
+                    div()
+                        .child("This does not use the trash. It cannot be undone.")
+                        .into_any_element(),
+                ],
+                vec![
+                    Button::new("dialog-cancel")
+                        .outline()
+                        .label("Keep (Esc)")
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx))),
+                    Button::new("dialog-accept")
+                        .danger()
+                        .label("Delete for good (Enter)")
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
+                ],
+            ),
+        };
+        let glow = BoxShadow {
+            color: theme.selection.into(),
+            offset: point(px(0.), px(0.)),
+            blur_radius: px(space::LG),
+            spread_radius: px(-2.),
+            inset: false,
+        };
+        div()
+            .absolute()
+            .inset_0()
+            .occlude()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(theme.scrim)
+            .child(
+                div()
+                    .key_context(DIALOG_CONTEXT)
+                    .track_focus(&self.dialog_focus)
+                    .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
+                        this.answer(Answer::Accept, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
+                        this.answer(Answer::Cancel, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &DialogSkip, _, cx| {
+                        this.answer(Answer::Skip, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &DialogKeepBoth, _, cx| {
+                        this.answer(Answer::Accept, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &DialogReplace, _, cx| {
+                        this.answer(Answer::Replace, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &DialogToggleAll, _, cx| {
+                        this.apply_to_all = !this.apply_to_all;
+                        cx.notify();
+                    }))
+                    .flex()
+                    .flex_col()
+                    .gap(px(space::MD))
+                    .w(px(size::DIALOG))
+                    .p(px(space::LG))
+                    .rounded(px(size::RADIUS))
+                    .bg(theme.raised)
+                    .border_1()
+                    .border_color(theme.border_accent)
+                    .shadow(vec![glow])
+                    .text_color(theme.text)
+                    .font_family(text::FAMILY_BODY)
+                    .text_size(px(text::BODY))
+                    .line_height(px(text::LINE))
+                    .child(
+                        div()
+                            .font_family(text::FAMILY_HEADING)
+                            .text_size(px(text::HEADING))
+                            .child(title),
+                    )
+                    .children(body)
+                    .child(
+                        div()
+                            .flex()
+                            .justify_end()
+                            .gap(px(space::SM))
+                            .pt(px(space::SM))
+                            .children(buttons.into_iter().map(|button| button.small())),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    /// Applies a dialog button or its key to the question being shown.
+    /// Answers that do not fit the question are ignored.
+    fn answer(&mut self, answer: Answer, cx: &mut Context<Self>) {
+        let all = self.apply_to_all;
+        hub(cx).update(cx, |hub, cx| match (hub.questions.front(), answer) {
+            (Some(Question::Conflict { conflict, .. }), answer) => {
+                let choice = match answer {
+                    Answer::Accept => ConflictChoice::KeepBoth,
+                    Answer::Skip => ConflictChoice::Skip,
+                    Answer::Cancel => ConflictChoice::Cancel,
+                    Answer::Replace if conflict.can_overwrite => ConflictChoice::Overwrite,
+                    Answer::Replace => return,
+                };
+                hub.resolve(choice, all, cx);
+            }
+            (Some(Question::Failed { .. }), Answer::Accept) => hub.recover(Recovery::Retry, cx),
+            (Some(Question::Failed { .. }), Answer::Skip) => hub.recover(Recovery::Skip, cx),
+            (Some(Question::Failed { .. }), Answer::Cancel) => hub.recover(Recovery::Cancel, cx),
+            (Some(Question::ConfirmDelete { .. }), Answer::Accept) => hub.confirm_delete(true, cx),
+            (Some(Question::ConfirmDelete { .. }), Answer::Cancel) => hub.confirm_delete(false, cx),
+            _ => {}
+        });
+        self.apply_to_all = false;
+        cx.notify();
+    }
+}
+
+/// What a dialog button means, before it is matched to the question.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Answer {
+    /// The default button: keep both, try again, or delete.
+    Accept,
+    Skip,
+    Replace,
+    /// Stop the operation, or keep the files.
+    Cancel,
 }
 
 /// The name shown for a folder: its last component, or `/` for the root.

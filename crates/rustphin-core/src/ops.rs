@@ -360,18 +360,22 @@ pub fn run(
         }
         Request::Copy { sources, into } => {
             let plan = engine.plan_transfer(sources, into, false)?;
+            engine.controller.progress(&engine.progress);
             engine.transfer(plan, into, false).is_ok()
         }
         Request::Move { sources, into } => {
             let plan = engine.plan_transfer(sources, into, true)?;
+            engine.controller.progress(&engine.progress);
             engine.transfer(plan, into, true).is_ok()
         }
         Request::Trash { paths } => {
             let plan = engine.plan_removal(paths, false)?;
+            engine.controller.progress(&engine.progress);
             engine.trash_all(plan).is_ok()
         }
         Request::Delete { paths } => {
             let plan = engine.plan_removal(paths, true)?;
+            engine.controller.progress(&engine.progress);
             engine.delete_all(plan).is_ok()
         }
     };

@@ -67,7 +67,8 @@ pub(super) fn read(path: impl AsRef<Path>) -> String {
 pub(super) struct Script {
     pub(super) conflicts: VecDeque<Resolution>,
     failures: VecDeque<Recovery>,
-    /// Cancel once this many progress reports were seen.
+    /// Cancel once this many progress reports were seen. The first report
+    /// comes when the plan is ready, before anything is changed.
     cancel_after: Option<usize>,
     pub(super) asked: Vec<Conflict>,
     pub(super) failed: Vec<PathBuf>,
@@ -470,10 +471,10 @@ fn cancelling_keeps_finished_entries_and_leaves_no_partial_or_temporary_ones() {
     let sources = ["1-first", "2-folder", "3-last"].map(|name| d.src.join(name));
     let before = tree(&d.src);
 
-    // Reports: one copy step and one finished entry per file. The third report
-    // is the first step inside the folder.
+    // Reports: one when the plan is ready, then one copy step and one finished
+    // entry per file. The fourth report is the first step inside the folder.
     let mut script = Script {
-        cancel_after: Some(3),
+        cancel_after: Some(4),
         ..Script::default()
     };
     let outcome = go(&copy(&sources, &d.dst), &mut script);
@@ -788,7 +789,7 @@ fn cancelling_between_entries_stops_before_the_next_one() {
     let sources = ["a", "b", "c"].map(|name| d.src.join(name));
 
     let mut script = Script {
-        cancel_after: Some(1),
+        cancel_after: Some(2),
         ..Script::default()
     };
     let outcome = go(&move_(&sources, &d.dst), &mut script);
@@ -805,7 +806,7 @@ fn cancelling_in_the_middle_of_a_large_file_leaves_nothing_behind() {
     fs::write(&big, vec![7u8; crate::COPY_STEP * 2 + 1]).unwrap();
 
     let mut script = Script {
-        cancel_after: Some(1),
+        cancel_after: Some(2),
         ..Script::default()
     };
     let outcome = go(&copy(&[big], &d.dst), &mut script);
@@ -982,7 +983,7 @@ fn cancelling_a_delete_stops_before_the_next_entry() {
     let sources = ["a", "b", "c"].map(|name| d.src.join(name));
 
     let mut script = Script {
-        cancel_after: Some(1),
+        cancel_after: Some(2),
         ..Script::default()
     };
     let outcome = go(&delete(&sources), &mut script);

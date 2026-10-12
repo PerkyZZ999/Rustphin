@@ -8,12 +8,12 @@ S4 — File operations, undo, trash
 Order matters: W-031 to W-036 are the engine and its gate; W-037 onwards (UI) may not start before W-036 is recorded as passed.
 
 ## Queue
-- [ ] W-037 — UI: new folder, new file, rename in place, trash, permanent delete with confirmation, undo (R-007, R-008)
-- [ ] W-038 — UI: copy and move within the application (copy/cut/paste and to the other pane), progress with speed, remaining count and cancel, conflict dialog (R-006, R-007)
 - [ ] W-039 — UI: trash view with restore and empty trash (R-009)
 - [ ] W-040 — UI scenarios for file operations; trash interoperability with Dolphin checked in an isolated session (R-009)
 
 ## Done (recent)
+- [x] W-038 — UI: copy, cut and paste within the application (Ctrl+C, Ctrl+X, Ctrl+V; works across panes and tabs), a progress line with counts, speed and a stop button, the conflict dialog (skip, replace or merge, keep both, apply to all) and the failure dialog (skip, try again, stop). The system clipboard and drag-and-drop are S5 (R-006, R-007)
+- [x] W-037 — UI: new folder (F10, Ctrl+Shift+N, toolbar button) and new file (Ctrl+Alt+N) created with a free name and renamed in place; rename in place (F2); trash (Delete); permanent delete with confirmation (Shift+Delete); undo (Ctrl+Z, and a button on the message of the last operation) (R-007, R-008)
 - [x] W-036 — Engine gate passed 2026-10-12: faults at every filesystem step of copy and move, process-kill test, property test over random operation sequences, hand mutation checks (see VALIDATION.md). Operation UI may now be built (R-103)
 - [x] W-035 — `ops::Operations`: each operation on its own thread; start, cancel, answer conflicts and failures; progress at most every 50 ms; events over a channel; owns the undo history (R-007, D-009)
 - [x] W-034 — Undo: `ops::undo` and `ops::History` revert create, rename, move, copy (by trashing the copies) and trash, newest first, after checking every affected entry; refusals name the entry and the reason (R-008)

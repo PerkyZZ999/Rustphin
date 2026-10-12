@@ -61,6 +61,15 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | D2 | Tab, then Down and Return on a folder | The accent line moves to the other pane; only that pane changes folder |
 | D3 | F3 again | The tab shows one pane, the one that had focus |
 | R1 | With two tabs, one of them split, read `<isolated home>/.local/state/rustphin/session.toml`; kill the app and `launch_app` it with no argument | The file lists both tabs and the split tab's two panes; the app reopens with the same tabs, split and locations |
+| F1 | F10, type `Work`, Return | A folder "New Folder" appears selected with its name in an edit field, all of it selected; after Return it is called "Work" and stays selected |
+| F2 | Select a file, F2 | The name becomes an edit field with the part before the extension selected; Escape leaves the name unchanged |
+| F3 | Select `video.mp4`, Delete | The file leaves the list; a line says "Moved “video.mp4” to the trash." with an Undo button; `<isolated home>/.local/share/Trash/files/video.mp4` and `info/video.mp4.trashinfo` exist |
+| F4 | Ctrl+Z | "Undid: moved “video.mp4” to the trash."; the file is back |
+| F5 | Select two files, Shift+Delete | A dialog "Delete 2 items for good?" over a dimmed window, with "Keep (Esc)" and "Delete for good (Enter)"; Escape closes it and both files remain |
+| F6 | Select a file, Ctrl+C, enter a folder, Ctrl+V, Ctrl+V | The first paste copies it. The second opens "“name” already exists in “folder”" with both sizes and dates; `K` or Enter keeps both and a "name (1)" appears |
+| F7 | Select a file, Ctrl+X, enter a folder, Ctrl+V, then Ctrl+Z | The file moves into the folder, and back |
+| F8 | Create a folder of 30,000 empty files from a shell, select it, Ctrl+C, Ctrl+V | A progress line "Copying “many” to “…”" with a moving bar, a count "n of 30,001" and a stop button |
+| F9 | After F3, launch `dolphin trash:/` in the same session | Dolphin's trash lists the file with its original path |
 | L1 | Launch the release build on a 500,000-entry folder (`rust-tc bench-listing` creates `target/bench/listing-500k`); press End | Status "500,000 items"; the last entry is selected and visible within a second |
 
 ## Not covered by these scenarios
@@ -68,3 +77,4 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.
 - Narrow-window column dropping, frame rate, and anything that needs a second application.
 - Reordering tabs by dragging with the mouse.
+- The failure dialog (it needs an entry that fails mid-operation) and the dialogs' buttons by mouse.

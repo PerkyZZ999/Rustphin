@@ -429,3 +429,15 @@
 - **Not covered:** power loss (no fsync of copied data); real second filesystems and reflink (simulated or not reachable on the test machine's tmpfs); FUSE and network mounts; trees deep enough to exhaust the stack.
 - **Waiver:** none
 - **Follow-up:** W-037 onwards may start.
+
+### 2026-10-12 — W-037, W-038: file operations in the interface
+- **Phase:** 6 Implement (S4)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS, 227 tests. New UI unit tests: the wording of progress and result lines (one entry named, several counted; quiet success for create and rename; problems name the first entry left out and why; a refused undo says what it was undoing), progress fraction and speed text, the free default name for a new entry, the part of a name preselected for renaming; contrast of text on dialogs and of the progress bar on its track.
+  - Observed in an isolated session with its own home, on a scratch fixture (scenarios F1–F9): F10 created "New Folder" selected with its name in an edit field, and typing a name plus Return renamed it; F2 opened the field with the stem selected; Delete moved a file to the isolated home's trash with a message and an Undo button, and Ctrl+Z brought it back; Shift+Delete opened the confirmation dialog and Escape kept the files; copy and two pastes produced the conflict dialog showing both sizes and dates, and `K` kept both; cut, paste and undo moved a file into a folder and back; copying a folder of 30,000 files showed the progress line with bar, count and stop button; Dolphin, started in the same session, listed the trashed file with its original path.
+  - Found and fixed while testing: after a rename the keyboard could stay in the hidden name field; the default button was white instead of the accent colour; the progress line read "0 of 0" while a question was open (the engine now reports once when its plan is ready); the rename field was unreadable on a selected row.
+- **Not verified:** the failure dialog on screen (its logic is covered by the runner's tests); dialog buttons by mouse; rename in the icons and compact views; new file (Ctrl+Alt+N); stopping an operation with the stop button; speed display (the test files were empty); copy between two panes of a split (same code path as between folders); the look with blur on the live desktop.
+- **Limits:** copy and paste are internal to Rustphin until S5 brings the system clipboard; cut entries are not shown dimmed; a name typed in the rename field replaces a name that was not valid UTF-8 with what is typed.
+- **Waiver:** none
+- **Follow-up:** W-039 trash view, W-040.

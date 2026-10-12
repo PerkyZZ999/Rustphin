@@ -22,6 +22,13 @@ use crate::Fs;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OpId(u64);
 
+impl OpId {
+    /// The id as a number, unique within its [`Operations`].
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
 /// Something an operation has to tell or ask.
 #[derive(Debug)]
 pub enum OpEvent {

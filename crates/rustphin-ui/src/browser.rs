@@ -2,6 +2,8 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    ffi::OsStr,
+    os::unix::ffi::OsStrExt as _,
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
@@ -9,10 +11,10 @@ use std::{
 
 use gpui_kit::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Entity, EventEmitter, FocusHandle,
-    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, Modifiers, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render,
-    ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
-    UniformListScrollHandle, Window, actions,
+    Focusable as _, InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, Modifiers,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point,
+    Render, ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, UniformListScrollHandle, Window, actions,
     component::{
         Disableable as _, Icon, IconName, Selectable as _, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -25,7 +27,7 @@ use gpui_kit::{
 use jiff::tz::TimeZone;
 use rustphin_core::{
     DirectoryModel, LoadError, ModelEvent, RealFs, Selection, Snapshot, SortKey, ViewOptions,
-    display_name,
+    display_name, ops::Request,
 };
 
 use crate::{
@@ -33,6 +35,7 @@ use crate::{
     filetypes::{Database, TypeInfo},
     format::{self, count, plural},
     layout::{self, Layout, Rect, ViewMode},
+    operations::{self, hub},
     settings::Settings,
     theme::{Theme, size, space, text},
 };
@@ -82,6 +85,14 @@ actions!(
         ToggleHidden,
         EditLocation,
         CancelEdit,
+        Rename,
+        NewFolder,
+        NewFile,
+        MoveToTrash,
+        DeletePermanently,
+        Copy,
+        Cut,
+        Paste,
     ]
 );
 
@@ -130,6 +141,15 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-2", ShowCompact, view),
         KeyBinding::new("ctrl-3", ShowDetails, view),
         KeyBinding::new("escape", CancelEdit, view),
+        KeyBinding::new("f2", Rename, list),
+        KeyBinding::new("f10", NewFolder, list),
+        KeyBinding::new("ctrl-shift-n", NewFolder, list),
+        KeyBinding::new("ctrl-alt-n", NewFile, list),
+        KeyBinding::new("delete", MoveToTrash, list),
+        KeyBinding::new("shift-delete", DeletePermanently, list),
+        KeyBinding::new("ctrl-c", Copy, list),
+        KeyBinding::new("ctrl-x", Cut, list),
+        KeyBinding::new("ctrl-v", Paste, list),
     ]);
 }
 
@@ -182,6 +202,16 @@ pub struct Browser {
     failure: Option<Failure>,
     editing_location: bool,
     location_input: Entity<InputState>,
+    /// The entry being renamed in place, by its current name.
+    renaming: Option<Vec<u8>>,
+    rename_input: Entity<InputState>,
+    /// An entry to select as soon as it shows up in the list, and whether to
+    /// start renaming it: the result of a create or rename this view asked for.
+    select_when_seen: Option<(Vec<u8>, bool)>,
+    /// An entry whose renaming starts at the next redraw, when a window is at hand.
+    rename_requested: Option<Vec<u8>>,
+    /// Take the keyboard focus back at the next redraw.
+    refocus: bool,
     focus: FocusHandle,
     /// The system's file-type databases, once loaded in the background.
     types: Option<Arc<Database>>,
@@ -225,7 +255,11 @@ impl Browser {
         let settings_path = settings_path.filter(|_| !settings.is_from_newer_version());
         let location_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Enter a folder path"));
-        let subscriptions = vec![cx.subscribe_in(&location_input, window, Self::on_location_input)];
+        let rename_input = cx.new(|cx| InputState::new(window, cx));
+        let subscriptions = vec![
+            cx.subscribe_in(&location_input, window, Self::on_location_input),
+            cx.subscribe_in(&rename_input, window, Self::on_rename_input),
+        ];
         // Whatever contains this view decides when it gets the keyboard focus:
         // a view created for a background tab must not take it.
         let focus = cx.focus_handle();
@@ -242,6 +276,11 @@ impl Browser {
             failure: None,
             editing_location: false,
             location_input,
+            renaming: None,
+            rename_input,
+            select_when_seen: None,
+            rename_requested: None,
+            refocus: false,
             focus,
             types: None,
             type_info: HashMap::new(),
@@ -312,10 +351,29 @@ impl Browser {
                 if let Some(row) = came_from {
                     self.selection.select_only(&snapshot, row);
                 }
+                // The entry this view just created or renamed has shown up.
+                let awaited = self
+                    .select_when_seen
+                    .as_ref()
+                    .and_then(|(name, _)| snapshot.row_of(name));
+                if let Some(row) = awaited {
+                    self.selection.select_only(&snapshot, row);
+                    if let Some((name, true)) = self.select_when_seen.take() {
+                        self.rename_requested = Some(name);
+                    }
+                }
+                // A rename in progress ends if its entry is gone.
+                if let Some(name) = &self.renaming
+                    && snapshot.row_of(name).is_none()
+                {
+                    self.renaming = None;
+                    // The name field is gone; the keyboard goes back to the list.
+                    self.refocus = true;
+                }
                 self.focus_row = self.selection.focus_row(&snapshot);
                 self.snapshot = Some(snapshot);
                 // A live update must not move the view; only arriving does.
-                if arrived || came_from.is_some() {
+                if arrived || came_from.is_some() || awaited.is_some() {
                     self.reveal_focus();
                 }
             }
@@ -548,7 +606,12 @@ impl Browser {
 
     fn on_key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
         let modifiers = event.keystroke.modifiers;
-        if self.editing_location || modifiers.control || modifiers.alt || modifiers.platform {
+        if self.editing_location
+            || self.renaming.is_some()
+            || modifiers.control
+            || modifiers.alt
+            || modifiers.platform
+        {
             return;
         }
         if let Some(typed) = event
@@ -816,6 +879,138 @@ impl Browser {
         }
     }
 
+    /// The selected entries, as full paths.
+    fn selected_paths(&self) -> Vec<PathBuf> {
+        self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
+            self.selection
+                .rows(snapshot)
+                .into_iter()
+                .map(|row| snapshot.entry_path(row))
+                .collect()
+        })
+    }
+
+    /// Starts renaming the focused entry in place.
+    fn rename_focused(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let name = self
+            .snapshot
+            .as_ref()
+            .zip(self.focus_row)
+            .filter(|(snapshot, row)| self.selection.contains(snapshot, *row))
+            .map(|(snapshot, row)| snapshot.name(row).to_vec());
+        if let Some(name) = name {
+            self.begin_rename(name, window, cx);
+        }
+    }
+
+    /// Shows the name field over the entry called `name`, with the part
+    /// before the extension selected.
+    fn begin_rename(&mut self, name: Vec<u8>, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((snapshot, row)) = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| Some((snapshot, snapshot.row_of(&name)?)))
+        else {
+            return;
+        };
+        let shown = display_name(&name).into_owned();
+        let stem = operations::stem_len(&shown, snapshot.is_container(row));
+        self.rename_input.update(cx, |input, cx| {
+            input.set_value(shown, window, cx);
+            input.set_selected_range(0..stem, cx);
+            input.focus(window, cx);
+        });
+        self.renaming = Some(name);
+        cx.notify();
+    }
+
+    /// Ends renaming. With `apply`, the typed name is given to the entry.
+    fn finish_rename(&mut self, apply: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(old) = self.renaming.take() else {
+            return;
+        };
+        let typed = self.rename_input.read(cx).value().to_string();
+        let unchanged = typed.is_empty() || typed == display_name(&old);
+        if apply
+            && !unchanged
+            && let Some(folder) = self.location()
+        {
+            self.select_when_seen = Some((typed.clone().into_bytes(), false));
+            hub(cx).update(cx, |hub, _| {
+                hub.start(Request::Rename {
+                    path: folder.join(OsStr::from_bytes(&old)),
+                    new_name: typed.into(),
+                });
+            });
+        }
+        if self
+            .rename_input
+            .focus_handle(cx)
+            .contains_focused(window, cx)
+        {
+            self.focus.focus(window, cx);
+        }
+        cx.notify();
+    }
+
+    fn on_rename_input(
+        &mut self,
+        _: &Entity<InputState>,
+        event: &InputEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            // Leaving the field keeps what was typed, as pressing Enter does.
+            InputEvent::PressEnter { .. } | InputEvent::Blur => {
+                self.finish_rename(true, window, cx);
+            }
+            InputEvent::Change | InputEvent::Focus => {}
+        }
+    }
+
+    /// Creates an empty folder or file with a free default name and starts
+    /// renaming it, so the name can be typed straight away.
+    fn create_entry(&mut self, folder: bool, cx: &mut Context<Self>) {
+        let (Some(parent), Some(snapshot)) = (self.location(), &self.snapshot) else {
+            return;
+        };
+        let base = if folder { "New Folder" } else { "New File" };
+        let name = operations::free_name(base, |name| snapshot.row_of(name.as_bytes()).is_some());
+        self.select_when_seen = Some((name.clone().into_bytes(), true));
+        let name = name.into();
+        hub(cx).update(cx, |hub, _| {
+            hub.start(if folder {
+                Request::CreateDir { parent, name }
+            } else {
+                Request::CreateFile { parent, name }
+            });
+        });
+    }
+
+    fn trash_selected(&mut self, cx: &mut Context<Self>) {
+        let paths = self.selected_paths();
+        if !paths.is_empty() {
+            hub(cx).update(cx, |hub, _| hub.start(Request::Trash { paths }));
+        }
+    }
+
+    fn delete_selected(&mut self, cx: &mut Context<Self>) {
+        let paths = self.selected_paths();
+        hub(cx).update(cx, |hub, cx| hub.delete_after_confirming(paths, cx));
+    }
+
+    fn pick_up_selected(&mut self, cut: bool, cx: &mut Context<Self>) {
+        let paths = self.selected_paths();
+        hub(cx).update(cx, |hub, cx| hub.pick_up(paths, cut, cx));
+    }
+
+    fn paste(&mut self, cx: &mut Context<Self>) {
+        if let Some(into) = self.location() {
+            hub(cx).update(cx, |hub, cx| hub.paste(into, cx));
+        }
+    }
+
     fn toolbar(&self, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement {
         let can_back = self.model.as_ref().is_some_and(DirectoryModel::can_go_back);
         let can_forward = self
@@ -874,6 +1069,15 @@ impl Browser {
                     bar.child(self.breadcrumbs(location.as_deref(), theme, cx))
                 }
             }))
+            .child(
+                Button::new("new-folder")
+                    .ghost()
+                    .small()
+                    .icon(gpui_kit::assets::IconName::FolderPlus)
+                    .tooltip("New folder (F10)")
+                    .disabled(location.is_none())
+                    .on_click(cx.listener(|this, _, _, cx| this.create_entry(true, cx))),
+            )
             .children(
                 [
                     (
@@ -1082,7 +1286,26 @@ impl Browser {
             container,
             selected: self.selection.contains(rows, row),
             focused: self.focus_row == Some(row),
+            renaming: self.renaming.as_deref() == Some(rows.name(row)),
             info: self.type_info_for(rows.name(row), container, cx),
+        }
+    }
+
+    /// The name of an entry on one line, or the field to edit it while it is
+    /// being renamed.
+    fn name_cell(&self, entry: &Entry, theme: Theme) -> gpui_kit::Div {
+        if entry.renaming {
+            // Clicks in the field place the cursor; they must not reach the
+            // row underneath or start a rubber band.
+            div()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                // Solid and in the normal text colour, whatever the row's state.
+                .rounded(px(size::RADIUS))
+                .bg(theme.raised)
+                .text_color(theme.text)
+                .child(Input::new(&self.rename_input).xsmall())
+        } else {
+            div().truncate().child(entry.name.clone())
         }
     }
 
@@ -1207,13 +1430,7 @@ impl Browser {
                                     .items_center()
                                     .gap(px(space::SM))
                                     .child(entry.icon(layout.icon, theme))
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .truncate()
-                                            .child(entry.name.clone()),
-                                    ),
+                                    .child(this.name_cell(&entry, theme).flex_1().min_w_0()),
                             )
                             .child(
                                 div()
@@ -1305,13 +1522,15 @@ impl Browser {
                                     .gap(px(space::SM))
                                     .p(px(space::SM))
                                     .child(icon)
-                                    .child(
+                                    .child(if entry.renaming {
+                                        this.name_cell(&entry, theme).w_full()
+                                    } else {
                                         div()
                                             .w_full()
                                             .text_center()
                                             .line_clamp(2)
-                                            .child(entry.name.clone()),
-                                    )
+                                            .child(entry.name.clone())
+                                    })
                             } else {
                                 surface
                                     .flex()
@@ -1319,13 +1538,7 @@ impl Browser {
                                     .gap(px(space::SM))
                                     .px(px(space::SM))
                                     .child(icon)
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .truncate()
-                                            .child(entry.name.clone()),
-                                    )
+                                    .child(this.name_cell(&entry, theme).flex_1().min_w_0())
                             };
                             div()
                                 .id(row)
@@ -1474,6 +1687,16 @@ impl Render for Browser {
             window.request_animation_frame();
         }
 
+        if std::mem::take(&mut self.refocus) {
+            cx.defer_in(window, |this, window, cx| this.focus.focus(window, cx));
+        }
+        // An entry this view created has appeared: let its name be typed.
+        if let Some(name) = self.rename_requested.take() {
+            cx.defer_in(window, |this, window, cx| {
+                this.begin_rename(name, window, cx)
+            });
+        }
+
         let view = div()
             .relative()
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
@@ -1575,8 +1798,22 @@ impl Render for Browser {
             .on_action(
                 cx.listener(|this, _: &EditLocation, window, cx| this.edit_location(window, cx)),
             )
+            .on_action(cx.listener(|this, _: &Rename, window, cx| {
+                this.rename_focused(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NewFolder, _, cx| this.create_entry(true, cx)))
+            .on_action(cx.listener(|this, _: &NewFile, _, cx| this.create_entry(false, cx)))
+            .on_action(cx.listener(|this, _: &MoveToTrash, _, cx| this.trash_selected(cx)))
+            .on_action(cx.listener(|this, _: &DeletePermanently, _, cx| {
+                this.delete_selected(cx);
+            }))
+            .on_action(cx.listener(|this, _: &Copy, _, cx| this.pick_up_selected(false, cx)))
+            .on_action(cx.listener(|this, _: &Cut, _, cx| this.pick_up_selected(true, cx)))
+            .on_action(cx.listener(|this, _: &Paste, _, cx| this.paste(cx)))
             .on_action(cx.listener(|this, _: &CancelEdit, window, cx| {
-                if this.editing_location {
+                if this.renaming.is_some() {
+                    this.finish_rename(false, window, cx);
+                } else if this.editing_location {
                     this.stop_editing(window, cx);
                 } else {
                     this.change_selection(|selection, _| selection.clear(), cx);
@@ -1696,6 +1933,8 @@ struct Entry {
     selected: bool,
     /// Has the keyboard focus.
     focused: bool,
+    /// Its name is being edited in place.
+    renaming: bool,
     info: Option<TypeInfo>,
 }
 
@@ -1767,9 +2006,9 @@ fn theme_icon_size(drawn: f32) -> u32 {
 /// into an ellipsis. The current folder is always shown.
 fn crumbs_for_width(width: f32) -> usize {
     match width {
-        w if w >= 900. => 4,
-        w if w >= 640. => 3,
-        w if w >= 480. => 2,
+        w if w >= 1000. => 4,
+        w if w >= 700. => 3,
+        w if w >= 520. => 2,
         _ => 1,
     }
 }
