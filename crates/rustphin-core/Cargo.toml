@@ -1,0 +1,20 @@
+[package]
+name = "rustphin-core"
+description = "Headless, UI-agnostic core of the Rustphin file manager"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+flume.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

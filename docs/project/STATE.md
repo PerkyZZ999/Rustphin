@@ -3,8 +3,8 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — slice S1 not started
-- **Status:** active — planning complete; ready to implement S1
+- **Current phase:** 6 (Vertical-slice implementation) — slice S1 implemented; awaiting the user's visual review
+- **Status:** active — S1 code complete and gated; W-012 (real-desktop review) open
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-12
 
@@ -14,16 +14,19 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-12 — Architecture gate
+- Latest validation entry: VALIDATION.md, 2026-10-12 — Slice S1 checks
 
 ## Open loops
-- Open items carried forward are listed in DISCOVERY.md
+- Task: W-012 — blur and opaque mode not yet seen on the real desktop with the S1 build
+- Task: W-013 — frame times unmeasured (R-101's 60 fps target is validated in S2)
+- Task: UI scenarios are hand-run, not a replayable script
+- Open items carried forward from Discovery are listed in DISCOVERY.md
 
 ## Blockers
 - None
 
 ## Next action
-- Start slice S1 with W-001 (create the Cargo workspace) from WORK_ITEMS.md. Locked decisions: D-001, D-002, D-003, D-006 to D-011 (confirmed by the maintainer, 2026-10-12). Spike code under `spikes/` is disposable reference only; port, do not reuse in place.
+- User runs `rust-tc run` on the real desktop and reviews blur and the opaque mode (W-012). On approval, mark S1 done in ROADMAP.md and seed WORK_ITEMS.md for S2 (views, sorting, selection). The quality gate is `rust-tc doctor`; run it and commit after every task (AGENTS.md).
 
 ## Phase checklist
 - [x] 0 Intake

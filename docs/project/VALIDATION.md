@@ -130,3 +130,27 @@
   - Test strategy, migrations, rollback, secrets, config, observability: ARCHITECTURE.md "Test strategy" and "Operability".
 - **Waiver:** none
 - **Follow-up:** CI provider and repository hosting undecided (D-016, assumption); does not block S1.
+
+### 2026-10-12 — Rust-Toolchain integration
+- **Phase:** 6 Implement (S1, W-002)
+- **Result:** pass
+- **Evidence:** Integrated per `../Rust-Toolchain/RUST-TOOLCHAIN.md`: `justfile`, `deny.toml`, `.config/nextest.toml`, `rust-toolchain.toml` copied from the templates (none existed), project recipes added (`layers`, `msrv`, `bench-listing`, `run`), agent policy merged into AGENTS.md. `rust-tc check`, `rust-tc quick` and `rust-tc doctor` were run and pass; the last run printed "Rust-Toolchain: PASS" with 25 tests passed, `advisories ok, bans ok, licenses ok, sources ok`, cargo-shear "no issues found", feature checks on four crates, the layering check, and `cargo +1.95.0 check` of the workspace.
+- **Project-specific exceptions (in `deny.toml`, each commented):** licences 0BSD, CC0-1.0, MPL-2.0 (in the UI toolkit's tree, GPLv3-compatible) and GPL-3.0-or-later (our crates) allowed; four "unmaintained" advisories ignored for crates that arrive only through the pinned toolkit (`instant`, `paste`, `rustybuzz`, `ttf-parser`); `allow-wildcard-paths` for unpublished workspace path dependencies; `gpui-kit` banned outside `rustphin-ui`.
+- **Waiver:** none
+- **Follow-up:** re-check the advisory ignores at every toolkit upgrade.
+
+### 2026-10-12 — Slice S1 checks
+- **Phase:** 6 Implement (S1)
+- **Result:** pass for everything automated; two items open (below)
+- **Evidence by S1 acceptance point:**
+  - *Builds with one command on Rust 1.95 and stable; checks pass.* `rust-tc doctor` passes, including `cargo +1.95.0 check --workspace --all-targets --all-features`. Release build with stable 1.98.1 succeeded.
+  - *Theme with blur, and opaque mode without.* The blur request and fallback are implemented and unit-tested for the non-Wayland and disabled cases. In the isolated KWin session (no blur protocol) the app logged the fallback and drew the opaque theme (observed in screenshots). **Blur on the real desktop with this build is not yet observed.** Token contrast tests pass for the opaque theme and for the translucent theme over a white window (WCAG AA 4.5:1 for text, 3:1 for the accent).
+  - *Entries listed by name, natural order, folders first; hidden toggle.* Unit tests in `rustphin-core`; observed in the UI: folders before files, `file2.txt` before `file10.txt`, Ctrl+H showing `.config` and `.hidden-file`, status line "11 items, 2 hidden" → "13 items".
+  - *Enter a folder, up, back, forward; type a path; inline errors.* Unit tests for history and failed opens. Observed in the UI: Enter into a folder; Alt+Up returning with the folder just left selected; double-click on an unreadable folder and a typed non-existent path each showing an inline error while the previous folder stays shown and the location bar still names it; empty folder and only-hidden-items states. Back and forward were exercised by unit tests and the toolbar state, not by a UI click.
+  - *500,000 entries: first batch within 200 ms, sorted snapshot within 500 ms; UI accepts input throughout.* `rust-tc bench-listing` through the real model on XFS, warm cache, five runs: first entries 2.3 ms worst, complete sorted listing 144.9 ms worst — PASS. In the UI (release build): the folder showed "500,000 items" and End jumped to the last entry within the 600 ms screenshot delay. Input responsiveness *during* loading and frame times were not measured (W-013).
+  - *Non-UTF-8 and control characters display safely.* Unit tests; observed in the UI as `bad�␊name.txt` on one row.
+- **Test quality (testing-suite skill):** 25 tests. Five mutations were applied by hand to the core (folders-first reversed, digit runs compared as text, history not restored after a failed open, superseded results still published, control characters shown raw). Four were caught at once; the fourth survived, so a deterministic test was added and then failed under that mutation as intended. The same exercise exposed a real ordering race (the completed listing was recorded after its final snapshot was published), fixed by recording first; the suite then passed 25 consecutive runs.
+- **Defects found by UI testing and fixed:** (1) an error banner was cleared by the next re-sort and a failed open dropped the selection; (2) list shortcuts fired while typing in the location field — Enter also activated the selected row, which made a failed typed path revert to the wrong folder, and Backspace would navigate up; fixed with a `Browser && !Input` key context; (3) End with nothing selected chose the first row; fixed, with selection movement extracted into a unit-tested function. Fix (3) is covered by unit tests but was not re-run in the UI.
+- **Not verified:** blur on the real desktop with this build; frame times; back/forward by mouse; behaviour on Btrfs or with a cold cache; the UI scenarios exist as a hand-run sequence, not a replayable script.
+- **Waiver:** none
+- **Follow-up:** W-012 (user's visual review), W-013 (frame timing, in S2).

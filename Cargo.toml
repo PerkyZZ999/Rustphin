@@ -1,0 +1,45 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+exclude = ["spikes"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "GPL-3.0-or-later"
+publish = false
+
+[workspace.dependencies]
+rustphin-core = { path = "crates/rustphin-core" }
+rustphin-platform = { path = "crates/rustphin-platform" }
+rustphin-ui = { path = "crates/rustphin-ui" }
+
+flume = { version = "0.11", default-features = false, features = ["async"] }
+rayon = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tempfile = "3"
+
+# UI toolkit, pinned exactly (decision D-001). Upgrade only as a planned work item.
+gpui-kit = "=0.7.3"
+
+# Direct Wayland access for the platform layer; versions match gpui-pre 0.3.9's lockfile.
+raw-window-handle = "0.6"
+wayland-backend = { version = "0.3", features = ["client_system"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+dbg_macro = "deny"
+todo = "deny"
+
+[profile.release]
+debug = "line-tables-only"

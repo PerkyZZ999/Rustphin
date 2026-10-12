@@ -26,7 +26,7 @@ Status on 2026-10-12: D-001 to D-003 and D-006 to D-011 are **locked** (confirme
 - **Decision:** A Cargo workspace of three layers with one-way dependencies: `rustphin-core` (directory model, sorting, selection, operation engine, undo, batch rename, fuzzy matching; no UI or desktop dependencies) ← `rustphin-platform` (Wayland, D-Bus, UDisks2, trash, thumbnails, places, MIME, icons; behind traits) ← `rustphin-ui` (GPUI views only). Core and platform never depend on GPUI.
 - **Rationale:** Keeps the toolkit replaceable; lets file operations be tested exhaustively without a display; makes performance measurable headlessly.
 - **Evidence:** Listing benchmark ran headless (VALIDATION.md).
-- **Consequences:** Some state is mirrored between core snapshots and views; trait boundaries add indirection; discipline is needed to keep GPUI types out of the lower layers (enforced by an `xtask` dependency check).
+- **Consequences:** Some state is mirrored between core snapshots and views; trait boundaries add indirection; discipline is needed to keep GPUI types out of the lower layers (enforced by `rust-tc layers` and `deny.toml`).
 - **Alternatives:** Single crate (rejected: couples logic to a pre-1.0 toolkit).
 - **Reopen criteria:** The boundary causes measurable overhead in the view (R-101 misses) or persistent duplicated state that tests cannot keep consistent.
 - **Confirmed by / date:** The maintainer, 2026-10-12
@@ -158,4 +158,4 @@ Status on 2026-10-12: D-001 to D-003 and D-006 to D-011 are **locked** (confirme
 ## D-016 — Repository and hosting
 - **Status:** assumption
 - **Date:** 2026-10-12
-- **Decision:** Local git repository on `main` only (user, 2026-10-12): no remote and no hosted CI. The checks a CI would run are an `xtask` command run locally before each commit.
+- **Decision:** Local git repository on `main` only (user, 2026-10-12): no remote and no hosted CI. The checks a CI would run are `rust-tc doctor` (the user's Rust-Toolchain), run locally after every task and before each commit.

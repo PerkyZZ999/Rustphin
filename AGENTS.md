@@ -32,6 +32,31 @@ Rules that follow from it:
 - **One slice at a time.** Implement the current slice's work items; do not start later slices' features.
 - Ask the user before: changing MVP scope, locking or changing a decision, anything destructive, publishing anything.
 
+## After every task
+
+A task is one work item or one coherent step. When it is done, in this order:
+
+1. Run all checks: `rust-tc doctor`. Fix every failure; do not suppress findings to get a pass.
+2. Update `docs/project/` (`WORK_ITEMS.md`, `VALIDATION.md`, `STATE.md`) to match what was done and what was actually verified.
+3. Commit (see [Commits](#commits)).
+
+Do not start the next task with failing checks or uncommitted work.
+
+## Required skills
+
+Load and follow these skills whenever the work matches. They are mandatory for this project.
+
+| Work | Skill |
+|---|---|
+| Writing, reviewing, fixing or auditing any test | `~/.agents/skills/devops-quality/testing-suite` (read its `references/rust.md`) |
+| Any frontend, visual design or UI/UX work | `~/.agents/skills/web-design/craft-beautiful-frontend` |
+| Adding, choosing or reviewing icons | `~/.agents/skills/web-design/iconography-frontend-ui` |
+
+Notes on applying them here:
+
+- Testing: every new test must pass the two litmus tests (fails when the behaviour breaks; survives a refactor). Prove new tests by breaking the code under test and seeing them fail. A bug fix starts with a failing regression test.
+- The two design skills are written for web CSS. Apply their rules, tables and quality gates to GPUI: all visual values come from the tokens in `crates/rustphin-ui/src/theme.rs` (4-pixel spacing grid, semantic colour names, one corner radius); text meets WCAG AA and is covered by the contrast tests there; state is never shown by colour alone; every empty, loading and error state says what happened and what to do; icons come from GPUI-Kit's bundled Lucide set, sized on the 4/8-pixel grid, and icon-only buttons carry a tooltip.
+
 ## Architecture rules
 
 Cargo workspace, dependencies point one way: `rustphin-ui` → `rustphin-platform` → `rustphin-core`.
@@ -42,7 +67,8 @@ Cargo workspace, dependencies point one way: `rustphin-ui` → `rustphin-platfor
 | `rustphin-platform` | Blur, file clipboard, devices, trash, thumbnails, places, MIME, icons | Depend on `gpui-kit` |
 | `rustphin-ui` | Theme, views, key bindings, bridge to the core | Touch the filesystem directly |
 | `rustphin` | Binary; wiring only | Hold logic |
-| `xtask` | Developer commands | Ship |
+
+The layering is enforced by `rust-tc layers` (part of `rust-tc doctor`) and by the `gpui-kit` ban in `deny.toml`.
 
 - No work on the UI thread: listing, metadata, sorting, thumbnails and file operations run on the core's own worker pools and reach the UI as immutable snapshots over channels. No Tokio or other general async runtime in the core (D-009).
 - All file mutations go through the core's operation engine (D-011): write under a temporary name then rename; verify before deleting a move's source; never overwrite or permanently delete without an explicit user choice; delete means trash.
@@ -52,40 +78,59 @@ Cargo workspace, dependencies point one way: `rustphin-ui` → `rustphin-platfor
 
 ## Setup
 
-Requirements: Rust (rustup, stable ≥ 1.95), a Wayland session, a working Vulkan driver, and the Wayland, xkbcommon and fontconfig development packages.
-
-The Cargo workspace is created by work item W-001. Until it lands, the only buildable code is the disposable spikes:
+Requirements: Rust through rustup (stable, plus the `1.95.0` toolchain for the minimum-version check), a Wayland session, a working Vulkan driver, the Wayland, xkbcommon and fontconfig development packages, and the Rust-Toolchain tools: `rust-tc`, `just`, `cargo-deny`, `cargo-shear`, `cargo-nextest`, `cargo-hack` (`cargo-llvm-cov` for optional coverage). Install instructions are in `../Rust-Toolchain/RUST-TOOLCHAIN.md`.
 
 ```bash
-cargo build --release --manifest-path spikes/gpui-toolkit/Cargo.toml
-cargo build --release --manifest-path spikes/gpui-kit-check/Cargo.toml
-cargo build --release --manifest-path spikes/listing-bench/Cargo.toml
+rust-tc run                # build and run, opening the home folder
+rust-tc run ~/Documents    # open a specific folder
 ```
 
-A cold GPUI build takes about two to three minutes.
+Environment variables: `RUSTPHIN_OPAQUE=1` forces the opaque theme; `RUSTPHIN_LOG=debug` sets the log level (logs go to stderr).
 
-When W-001 and W-002 land, replace this section and the next two with the real workspace commands, and verify each one runs.
+A cold build of the UI toolkit takes two to three minutes.
+
+## Quality gate: Rust-Toolchain
+
+`rust-tc` is the only check entry point. It wraps the repository `justfile`; do not tell anyone to run `just` directly, and do not add parallel homemade check scripts.
+
+| Command | Runs | When |
+|---|---|---|
+| `rust-tc check` | compiler only | fastest feedback while editing |
+| `rust-tc quick` | format, check, clippy, tests, doctests | after meaningful edits |
+| `rust-tc doctor` | format, clippy, tests, doctests, `cargo-deny`, `cargo-shear`, feature checks, `layers`, `msrv` | after every task, before committing |
+| `rust-tc bench-listing` | 500,000-entry listing benchmark; fails if R-101's thresholds are missed | after changing listing, sorting or the model |
+| `rust-tc deep`, `mutants`, `miri` | deeper checks | on demand, not after every edit |
+
+Hard rules:
+
+- Do not add `cargo-audit` (`cargo-deny` owns advisories). Do not invoke the separate `rust-doctor` binary. Do not add SonarQube.
+- Do not blanket-allow lints. An `allow` needs an understood, intentional reason, the narrowest scope, and a comment when not obvious.
+- Do not invent fuzz targets to satisfy the toolchain.
+- `deny.toml` is reviewed for this project. Its four advisory ignores are "unmaintained" notices for crates that arrive only through the pinned UI toolkit; re-check them at every toolkit upgrade. New licences or ignores need a comment saying why.
+- `rust-tc miri` is expected for changes to the `unsafe` code in `rustphin-platform` where it can run.
 
 ## Development workflow
 
 - Keep `gpui-kit` pinned exactly. Never run `cargo update` for it or change its version as a side effect; an upgrade is its own planned work item.
 - Add dependencies sparingly and check the licence first.
-- `spikes/` is throwaway reference code from Discovery. Port ideas from it; do not depend on it or extend it.
+- `spikes/` is throwaway reference code from Discovery, outside the workspace. Port ideas from it; do not depend on it or extend it.
+- GPUI APIs differ between the pinned snapshot and Zed's `main`. When unsure, read the pinned source under `~/.cargo/registry/src/*/gpui-pre-0.3.9/` and `gpui-component-0.7.3/`.
 
 ## Testing
 
-Planned strategy (see `ARCHITECTURE.md`); commands are added as each piece exists:
+Follow the testing-suite skill. Layout and tools:
 
-- Core: unit and property tests; fault-injection tests through the `Fs` trait for every file operation; headless benchmarks on generated 500,000-entry directories.
+- Unit tests live in `#[cfg(test)] mod tests` beside the code; runner is `cargo-nextest` through `rust-tc`.
+- Core: behaviour through the public model API where possible; fakes of the `Fs` trait instead of mocks; fault injection through `Fs` for every file operation; no sleeps (wait on model events).
 - Platform: fixture and contract tests; D-Bus services against a mocked bus.
-- UI: scripted scenarios in an **isolated KWin session with an isolated home directory** (kwin-mcp `session_start` with `isolate_home: true`). Never run test instances of Rustphin or Dolphin against the user's real home, and never use the user's real files as test data.
-- Add or update tests with every change. File-operation UI must not be enabled before the operation engine's fault-injection suite passes.
+- UI: pure logic (selection movement, path expansion, formatting, token contrast) is unit-tested. Interaction is checked by scripted scenarios in an **isolated KWin session with an isolated home directory** (kwin-mcp `session_start` with `isolate_home: true`). Never run test instances of Rustphin or Dolphin against the user's real home, and never use the user's real files as test data. Wait for the window before sending input: the app takes a moment to start.
+- File-operation UI must not be enabled before the operation engine's fault-injection suite passes.
 
 Performance targets on a 500,000-entry directory (R-101): first entries within 200 ms, re-sort within 500 ms, 60 fps scrolling, no UI-thread task over 16 ms.
 
 ## Code style
 
-- `cargo fmt` and `cargo clippy` clean, with warnings denied.
+- `cargo fmt` and `cargo clippy` clean, with warnings denied (both run by `rust-tc`). Workspace lints deny `unwrap`, `expect`, `dbg!` and `todo!` outside tests.
 - Errors: typed errors in library crates (`thiserror`-style enums); no `unwrap`/`expect` on fallible I/O outside tests.
 - `unsafe` only in `rustphin-platform`, each block with a `// SAFETY:` comment.
 - Public items in `rustphin-core` and `rustphin-platform` carry doc comments.
@@ -95,7 +140,7 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 
 - Local commits on `main`; small and focused, one work item or coherent step each.
 - Message: imperative summary line (≤ 72 characters), blank line, then why. Reference the work item or requirement, for example `W-004` or `R-101`.
-- Before committing: format, lint and tests pass, and `docs/project/` reflects what changed (`WORK_ITEMS.md`, `VALIDATION.md`, `STATE.md`).
+- Commit after every task, once `rust-tc doctor` passes and `docs/project/` reflects what changed. Never commit with failing checks.
 
 ## Reference material
 
@@ -108,3 +153,5 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 - GPUI's own clipboard cannot exchange files with other applications, and its blur uses a protocol current KWin does not offer. Use the platform layer's implementations.
 - GPUI cannot blur content inside the window. Menus, the palette and dialogs are tinted opaque surfaces by design (D-007).
 - The user's Dolphin reports Ctrl+V as an ambiguous shortcut; in UI tests paste through Dolphin's context menu.
+- Key bindings that also edit text (arrows, Enter, Backspace, Home, End) must use the `Browser && !Input` context, or they fire while the user types in a text field.
+- Isolated KWin sessions offer no blur protocol, so Rustphin shows its opaque theme there. Blur can only be reviewed on the real desktop.

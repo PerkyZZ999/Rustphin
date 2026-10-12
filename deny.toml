@@ -1,0 +1,65 @@
+# Rust-Toolchain dependency policy, reviewed for Rustphin on 2026-10-12.
+# Rustphin is GPL-3.0-or-later (decision D-003): every licence allowed here
+# must be compatible with GPLv3.
+# See https://embarkstudios.github.io/cargo-deny/ for full options.
+
+[graph]
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+]
+all-features = true
+
+[advisories]
+yanked = "deny"
+# "Unmaintained" notices (not vulnerabilities) for crates that arrive only
+# through the pinned UI toolkit, gpui-kit =0.7.3 / gpui-pre =0.3.9 (decision
+# D-001). They cannot be replaced from this workspace. Re-check this list at
+# every toolkit upgrade and delete entries that no longer apply.
+ignore = [
+    { id = "RUSTSEC-2024-0384", reason = "instant: transitive dependency of the pinned UI toolkit" },
+    { id = "RUSTSEC-2024-0436", reason = "paste: transitive dependency of the pinned UI toolkit" },
+    { id = "RUSTSEC-2026-0206", reason = "rustybuzz: text shaping inside the pinned UI toolkit" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser: font parsing inside the pinned UI toolkit" },
+]
+
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    # Present in the UI toolkit's dependency tree; all GPLv3-compatible.
+    "0BSD",
+    "CC0-1.0",
+    "MPL-2.0",
+    # Rustphin's own crates.
+    "GPL-3.0-or-later",
+]
+unused-allowed-license = "allow"
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Workspace crates depend on each other by path and are never published.
+allow-wildcard-paths = true
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+# Layering (decision D-002): only the UI crate may depend on the UI toolkit.
+deny = [
+    { crate = "gpui-kit", wrappers = ["rustphin-ui"] },
+]
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

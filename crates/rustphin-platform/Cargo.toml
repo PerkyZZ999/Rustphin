@@ -1,0 +1,26 @@
+[package]
+name = "rustphin-platform"
+description = "Desktop integration for Rustphin: Wayland, D-Bus and XDG services"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints.rust]
+# This crate is the only place allowed to use `unsafe` (see AGENTS.md).
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+dbg_macro = "deny"
+todo = "deny"
+undocumented_unsafe_blocks = "deny"
+
+[dependencies]
+raw-window-handle.workspace = true
+thiserror.workspace = true
+wayland-backend.workspace = true
+wayland-client.workspace = true
+wayland-protocols.workspace = true

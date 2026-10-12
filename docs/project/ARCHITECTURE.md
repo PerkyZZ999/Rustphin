@@ -43,7 +43,7 @@ flowchart LR
 | `rustphin-platform` | Wayland integrations (blur, file clipboard), UDisks2 devices, `FileManager1` service, freedesktop trash, thumbnail cache and generators, shared places file and place groups, MIME detection, icon-theme lookup, launching applications, atomic config I/O | Each capability is a trait with a real implementation and a fallback or mock (D-010). No GPUI dependency, apart from accepting raw window handles for blur. |
 | `rustphin-ui` | Theme tokens, views, actions and key bindings, the bridge that turns core channels into GPUI entity updates | Only crate that depends on `gpui-kit` (D-001, D-002). Never calls the filesystem directly (D-011). |
 | `rustphin` (binary) | Composition root: parses arguments, builds platform services, starts the core and the UI | Thin; holds no logic. |
-| `xtask` | Developer commands: benchmarks, dependency-direction check, licence check | Not shipped. |
+| `justfile` (via `rust-tc`) | Developer commands and the quality gate: checks, layering check, minimum-version build, benchmarks | Not shipped. The user's Rust-Toolchain; replaces the `xtask` crate first planned. |
 
 ### Core internals
 
@@ -107,13 +107,13 @@ Stale results are discarded by generation number, so a fast navigation never sho
 - **Logging/metrics:** structured logs through `tracing` to stderr and a rotating file in the state directory; level set by an environment variable. A hidden diagnostics view shows frame time and worker queue depth. No telemetry.
 - **Migrations:** only Rustphin's own config files; shared files are never migrated.
 - **Rollback sketch:** Rustphin never replaces Dolphin. Reverting means changing the default file manager back; shared data (places, trash, thumbnails) stays valid for Dolphin at all times. Releases are tagged so a previous build can be reinstalled.
-- **Checks:** format, lints, tests, headless benchmarks, dependency-direction check and licence check, run locally through `xtask` before each commit, on Rust 1.95 and current stable. The repository is local only; there is no hosted CI (D-016).
+- **Checks:** `rust-tc doctor` runs format, clippy, tests, doctests, `cargo-deny` (advisories, licences, bans, sources), `cargo-shear`, feature checks, the layering check and a build on Rust 1.95. `rust-tc bench-listing` runs the headless benchmark. All local; there is no hosted CI (D-016).
 
 ## Alignment to locks
 
 - D-001 → only `rustphin-ui` depends on `gpui-kit`, pinned `=0.7.3`; upgrades are roadmap items.
-- D-002 → three layers with one-way dependencies, enforced by an `xtask` check.
-- D-003 → every crate declares GPL-3.0-or-later; licence check in `xtask`.
+- D-002 → three layers with one-way dependencies, enforced by `rust-tc layers` and a `gpui-kit` ban in `deny.toml`.
+- D-003 → every crate declares GPL-3.0-or-later; licences checked by `cargo-deny`.
 - D-006 → Wayland-only features compiled; no X11 backend.
 - D-007 → theme tokens in `rustphin-ui`; opaque mode driven by the platform blur trait.
 - D-008 → `places` module in the platform layer reads/writes the shared file and a separate groups file keyed by place ID.

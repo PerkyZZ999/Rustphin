@@ -13,7 +13,7 @@ Each slice ends with something the author can run and use, and with its acceptan
   - Names with invalid UTF-8 and control characters display safely.
 - **Requirements:** R-001 (navigation part), R-101 (first entries, input responsiveness), R-104 (names), R-105 (window and fallback), R-109
 - **Validation:** test, bench, ui-test, manual visual review
-- **Status:** todo
+- **Status:** doing — implemented and gated; manual visual review on the real desktop outstanding
 
 ## Slice S2 — Views, sorting, selection
 - **Outcome:** Icons, compact and details views with sortable columns, zoom, file-type icons, and full selection and keyboard navigation.
