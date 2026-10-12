@@ -31,6 +31,7 @@ use crate::{
     filetypes::{Database, TypeInfo},
     format::{self, count, plural},
     layout::{self, Layout, ViewMode},
+    settings::Settings,
     theme::{Theme, size, space, text},
 };
 
@@ -170,13 +171,25 @@ pub struct Browser {
     per_row: usize,
     /// Bumped when the icon size changes, so lookups for the old size are dropped.
     icon_epoch: u64,
+    /// Where view settings are stored; `None` when they must not be written.
+    settings_path: Option<PathBuf>,
+    /// The settings as last written, to skip writes that change nothing.
+    saved: Settings,
     scroll: UniformListScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Browser {
     /// Creates the view and starts listing `start`.
-    pub fn new(start: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        start: PathBuf,
+        settings: Settings,
+        settings_path: Option<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        // Never overwrite a file a later version of Rustphin wrote.
+        let settings_path = settings_path.filter(|_| !settings.is_from_newer_version());
         let location_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Enter a folder path"));
         let subscriptions = vec![cx.subscribe_in(&location_input, window, Self::on_location_input)];
@@ -200,20 +213,18 @@ impl Browser {
             type_info: HashMap::new(),
             types_pending: HashSet::new(),
             zone: TimeZone::system(),
-            mode: ViewMode::default(),
-            zoom: layout::DEFAULT_ZOOM,
+            mode: settings.mode(),
+            zoom: settings.zoom(),
             per_row: 1,
             icon_epoch: 0,
+            settings_path,
+            saved: settings.clone(),
             scroll: UniformListScrollHandle::new(),
             _subscriptions: subscriptions,
         };
         match DirectoryModel::new(Arc::new(RealFs)) {
             Ok((mut model, events)) => {
-                // The details view shows sizes and dates, so always load them.
-                model.set_options(ViewOptions {
-                    details: true,
-                    ..ViewOptions::default()
-                });
+                model.set_options(settings.options());
                 this.model = Some(model);
                 this.load_file_types(cx);
                 cx.spawn(async move |view, cx| {
@@ -470,6 +481,27 @@ impl Browser {
         None
     }
 
+    /// Stores the view settings if they changed, on a background thread.
+    fn save_settings(&mut self, cx: &mut Context<Self>) {
+        let (Some(path), Some(model)) = (self.settings_path.clone(), &self.model) else {
+            return;
+        };
+        let settings = Settings::new(self.mode, self.zoom, model.options());
+        if settings == self.saved {
+            return;
+        }
+        self.saved = settings.clone();
+        cx.background_executor()
+            .spawn(async move {
+                let text = settings.to_toml();
+                if let Err(error) = rustphin_platform::config::write_atomic(&path, text.as_bytes())
+                {
+                    tracing::warn!(%error, path = %path.display(), "could not save the settings");
+                }
+            })
+            .detach();
+    }
+
     /// Forgets resolved icons after the icon size changed; rows ask again.
     fn icon_size_changed(&mut self) {
         self.icon_epoch += 1;
@@ -493,6 +525,7 @@ impl Browser {
                 self.generation = generation;
             }
         }
+        self.save_settings(cx);
         cx.notify();
     }
 
@@ -500,6 +533,7 @@ impl Browser {
         if self.zoom != zoom {
             self.zoom = zoom;
             self.icon_size_changed();
+            self.save_settings(cx);
             cx.notify();
         }
     }
@@ -515,6 +549,7 @@ impl Browser {
         };
         if let Some(generation) = model.set_options(options) {
             self.generation = generation;
+            self.save_settings(cx);
             cx.notify();
         }
     }
@@ -528,6 +563,7 @@ impl Browser {
         };
         if let Some(generation) = model.set_options(options) {
             self.generation = generation;
+            self.save_settings(cx);
             cx.notify();
         }
     }

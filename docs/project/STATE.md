@@ -3,7 +3,7 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S2 in progress (W-014 to W-020 done)
+- **Current phase:** 6 (Vertical-slice implementation) — S2 in progress (W-014 to W-021 done)
 - **Status:** active — S2 under way
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-12
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-12 — W-019
+- Latest validation entry: VALIDATION.md, 2026-10-12 — W-021
 
 ## Open loops
 - Task: W-023 — first details load on a cold inode cache took 1.7 s for 500,000 files, over R-101's 500 ms
@@ -26,7 +26,7 @@
 - None
 
 ## Next action
-- Continue S2 with W-021 (persist view mode, sort and zoom), then W-024 (rubber band), W-023 (progressive details), W-013 (frame times, memory), W-022 (replayable UI script). Run `rust-tc doctor` and commit after every task.
+- Remaining in S2: W-013 (frame times and memory on 500,000 entries), W-023 (progressive details loading), W-024 (rubber-band selection), W-022 (replayable UI script). Run `rust-tc doctor` and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

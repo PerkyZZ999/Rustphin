@@ -15,4 +15,6 @@ rustphin-core.workspace = true
 rustphin-platform.workspace = true
 gpui-kit.workspace = true
 jiff.workspace = true
+serde.workspace = true
+toml.workspace = true
 tracing.workspace = true

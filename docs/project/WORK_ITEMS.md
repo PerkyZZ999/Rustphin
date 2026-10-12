@@ -7,12 +7,12 @@ S2 — Views, sorting, selection
 
 ## Queue
 - [ ] W-024 — UI rubber-band selection by dragging over the list, split out of W-020 (R-004)
-- [ ] W-021 — Persist view mode, sort and zoom between sessions: TOML under the XDG config directory, written atomically, read through the platform layer (R-003)
 - [ ] W-013 — Frame-time measurement while scrolling and while a 500,000-entry listing streams in; memory with that folder open and after closing it (R-101, R-102)
 - [ ] W-023 — Core: load details progressively, visible rows first, and publish as they arrive, so the first sort by size or date in a large folder with a cold inode cache stays within R-101 (measured 1.7 s for 500,000 files; see VALIDATION.md) (R-101)
 - [ ] W-022 — Replayable UI scenario script for navigation and views in an isolated KWin session (R-001, R-003, R-004)
 
 ## Done (recent)
+- [x] W-021 — View mode, zoom, sort, direction, hidden-files and folders-first settings saved as TOML in `$XDG_CONFIG_HOME/rustphin/settings.toml`, written atomically on a background thread and restored at start; unreadable files fall back to defaults; files from a newer version are not overwritten (R-003)
 - [x] W-019 — UI icons and compact views as virtualised grids, five zoom levels in all three modes (Ctrl+=, Ctrl+-, Ctrl+0), view-mode buttons and Ctrl+1/2/3, arrow keys moving by row and column in grids (R-003)
 - [x] W-020 — UI multi-selection on the core `Selection`: click, Ctrl+click, Shift+click, Shift+arrows/Home/End/Page keys, Ctrl+A, Ctrl+Shift+A (invert), Escape to clear, type-ahead by name, selected count in the status line. Rubber band moved to W-024 (R-004)
 - [x] W-018 — UI details view: name, size, modified and type columns; clickable headings that sort and show direction with an arrow; system-theme icons and type descriptions resolved in the background; narrow windows drop the type then the date column; the list sits on a more solid surface than the glass chrome (R-003, R-014 icons)

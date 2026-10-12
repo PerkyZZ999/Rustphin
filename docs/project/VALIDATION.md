@@ -241,10 +241,21 @@
 - **Phase:** 6 Implement (S2)
 - **Result:** pass for what was exercised
 - **Evidence:**
-  - `rust-tc doctor` PASS, 79 tests. New unit tests cover the geometry of each mode at each zoom level (sizes on the 4-pixel grid, zooming never shrinking anything, whole cells per row, at least one column, zoom steps clamped) and the icon size requested from the theme.
+  - `rust-tc doctor` PASS, 78 tests. New unit tests cover the geometry of each mode at each zoom level (sizes on the 4-pixel grid, zooming never shrinking anything, whole cells per row, at least one column, zoom steps clamped) and the icon size requested from the theme.
   - Observed in an isolated KWin session: Ctrl+1 showed a grid of large theme icons with names underneath, and Down then Right moved the selection to the second cell; Ctrl+2 showed the compact grid with small icons beside names; Ctrl+= enlarged the compact icons and widened the cells from four to three per row; the three view-mode buttons show their icons with the active one highlighted.
 - **Defect found and fixed:** the view-mode buttons were blank because the default icon bundle lacks those icons; the application now embeds the complete icon set.
 - **Deviations:** the compact view fills rows left to right and scrolls vertically, where Dolphin's fills columns and scrolls horizontally; embedding the complete icon set makes the binary larger (not measured).
 - **Not verified:** zoom out and reset; zoom in the icons and details modes; clicking the view-mode buttons (keyboard shortcuts were used); very large folders in the grid modes; names longer than two lines in the icons view; view mode and zoom are not yet remembered (W-021).
 - **Waiver:** none
 - **Follow-up:** W-021, W-013 (frame times should include the grid modes).
+
+### 2026-10-12 — W-021: remembered view settings
+- **Phase:** 6 Implement (S2)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS, 91 tests. New tests: atomic write in the platform layer (creates folders, replaces the file, leaves no temporary file, a failed write keeps the old file) and the settings format in the UI (round trip, readable key names, defaults for an empty file, missing and unknown keys, damaged files and wrong values, zoom clamping, newer-version detection).
+  - Observed in an isolated KWin session with an isolated home: after Ctrl+1, Ctrl+= and Ctrl+H the file `.config/rustphin/settings.toml` held `mode = "icons"`, `zoom = 2`, `show_hidden = true`; after closing and relaunching, the window opened in the icons view at that zoom with `.hidden` shown.
+- **Not verified:** restoring the sort column and direction in the UI (covered by the format tests only); the "do not overwrite a newer file" path in the running app (its detection is unit-tested); behaviour when the config folder is not writable (a warning is logged; not exercised).
+- **Deviation:** settings are global, not per folder as Dolphin can do.
+- **Waiver:** none
+- **Follow-up:** none

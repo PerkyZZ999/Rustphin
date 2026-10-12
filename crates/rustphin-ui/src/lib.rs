@@ -7,6 +7,7 @@ mod browser;
 mod filetypes;
 mod format;
 mod layout;
+mod settings;
 mod theme;
 
 use std::path::PathBuf;
@@ -17,7 +18,7 @@ use gpui_kit::{
 };
 use rustphin_platform::blur::{BackgroundBlur, NoBlur, WaylandBlur};
 
-use crate::{browser::Browser, theme::Theme};
+use crate::{browser::Browser, settings::Settings, theme::Theme};
 
 /// How the application should start.
 #[derive(Debug, Clone)]
@@ -30,6 +31,20 @@ pub struct Options {
 
 /// Runs the application until its last window closes.
 pub fn run(options: Options) {
+    // A small file read once before the window exists.
+    let settings_path =
+        rustphin_platform::config::config_dir().map(|dir| dir.join("settings.toml"));
+    let settings = settings_path
+        .as_deref()
+        .and_then(|path| match rustphin_platform::config::read(path) {
+            Ok(text) => text,
+            Err(error) => {
+                tracing::warn!(%error, path = %path.display(), "could not read the settings");
+                None
+            }
+        })
+        .map(|text| Settings::parse(&text))
+        .unwrap_or_default();
     gpui_kit::application()
         // The complete icon set: the default bundle lacks the view-mode icons.
         .with_assets(gpui_kit::assets::AllAssets)
@@ -78,7 +93,15 @@ pub fn run(options: Options) {
                 theme.apply_to_components(cx);
                 cx.set_global(theme);
                 window.set_window_title("Rustphin");
-                let browser = cx.new(|cx| Browser::new(options.start.clone(), window, cx));
+                let browser = cx.new(|cx| {
+                    Browser::new(
+                        options.start.clone(),
+                        settings.clone(),
+                        settings_path.clone(),
+                        window,
+                        cx,
+                    )
+                });
                 // The component library's root paints its own opaque background
                 // under the view. Clear it: the browser paints the window
                 // background itself, translucent when the compositor blurs.

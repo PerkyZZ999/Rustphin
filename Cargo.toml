@@ -16,6 +16,8 @@ rustphin-platform = { path = "crates/rustphin-platform" }
 rustphin-ui = { path = "crates/rustphin-ui" }
 
 jiff = "0.2"
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
 flume = { version = "0.11", default-features = false, features = ["async"] }
 rayon = "1"
 thiserror = "2"

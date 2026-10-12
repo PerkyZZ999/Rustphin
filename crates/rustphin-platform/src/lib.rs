@@ -5,6 +5,7 @@
 //! toolkit; it is the only crate in the workspace allowed to use `unsafe`.
 
 pub mod blur;
+pub mod config;
 pub mod icons;
 pub mod mime;
 pub mod xdg;
