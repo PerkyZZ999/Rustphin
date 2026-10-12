@@ -293,3 +293,18 @@
 - **Other observation:** the release binary is 309 MB with line tables and 43 MB stripped.
 - **Waiver:** none
 - **Follow-up:** look at the start-up gap when working on W-023; measure on the live desktop before the release gate.
+
+### 2026-10-12 — W-023: progressive details loading
+- **Phase:** 6 Implement (S2)
+- **Result:** pass; the cold-cache sort itself is still over the R-101 limit
+- **Evidence:**
+  - `rust-tc doctor` PASS, 100 tests. New tests: details arrive for the top of the list before the rest; rows keep name order until a size sort has every size; hidden entries stay hidden while details load.
+  - Mutation checks: four breakages by hand. "Partial results sorted by half-known sizes" and "no partial results at all" were caught. "Hidden entries shown while loading" survived, a test was added, and it then failed under the mutation. "Only one partial result published" still survives: it changes how often partial results appear, not what the user ends up seeing, and no test pins the cadence.
+  - `rust-tc bench-listing`, 500,000 files. With a cold inode cache (first run after the machine had been idle): sizes and dates for the top of the list after **207 ms**, for all entries after **5,314 ms**. Before this change nothing was shown until the full load finished (1,748 ms in the earlier cold run). With a warm cache on an otherwise idle machine: top after 74 ms, all after 252–322 ms (153 ms before this change: publishing partial results costs about 100–170 ms in total).
+  - Observed in the application (release build, isolated session, 500,000-entry folder): sizes, dates and types shown, and clicking Size put its arrow on the heading with the list still populated.
+- **Measurement conditions:** the cold run and the three runs after it were taken while a game was using the machine (load average 19); under that load the benchmark still passed its limits (sorted listing 305–394 ms, slowest re-sort 141–194 ms).
+- **Still open against R-101:** the first sort by size or date in a very large folder with a cold cache takes as long as reading every entry's details (seconds), over the 500 ms limit. The list stays populated in name order meanwhile. This is bounded by disk reads, not by sorting.
+- **Deviation:** "visible rows first" is approximated by reading in display order from the top; the view does not tell the core where the user has scrolled to.
+- **Not verified:** how the list looks while details arrive on a slow filesystem (rows fill in top-down); network and FUSE mounts.
+- **Waiver:** none
+- **Follow-up:** decide with the user whether R-101's re-sort limit should apply only once details are loaded.

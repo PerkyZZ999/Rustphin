@@ -3,7 +3,7 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S2 in progress (only W-023 and W-024 left)
+- **Current phase:** 6 (Vertical-slice implementation) — S2 in progress (only W-024 left)
 - **Status:** active — S2 under way
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-12
@@ -14,10 +14,10 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-12 — W-013
+- Latest validation entry: VALIDATION.md, 2026-10-12 — W-023
 
 ## Open loops
-- Task: W-023 — first details load on a cold inode cache took 1.7 s for 500,000 files, over R-101's 500 ms
+- Product: R-101's 500 ms re-sort limit cannot hold for the first size or date sort of a huge folder with a cold cache (5.3 s measured); needs the user's decision on the requirement's wording
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
 - Product: nothing is exposed over AT-SPI in test sessions; affects R-107, to resolve in S11
 - Open items carried forward from Discovery are listed in DISCOVERY.md
@@ -26,7 +26,7 @@
 - None
 
 ## Next action
-- Remaining in S2: W-023 (progressive details loading), W-024 (rubber-band selection). Verify UI changes yourself by replaying `docs/project/UI_SCENARIOS.md` through kwin-mcp. Run `rust-tc doctor` and commit after every task.
+- Remaining in S2: W-024 (rubber-band selection), then the S2 gate. Verify UI changes yourself by replaying `docs/project/UI_SCENARIOS.md` through kwin-mcp. Run `rust-tc doctor` and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

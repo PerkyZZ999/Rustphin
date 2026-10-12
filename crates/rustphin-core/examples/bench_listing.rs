@@ -82,17 +82,37 @@ fn measure_resorts(dir: &Path) -> Result<Resorts, Box<dyn Error>> {
     let (mut model, events) = DirectoryModel::new(Arc::new(RealFs))?;
     settle(&events, model.open(dir), Instant::now())?;
 
+    let base = ViewOptions {
+        details: true,
+        ..ViewOptions::default()
+    };
+    // Time until sizes and dates are known for the top of the list, and for all of it.
+    let start = Instant::now();
+    let generation = model.set_options(base).ok_or("options did not change")?;
+    let mut first_details = None;
+    loop {
+        if let ModelEvent::Snapshot(snapshot) = events.recv()?
+            && snapshot.generation() == generation
+        {
+            if first_details.is_none() && snapshot.metadata(0).is_some() {
+                first_details = Some(start.elapsed());
+            }
+            if !snapshot.is_loading() {
+                break;
+            }
+        }
+    }
+    let details = start.elapsed();
+    println!(
+        "sizes and dates at the top {:>6.1} ms",
+        first_details.unwrap_or(details).as_secs_f64() * 1e3
+    );
     let mut switch = |options: ViewOptions| -> Result<Duration, Box<dyn Error>> {
         let start = Instant::now();
         let generation = model.set_options(options).ok_or("options did not change")?;
         settle(&events, generation, start)?;
         Ok(start.elapsed())
     };
-    let base = ViewOptions {
-        details: true,
-        ..ViewOptions::default()
-    };
-    let details = switch(base)?;
     let mut timings = Vec::new();
     for (label, sort, descending) in [
         ("size", SortKey::Size, false),

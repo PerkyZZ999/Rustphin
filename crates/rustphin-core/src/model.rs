@@ -18,6 +18,9 @@ use crate::{
     CHUNK_LEN, Chunk, EntryKind, EntryStore, Fs, Metadata, SortKey, details::Details, sort,
 };
 
+/// Entries whose details are read at a time, and the count after which the
+/// first partial result is published; later ones follow at doubling counts.
+const DETAILS_BATCH: usize = 4096;
 /// How often, in entries, a running listing checks whether it was superseded.
 const CANCEL_CHECK_INTERVAL: usize = 512;
 
@@ -265,6 +268,12 @@ impl Shared {
         let order = self.pool.install(|| {
             sort::build_order(&listing.store, listing.details.as_deref(), request.options)
         });
+        self.publish_rows(request, listing, loading, order);
+    }
+
+    /// Publishes a snapshot showing `order`, which may differ from what the
+    /// requested options would give while details are still arriving.
+    fn publish_rows(&self, request: &Request, listing: &Listing, loading: bool, order: Vec<u32>) {
         if !self.is_current(request.generation) {
             return;
         }
@@ -282,22 +291,71 @@ impl Shared {
         let _ = self.events.send(ModelEvent::Snapshot(Arc::new(snapshot)));
     }
 
-    /// Reads the metadata of every entry on the CPU pool. Returns `None` when
-    /// the request was superseded meanwhile.
-    fn load_details(&self, request: &Request, store: &EntryStore) -> Option<Details> {
-        let entries = self.pool.install(|| {
-            (0..store.len() as u32)
-                .into_par_iter()
-                .map(|index| {
-                    if !self.is_current(request.generation) {
-                        return None;
-                    }
-                    let path = request.path.join(OsStr::from_bytes(store.name(index)));
-                    Some(self.fs.metadata(&path).ok())
-                })
-                .collect::<Option<Vec<_>>>()
-        })?;
-        Some(Details::new(entries))
+    /// Reads the metadata of every entry on the CPU pool, starting with the
+    /// entries at the top of the list and publishing partial results as it
+    /// goes, so the rows a user is looking at fill in first. Returns `false`
+    /// when the request was superseded meanwhile.
+    fn load_details(&self, request: &Request, listing: &mut Listing) -> bool {
+        let store = listing.store.clone();
+        // While a sort that needs details is incomplete, rows keep name order:
+        // sorting by half-known sizes would shuffle them as results arrive.
+        let interim = if request.options.sort.needs_details() {
+            ViewOptions {
+                sort: SortKey::Name,
+                descending: false,
+                ..request.options
+            }
+        } else {
+            request.options
+        };
+        let reading_order = self.pool.install(|| {
+            let everything = ViewOptions {
+                show_hidden: true,
+                ..interim
+            };
+            sort::build_order(&store, None, everything)
+        });
+
+        // The rows shown while loading never change order: they are the reading
+        // order without the entries the options hide.
+        let interim_rows: Vec<u32> = reading_order
+            .iter()
+            .copied()
+            .filter(|&index| interim.show_hidden || !store.is_hidden(index))
+            .collect();
+        // Show the entries at once, before any of their details are known.
+        self.publish_rows(request, listing, true, interim_rows.clone());
+
+        let mut entries: Vec<Option<Metadata>> = vec![None; store.len()];
+        let mut publish_at = DETAILS_BATCH;
+        for (batch_number, batch) in reading_order.chunks(DETAILS_BATCH).enumerate() {
+            let read = self.pool.install(|| {
+                batch
+                    .par_iter()
+                    .map(|&index| {
+                        if !self.is_current(request.generation) {
+                            return None;
+                        }
+                        let path = request.path.join(OsStr::from_bytes(store.name(index)));
+                        Some((index, self.fs.metadata(&path).ok()))
+                    })
+                    .collect::<Option<Vec<_>>>()
+            });
+            let Some(read) = read else {
+                return false;
+            };
+            for (index, metadata) in read {
+                entries[index as usize] = metadata;
+            }
+            let done = (batch_number + 1) * DETAILS_BATCH;
+            if done >= publish_at && done < reading_order.len() {
+                listing.details = Some(Arc::new(Details::new(entries.clone())));
+                self.publish_rows(request, listing, true, interim_rows.clone());
+                publish_at *= 2;
+            }
+        }
+        listing.details = Some(Arc::new(Details::new(entries)));
+        true
     }
 
     fn fail(&self, request: Request, error: LoadError) {
@@ -374,13 +432,9 @@ impl Shared {
     /// The record is stored before the final snapshot is published: a consumer
     /// reacting to the snapshot must already find the listing reusable.
     fn finish(&self, request: Request, mut listing: Listing) {
-        if request.options.needs_details() && listing.details.is_none() {
-            // Show the entries in name order while their details load.
-            self.publish(&request, &listing, true);
-            let Some(details) = self.load_details(&request, &listing.store) else {
-                return;
-            };
-            listing.details = Some(Arc::new(details));
+        let missing_details = request.options.needs_details() && listing.details.is_none();
+        if missing_details && !self.load_details(&request, &mut listing) {
+            return;
         }
         if !self.is_current(request.generation) {
             return;
@@ -1127,5 +1181,90 @@ mod tests {
         assert_eq!(shown.find_prefix(b"q", 0), None);
         assert_eq!(shown.find_prefix(b"", 0), None);
         assert_eq!(shown.find_prefix(b"file2.txt.more", 0), None);
+    }
+
+    /// Collects every snapshot of `generation` up to and including the final one.
+    fn all_snapshots(events: &flume::Receiver<ModelEvent>, generation: u64) -> Vec<Arc<Snapshot>> {
+        let mut seen = Vec::new();
+        loop {
+            match events.recv_timeout(TIMEOUT).unwrap() {
+                ModelEvent::Snapshot(s) if s.generation() == generation => {
+                    let last = !s.is_loading();
+                    seen.push(s);
+                    if last {
+                        return seen;
+                    }
+                }
+                ModelEvent::Snapshot(_) => {}
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn details_arrive_for_the_top_of_the_list_before_the_rest() {
+        let entries = DETAILS_BATCH * 4;
+        let (mut model, events) = DirectoryModel::new(Arc::new(FakeFs { entries })).unwrap();
+        snapshot(&events, model.open("/dir"));
+        let detailed = ViewOptions {
+            details: true,
+            ..ViewOptions::default()
+        };
+        let seen = all_snapshots(&events, model.set_options(detailed).unwrap());
+
+        // Neither the first row ("item0") nor the last is one of the fake
+        // filesystem's entries with unreadable details.
+        let done = seen.last().unwrap();
+        let last = done.len() - 1;
+        let partial = seen
+            .iter()
+            .find(|s| s.metadata(0).is_some() && s.metadata(last).is_none());
+        assert!(
+            partial.is_some_and(|s| s.is_loading()),
+            "no partial snapshot"
+        );
+        assert!(done.metadata(0).is_some() && done.metadata(last).is_some());
+    }
+
+    #[test]
+    fn rows_keep_name_order_until_a_size_sort_has_every_size() {
+        let entries = DETAILS_BATCH * 4;
+        let (mut model, events) = DirectoryModel::new(Arc::new(FakeFs { entries })).unwrap();
+        snapshot(&events, model.open("/dir"));
+        let by_size = ViewOptions {
+            sort: SortKey::Size,
+            descending: true,
+            ..ViewOptions::default()
+        };
+        let seen = all_snapshots(&events, model.set_options(by_size).unwrap());
+
+        let (done, loading) = seen.split_last().unwrap();
+        assert!(loading.len() >= 2, "expected partial snapshots");
+        for partial in loading {
+            assert_eq!(partial.name(0), b"item0");
+            assert_eq!(partial.options().sort, SortKey::Size);
+        }
+        // "item<n>" is n bytes long, so the largest comes first once sorted.
+        assert_eq!(done.name(0), format!("item{}", entries - 1).as_bytes());
+    }
+
+    #[test]
+    fn hidden_entries_stay_hidden_while_details_load() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        model.set_options(ViewOptions {
+            details: true,
+            ..ViewOptions::default()
+        });
+        let seen = all_snapshots(&events, model.open(dir.path()));
+
+        assert!(
+            seen.len() >= 2,
+            "expected a snapshot from before the details"
+        );
+        for shown in &seen {
+            assert_eq!(shown.row_of(b".hidden"), None);
+            assert_eq!(shown.len(), 5);
+        }
     }
 }
