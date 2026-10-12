@@ -278,3 +278,18 @@
 - **Limits:** the scenarios are instructions an agent replays with screenshots and coordinates, not an unattended test; coordinates depend on the window layout.
 - **Waiver:** none
 - **Follow-up:** accessibility exposure (S11).
+
+### 2026-10-12 — W-013: frame timing and memory on 500,000 entries
+- **Phase:** 6 Implement (S2)
+- **Result:** pass in the test environment (see limits)
+- **Method:** release build with `RUSTPHIN_SCROLL_BENCH=1`, which scrolls the list three rows every frame for 1,200 frames and logs, per 120 frames, the interval between frames (which includes building rows, layout and painting). Run in an isolated KWin session at 1280×800 on the reference machine (Intel Arc B580, Vulkan). Memory is resident set size from `ps`.
+- **Evidence:**
+  - Details view: median frame interval 16.6–16.7 ms in all ten windows; 95th percentile 17.2–17.6 ms; maximum 17.5–19.5 ms in nine windows. The first window had one 89.7 ms gap while the folder was still loading. No frame took two display periods after loading.
+  - Icons view: median 16.6–16.7 ms, 95th percentile 17.3–17.5 ms, maximum 17.4–17.6 ms after one 80.5 ms gap in the first window.
+  - The view's own description took at most 0.5 ms per frame.
+  - Memory: 95 MB with a 17-entry folder open; 137 MB with the 500,000-entry folder in the details view (sizes and dates loaded); 108 MB in the icons view; 126 MB after leaving the large folder.
+- **Against the requirements:** R-101 "scrolling holds 60 frames per second at the 95th percentile": the display runs at 60 Hz (16.7 ms) and every frame after loading arrived within one period plus about 1 ms of jitter, so no frames were dropped; a strict reading of "95th-percentile interval ≤ 16.7 ms" is missed by under a millisecond of timer jitter. R-102: 137 MB is under 400 MB, and leaving the folder returned to 31 MB above the small-folder figure, within the 50 MB allowed.
+- **Limits:** a virtual compositor output, not the real display, and no blur; the compact view was not measured; real wheel or touchpad scrolling was not measured (the test tool's smooth scrolling is not picked up by the app and its wheel scroll sends a single event); R-101's "no UI-thread task over 16 ms" is supported by the absence of long frames after loading but not measured per task; the 80–90 ms gap at start-up is unexplained beyond coinciding with loading.
+- **Other observation:** the release binary is 309 MB with line tables and 43 MB stripped.
+- **Waiver:** none
+- **Follow-up:** look at the start-up gap when working on W-023; measure on the live desktop before the release gate.

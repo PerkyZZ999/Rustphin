@@ -4,6 +4,7 @@
 //! commands. It never reads the filesystem itself.
 
 mod browser;
+mod diagnostics;
 mod filetypes;
 mod format;
 mod layout;

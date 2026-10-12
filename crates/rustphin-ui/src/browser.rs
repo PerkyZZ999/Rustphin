@@ -28,6 +28,7 @@ use rustphin_core::{
 };
 
 use crate::{
+    diagnostics::FrameLog,
     filetypes::{Database, TypeInfo},
     format::{self, count, plural},
     layout::{self, Layout, ViewMode},
@@ -175,6 +176,7 @@ pub struct Browser {
     settings_path: Option<PathBuf>,
     /// The settings as last written, to skip writes that change nothing.
     saved: Settings,
+    frames: FrameLog,
     scroll: UniformListScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
@@ -219,6 +221,7 @@ impl Browser {
             icon_epoch: 0,
             settings_path,
             saved: settings.clone(),
+            frames: FrameLog::from_env(),
             scroll: UniformListScrollHandle::new(),
             _subscriptions: subscriptions,
         };
@@ -1228,6 +1231,7 @@ impl Browser {
 
 impl Render for Browser {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let frame_started = self.frames.begin();
         let theme = *cx.global::<Theme>();
         let snapshot = self.snapshot.clone();
         let width = f32::from(window.viewport_size().width);
@@ -1236,8 +1240,15 @@ impl Render for Browser {
         // Cells fill the width inside the list's side gutters.
         self.per_row = layout.columns(width - space::SM * 2.);
         let per_row = self.per_row;
+        let lines = snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.len().div_ceil(per_row));
+        if let Some(line) = self.frames.next_bench_row(lines) {
+            self.scroll.scroll_to_item(line, ScrollStrategy::Top);
+            window.request_animation_frame();
+        }
 
-        div()
+        let view = div()
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus)
             .on_action(cx.listener(|this, _: &SelectPrevious, _, cx| {
@@ -1373,7 +1384,9 @@ impl Render for Browser {
                         None => content,
                     }),
             )
-            .child(self.status(theme))
+            .child(self.status(theme));
+        self.frames.end(frame_started);
+        view
     }
 }
 

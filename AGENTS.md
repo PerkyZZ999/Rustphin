@@ -85,7 +85,7 @@ rust-tc run                # build and run, opening the home folder
 rust-tc run ~/Documents    # open a specific folder
 ```
 
-Environment variables: `RUSTPHIN_OPAQUE=1` forces the opaque theme; `RUSTPHIN_LOG=debug` sets the log level (logs go to stderr).
+Environment variables: `RUSTPHIN_OPAQUE=1` forces the opaque theme; `RUSTPHIN_LOG=debug` sets the log level (logs go to stderr). `RUSTPHIN_FRAME_LOG=1` logs frame timing every 120 frames; `RUSTPHIN_SCROLL_BENCH=1` also makes the list scroll itself for 1,200 frames, which is how frame rate is measured (see W-013 in `docs/project/VALIDATION.md`).
 
 A cold build of the UI toolkit takes two to three minutes.
 
@@ -157,5 +157,6 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 - Key bindings that also edit text (arrows, Enter, Backspace, Home, End) must use the `Browser && !Input` context, or they fire while the user types in a text field.
 - GPUI-Kit's root element paints an opaque background under the app view. The window is opened with a root whose background is cleared (`crates/rustphin-ui/src/lib.rs`); keep that, or translucency silently disappears.
 - GPUI-Kit's component `IconName` is a small subset. Other Lucide icons are `gpui_kit::assets::IconName::…` and only render because the app registers `AllAssets`.
+- kwin-mcp's smooth `mouse_scroll` does not move the list and its discrete scroll sends one event; use the scroll benchmark for sustained scrolling.
 - In kwin-mcp, spell punctuation keys literally (`ctrl+=`, `ctrl+-`); names like `equal` or `minus` are accepted but do nothing.
 - Isolated KWin sessions offer no blur protocol, so Rustphin shows its opaque theme there. Blur can only be reviewed on the real desktop.

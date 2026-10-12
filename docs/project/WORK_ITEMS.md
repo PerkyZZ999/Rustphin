@@ -7,10 +7,10 @@ S2 — Views, sorting, selection
 
 ## Queue
 - [ ] W-024 — UI rubber-band selection by dragging over the list, split out of W-020 (R-004)
-- [ ] W-013 — Frame-time measurement while scrolling and while a 500,000-entry listing streams in; memory with that folder open and after closing it (R-101, R-102)
 - [ ] W-023 — Core: load details progressively, visible rows first, and publish as they arrive, so the first sort by size or date in a large folder with a cold inode cache stays within R-101 (measured 1.7 s for 500,000 files; see VALIDATION.md) (R-101)
 
 ## Done (recent)
+- [x] W-013 — Frame timing and memory on 500,000 entries, measured with an opt-in frame log (`RUSTPHIN_FRAME_LOG`) and a self-driven scroll (`RUSTPHIN_SCROLL_BENCH`) (R-101, R-102)
 - [x] W-022 — Replayable UI scenarios in `docs/project/UI_SCENARIOS.md` with a fixture script (`tests/ui/make-fixture.sh`); run by an agent through kwin-mcp in an isolated session. They are instructions for an agent, not an unattended script (R-001, R-003, R-004)
 - [x] W-021 — View mode, zoom, sort, direction, hidden-files and folders-first settings saved as TOML in `$XDG_CONFIG_HOME/rustphin/settings.toml`, written atomically on a background thread and restored at start; unreadable files fall back to defaults; files from a newer version are not overwritten (R-003)
 - [x] W-019 — UI icons and compact views as virtualised grids, five zoom levels in all three modes (Ctrl+=, Ctrl+-, Ctrl+0), view-mode buttons and Ctrl+1/2/3, arrow keys moving by row and column in grids (R-003)
