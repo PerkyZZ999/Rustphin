@@ -236,3 +236,15 @@
 - **Deviation:** rubber-band selection is not built; split into W-024.
 - **Waiver:** none
 - **Follow-up:** W-024; W-022 should script these interactions.
+
+### 2026-10-12 — W-019: icons and compact views, zoom
+- **Phase:** 6 Implement (S2)
+- **Result:** pass for what was exercised
+- **Evidence:**
+  - `rust-tc doctor` PASS, 79 tests. New unit tests cover the geometry of each mode at each zoom level (sizes on the 4-pixel grid, zooming never shrinking anything, whole cells per row, at least one column, zoom steps clamped) and the icon size requested from the theme.
+  - Observed in an isolated KWin session: Ctrl+1 showed a grid of large theme icons with names underneath, and Down then Right moved the selection to the second cell; Ctrl+2 showed the compact grid with small icons beside names; Ctrl+= enlarged the compact icons and widened the cells from four to three per row; the three view-mode buttons show their icons with the active one highlighted.
+- **Defect found and fixed:** the view-mode buttons were blank because the default icon bundle lacks those icons; the application now embeds the complete icon set.
+- **Deviations:** the compact view fills rows left to right and scrolls vertically, where Dolphin's fills columns and scrolls horizontally; embedding the complete icon set makes the binary larger (not measured).
+- **Not verified:** zoom out and reset; zoom in the icons and details modes; clicking the view-mode buttons (keyboard shortcuts were used); very large folders in the grid modes; names longer than two lines in the icons view; view mode and zoom are not yet remembered (W-021).
+- **Waiver:** none
+- **Follow-up:** W-021, W-013 (frame times should include the grid modes).

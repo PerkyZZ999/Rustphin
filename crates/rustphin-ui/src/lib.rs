@@ -6,6 +6,7 @@
 mod browser;
 mod filetypes;
 mod format;
+mod layout;
 mod theme;
 
 use std::path::PathBuf;
@@ -30,7 +31,8 @@ pub struct Options {
 /// Runs the application until its last window closes.
 pub fn run(options: Options) {
     gpui_kit::application()
-        .with_assets(gpui_kit::assets::Assets)
+        // The complete icon set: the default bundle lacks the view-mode icons.
+        .with_assets(gpui_kit::assets::AllAssets)
         .run(move |cx: &mut App| {
             gpui_kit::init(cx);
             gpui_kit::component::theme::Theme::change(

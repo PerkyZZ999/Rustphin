@@ -19,7 +19,8 @@ pub mod space {
 
 /// Fixed sizes in pixels.
 pub mod size {
-    /// Height of a list row: a 20-pixel text line plus 4 pixels above and below.
+    /// Height of the column headings: a 20-pixel text line plus 4 pixels above
+    /// and below. Entry rows take their height from the view layout.
     pub const ROW: f32 = 28.;
     /// Height of the toolbar.
     pub const TOOLBAR: f32 = 44.;
@@ -29,10 +30,6 @@ pub mod size {
     pub const ICON: f32 = 16.;
     /// Sort arrows and other inline indicators.
     pub const ICON_SMALL: f32 = 12.;
-    /// File-type icons in list rows: the height of the text line beside them.
-    pub const ICON_ROW: f32 = 20.;
-    /// The size asked of the icon theme for list rows. Themes commonly ship 22.
-    pub const ICON_LOOKUP: u32 = 22;
     /// Width of the accent bar marking a selected row.
     pub const SELECTION_BAR: f32 = 2.;
     /// Width of the size column.

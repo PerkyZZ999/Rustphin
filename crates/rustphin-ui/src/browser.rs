@@ -8,10 +8,10 @@ use std::{
 };
 
 use gpui_kit::{
-    App, AppContext as _, ClickEvent, Context, Entity, FocusHandle, InteractiveElement as _,
-    IntoElement, KeyBinding, KeyDownEvent, Modifiers, ParentElement as _, Render, ScrollStrategy,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
-    UniformListScrollHandle, Window, actions,
+    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, FocusHandle,
+    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, Modifiers, ParentElement as _,
+    Render, ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, UniformListScrollHandle, Window, actions,
     component::{
         Disableable as _, Icon, IconName, Selectable as _, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -30,6 +30,7 @@ use rustphin_core::{
 use crate::{
     filetypes::{Database, TypeInfo},
     format::{self, count, plural},
+    layout::{self, Layout, ViewMode},
     theme::{Theme, size, space, text},
 };
 
@@ -58,8 +59,18 @@ actions!(
         ExtendLast,
         ExtendPageUp,
         ExtendPageDown,
+        SelectLeft,
+        SelectRight,
+        ExtendLeft,
+        ExtendRight,
         SelectAll,
         InvertSelection,
+        ZoomIn,
+        ZoomOut,
+        ZoomReset,
+        ShowIcons,
+        ShowCompact,
+        ShowDetails,
         Activate,
         GoUp,
         GoBack,
@@ -92,6 +103,10 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("shift-end", ExtendLast, list),
         KeyBinding::new("shift-pageup", ExtendPageUp, list),
         KeyBinding::new("shift-pagedown", ExtendPageDown, list),
+        KeyBinding::new("left", SelectLeft, list),
+        KeyBinding::new("right", SelectRight, list),
+        KeyBinding::new("shift-left", ExtendLeft, list),
+        KeyBinding::new("shift-right", ExtendRight, list),
         KeyBinding::new("ctrl-a", SelectAll, list),
         KeyBinding::new("ctrl-shift-a", InvertSelection, list),
         KeyBinding::new("enter", Activate, list),
@@ -104,6 +119,13 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("alt-.", ToggleHidden, view),
         KeyBinding::new("ctrl-l", EditLocation, view),
         KeyBinding::new("f6", EditLocation, view),
+        KeyBinding::new("ctrl-=", ZoomIn, view),
+        KeyBinding::new("ctrl-+", ZoomIn, view),
+        KeyBinding::new("ctrl--", ZoomOut, view),
+        KeyBinding::new("ctrl-0", ZoomReset, view),
+        KeyBinding::new("ctrl-1", ShowIcons, view),
+        KeyBinding::new("ctrl-2", ShowCompact, view),
+        KeyBinding::new("ctrl-3", ShowDetails, view),
         KeyBinding::new("escape", CancelEdit, view),
     ]);
 }
@@ -142,6 +164,12 @@ pub struct Browser {
     types_pending: HashSet<String>,
     /// The zone dates are shown in.
     zone: TimeZone,
+    mode: ViewMode,
+    zoom: usize,
+    /// Entries per row of the list or grid as last drawn; 1 in details mode.
+    per_row: usize,
+    /// Bumped when the icon size changes, so lookups for the old size are dropped.
+    icon_epoch: u64,
     scroll: UniformListScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
@@ -172,6 +200,10 @@ impl Browser {
             type_info: HashMap::new(),
             types_pending: HashSet::new(),
             zone: TimeZone::system(),
+            mode: ViewMode::default(),
+            zoom: layout::DEFAULT_ZOOM,
+            per_row: 1,
+            icon_epoch: 0,
             scroll: UniformListScrollHandle::new(),
             _subscriptions: subscriptions,
         };
@@ -277,7 +309,8 @@ impl Browser {
 
     fn reveal_focus(&self) {
         if let Some(row) = self.focus_row {
-            self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
+            self.scroll
+                .scroll_to_item(row / self.per_row.max(1), ScrollStrategy::Nearest);
         }
     }
 
@@ -297,6 +330,13 @@ impl Browser {
             },
             cx,
         );
+    }
+
+    /// Left and right move between neighbours in a grid; a list has none.
+    fn move_sideways(&mut self, delta: isize, extend: bool, cx: &mut Context<Self>) {
+        if self.per_row > 1 {
+            self.move_selection(Motion::By(delta), extend, cx);
+        }
     }
 
     /// Jumps to the next entry whose name starts with what has been typed.
@@ -408,21 +448,60 @@ impl Browser {
         if self.types_pending.insert(mime.to_owned()) {
             let mime = mime.to_owned();
             let database = Arc::clone(database);
+            let icon_size = theme_icon_size(self.mode.layout(self.zoom).icon);
+            let epoch = self.icon_epoch;
             let lookup = cx.background_executor().spawn({
                 let mime = mime.clone();
-                async move { database.resolve(&mime, size::ICON_LOOKUP) }
+                async move { database.resolve(&mime, icon_size) }
             });
             cx.spawn(async move |view, cx| {
                 let info = lookup.await;
                 let _ = view.update(cx, |view, cx| {
-                    view.types_pending.remove(&mime);
-                    view.type_info.insert(mime, info);
-                    cx.notify();
+                    // Drop results for an icon size that is no longer shown.
+                    if view.icon_epoch == epoch {
+                        view.types_pending.remove(&mime);
+                        view.type_info.insert(mime, info);
+                        cx.notify();
+                    }
                 });
             })
             .detach();
         }
         None
+    }
+
+    /// Forgets resolved icons after the icon size changed; rows ask again.
+    fn icon_size_changed(&mut self) {
+        self.icon_epoch += 1;
+        self.type_info.clear();
+        self.types_pending.clear();
+    }
+
+    fn set_mode(&mut self, mode: ViewMode, cx: &mut Context<Self>) {
+        if self.mode == mode {
+            return;
+        }
+        self.mode = mode;
+        self.icon_size_changed();
+        // Only the details view shows sizes and dates.
+        if let Some(model) = &mut self.model {
+            let options = ViewOptions {
+                details: mode == ViewMode::Details,
+                ..model.options()
+            };
+            if let Some(generation) = model.set_options(options) {
+                self.generation = generation;
+            }
+        }
+        cx.notify();
+    }
+
+    fn set_zoom(&mut self, zoom: usize, cx: &mut Context<Self>) {
+        if self.zoom != zoom {
+            self.zoom = zoom;
+            self.icon_size_changed();
+            cx.notify();
+        }
     }
 
     /// Orders by `key`; choosing the current key again reverses the direction.
@@ -562,6 +641,37 @@ impl Browser {
                     bar.child(self.breadcrumbs(location.as_deref(), theme, cx))
                 }
             }))
+            .children(
+                [
+                    (
+                        "view-icons",
+                        ViewMode::Icons,
+                        gpui_kit::assets::IconName::LayoutGrid,
+                        "Icons (Ctrl+1)",
+                    ),
+                    (
+                        "view-compact",
+                        ViewMode::Compact,
+                        gpui_kit::assets::IconName::LayoutList,
+                        "Compact (Ctrl+2)",
+                    ),
+                    (
+                        "view-details",
+                        ViewMode::Details,
+                        gpui_kit::assets::IconName::Table,
+                        "Details (Ctrl+3)",
+                    ),
+                ]
+                .map(|(id, mode, icon, tooltip)| {
+                    Button::new(id)
+                        .ghost()
+                        .small()
+                        .icon(icon)
+                        .selected(self.mode == mode)
+                        .tooltip(tooltip)
+                        .on_click(cx.listener(move |this, _, _, cx| this.set_mode(mode, cx)))
+                }),
+            )
             .child(
                 Button::new("hidden")
                     .ghost()
@@ -735,10 +845,39 @@ impl Browser {
             .on_click(cx.listener(move |this, _, _, cx| this.sort_by(key, cx)))
     }
 
+    /// What a row or cell needs to know about the entry it shows.
+    fn entry(&mut self, rows: &Snapshot, row: usize, cx: &mut Context<Self>) -> Entry {
+        let container = rows.is_container(row);
+        Entry {
+            name: display_name(rows.name(row)).into_owned().into(),
+            container,
+            selected: self.selection.contains(rows, row),
+            focused: self.focus_row == Some(row),
+            info: self.type_info_for(rows.name(row), container, cx),
+        }
+    }
+
+    /// Click behaviour shared by every view: select, and open on a plain
+    /// double click.
+    fn entry_click(
+        row: usize,
+        cx: &mut Context<Self>,
+    ) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+        cx.listener(move |this, event: &ClickEvent, _, cx| {
+            let modifiers = event.modifiers();
+            this.click_row(row, modifiers, cx);
+            let plain = !modifiers.shift && !modifiers.control;
+            if plain && event.click_count() >= 2 {
+                this.activate_row(row, cx);
+            }
+        })
+    }
+
     /// The details view: column headings over a virtualised list of entries.
     fn list(
         &self,
         snapshot: &Arc<Snapshot>,
+        layout: Layout,
         columns: Columns,
         theme: Theme,
         cx: &mut Context<Self>,
@@ -788,68 +927,29 @@ impl Browser {
             cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                 range
                     .map(|row| {
-                        let is_selected = this.selection.contains(&rows, row);
-                        let is_focus = this.focus_row == Some(row);
-                        let container = rows.is_container(row);
-                        let name: SharedString = display_name(rows.name(row)).into_owned().into();
-                        let info = this.type_info_for(rows.name(row), container, cx);
+                        let entry = this.entry(&rows, row, cx);
                         let metadata = rows.metadata(row);
-                        let secondary = if is_selected {
-                            theme.on_selection
-                        } else {
-                            theme.text_muted
-                        };
+                        let secondary = entry.secondary(theme);
                         // Folders show no size: a folder's own size says nothing useful.
                         let size_text = metadata
-                            .filter(|_| !container)
+                            .filter(|_| !entry.container)
                             .map(|metadata| format::size(metadata.size))
                             .unwrap_or_default();
                         let modified_text = metadata
                             .map(|metadata| format::timestamp(metadata.modified, &zone))
                             .unwrap_or_default();
-                        let description = info
+                        let description = entry
+                            .info
                             .as_ref()
                             .map(|info| info.description.clone())
                             .unwrap_or_default();
-                        let icon = match info.and_then(|info| info.icon) {
-                            Some(path) => img(path)
-                                .size(px(size::ICON_ROW))
-                                .flex_none()
-                                .into_any_element(),
-                            // Until the theme icon is known, or if the theme has none.
-                            None => Icon::new(if container {
-                                IconName::Folder
-                            } else {
-                                IconName::File
-                            })
-                            .size(px(size::ICON_ROW))
-                            .flex_none()
-                            .text_color(if container { theme.accent } else { secondary })
-                            .into_any_element(),
-                        };
-                        let entry = div()
+                        let line = entry
+                            .surface(theme)
                             .flex()
                             .items_center()
                             .gap(px(space::MD))
                             .size_full()
                             .px(px(space::SM))
-                            .rounded(px(size::RADIUS))
-                            .border_l(px(size::SELECTION_BAR))
-                            .border_color(gpui_kit::transparent_black())
-                            .text_color(theme.text)
-                            .when(is_selected, |entry| {
-                                // Selection is a fill plus an accent bar, never colour alone.
-                                entry
-                                    .bg(theme.selection)
-                                    .border_color(theme.accent)
-                                    .text_color(theme.on_selection)
-                            })
-                            .when(!is_selected, |entry| {
-                                // The keyboard focus without selection keeps the bar only.
-                                entry
-                                    .when(is_focus, |entry| entry.border_color(theme.accent))
-                                    .hover(|entry| entry.bg(theme.hover))
-                            })
                             .child(
                                 div()
                                     .flex()
@@ -857,8 +957,14 @@ impl Browser {
                                     .min_w_0()
                                     .items_center()
                                     .gap(px(space::SM))
-                                    .child(icon)
-                                    .child(div().flex_1().min_w_0().truncate().child(name)),
+                                    .child(entry.icon(layout.icon, theme))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .truncate()
+                                            .child(entry.name.clone()),
+                                    ),
                             )
                             .child(
                                 div()
@@ -868,8 +974,8 @@ impl Browser {
                                     .text_color(secondary)
                                     .child(size_text),
                             )
-                            .when(columns.modified, |entry| {
-                                entry.child(
+                            .when(columns.modified, |line| {
+                                line.child(
                                     div()
                                         .w(px(size::COLUMN_MODIFIED))
                                         .flex_none()
@@ -877,8 +983,8 @@ impl Browser {
                                         .child(modified_text),
                                 )
                             })
-                            .when(columns.kind, |entry| {
-                                entry.child(
+                            .when(columns.kind, |line| {
+                                line.child(
                                     div()
                                         .w(px(size::COLUMN_TYPE))
                                         .flex_none()
@@ -890,17 +996,10 @@ impl Browser {
                         div()
                             .id(row)
                             .w_full()
-                            .h(px(size::ROW))
+                            .h(px(layout.row_height))
                             .px(px(space::SM))
-                            .child(entry)
-                            .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
-                                let modifiers = event.modifiers();
-                                this.click_row(row, modifiers, cx);
-                                let plain = !modifiers.shift && !modifiers.control;
-                                if plain && event.click_count() >= 2 {
-                                    this.activate_row(row, cx);
-                                }
-                            }))
+                            .child(line)
+                            .on_click(Self::entry_click(row, cx))
                     })
                     .collect::<Vec<_>>()
             }),
@@ -916,6 +1015,86 @@ impl Browser {
             .min_h_0()
             .child(headings)
             .child(list)
+    }
+
+    /// The icons and compact views: a virtualised grid, `per_row` entries wide.
+    fn grid(
+        &self,
+        snapshot: &Arc<Snapshot>,
+        layout: Layout,
+        per_row: usize,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let rows = Arc::clone(snapshot);
+        let len = snapshot.len();
+        let cell_width = layout.cell_width.unwrap_or(layout.row_height);
+        let stacked = self.mode == ViewMode::Icons;
+
+        uniform_list(
+            "entries",
+            len.div_ceil(per_row),
+            cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+                range
+                    .map(|line| {
+                        let first = line * per_row;
+                        let cells = (first..(first + per_row).min(len)).map(|row| {
+                            let entry = this.entry(&rows, row, cx);
+                            let icon = entry.icon(layout.icon, theme);
+                            let surface = entry.surface(theme).size_full();
+                            let cell = if stacked {
+                                // Icon above a centred name of up to two lines.
+                                surface
+                                    .flex()
+                                    .flex_col()
+                                    .items_center()
+                                    .gap(px(space::SM))
+                                    .p(px(space::SM))
+                                    .child(icon)
+                                    .child(
+                                        div()
+                                            .w_full()
+                                            .text_center()
+                                            .line_clamp(2)
+                                            .child(entry.name.clone()),
+                                    )
+                            } else {
+                                surface
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(space::SM))
+                                    .px(px(space::SM))
+                                    .child(icon)
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .truncate()
+                                            .child(entry.name.clone()),
+                                    )
+                            };
+                            div()
+                                .id(row)
+                                .flex_none()
+                                .w(px(cell_width))
+                                .h_full()
+                                .p(px(space::XS / 2.))
+                                .child(cell)
+                                .on_click(Self::entry_click(row, cx))
+                        });
+                        div()
+                            .flex()
+                            .w_full()
+                            .h(px(layout.row_height))
+                            .px(px(space::SM))
+                            .children(cells)
+                    })
+                    .collect::<Vec<_>>()
+            }),
+        )
+        .track_scroll(&self.scroll)
+        .flex_1()
+        .py(px(space::XS))
     }
 
     /// Shown instead of the list when it has no rows: says why and what to do.
@@ -1015,16 +1194,21 @@ impl Render for Browser {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.global::<Theme>();
         let snapshot = self.snapshot.clone();
-        let columns = Columns::for_width(f32::from(window.viewport_size().width));
+        let width = f32::from(window.viewport_size().width);
+        let columns = Columns::for_width(width);
+        let layout = self.mode.layout(self.zoom);
+        // Cells fill the width inside the list's side gutters.
+        self.per_row = layout.columns(width - space::SM * 2.);
+        let per_row = self.per_row;
 
         div()
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus)
             .on_action(cx.listener(|this, _: &SelectPrevious, _, cx| {
-                this.move_selection(Motion::By(-1), false, cx);
+                this.move_selection(Motion::By(-(this.per_row as isize)), false, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectNext, _, cx| {
-                this.move_selection(Motion::By(1), false, cx);
+                this.move_selection(Motion::By(this.per_row as isize), false, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectFirst, _, cx| {
                 this.move_selection(Motion::First, false, cx);
@@ -1033,16 +1217,16 @@ impl Render for Browser {
                 this.move_selection(Motion::Last, false, cx);
             }))
             .on_action(cx.listener(|this, _: &PageUp, _, cx| {
-                this.move_selection(Motion::By(-PAGE_ROWS), false, cx);
+                this.move_selection(Motion::By(-PAGE_ROWS * this.per_row as isize), false, cx);
             }))
             .on_action(cx.listener(|this, _: &PageDown, _, cx| {
-                this.move_selection(Motion::By(PAGE_ROWS), false, cx);
+                this.move_selection(Motion::By(PAGE_ROWS * this.per_row as isize), false, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendPrevious, _, cx| {
-                this.move_selection(Motion::By(-1), true, cx);
+                this.move_selection(Motion::By(-(this.per_row as isize)), true, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendNext, _, cx| {
-                this.move_selection(Motion::By(1), true, cx);
+                this.move_selection(Motion::By(this.per_row as isize), true, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendFirst, _, cx| {
                 this.move_selection(Motion::First, true, cx);
@@ -1051,10 +1235,40 @@ impl Render for Browser {
                 this.move_selection(Motion::Last, true, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendPageUp, _, cx| {
-                this.move_selection(Motion::By(-PAGE_ROWS), true, cx);
+                this.move_selection(Motion::By(-PAGE_ROWS * this.per_row as isize), true, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendPageDown, _, cx| {
-                this.move_selection(Motion::By(PAGE_ROWS), true, cx);
+                this.move_selection(Motion::By(PAGE_ROWS * this.per_row as isize), true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectLeft, _, cx| {
+                this.move_sideways(-1, false, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectRight, _, cx| {
+                this.move_sideways(1, false, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendLeft, _, cx| {
+                this.move_sideways(-1, true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtendRight, _, cx| {
+                this.move_sideways(1, true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ZoomIn, _, cx| {
+                this.set_zoom(layout::step_zoom(this.zoom, 1), cx);
+            }))
+            .on_action(cx.listener(|this, _: &ZoomOut, _, cx| {
+                this.set_zoom(layout::step_zoom(this.zoom, -1), cx);
+            }))
+            .on_action(cx.listener(|this, _: &ZoomReset, _, cx| {
+                this.set_zoom(layout::DEFAULT_ZOOM, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ShowIcons, _, cx| {
+                this.set_mode(ViewMode::Icons, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ShowCompact, _, cx| {
+                this.set_mode(ViewMode::Compact, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ShowDetails, _, cx| {
+                this.set_mode(ViewMode::Details, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectAll, _, cx| {
                 this.change_selection(Selection::select_all, cx);
@@ -1113,7 +1327,11 @@ impl Render for Browser {
                     .bg(theme.content)
                     .map(|content| match &snapshot {
                         Some(snapshot) if !snapshot.is_empty() => {
-                            content.child(self.list(snapshot, columns, theme, cx))
+                            if self.mode == ViewMode::Details {
+                                content.child(self.list(snapshot, layout, columns, theme, cx))
+                            } else {
+                                content.child(self.grid(snapshot, layout, per_row, theme, cx))
+                            }
                         }
                         Some(snapshot) => content.child(self.empty_state(snapshot, theme, cx)),
                         None => content,
@@ -1175,6 +1393,80 @@ fn expand_path(typed: &str, base: Option<&Path>) -> Option<PathBuf> {
         Some(base) if path.is_relative() => base.join(path),
         _ => path,
     })
+}
+
+/// One entry as a row or cell draws it.
+struct Entry {
+    name: SharedString,
+    container: bool,
+    selected: bool,
+    /// Has the keyboard focus.
+    focused: bool,
+    info: Option<TypeInfo>,
+}
+
+impl Entry {
+    /// Colour for secondary text and the placeholder icon.
+    fn secondary(&self, theme: Theme) -> gpui_kit::Rgba {
+        if self.selected {
+            theme.on_selection
+        } else {
+            theme.text_muted
+        }
+    }
+
+    /// The file-type icon from the system theme, or a generic one until it is
+    /// known or when the theme has none.
+    fn icon(&self, edge: f32, theme: Theme) -> AnyElement {
+        match self.info.as_ref().and_then(|info| info.icon.clone()) {
+            Some(path) => img(path).size(px(edge)).flex_none().into_any_element(),
+            None => Icon::new(if self.container {
+                IconName::Folder
+            } else {
+                IconName::File
+            })
+            .size(px(edge))
+            .flex_none()
+            .text_color(if self.container && !self.selected {
+                theme.accent
+            } else {
+                self.secondary(theme)
+            })
+            .into_any_element(),
+        }
+    }
+
+    /// The entry's background and outline. Selection is a fill plus an accent
+    /// bar, and keyboard focus without selection the bar alone, so neither is
+    /// shown by colour only.
+    fn surface(&self, theme: Theme) -> gpui_kit::Div {
+        div()
+            .rounded(px(size::RADIUS))
+            .border_l(px(size::SELECTION_BAR))
+            .border_color(gpui_kit::transparent_black())
+            .text_color(theme.text)
+            .when(self.selected, |surface| {
+                surface
+                    .bg(theme.selection)
+                    .border_color(theme.accent)
+                    .text_color(theme.on_selection)
+            })
+            .when(!self.selected, |surface| {
+                surface
+                    .when(self.focused, |surface| surface.border_color(theme.accent))
+                    .hover(|surface| surface.bg(theme.hover))
+            })
+    }
+}
+
+/// The size to ask the icon theme for, given the size drawn. Themes ship a
+/// fixed set of sizes; asking for one of them avoids scaling a neighbour.
+fn theme_icon_size(drawn: f32) -> u32 {
+    const SIZES: [u32; 9] = [16, 22, 24, 32, 48, 64, 96, 128, 256];
+    SIZES
+        .into_iter()
+        .find(|&size| size as f32 >= drawn)
+        .unwrap_or(256)
 }
 
 /// Which optional columns fit the window.
@@ -1239,6 +1531,15 @@ mod tests {
     fn an_empty_list_has_no_target() {
         assert_eq!(target_row(None, 0, Motion::Last), None);
         assert_eq!(target_row(None, 0, Motion::By(1)), None);
+    }
+
+    #[test]
+    fn icons_are_requested_at_the_theme_size_at_or_above_the_drawn_size() {
+        assert_eq!(theme_icon_size(16.), 16);
+        assert_eq!(theme_icon_size(20.), 22);
+        assert_eq!(theme_icon_size(64.), 64);
+        assert_eq!(theme_icon_size(192.), 256);
+        assert_eq!(theme_icon_size(999.), 256);
     }
 
     #[test]
