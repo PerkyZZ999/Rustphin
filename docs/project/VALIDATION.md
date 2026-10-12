@@ -154,3 +154,21 @@
 - **Not verified:** blur on the real desktop with this build; frame times; back/forward by mouse; behaviour on Btrfs or with a cold cache; the UI scenarios exist as a hand-run sequence, not a replayable script.
 - **Waiver:** none
 - **Follow-up:** W-012 (user's visual review), W-013 (frame timing, in S2).
+
+### 2026-10-12 — S1 visual review on the real desktop (W-012)
+- **Phase:** 6 Implement (S1)
+- **Result:** pass after one fix
+- **Evidence:**
+  - First review, by the user (screenshots): the default and `RUSTPHIN_OPAQUE=1` runs looked almost identical; no transparency. Cause, found in the pinned source: `gpui-component`'s root plugin paints `theme.tokens.background` (opaque) under the application view.
+  - Fix: the window is opened with `gpui_kit::base::Root` whose background is cleared, and the window colour went from 84% to 72% opacity. Secondary text was brightened (`#aab2c5` → `#c3cad9`) so the contrast tests still pass over a white window. `rust-tc doctor` passed (25 tests).
+  - Second review, by the user (screenshot): the window behind is visible and blurred through the list area; toolbar and status line read slightly darker. The opaque mode was seen solid in the first review.
+- **Not verified:** blur while resizing; appearance over a bright window (covered by the contrast tests only).
+- **Waiver:** none
+- **Follow-up:** none
+
+### 2026-10-12 — Implement gate, slice S1
+- **Phase:** 6 Implement
+- **Result:** pass
+- **Evidence:** every S1 acceptance point in ROADMAP.md is demonstrated in the two entries above and "Slice S1 checks". Requirements advanced: R-001 (navigation part), R-101 (first entries and sorted listing; input during loading and frame rate move to S2 as W-013), R-104 (names), R-105 (window, blur, fallback, contrast tests), R-109.
+- **Waiver:** none
+- **Follow-up:** W-013 in S2; the UI scenarios should become a replayable script.

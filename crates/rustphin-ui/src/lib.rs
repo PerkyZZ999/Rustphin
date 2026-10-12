@@ -9,7 +9,8 @@ mod theme;
 use std::path::PathBuf;
 
 use gpui_kit::{
-    App, AppContext as _, Bounds, WindowBackgroundAppearance, WindowBounds, WindowOptions, px, size,
+    App, AppContext as _, Bounds, Styled as _, WindowBackgroundAppearance, WindowBounds,
+    WindowOptions, px, size,
 };
 use rustphin_platform::blur::{BackgroundBlur, NoBlur, WaylandBlur};
 
@@ -55,7 +56,7 @@ pub fn run(options: Options) {
                 app_id: Some("rustphin".into()),
                 ..Default::default()
             };
-            let opened = gpui_kit::open_window(window_options, cx, |window, cx| {
+            let opened = cx.open_window(window_options, |window, cx| {
                 let blur: &dyn BackgroundBlur = if options.force_opaque {
                     &NoBlur
                 } else {
@@ -73,7 +74,13 @@ pub fn run(options: Options) {
                 theme.apply_to_components(cx);
                 cx.set_global(theme);
                 window.set_window_title("Rustphin");
-                cx.new(|cx| Browser::new(options.start.clone(), window, cx))
+                let browser = cx.new(|cx| Browser::new(options.start.clone(), window, cx));
+                // The component library's root paints its own opaque background
+                // under the view. Clear it: the browser paints the window
+                // background itself, translucent when the compositor blurs.
+                cx.new(|cx| {
+                    gpui_kit::base::Root::new(browser, window, cx).bg(gpui_kit::transparent_black())
+                })
             });
             match opened {
                 Ok(_) => cx.activate(true),

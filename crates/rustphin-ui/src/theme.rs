@@ -84,7 +84,7 @@ impl Theme {
     pub fn obsidian(translucent: bool) -> Self {
         Self {
             window: if translucent {
-                rgba(0x0b0d12d6)
+                rgba(0x0b0d12b8)
             } else {
                 rgb(0x0f1116)
             },
@@ -95,7 +95,7 @@ impl Theme {
             },
             border: rgba(0xffffff1f),
             text: rgb(0xe6e9f0),
-            text_muted: rgb(0xaab2c5),
+            text_muted: rgb(0xc3cad9),
             accent: rgb(0x8fa8ff),
             selection: rgb(0x3457d5),
             selection_hover: rgb(0x2f4fc4),

@@ -13,14 +13,14 @@ Each slice ends with something the author can run and use, and with its acceptan
   - Names with invalid UTF-8 and control characters display safely.
 - **Requirements:** R-001 (navigation part), R-101 (first entries, input responsiveness), R-104 (names), R-105 (window and fallback), R-109
 - **Validation:** test, bench, ui-test, manual visual review
-- **Status:** doing — implemented and gated; manual visual review on the real desktop outstanding
+- **Status:** done (2026-10-12; evidence in VALIDATION.md)
 
 ## Slice S2 — Views, sorting, selection
 - **Outcome:** Icons, compact and details views with sortable columns, zoom, file-type icons, and full selection and keyboard navigation.
 - **Acceptance:** R-003 and R-004 criteria; lazy metadata keeps R-101 sort and scroll targets; memory target of R-102; icons from the system theme by MIME type; view settings persist.
 - **Requirements:** R-003, R-004, R-014 (icons part), R-101 (sort, scroll), R-102
 - **Validation:** test, bench, ui-test with frame timing
-- **Status:** todo
+- **Status:** todo — next
 
 ## Slice S3 — Live updates, tabs, split view
 - **Outcome:** The view follows outside changes; work in several tabs and two panes; session restored on start.

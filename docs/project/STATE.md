@@ -3,8 +3,8 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — slice S1 implemented; awaiting the user's visual review
-- **Status:** active — S1 code complete and gated; W-012 (real-desktop review) open
+- **Current phase:** 6 (Vertical-slice implementation) — S1 done; S2 not started
+- **Status:** active — ready to start S2
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-12
 
@@ -14,19 +14,18 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-12 — Slice S1 checks
+- Latest validation entry: VALIDATION.md, 2026-10-12 — Implement gate, slice S1
 
 ## Open loops
-- Task: W-012 — blur and opaque mode not yet seen on the real desktop with the S1 build
-- Task: W-013 — frame times unmeasured (R-101's 60 fps target is validated in S2)
-- Task: UI scenarios are hand-run, not a replayable script
+- Task: W-013 — frame times and memory unmeasured (in the S2 queue)
+- Task: UI scenarios are hand-run, not a replayable script (W-022)
 - Open items carried forward from Discovery are listed in DISCOVERY.md
 
 ## Blockers
 - None
 
 ## Next action
-- User runs `rust-tc run` on the real desktop and reviews blur and the opaque mode (W-012). On approval, mark S1 done in ROADMAP.md and seed WORK_ITEMS.md for S2 (views, sorting, selection). The quality gate is `rust-tc doctor`; run it and commit after every task (AGENTS.md).
+- Start S2 with W-014 (lazy metadata in the core) from WORK_ITEMS.md. Load the required skills named in AGENTS.md. Run `rust-tc doctor` and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

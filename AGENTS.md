@@ -154,4 +154,5 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 - GPUI cannot blur content inside the window. Menus, the palette and dialogs are tinted opaque surfaces by design (D-007).
 - The user's Dolphin reports Ctrl+V as an ambiguous shortcut; in UI tests paste through Dolphin's context menu.
 - Key bindings that also edit text (arrows, Enter, Backspace, Home, End) must use the `Browser && !Input` context, or they fire while the user types in a text field.
+- GPUI-Kit's root element paints an opaque background under the app view. The window is opened with a root whose background is cleared (`crates/rustphin-ui/src/lib.rs`); keep that, or translucency silently disappears.
 - Isolated KWin sessions offer no blur protocol, so Rustphin shows its opaque theme there. Blur can only be reviewed on the real desktop.
