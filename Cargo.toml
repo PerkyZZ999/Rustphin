@@ -25,6 +25,7 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tempfile = "3"
+rustix = { version = "1", features = ["fs"] }
 
 # UI toolkit, pinned exactly (decision D-001). Upgrade only as a planned work item.
 gpui-kit = "=0.7.3"

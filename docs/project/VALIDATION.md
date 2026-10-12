@@ -379,3 +379,17 @@
 - **Carried forward, not blocking:** live updates re-read the whole directory; tab reordering by mouse drag and T6 unobserved; view settings are saved globally, not per pane or folder; nothing exposed over AT-SPI (R-107, S11); the 80–90 ms start-up frame gap.
 - **Waiver:** none
 - **Follow-up:** S4.
+
+### 2026-10-12 — W-031, W-032: filesystem primitives and the operation engine
+- **Phase:** 6 Implement (S4)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS, 170 tests (39 new, all against real temporary directories; no fake filesystem).
+  - Behaviour: create, rename, copy of nested folders with links (kept as links, dangling included) and names that are not UTF-8, permissions and modification time kept, numbered name for a copy beside its source, every conflict choice including apply to all and folder merge, refusal of impossible requests before any change, cancel between entries and in the middle of a large file, skip and retry of a failing file.
+  - Fault sweeps: the same copy, same-filesystem move and cross-filesystem move are run once per changing filesystem call, with that call (a) failing, (b) failing together with every later call, as when the process dies, (c) for copies, writing half the file and reporting success. After each run: sources of a copy unchanged; nothing partial under a final name; a file being replaced is wholly old or wholly new; for a move every source entry is intact at the source or whole at the destination; after a plain error no temporary entry is left.
+  - Kill test: a child process runs the cross-filesystem move and is sent SIGKILL at each step in turn (13 or more steps); the same invariants hold after each.
+  - Mutation checks: 14 breakages by hand (copy straight to the final name, always replace, no clean-up, no size check, partial file kept, source removed although changed or not copied, silent replace on rename, conflicts not asked, file over folder, cancel ignored, into-itself check dropped, skip not honoured). 11 were caught at once; 3 survived, tests were added, and all 3 then failed.
+- **Not verified:** the reflink path (the tests run on tmpfs, which has none; the project disk is XFS); the fallback for filesystems without no-replace rename; a real second filesystem (the cross-filesystem case is simulated by the test wrapper refusing renames between two folders); behaviour on power loss (files are not synced to disk; killing the process is covered, losing power is not); very deep trees (the scan recurses).
+- **Deviations:** a folder is copied into a temporary folder and renamed as a whole, so a folder appears only when complete; if the user skips a failing file inside it, the folder is put in place without that file and the skip is reported. Devices, pipes and sockets are not copied.
+- **Waiver:** none
+- **Follow-up:** W-033 trash, W-034 undo, W-036 property tests and the gate record.
