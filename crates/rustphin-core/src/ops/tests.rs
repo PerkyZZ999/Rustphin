@@ -45,7 +45,7 @@ pub(super) fn tree(root: &Path) -> BTreeMap<PathBuf, Item> {
 }
 
 /// The paths in `tree`, as strings, for short assertions.
-fn names(root: &Path) -> Vec<String> {
+pub(super) fn names(root: &Path) -> Vec<String> {
     tree(root)
         .into_keys()
         .map(|path| path.to_string_lossy().into_owned())
@@ -58,14 +58,14 @@ pub(super) fn file(path: impl AsRef<Path>, content: &str) {
     fs::write(path, content).unwrap();
 }
 
-fn read(path: impl AsRef<Path>) -> String {
+pub(super) fn read(path: impl AsRef<Path>) -> String {
     fs::read_to_string(path).unwrap()
 }
 
 /// A controller that follows a script and fails the test on anything unscripted.
 #[derive(Default)]
 pub(super) struct Script {
-    conflicts: VecDeque<Resolution>,
+    pub(super) conflicts: VecDeque<Resolution>,
     failures: VecDeque<Recovery>,
     /// Cancel once this many progress reports were seen.
     cancel_after: Option<usize>,
@@ -75,7 +75,7 @@ pub(super) struct Script {
 }
 
 impl Script {
-    fn conflicts(choices: &[(ConflictChoice, bool)]) -> Self {
+    pub(super) fn conflicts(choices: &[(ConflictChoice, bool)]) -> Self {
         Self {
             conflicts: choices
                 .iter()
@@ -140,14 +140,14 @@ pub(super) fn dirs() -> Dirs {
     }
 }
 
-fn copy(sources: &[PathBuf], into: &Path) -> Request {
+pub(super) fn copy(sources: &[PathBuf], into: &Path) -> Request {
     Request::Copy {
         sources: sources.to_vec(),
         into: into.to_owned(),
     }
 }
 
-fn move_(sources: &[PathBuf], into: &Path) -> Request {
+pub(super) fn move_(sources: &[PathBuf], into: &Path) -> Request {
     Request::Move {
         sources: sources.to_vec(),
         into: into.to_owned(),
@@ -815,22 +815,40 @@ fn cancelling_in_the_middle_of_a_large_file_leaves_nothing_behind() {
     assert!(outcome.changes.is_empty());
 }
 
-/// A trash that is a plain folder: entries are renamed into it.
-pub(super) struct FolderTrash(pub(super) PathBuf);
+/// A trash that is a plain folder: each entry is renamed into a numbered
+/// subfolder of it.
+pub(super) struct FolderTrash {
+    dir: PathBuf,
+    next: std::sync::atomic::AtomicUsize,
+}
+
+impl FolderTrash {
+    pub(super) fn new(dir: &Path) -> Self {
+        Self {
+            dir: dir.to_owned(),
+            next: Default::default(),
+        }
+    }
+}
 
 impl Trash for FolderTrash {
     fn trash(&self, path: &Path) -> io::Result<TrashedItem> {
-        let content = self.0.join(path.file_name().unwrap());
+        let slot = self
+            .dir
+            .join(self.next.fetch_add(1, Ordering::Relaxed).to_string());
+        fs::create_dir(&slot)?;
+        let content = slot.join(path.file_name().unwrap());
         RealFs.rename_new(path, &content)?;
         Ok(TrashedItem {
             original: path.to_owned(),
-            record: content.with_extension("record"),
+            record: slot,
             content,
         })
     }
 
     fn restore(&self, item: &TrashedItem) -> io::Result<()> {
-        RealFs.rename_new(&item.content, &item.original)
+        RealFs.rename_new(&item.content, &item.original)?;
+        fs::remove_dir(&item.record)
     }
 }
 
@@ -840,7 +858,7 @@ fn trashing_moves_entries_into_the_trash_and_records_where() {
     file(d.src.join("folder/inner"), "inner");
     file(d.src.join("a.txt"), "a");
     file(d.src.join("stays"), "stays");
-    let trash = FolderTrash(d.dst.clone());
+    let trash = FolderTrash::new(&d.dst);
 
     let outcome = run(
         &RealFs,
@@ -853,11 +871,14 @@ fn trashing_moves_entries_into_the_trash_and_records_where() {
     .unwrap();
 
     assert_eq!(names(&d.src), ["stays"]);
-    assert_eq!(names(&d.dst), ["a.txt", "folder", "folder/inner"]);
+    assert_eq!(
+        names(&d.dst),
+        ["0", "0/folder", "0/folder/inner", "1", "1/a.txt"]
+    );
     assert!(matches!(
         &outcome.changes[..],
         [Change::Trashed { item: first }, Change::Trashed { item: second }]
-            if first.original == d.src.join("folder") && second.content == d.dst.join("a.txt")
+            if first.original == d.src.join("folder") && second.content == d.dst.join("1/a.txt")
     ));
 }
 

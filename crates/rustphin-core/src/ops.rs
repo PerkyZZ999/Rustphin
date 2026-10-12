@@ -1178,6 +1178,14 @@ enum Placed {
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod faults;
+mod undo;
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod undo_tests;
+mod worker;
+
+pub use undo::{History, Record, UndoError, UndoFailure, undo};
+pub use worker::{Finished, OpEvent, OpId, Operations, PROGRESS_INTERVAL};
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;

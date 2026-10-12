@@ -405,3 +405,27 @@
 - **Decision within D-011:** when no trash can be used on an entry's own volume, trashing fails and the entry stays; it is never copied to the home trash across filesystems and never deleted instead.
 - **Waiver:** none
 - **Follow-up:** W-034 undo.
+
+### 2026-10-12 — W-034, W-035: undo and the background runner
+- **Phase:** 6 Implement (S4)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS, 217 tests.
+  - Undo: each kind of operation (create folder and file, rename, copy, move within and across filesystems, merge move, trash) is run and undone, and the source and destination trees are compared with the state before. Refusals are tested for a replaced file, a permanent delete, an edited copy, a taken old place, a missing entry, a created file that was written to, and a created folder that was filled. A refused undo is shown to touch none of the operation's entries; an undo that stops half-way reports exactly what is still in effect.
+  - Property test: random sequences of up to 13 operations (create, rename, copy, move, trash, with colliding names, one not UTF-8, half the runs with a folder acting as another filesystem) are applied and then undone one by one; the tree must equal the starting tree. 200 cases per run in the suite; one run of 4,000 cases passed.
+  - The property test found two real defects, both fixed before this entry: undo refused a created folder after a later operation inside it had been undone (its modification time had moved), and refused entries that an earlier undo had brought back across filesystems (new inode). Entries are now compared by kind, size, modification time and permissions for files, and by kind for folders.
+  - Runner: start/progress/finish, a conflict that waits for its answer, cancel while a question is open, skip and retry of a failed entry, a refused request, undo twice in order, a refused undo that stays on offer. One test found that an operation waiting for an answer lived on after the runner was dropped; dropping the runner now cancels running operations.
+  - Mutation checks: 17 breakages of undo by hand; 13 caught at once, 4 survived (redundant checks that only matter for multi-entry operations or races), tests were added, all 4 then failed.
+- **Limits, by design:** a folder is not checked for changes before its undo, because undoing a folder never deletes (a created folder is removed only if empty, a moved one goes back with its contents, a copied one goes to the trash with whatever it holds). Undo of a copy needs a trash; without one it is refused. History is per session, 100 operations.
+- **Waiver:** none
+- **Follow-up:** none.
+
+### 2026-10-12 — W-036: operation engine gate
+- **Phase:** 6 Implement (S4)
+- **Result:** pass
+- **What the gate requires (ROADMAP S4, ARCHITECTURE risk rule):** the engine passes its fault-injection and kill-test suite before any operation UI is enabled.
+- **Evidence:** the entries of 2026-10-12 for W-031/W-032, W-033 and W-034/W-035 above. In short: a fault at every changing filesystem call of a copy, a move and a cross-filesystem move (failing once, dying there, or producing a short copy); a child process killed with SIGKILL at each step of a cross-filesystem move; trashing with the process dying at each step; the property test over operation sequences; 47 hand mutations in total, every one of which now fails at least one test.
+- **Against R-103:** "no code path overwrites or permanently deletes without an explicit choice": replacing happens only on `ConflictChoice::Overwrite`, deleting only through `Request::Delete`; undo never deletes non-empty data. "Killing the process at any point during copy or move leaves every source file intact or fully present at its destination": shown by the kill test and the crash sweeps. Batch rename is not built yet (S9). Atomic configuration writes were shown in S2.
+- **Not covered:** power loss (no fsync of copied data); real second filesystems and reflink (simulated or not reachable on the test machine's tmpfs); FUSE and network mounts; trees deep enough to exhaust the stack.
+- **Waiver:** none
+- **Follow-up:** W-037 onwards may start.

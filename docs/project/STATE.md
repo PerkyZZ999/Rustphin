@@ -3,8 +3,8 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S1–S3 done; S4 next
-- **Status:** active — between slices
+- **Current phase:** 6 (Vertical-slice implementation) — S1–S3 done; S4 in progress: engine gate passed (W-031 to W-036), operation UI next
+- **Status:** active — S4 under way
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-12
 
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-12 — Implement gate, slice S3
+- Latest validation entry: VALIDATION.md, 2026-10-12 — W-036: operation engine gate
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -27,7 +27,7 @@
 - None
 
 ## Next action
-- Start S4 (file operations, undo, trash): write its work items, build the operation engine in `rustphin-core` and pass fault-injection tests before any operation UI. Verify UI changes yourself through kwin-mcp, always in an isolated home. Run `rust-tc doctor` and commit after every task.
+- Continue S4 with W-037 (new folder, new file, rename, trash, delete, undo in the UI), then W-038 (copy and move, progress, conflict dialog), W-039 (trash view), W-040 (scenarios and Dolphin trash interoperability). Verify UI changes through kwin-mcp in an isolated home. Run `rust-tc doctor` and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

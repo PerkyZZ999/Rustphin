@@ -8,15 +8,15 @@ S4 — File operations, undo, trash
 Order matters: W-031 to W-036 are the engine and its gate; W-037 onwards (UI) may not start before W-036 is recorded as passed.
 
 ## Queue
-- [ ] W-034 — Undo journal: rename, move, copy, create and trash undone in reverse order; refusal with an explanation when files changed (R-008)
-- [ ] W-035 — Engine on a worker thread: commands in, progress, questions and results out over a channel (R-007, D-009)
-- [ ] W-036 — Engine gate: fault injected at every filesystem step of copy and move, process-kill tests, property tests over generated trees; hand mutation checks (R-103)
 - [ ] W-037 — UI: new folder, new file, rename in place, trash, permanent delete with confirmation, undo (R-007, R-008)
 - [ ] W-038 — UI: copy and move within the application (copy/cut/paste and to the other pane), progress with speed, remaining count and cancel, conflict dialog (R-006, R-007)
 - [ ] W-039 — UI: trash view with restore and empty trash (R-009)
 - [ ] W-040 — UI scenarios for file operations; trash interoperability with Dolphin checked in an isolated session (R-009)
 
 ## Done (recent)
+- [x] W-036 — Engine gate passed 2026-10-12: faults at every filesystem step of copy and move, process-kill test, property test over random operation sequences, hand mutation checks (see VALIDATION.md). Operation UI may now be built (R-103)
+- [x] W-035 — `ops::Operations`: each operation on its own thread; start, cancel, answer conflicts and failures; progress at most every 50 ms; events over a channel; owns the undo history (R-007, D-009)
+- [x] W-034 — Undo: `ops::undo` and `ops::History` revert create, rename, move, copy (by trashing the copies) and trash, newest first, after checking every affected entry; refusals name the entry and the reason (R-008)
 - [x] W-033 — Trash: freedesktop.org trash in `rustphin-platform` behind the core's `Trash` trait (home trash, per-volume `.Trash/$uid` and `.Trash-$uid`, restore, listing); engine requests `Trash` and `Delete` (permanent, recursive, never through links). Emptying the trash and finding mounted volumes' trashes come with the trash view, W-039 (R-007, R-009)
 - [x] W-032 — Core operation engine (`rustphin_core::ops`): create folder and file, rename, copy and move through a temporary name; a move between filesystems removes a source only when its copy is in place and the source unchanged; conflicts (skip, overwrite, keep both, apply to all; folders merge), cancel, per-entry skip or retry, progress (R-007, D-011)
 - [x] W-031 — Mutation primitives on the `Fs` trait (exclusive create, no-replace rename via `renameat2`, copy by reflink / `copy_file_range` / read-write, remove, attributes) for the real filesystem, and a fault-injecting wrapper for tests (R-007, R-103)
