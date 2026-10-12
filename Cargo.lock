@@ -5651,6 +5651,7 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "wl-clipboard-rs",
+ "zbus",
 ]
 
 [[package]]

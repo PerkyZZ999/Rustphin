@@ -229,6 +229,7 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 - **Cut entries:** drawn at half opacity until they are pasted or the clipboard changes.
 - **Dragging:** a chip in `primary` with `on-primary` text follows the pointer, naming the entry or counting them. A folder under the pointer takes the `hover` fill. Icon and name are the handle in the details view, the whole cell in the grids.
 - **Places panel:** 220 px wide on `chrome-glass`, left of the panes, with a 44 px header holding its label and icon buttons. Rows are 28 px with a 16 px icon; the place of the folder being shown has the `hover` fill, a `primary-bright` bar and icon. A group heading is `headline` type in `body-sm` size and `text-muted`, with an arrow that points down when open and right when folded; a folded group shows how many places it holds. Places in a group are indented one step. Hidden places, when listed, are at half opacity.
+- **Device rows:** in the places panel under a "Devices" label, 48 px tall: a drive icon, the label, a 2 px usage bar (`secondary` on a `hover` track) and, in `data` type at 11 px, the free and total space in words. An unmounted volume is `text-muted`. An eject button sits at the right of volumes that may be unmounted.
 - **Rubber band:** a 1 px `primary-bright` outline with a `hover` fill.
 - **Floating surfaces:** as level 3 above. Menu items follow the entry hover and selection rules.
 

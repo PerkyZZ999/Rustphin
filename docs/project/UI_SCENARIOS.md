@@ -90,6 +90,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | K5 | Kill and relaunch Rustphin | The group and its place are back as they were |
 | K6 | Drag a place onto a group heading; drag a folder from the file list onto the panel | The place moves into the group; the folder is added to the places |
 | K7 | Focus a group heading, Left, then Delete | Left folds the group (arrow points right, a count appears); Delete removes the heading and its places stay, ungrouped |
+| V5 | Look at the places panel's "Devices" section. Do not click its rows or buttons: they are the machine's real drives | Each mounted volume has a drive icon, its label ("System" for the root volume), a usage bar and a line like "211 GiB free of 927 GiB"; volumes other than the system and home ones have an eject button |
 | L1 | Launch the release build on a 500,000-entry folder (`rust-tc bench-listing` creates `target/bench/listing-500k`); press End | Status "500,000 items"; the last entry is selected and visible within a second |
 
 ## Not covered by these scenarios
@@ -99,4 +100,5 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 - Reordering tabs by dragging with the mouse, and dropping entries on a tab.
 - Dragging to an application that is not a KDE one, and a session without a data-control protocol: neither is available in the test session.
 - The trashes of other volumes: the banner lists the real ones of the machine, which belong to the user and are not opened in tests.
+- Mounting, unmounting and safely removing a volume: the session shares the machine's real device service, so these are only tested against a mock service in unit tests.
 - The failure dialog (it needs an entry that fails mid-operation) and the dialogs' buttons by mouse.

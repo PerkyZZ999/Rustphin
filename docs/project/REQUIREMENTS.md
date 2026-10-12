@@ -111,19 +111,19 @@ Conventions:
 - **Priority:** must
 - **Description:** A places panel shared with KDE, plus user-defined collapsible groups.
 - **Acceptance:**
-  - [ ] Places from the shared KDE places file are shown; adding, renaming, removing and hiding a place in Rustphin is visible in Dolphin, and the reverse.
-  - [ ] The user can create, rename, reorder, collapse and delete groups, and move places into and out of them by drag-and-drop and by keyboard.
-  - [ ] A group's collapsed state and order persist between sessions.
-  - [ ] A grouped place still appears, ungrouped, in Dolphin and KDE file dialogs; the shared file remains valid for them after any Rustphin edit.
-  - [ ] Deleting a group does not delete its places.
+  - [x] Places from the shared KDE places file are shown; adding, renaming, removing and hiding a place in Rustphin is visible in Dolphin, and the reverse.
+  - [x] The user can create, rename, reorder, collapse and delete groups, and move places into and out of them by drag-and-drop and by keyboard.
+  - [x] A group's collapsed state and order persist between sessions.
+  - [x] A grouped place still appears, ungrouped, in Dolphin and KDE file dialogs; the shared file remains valid for them after any Rustphin edit.
+  - [x] Deleting a group does not delete its places.
 - **Validation:** test (shared-file round trip against fixtures), ui-test, manual (Dolphin interop)
 
 ### R-013 — Devices
 - **Priority:** must
 - **Acceptance:**
-  - [ ] Removable and internal volumes appear in the places panel with name, and with capacity usage when mounted.
-  - [ ] Mount on activation, unmount and safely remove work; plugging and unplugging updates the list without restart.
-  - [ ] A failed unmount (device busy) shows the reason.
+  - [x] Removable and internal volumes appear in the places panel with name, and with capacity usage when mounted.
+  - [ ] Mount on activation, unmount and safely remove work; plugging and unplugging updates the list without restart. (Implemented and tested against a mock service; not yet tried on a real drive.)
+  - [ ] A failed unmount (device busy) shows the reason. (Tested against the mock service; not yet seen on screen.)
 - **Validation:** test (against a mocked UDisks2 service), manual (real USB drive)
 
 ### R-014 — Thumbnails and icons

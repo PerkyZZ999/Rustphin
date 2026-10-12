@@ -498,3 +498,22 @@
 - **Limits:** only local folders and the trash are listed (network and "recent" places stay in the file, untouched); place icons are bundled ones chosen from the theme icon's name, not the theme's own; the panel's width is fixed and its visibility is not remembered between sessions.
 - **Waiver:** none
 - **Follow-up:** W-049 devices.
+
+### 2026-10-12 — W-049 to W-051: devices
+- **Phase:** 6 Implement (S6)
+- **Result:** pass, with real-hardware checks open
+- **Evidence:**
+  - `rust-tc doctor` PASS, 276 tests. The device client is tested against a mock UDisks2 service reached over a private connection (no bus daemon): volumes listed fixed first, without ignored volumes and disk images, with label, size, mount point and whether the drive is removable and can be powered off; mounting returns the mount point and the list then shows it; unmounting a busy volume fails with the service's reason and leaves it mounted; a dismissed password prompt is reported as missing permission; a removable drive is powered off and a fixed one is not; a volume appearing on the service is noticed and then listed. Also tested: free and total space of a mounted filesystem; which volumes the panel offers to unmount (never the system or home volume); naming of unlabelled volumes; the compact size format.
+  - Mutation checks through `rust-tc quick`: 8 breakages of the device client by hand (ignored volumes listed, disk images listed, busy not recognised, trailing NUL kept in a mount point, removable flag lost, fixed drives offered for power-off, changes not reported, sort order); all 8 failed.
+  - Observed in an isolated session (scenario V5): the panel's "Devices" section listed the machine's three mounted volumes with usage bars and "n GiB free of m GiB"; the root volume was named "System" and had no eject button; the other two had one. Nothing was clicked there.
+- **Not verified:** mounting, unmounting, safe removal, the busy message and plug/unplug on a real drive (R-013): the test session shares the machine's device service and no spare removable drive is attached. These paths are covered by the mock-service tests only.
+- **Limits:** the usage figures are read when the list changes, not continuously; encrypted volumes that need unlocking are not offered; optical and network volumes are not handled specially.
+- **Waiver:** none
+- **Follow-up:** the manual check with a USB drive (recorded in STATE.md).
+
+### 2026-10-12 — Implement gate, slice S6
+- **Phase:** 6 Implement
+- **Result:** pass with the hardware checks above open
+- **Evidence:** `rust-tc doctor` PASS with 276 tests. R-012: all five points demonstrated (entry of 2026-10-12 for W-046 to W-048). R-013: volumes appear with name and usage (V5); mount, unmount, safe removal, change notification and the busy reason are implemented and pass against a mock service, and are not yet tried on hardware. The shared places file stayed valid for Dolphin after Rustphin's edits (K4).
+- **Waiver:** none
+- **Follow-up:** S7.

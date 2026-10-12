@@ -6,11 +6,13 @@ S6 — Places, place groups, devices
 **Done when:** every R-012 and R-013 acceptance point is demonstrated and recorded in VALIDATION.md, or recorded as not verifiable with the reason; the shared places file stays valid for Dolphin after every edit.
 
 ## Queue
-- [ ] W-049 — Platform: devices over UDisks2 (list, mount, unmount, safely remove, changes), tested against a mock service (R-013, D-013)
-- [ ] W-050 — UI: devices in the places panel with capacity; mount on activation; unmount and safely remove; failures shown with their reason (R-013)
-- [ ] W-051 — Device scenarios, and whatever of R-013 can be observed without real hardware, added to UI_SCENARIOS.md and run (R-013)
+- None. S6 is closed; S7 is planned in ROADMAP.md and its work items are written when it starts.
 
 ## Done (recent)
+- [x] S6 — Places, place groups, devices: W-046 to W-051, closed 2026-10-12; mounting and unmounting were not exercised on real hardware (see VALIDATION.md)
+- [x] W-051 — Scenario V5 for the devices section added to UI_SCENARIOS.md and run; nothing was mounted or unmounted on the machine's own drives (R-013)
+- [x] W-050 — Devices in the places panel: name, a usage bar with free and total space for mounted volumes, mount on activation, unmount or safely remove (button or E), failures reported with their reason; the system and home volumes cannot be unmounted from the panel (R-013)
+- [x] W-049 — `rustphin_platform::devices`: volumes over UDisks2 on the system bus (list, mount, unmount, power off, change signals), tested against a mock service over a private connection (R-013, D-013)
 - [x] W-048 — Places panel: shows the shared places and the groups; open, open in a new tab, add (Ctrl+D, button, or drag a folder in), rename (F2), remove or hide (Delete, H), reorder (Alt+Up/Down), collapse (Left/Right), move between groups (G, or drag), new group (Ctrl+Shift+G); follows edits other applications make; F9 shows and hides it; Tab moves between it and the panes. Scenarios K1–K7 run with Dolphin (R-012)
 - [x] W-047 — Place groups in `place-groups.toml`: name, order, collapsed state, member identifiers; a place is in at most one group; deleting a group keeps its places; vanished places are forgotten only after a successful read of the shared file (R-012, D-008)
 - [x] W-046 — `rustphin_platform::places`: reads KDE's `user-places.xbel` and edits it in place (add, rename, hide, remove, reorder), changing only the bytes concerned and refusing a result that does not parse (R-012, D-008)

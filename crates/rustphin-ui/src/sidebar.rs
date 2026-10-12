@@ -5,7 +5,9 @@
 //! (decision D-008). All file access happens off the UI thread.
 
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
@@ -25,11 +27,13 @@ use gpui_kit::{
 use rustphin_core::{Fs as _, RealFs};
 use rustphin_platform::{
     config,
+    devices::{self, Device, Devices, NoDevices, UDisks2},
     places::{EMPTY, Place, Places, PlacesError},
 };
 
 use crate::{
     browser::DraggedEntries,
+    format,
     groups::Groups,
     operations::hub,
     theme::{Theme, size, space, text},
@@ -58,6 +62,7 @@ actions!(
         NextGroup,
         NewGroup,
         CancelRename,
+        Eject,
     ]
 );
 
@@ -77,6 +82,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("right", Expand, list),
         KeyBinding::new("g", NextGroup, list),
         KeyBinding::new("ctrl-shift-g", NewGroup, list),
+        KeyBinding::new("e", Eject, list),
         KeyBinding::new("escape", CancelRename, Some(KEY_CONTEXT)),
     ]);
 }
@@ -98,6 +104,8 @@ enum Row {
     Place(String),
     /// A group heading, by the group's position.
     Group(usize),
+    /// A storage volume, by the device service's name for it.
+    Device(String),
 }
 
 /// A place being dragged within the panel.
@@ -140,6 +148,12 @@ pub struct Sidebar {
     rename_requested: Option<Row>,
     /// The folder the active pane shows, to mark its place.
     current: Option<PathBuf>,
+    /// Storage volumes, and how full the mounted ones are (size, free).
+    devices: Vec<Device>,
+    usage: HashMap<String, (u64, u64)>,
+    device_service: Arc<dyn Devices>,
+    /// The volume being mounted or unmounted, shown as busy.
+    device_busy: Option<String>,
     focus: FocusHandle,
     _watch: Option<rustphin_core::WatchGuard>,
     _subscriptions: Vec<Subscription>,
@@ -210,6 +224,33 @@ fn icon_for(place: &Place) -> gpui_kit::assets::IconName {
     }
 }
 
+/// The name shown for a volume: its label, or its size when it has none.
+fn device_name(device: &Device) -> String {
+    match &device.label {
+        Some(label) => label.clone(),
+        None if device.mount_point.as_deref() == Some(Path::new("/")) => "System".to_owned(),
+        None => format!("{} volume", format::size(device.size)),
+    }
+}
+
+/// How full a volume is, in words short enough for the panel.
+fn usage_text(total: u64, free: u64) -> String {
+    format!(
+        "{} free of {}",
+        format::size_short(free),
+        format::size_short(total)
+    )
+}
+
+/// Whether the panel offers to unmount or remove `device`: anything mounted
+/// or unpluggable, except the volumes the system and the user's home run from.
+fn can_eject(device: &Device, home: Option<&Path>) -> bool {
+    match &device.mount_point {
+        Some(mount) => mount != Path::new("/") && home.is_none_or(|home| !home.starts_with(mount)),
+        None => device.removable && device.can_power_off(),
+    }
+}
+
 /// The time now, in seconds since the Unix epoch; KDE builds identifiers from it.
 fn now() -> u64 {
     std::time::SystemTime::now()
@@ -265,12 +306,17 @@ impl Sidebar {
             rename_input,
             rename_requested: None,
             current: None,
+            devices: Vec::new(),
+            usage: HashMap::new(),
+            device_service: Arc::new(NoDevices),
+            device_busy: None,
             focus: cx.focus_handle(),
             _watch: watch,
             _subscriptions: subscriptions,
         };
         panel.load_groups(cx);
         panel.reload(cx);
+        panel.connect_devices(cx);
         panel
     }
 
@@ -441,7 +487,13 @@ impl Sidebar {
     }
 
     fn rows(&self) -> Vec<Row> {
-        rows(&self.places, &self.groups, self.show_hidden)
+        let mut rows = rows(&self.places, &self.groups, self.show_hidden);
+        rows.extend(
+            self.devices
+                .iter()
+                .map(|device| Row::Device(device.id.clone())),
+        );
+        rows
     }
 
     fn move_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
@@ -480,7 +532,271 @@ impl Sidebar {
                 let collapsed = self.groups.groups.get(*index).is_some_and(|g| g.collapsed);
                 self.set_collapsed(*index, !collapsed, cx);
             }
+            Row::Device(id) => self.open_device(id, new_tab, cx),
         }
+    }
+
+    /// Connects to the device service in the background and starts
+    /// following it.
+    fn connect_devices(&mut self, cx: &mut Context<Self>) {
+        let (changed, changes) = flume::unbounded::<()>();
+        cx.spawn(async move |panel, cx| {
+            let service = cx
+                .background_spawn(async move {
+                    let service = UDisks2::connect()?;
+                    service.watch(Box::new(move || {
+                        let _ = changed.send(());
+                    }))?;
+                    Ok::<_, devices::DeviceError>(service)
+                })
+                .await;
+            match service {
+                Ok(service) => {
+                    let _ = panel.update(cx, |panel, cx| {
+                        panel.device_service = Arc::new(service);
+                        panel.reload_devices(cx);
+                    });
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "no device service; volumes are not listed");
+                    return;
+                }
+            }
+            while changes.recv_async().await.is_ok() {
+                // One plug or mount sends several signals.
+                cx.background_executor().timer(RELOAD_DELAY).await;
+                while changes.try_recv().is_ok() {}
+                if panel
+                    .update(cx, |panel, cx| panel.reload_devices(cx))
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// Lists the volumes again, in the background.
+    fn reload_devices(&mut self, cx: &mut Context<Self>) {
+        let service = self.device_service.clone();
+        cx.spawn(async move |panel, cx| {
+            let listed = cx
+                .background_spawn(async move {
+                    let devices = service.list()?;
+                    let usage: HashMap<String, (u64, u64)> = devices
+                        .iter()
+                        .filter_map(|device| {
+                            let usage = devices::usage(device.mount_point.as_deref()?)?;
+                            Some((device.id.clone(), usage))
+                        })
+                        .collect();
+                    Ok::<_, devices::DeviceError>((devices, usage))
+                })
+                .await;
+            let _ = panel.update(cx, |panel, cx| match listed {
+                Ok((devices, usage)) => {
+                    panel.devices = devices;
+                    panel.usage = usage;
+                    cx.notify();
+                }
+                Err(error) => tracing::warn!(%error, "the volumes could not be listed"),
+            });
+        })
+        .detach();
+    }
+
+    fn device(&self, id: &str) -> Option<&Device> {
+        self.devices.iter().find(|device| device.id == id)
+    }
+
+    /// Shows a volume, mounting it first if it is not mounted.
+    fn open_device(&mut self, id: &str, new_tab: bool, cx: &mut Context<Self>) {
+        let Some(device) = self.device(id).cloned() else {
+            return;
+        };
+        let emit = move |path: PathBuf, cx: &mut Context<Self>| {
+            cx.emit(if new_tab {
+                SidebarEvent::OpenInNewTab(path)
+            } else {
+                SidebarEvent::Open(path)
+            });
+        };
+        if let Some(path) = device.mount_point.clone() {
+            return emit(path, cx);
+        }
+        let service = self.device_service.clone();
+        self.device_busy = Some(device.id.clone());
+        cx.notify();
+        cx.spawn(async move |panel, cx| {
+            let name = device_name(&device);
+            let mounted = cx
+                .background_spawn(async move { service.mount(&device) })
+                .await;
+            let _ = panel.update(cx, |panel, cx| {
+                panel.device_busy = None;
+                match mounted {
+                    Ok(path) => emit(path, cx),
+                    Err(error) => {
+                        let text = format!("\u{201c}{name}\u{201d} could not be mounted: {error}.");
+                        hub(cx).update(cx, |hub, cx| hub.say(text, true, cx));
+                    }
+                }
+                panel.reload_devices(cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Unmounts a volume and, when its drive allows it, powers the drive off
+    /// so it can be unplugged.
+    fn eject(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some(device) = self.device(id).cloned() else {
+            return;
+        };
+        if !can_eject(&device, rustphin_platform::xdg::home().as_deref()) {
+            return;
+        }
+        let service = self.device_service.clone();
+        self.device_busy = Some(device.id.clone());
+        cx.notify();
+        cx.spawn(async move |panel, cx| {
+            let name = device_name(&device);
+            let done = cx
+                .background_spawn(async move {
+                    if device.mount_point.is_some() {
+                        service.unmount(&device)?;
+                    }
+                    if device.removable && device.can_power_off() {
+                        service.power_off(&device)?;
+                        return Ok(true);
+                    }
+                    Ok::<_, devices::DeviceError>(false)
+                })
+                .await;
+            let _ = panel.update(cx, |panel, cx| {
+                panel.device_busy = None;
+                let (text, is_error) = match done {
+                    Ok(true) => (
+                        format!("\u{201c}{name}\u{201d} can be unplugged now."),
+                        false,
+                    ),
+                    Ok(false) => (format!("\u{201c}{name}\u{201d} was unmounted."), false),
+                    Err(error) => (
+                        format!("\u{201c}{name}\u{201d} could not be removed: {error}."),
+                        true,
+                    ),
+                };
+                hub(cx).update(cx, |hub, cx| hub.say(text, is_error, cx));
+                panel.reload_devices(cx);
+            });
+        })
+        .detach();
+    }
+
+    fn device_row(
+        &self,
+        device: &Device,
+        theme: Theme,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        use gpui_kit::assets::IconName as I;
+        let row = Row::Device(device.id.clone());
+        let is_current = device.mount_point.is_some() && device.mount_point == self.current;
+        let busy = self.device_busy.as_deref() == Some(device.id.as_str());
+        let usage = self.usage.get(&device.id).copied();
+        let ejectable = can_eject(device, rustphin_platform::xdg::home().as_deref());
+        let (click_row, middle_row) = (row.clone(), row.clone());
+        let eject_id = device.id.clone();
+        let name: SharedString = device_name(device).into();
+        self.row_surface(&row, is_current, theme, window, cx)
+            .id(SharedString::from(format!("device-{}", device.id)))
+            .h(px(size::DEVICE_ROW))
+            // A volume that is not mounted is listed, but fainter.
+            .when(device.mount_point.is_none(), |line| {
+                line.text_color(theme.text_muted)
+            })
+            .child(
+                Icon::new(if busy {
+                    I::Loader
+                } else if device.removable {
+                    I::Usb
+                } else {
+                    I::HardDrive
+                })
+                .size(px(size::ICON))
+                .flex_none()
+                .text_color(if is_current {
+                    theme.accent
+                } else {
+                    theme.text_muted
+                }),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .gap(px(space::XS / 2.))
+                    .child(div().truncate().child(name))
+                    // How full it is: a bar, and the same in words on hover
+                    // and in the line under it.
+                    .when_some(usage, |column, (total, free)| {
+                        let used = 1. - free as f32 / total as f32;
+                        column
+                            .child(
+                                div()
+                                    .w_full()
+                                    .h(px(size::PROGRESS / 2.))
+                                    .rounded(px(size::RADIUS))
+                                    .bg(theme.hover)
+                                    .child(
+                                        div()
+                                            .h_full()
+                                            .w(gpui_kit::relative(used.clamp(0., 1.)))
+                                            .rounded(px(size::RADIUS))
+                                            .bg(theme.activity),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .font_family(text::FAMILY_DATA)
+                                    .text_size(px(text::TINY))
+                                    .text_color(theme.text_muted)
+                                    .truncate()
+                                    .child(usage_text(total, free)),
+                            )
+                    }),
+            )
+            .when(ejectable && !busy, |line| {
+                line.child(
+                    Button::new(SharedString::from(format!("eject-{}", device.id)))
+                        .ghost()
+                        .xsmall()
+                        .icon(I::Eject)
+                        .tooltip(if device.removable && device.can_power_off() {
+                            "Safely remove (E)"
+                        } else {
+                            "Unmount (E)"
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.eject(&eject_id.clone(), cx);
+                        })),
+                )
+            })
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.focused = Some(click_row.clone());
+                this.focus.focus(window, cx);
+                this.open(&click_row.clone(), false, cx);
+            }))
+            .on_mouse_down(
+                MouseButton::Middle,
+                cx.listener(move |this, _, _, cx| this.open(&middle_row.clone(), true, cx)),
+            )
+            .into_any_element()
     }
 
     fn set_collapsed(&mut self, index: usize, collapsed: bool, cx: &mut Context<Self>) {
@@ -493,6 +809,8 @@ impl Sidebar {
         let name = match &row {
             Row::Place(id) => self.place(id).map(|place| place.title.clone()),
             Row::Group(index) => self.groups.groups.get(*index).map(|g| g.name.clone()),
+            // A volume's label belongs to its filesystem.
+            Row::Device(_) => None,
         };
         let Some(name) = name else { return };
         let len = name.len();
@@ -525,6 +843,7 @@ impl Sidebar {
                     self.groups.rename(index, &typed);
                     self.save_groups(cx);
                 }
+                Row::Device(_) => {}
             }
         }
         if self
@@ -572,7 +891,8 @@ impl Sidebar {
                 self.save_groups(cx);
                 cx.notify();
             }
-            None => {}
+            // A volume is not removed from the list; `E` unmounts it.
+            Some(Row::Device(_)) | None => {}
         }
     }
 
@@ -640,7 +960,7 @@ impl Sidebar {
                     |_, (), _| {},
                 );
             }
-            None => {}
+            Some(Row::Device(_)) | None => {}
         }
     }
 
@@ -688,6 +1008,7 @@ impl Sidebar {
     fn drop_place(&mut self, id: &str, target: &Row, cx: &mut Context<Self>) {
         match target {
             Row::Group(index) => self.move_to_group(id, Some(*index), None, cx),
+            Row::Device(_) => {}
             Row::Place(other) if other == id => {}
             Row::Place(other) => match self.groups.group_of(other) {
                 Some(index) => self.move_to_group(id, Some(index), Some(other), cx),
@@ -716,7 +1037,7 @@ impl Sidebar {
         let group = match target {
             Some(Row::Group(index)) => Some(*index),
             Some(Row::Place(id)) => self.groups.group_of(id),
-            None => None,
+            Some(Row::Device(_)) | None => None,
         };
         for folder in folders {
             self.add_place(folder, group, cx);
@@ -944,7 +1265,38 @@ impl Render for Sidebar {
                 }
             }
         }
-        let nothing = lines.is_empty();
+        if lines.is_empty() {
+            lines.push(
+                div()
+                    .p(px(space::MD))
+                    .text_size(px(text::SMALL))
+                    .text_color(theme.text_muted)
+                    .child(
+                        "No places yet. Add the folder shown with Ctrl+D, or drag a folder here.",
+                    )
+                    .into_any_element(),
+            );
+        }
+        let devices = self.devices.clone();
+        if !devices.is_empty() {
+            lines.push(
+                div()
+                    .mt(px(space::SM))
+                    .mx(px(space::XS))
+                    .px(px(space::SM))
+                    .h(px(size::ROW))
+                    .flex()
+                    .items_center()
+                    .font_family(text::FAMILY_HEADING)
+                    .text_size(px(text::SMALL))
+                    .text_color(theme.text_muted)
+                    .child("Devices")
+                    .into_any_element(),
+            );
+            for device in &devices {
+                lines.push(self.device_row(device, theme, window, cx));
+            }
+        }
         let any_hidden = places.iter().any(|place| place.hidden);
         let current = self.current.clone();
 
@@ -1013,16 +1365,7 @@ impl Render for Sidebar {
             .min_h_0()
             .overflow_y_scroll()
             .py(px(space::XS))
-            .children(lines)
-            .when(nothing, |list| {
-                list.child(
-                    div()
-                        .p(px(space::MD))
-                        .text_size(px(text::SMALL))
-                        .text_color(theme.text_muted)
-                        .child("No places yet. Add the folder shown with Ctrl+D, or drag a folder here."),
-                )
-            });
+            .children(lines);
 
         div()
             .key_context(KEY_CONTEXT)
@@ -1055,6 +1398,11 @@ impl Render for Sidebar {
             }))
             .on_action(cx.listener(|this, _: &NextGroup, _, cx| this.cycle_group(cx)))
             .on_action(cx.listener(|this, _: &NewGroup, _, cx| this.new_group(cx)))
+            .on_action(cx.listener(|this, _: &Eject, _, cx| {
+                if let Some(Row::Device(id)) = this.focused.clone() {
+                    this.eject(&id, cx);
+                }
+            }))
             .on_action(cx.listener(|this, _: &CancelRename, window, cx| {
                 this.finish_rename(false, window, cx);
             }))
@@ -1161,6 +1509,44 @@ mod tests {
                 Row::Group(1)
             ]
         );
+    }
+
+    fn device(mount: Option<&str>, removable: bool, power_off: bool) -> Device {
+        Device {
+            id: "/dev/x".into(),
+            label: None,
+            mount_point: mount.map(PathBuf::from),
+            size: 64 * 1024 * 1024 * 1024,
+            removable,
+            power_off: power_off.then(|| "/drive".to_owned()),
+        }
+    }
+
+    #[test]
+    fn the_system_and_home_volumes_are_never_offered_for_unmounting() {
+        let home = Some(Path::new("/home/u"));
+        assert!(!can_eject(&device(Some("/"), false, false), home));
+        assert!(!can_eject(&device(Some("/home"), false, false), home));
+        assert!(!can_eject(&device(Some("/home/u"), false, false), home));
+        assert!(can_eject(&device(Some("/mnt/data"), false, false), home));
+        assert!(can_eject(&device(Some("/home/u/stick"), true, true), home));
+        // Not mounted: only a drive that can be powered off has anything to do.
+        assert!(can_eject(&device(None, true, true), home));
+        assert!(!can_eject(&device(None, true, false), home));
+        assert!(!can_eject(&device(None, false, false), home));
+    }
+
+    #[test]
+    fn a_volume_without_a_label_is_named_by_its_size_and_usage_is_put_in_words() {
+        let mut volume = device(None, true, true);
+        assert_eq!(device_name(&volume), "64.0 GiB volume");
+        volume.label = Some("STICK".into());
+        assert_eq!(device_name(&volume), "STICK");
+        assert_eq!(
+            usage_text(64 * 1024 * 1024 * 1024, 16 * 1024 * 1024 * 1024),
+            "16 GiB free of 64 GiB"
+        );
+        assert_eq!(device_name(&device(Some("/"), false, false)), "System");
     }
 
     #[test]

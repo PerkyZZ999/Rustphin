@@ -7,6 +7,7 @@
 pub mod blur;
 pub mod clipboard;
 pub mod config;
+pub mod devices;
 pub mod icons;
 pub mod mime;
 pub mod places;

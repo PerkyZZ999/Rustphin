@@ -47,6 +47,9 @@ pub mod size {
     pub const WIDTH_FOR_TYPE: f32 = 760.;
     /// Icons in empty and error states.
     pub const ICON_LARGE: f32 = 32.;
+    /// Height of a volume's row in the places panel: a name, a usage bar
+    /// and a line of numbers.
+    pub const DEVICE_ROW: f32 = 48.;
     /// Width of the places panel.
     pub const SIDEBAR: f32 = 220.;
     /// Width of a dialog.
@@ -69,6 +72,8 @@ pub mod text {
     pub const FAMILY_HEADING: &str = "Space Grotesk";
     /// Data cells (`data-md`).
     pub const DATA: f32 = 13.;
+    /// The smallest text: figures under a usage bar.
+    pub const TINY: f32 = 11.;
     /// Secondary information: status line, captions.
     pub const SMALL: f32 = 12.;
     /// Body text and list rows.

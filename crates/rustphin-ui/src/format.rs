@@ -37,6 +37,23 @@ pub fn size(bytes: u64) -> String {
     format!("{value:.1} {}", UNITS[unit])
 }
 
+/// Formats a size in binary units without decimals, for tight spaces:
+/// `512 B`, `2 KiB`, `931 GiB`.
+pub fn size_short(bytes: u64) -> String {
+    const UNITS: [&str; 6] = ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+    let mut value = bytes as f64 / 1024.;
+    let mut unit = 0;
+    // Step up before rounding would print "1024" of the smaller unit.
+    while value >= 1023.5 && unit + 1 < UNITS.len() {
+        value /= 1024.;
+        unit += 1;
+    }
+    format!("{value:.0} {}", UNITS[unit])
+}
+
 /// Formats seconds since the Unix epoch as a date and time in `zone`:
 /// `2026-10-12 14:03`. Out-of-range values give an empty string.
 pub fn timestamp(seconds: i64, zone: &TimeZone) -> String {
@@ -54,6 +71,15 @@ pub fn timestamp(seconds: i64, zone: &TimeZone) -> String {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn short_sizes_have_no_decimals_and_step_up_before_showing_1024() {
+        assert_eq!(size_short(0), "0 B");
+        assert_eq!(size_short(1023), "1023 B");
+        assert_eq!(size_short(1536), "2 KiB");
+        assert_eq!(size_short(1024 * 1024 * 1024 - 1), "1 GiB");
+        assert_eq!(size_short(931 * 1024 * 1024 * 1024), "931 GiB");
+    }
 
     #[test]
     fn counts_use_thousands_separators() {

@@ -48,14 +48,14 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** R-012 and R-013 criteria; the shared places file stays valid for Dolphin after every edit.
 - **Requirements:** R-012, R-013
 - **Validation:** test (fixtures, mocked UDisks2), ui-test, manual (Dolphin, USB drive)
-- **Status:** todo — next
+- **Status:** done 2026-10-12 (see VALIDATION.md). Open: mounting, unmounting and safe removal on a real USB drive.
 
 ## Slice S7 — Thumbnails
 - **Outcome:** Image thumbnails that load as you scroll and are shared with Dolphin's cache.
 - **Acceptance:** R-014 thumbnail criteria; malformed and oversized images are harmless.
 - **Requirements:** R-014 (thumbnails), R-104 (images)
 - **Validation:** test, manual
-- **Status:** todo
+- **Status:** todo — next
 
 ## Slice S8 — Command palette and progressive disclosure
 - **Outcome:** One shortcut reaches every action and any recent folder; the default window is pared back to the essentials.
