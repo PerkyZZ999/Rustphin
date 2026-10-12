@@ -51,9 +51,20 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | P2 | Kill the app and `launch_app` it again in the same session | Opens in the icons view at that zoom, sorted by type, hidden files shown |
 | U1 | Select two files; from a shell create a file, delete one of the selected files and rename another file in the fixture; wait one second | All three changes are shown without a reload; the surviving selected file is still selected; the list has not scrolled |
 | U2 | Enter "empty"; from a shell `rmdir` it; wait one second | The fixture is shown with a message that the folder no longer exists; the location bar names the fixture |
+| T1 | Middle-click the "Documents" row | A tab strip appears with "ui-fixture" (active, accent underline) and "Documents"; the view still shows the fixture |
+| T2 | Ctrl+Tab, then Ctrl+Shift+Tab | The "Documents" tab is shown (one item, window title "Documents — Rustphin"), then the first tab again |
+| T3 | On the second tab, Ctrl+Shift+PageUp | "Documents" moves to the first position and stays active |
+| T4 | Ctrl+T, then Ctrl+W | A third tab opens on the same folder and is closed again |
+| T5 | Ctrl+W until one tab is left | The tab strip disappears; Ctrl+W on the last tab does not close the window |
+| T6 | With two tabs, click the other tab; click its × | The clicked tab becomes active; the × closes that tab |
+| D1 | F3 | Two panes side by side on the same folder, a thin divider between them, an accent line above the pane that has keyboard focus; narrow panes keep the Name and Size columns |
+| D2 | Tab, then Down and Return on a folder | The accent line moves to the other pane; only that pane changes folder |
+| D3 | F3 again | The tab shows one pane, the one that had focus |
+| R1 | With two tabs, one of them split, read `<isolated home>/.local/state/rustphin/session.toml`; kill the app and `launch_app` it with no argument | The file lists both tabs and the split tab's two panes; the app reopens with the same tabs, split and locations |
 | L1 | Launch the release build on a 500,000-entry folder (`rust-tc bench-listing` creates `target/bench/listing-500k`); press End | Status "500,000 items"; the last entry is selected and visible within a second |
 
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.
 - Narrow-window column dropping, frame rate, and anything that needs a second application.
+- Reordering tabs by dragging with the mouse.

@@ -11,6 +11,11 @@ pub fn config_dir() -> Option<PathBuf> {
     crate::xdg::config_home().map(|home| home.join("rustphin"))
 }
 
+/// Rustphin's folder inside the user's state directory.
+pub fn state_dir() -> Option<PathBuf> {
+    crate::xdg::state_home().map(|home| home.join("rustphin"))
+}
+
 /// Reads a configuration file. A missing file is `Ok(None)`.
 pub fn read(path: &Path) -> io::Result<Option<String>> {
     match fs::read_to_string(path) {

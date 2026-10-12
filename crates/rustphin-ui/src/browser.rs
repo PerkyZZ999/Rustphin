@@ -8,7 +8,7 @@ use std::{
 };
 
 use gpui_kit::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, FocusHandle,
+    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, EventEmitter, FocusHandle,
     InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, Modifiers, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render,
     ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
@@ -40,8 +40,6 @@ use crate::{
 const KEY_CONTEXT: &str = "Browser";
 /// The browser while no text field inside it has focus.
 const LIST_CONTEXT: &str = "Browser && !Input";
-/// Ancestors shown in the location bar before the rest collapse into an ellipsis.
-const MAX_CRUMBS: usize = 4;
 /// How far the pointer must move with the button down before a rubber band starts.
 const BAND_THRESHOLD: f32 = 4.;
 /// A pause longer than this starts a new type-ahead search.
@@ -156,6 +154,15 @@ impl Failure {
     }
 }
 
+/// What a browser asks of whatever contains it.
+#[derive(Debug, Clone)]
+pub enum BrowserEvent {
+    /// Show this folder in a new tab (a middle click on it).
+    OpenInNewTab(PathBuf),
+}
+
+impl EventEmitter<BrowserEvent> for Browser {}
+
 /// One browsing view of the filesystem.
 pub struct Browser {
     /// `None` when the model's worker pool could not be created.
@@ -195,6 +202,8 @@ pub struct Browser {
     /// The settings as last written, to skip writes that change nothing.
     saved: Settings,
     frames: FrameLog,
+    /// The width this view is drawn at, in pixels; zero until known.
+    width: f32,
     /// A rubber-band selection being dragged, if any.
     band: Option<Band>,
     /// Set when a band ends, so the click that the same press produces is ignored.
@@ -217,8 +226,9 @@ impl Browser {
         let location_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Enter a folder path"));
         let subscriptions = vec![cx.subscribe_in(&location_input, window, Self::on_location_input)];
+        // Whatever contains this view decides when it gets the keyboard focus:
+        // a view created for a background tab must not take it.
         let focus = cx.focus_handle();
-        focus.focus(window, cx);
 
         let mut this = Self {
             model: None,
@@ -244,6 +254,7 @@ impl Browser {
             settings_path,
             saved: settings.clone(),
             frames: FrameLog::from_env(),
+            width: 0.,
             band: None,
             ignore_click: false,
             scroll: UniformListScrollHandle::new(),
@@ -733,7 +744,34 @@ impl Browser {
             .is_some_and(|model| model.options().show_hidden)
     }
 
-    fn location(&self) -> Option<PathBuf> {
+    /// Tells the view how wide it is drawn, so columns and the location bar
+    /// adapt to a pane and not to the whole window.
+    pub fn set_width(&mut self, width: f32) {
+        self.width = width;
+    }
+
+    /// Gives this view the keyboard focus.
+    pub fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus.focus(window, cx);
+    }
+
+    /// Whether this view, or a field inside it, has the keyboard focus.
+    pub fn is_focused(&self, window: &Window, cx: &App) -> bool {
+        self.focus.contains_focused(window, cx)
+    }
+
+    /// The view's mode, zoom and options, as they would be saved.
+    pub fn settings(&self) -> Settings {
+        let options = self
+            .model
+            .as_ref()
+            .map(DirectoryModel::options)
+            .unwrap_or_default();
+        Settings::new(self.mode, self.zoom, options)
+    }
+
+    /// The folder being shown.
+    pub fn location(&self) -> Option<PathBuf> {
         self.model.as_ref().and_then(DirectoryModel::location)
     }
 
@@ -902,7 +940,7 @@ impl Browser {
             })
             .unwrap_or_default();
         let last = ancestors.len().saturating_sub(1);
-        let first_shown = ancestors.len().saturating_sub(MAX_CRUMBS);
+        let first_shown = ancestors.len().saturating_sub(crumbs_for_width(self.width));
 
         div()
             .id("breadcrumbs")
@@ -1046,6 +1084,23 @@ impl Browser {
             focused: self.focus_row == Some(row),
             info: self.type_info_for(rows.name(row), container, cx),
         }
+    }
+
+    /// A middle click on a folder asks for it in a new tab.
+    fn entry_middle_click(
+        row: usize,
+        cx: &mut Context<Self>,
+    ) -> impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static {
+        cx.listener(move |this, _: &MouseDownEvent, _, cx| {
+            let folder = this
+                .snapshot
+                .as_ref()
+                .filter(|snapshot| row < snapshot.len() && snapshot.is_container(row))
+                .map(|snapshot| snapshot.entry_path(row));
+            if let Some(path) = folder {
+                cx.emit(BrowserEvent::OpenInNewTab(path));
+            }
+        })
     }
 
     /// Click behaviour shared by every view: select, and open on a plain
@@ -1198,6 +1253,7 @@ impl Browser {
                             .px(px(space::SM))
                             .child(line)
                             .on_click(Self::entry_click(row, cx))
+                            .on_mouse_down(MouseButton::Middle, Self::entry_middle_click(row, cx))
                     })
                     .collect::<Vec<_>>()
             }),
@@ -1279,6 +1335,10 @@ impl Browser {
                                 .p(px(space::XS / 2.))
                                 .child(cell)
                                 .on_click(Self::entry_click(row, cx))
+                                .on_mouse_down(
+                                    MouseButton::Middle,
+                                    Self::entry_middle_click(row, cx),
+                                )
                         });
                         div()
                             .flex()
@@ -1395,7 +1455,12 @@ impl Render for Browser {
         let frame_started = self.frames.begin();
         let theme = *cx.global::<Theme>();
         let snapshot = self.snapshot.clone();
-        let width = f32::from(window.viewport_size().width);
+        // A pane in a split is narrower than the window; whatever contains
+        // this view says how wide it is.
+        if self.width <= 0. {
+            self.width = f32::from(window.viewport_size().width);
+        }
+        let width = self.width;
         let columns = Columns::for_width(width);
         let layout = self.mode.layout(self.zoom);
         // Cells fill the width inside the list's side gutters.
@@ -1520,7 +1585,6 @@ impl Render for Browser {
             .flex()
             .flex_col()
             .size_full()
-            .bg(theme.window)
             .text_color(theme.text)
             .font_family(text::FAMILY_BODY)
             .text_size(px(text::BODY))
@@ -1699,7 +1763,18 @@ fn theme_icon_size(drawn: f32) -> u32 {
         .unwrap_or(256)
 }
 
-/// Which optional columns fit the window.
+/// How many trailing folders of the location fit the view; the rest collapse
+/// into an ellipsis. The current folder is always shown.
+fn crumbs_for_width(width: f32) -> usize {
+    match width {
+        w if w >= 900. => 4,
+        w if w >= 640. => 3,
+        w if w >= 480. => 2,
+        _ => 1,
+    }
+}
+
+/// Which optional columns fit the view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Columns {
     modified: bool,
@@ -1792,6 +1867,15 @@ mod tests {
         assert_eq!(theme_icon_size(64.), 64);
         assert_eq!(theme_icon_size(192.), 256);
         assert_eq!(theme_icon_size(999.), 256);
+    }
+
+    #[test]
+    fn narrower_views_show_fewer_folders_of_the_location_but_always_one() {
+        assert_eq!(crumbs_for_width(1280.), 4);
+        assert_eq!(crumbs_for_width(899.), 3);
+        assert_eq!(crumbs_for_width(639.), 2);
+        assert_eq!(crumbs_for_width(479.), 1);
+        assert_eq!(crumbs_for_width(0.), 1);
     }
 
     #[test]

@@ -10,22 +10,24 @@ fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    // The first argument is the folder to open; default to the home directory.
-    let start = env::args_os()
-        .nth(1)
+    let home = env::var_os("HOME")
         .map(PathBuf::from)
-        .or_else(|| env::var_os("HOME").map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("/"));
-    let start = if start.is_relative() {
-        env::current_dir()
-            .map(|dir| dir.join(&start))
-            .unwrap_or(start)
-    } else {
-        start
-    };
+    // The first argument is a folder to open; without one the previous
+    // session's tabs come back.
+    let start = env::args_os().nth(1).map(PathBuf::from).map(|folder| {
+        if folder.is_relative() {
+            env::current_dir()
+                .map(|dir| dir.join(&folder))
+                .unwrap_or(folder)
+        } else {
+            folder
+        }
+    });
 
     rustphin_ui::run(rustphin_ui::Options {
         start,
+        home,
         force_opaque: env::var_os("RUSTPHIN_OPAQUE").is_some_and(|value| value != "0"),
     });
 }

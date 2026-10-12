@@ -218,6 +218,8 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 - **Inputs:** the path field and, later, search: `surface-raised` with a `border-strong` outline that becomes `primary-bright` on focus.
 - **Messages:** failures appear inline above the files, in an `error-surface` banner with an icon, a sentence saying what happened, and a way to dismiss it. The file list stays as it was.
 - **Empty and loading states:** a large icon, a `headline-sm` line saying what is the case, a `text-muted` line saying why, and one action when there is something useful to do.
+- **Tab strip:** 32 px high on `surface-chrome`, shown only when a window has more than one tab. Tabs are `body-sm`; inactive tabs use `text-muted`, the active tab uses `text` with a 2 px `primary-bright` underline. Each tab has a close button; a `+` button after the last tab opens a new one.
+- **Split panes:** two equal panes separated by a 1 px `border` line. A 2 px `primary-bright` line above a pane marks the one that receives keyboard input; it is only drawn while a tab is split.
 - **Rubber band:** a 1 px `primary-bright` outline with a `hover` fill.
 - **Floating surfaces:** as level 3 above. Menu items follow the entry hover and selection rules.
 
@@ -236,7 +238,7 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 
 ## Implementation status
 
-As of 2026-10-12 the application implements the surfaces, text colours, selection, hover, error banner, toolbar, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings).
+As of 2026-10-12 the application implements the surfaces, text colours, selection, hover, error banner, toolbar, tab strip, split panes, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings).
 
 Not yet applied in code: `surface-raised`, `border-accent` and the glow for floating surfaces (there are no menus or palette yet), the cyan and emerald signals (nothing reports progress yet), `primary-bright` on focused inputs, and the type column, which still uses Inter.
 

@@ -35,3 +35,11 @@ pub fn config_home() -> Option<PathBuf> {
         .filter(|path| path.is_absolute())
         .or_else(|| home().map(|home| home.join(".config")))
 }
+
+/// The directory holding the user's state files (session data, history).
+pub fn state_home() -> Option<PathBuf> {
+    env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| home().map(|home| home.join(".local/state")))
+}

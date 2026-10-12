@@ -27,7 +27,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** R-002, R-005, R-006 criteria (pane-to-pane copy arrives with S4/S5).
 - **Requirements:** R-002, R-005, R-006
 - **Validation:** test, ui-test
-- **Status:** todo — next
+- **Status:** done 2026-10-12 (see VALIDATION.md). Copy and move between panes is left to S4/S5.
 
 ## Slice S4 — File operations, undo, trash
 - **Outcome:** Create, rename, copy, move, trash and delete with progress, conflict handling and undo.

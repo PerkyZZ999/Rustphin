@@ -27,6 +27,8 @@ pub mod size {
     pub const TOOLBAR: f32 = 44.;
     /// Height of the status line.
     pub const STATUS: f32 = 28.;
+    /// Height of the tab strip.
+    pub const TABS: f32 = 32.;
     /// Icons in toolbars and banners.
     pub const ICON: f32 = 16.;
     /// Sort arrows and other inline indicators.

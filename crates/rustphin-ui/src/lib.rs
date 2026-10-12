@@ -8,8 +8,11 @@ mod diagnostics;
 mod filetypes;
 mod format;
 mod layout;
+mod session;
 mod settings;
+mod tabs;
 mod theme;
+mod workspace;
 
 use std::path::PathBuf;
 
@@ -19,13 +22,15 @@ use gpui_kit::{
 };
 use rustphin_platform::blur::{BackgroundBlur, NoBlur, WaylandBlur};
 
-use crate::{browser::Browser, settings::Settings, theme::Theme};
+use crate::{session::Session, settings::Settings, theme::Theme, workspace::Workspace};
 
 /// How the application should start.
 #[derive(Debug, Clone)]
 pub struct Options {
-    /// The directory to show first.
-    pub start: PathBuf,
+    /// A folder to open instead of restoring the previous session's tabs.
+    pub start: Option<PathBuf>,
+    /// The folder to show when there is neither a start folder nor a session.
+    pub home: PathBuf,
     /// Draw opaque surfaces even when the compositor could blur.
     pub force_opaque: bool,
 }
@@ -46,6 +51,17 @@ pub fn run(options: Options) {
         })
         .map(|text| Settings::parse(&text))
         .unwrap_or_default();
+    let session_path = rustphin_platform::config::state_dir().map(|dir| dir.join("session.toml"));
+    // An explicit folder replaces the remembered tabs for this run; they are
+    // still overwritten by what is open when the tabs next change.
+    let session = match &options.start {
+        Some(folder) => Session::single(folder.clone()),
+        None => session_path
+            .as_deref()
+            .and_then(|path| rustphin_platform::config::read(path).ok().flatten())
+            .map(|text| Session::parse(&text))
+            .unwrap_or_default(),
+    };
     gpui_kit::application()
         // The complete icon set: the default bundle lacks the view-mode icons.
         .with_assets(gpui_kit::assets::AllAssets)
@@ -57,6 +73,7 @@ pub fn run(options: Options) {
                 cx,
             );
             browser::bind_keys(cx);
+            workspace::bind_keys(cx);
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
                     cx.quit();
@@ -94,9 +111,11 @@ pub fn run(options: Options) {
                 theme.apply_to_components(cx);
                 cx.set_global(theme);
                 window.set_window_title("Rustphin");
-                let browser = cx.new(|cx| {
-                    Browser::new(
-                        options.start.clone(),
+                let workspace = cx.new(|cx| {
+                    Workspace::new(
+                        session.clone(),
+                        options.home.clone(),
+                        session_path.clone(),
                         settings.clone(),
                         settings_path.clone(),
                         window,
@@ -107,7 +126,8 @@ pub fn run(options: Options) {
                 // under the view. Clear it: the browser paints the window
                 // background itself, translucent when the compositor blurs.
                 cx.new(|cx| {
-                    gpui_kit::base::Root::new(browser, window, cx).bg(gpui_kit::transparent_black())
+                    gpui_kit::base::Root::new(workspace, window, cx)
+                        .bg(gpui_kit::transparent_black())
                 })
             });
             match opened {

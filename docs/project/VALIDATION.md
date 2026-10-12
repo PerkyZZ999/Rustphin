@@ -357,3 +357,25 @@
 - **Deviations and limits:** a change triggers a full, quiet re-read of the directory rather than patching the listing, so a 500,000-entry folder under constant change costs a re-read each time; consecutive re-reads are spaced by three times the last one's duration. Entries are matched across a re-read by name, so a renamed selected file loses its selection. Not measured: the delay on a very large folder; inotify watch limits; network and FUSE mounts, where inotify does not report remote changes.
 - **Waiver:** none
 - **Follow-up:** incremental updates if large busy folders prove slow; W-030 adds these checks to the UI scenarios.
+
+### 2026-10-12 — W-027 to W-030: tabs, split view, session restore
+- **Phase:** 6 Implement (S3)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS, 131 tests. New unit tests: the tab list (open beside the active tab, close with neighbour activation, the only tab cannot be closed, cycling wraps, moving keeps the same tab active, out-of-range indices) and the session file (round trip, missing or damaged file, unusable entries dropped and indices clamped, a file from a newer version recognised).
+  - Observed in the application (isolated session with its own home, scenarios T1–T5, D1–D3, R1): middle-click on a folder opened a background tab and showed the tab strip; Ctrl+Tab switched tabs and the window title followed; Ctrl+Shift+PageUp moved the active tab to the first position; Ctrl+T opened and Ctrl+W closed tabs, and the strip disappeared at one tab; F3 split the tab; Tab moved the accent line and keyboard input to the other pane; `session.toml` listed two tabs with the split tab's two panes; after killing and relaunching with no argument the same tabs, split and locations came back.
+  - Found and fixed while testing: new panes stole keyboard focus on creation; narrow panes hid the Name column; the pane divider and the gap above the inactive pane showed the desktop through the window, because each pane painted its own background (the workspace now paints it once).
+- **Not verified:** T6 (clicking a tab and its close button) after the last fixes; reordering by mouse drag; two panes holding different view modes (each pane has its own settings in code, not observed); restoring a session whose folder no longer exists, beyond the core's fallback to the nearest ancestor; the look with blur on the live desktop.
+- **Waiver:** none
+- **Follow-up:** none blocking.
+
+### 2026-10-12 — Implement gate, slice S3
+- **Phase:** 6 Implement
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` PASS with 131 tests. Per requirement:
+  - R-002 (live updates): W-025, W-026 and scenarios U1, U2.
+  - R-005 (tabs): W-027, W-029 and scenarios T1–T5, R1.
+  - R-006 (split view): W-028 and scenarios D1–D3. Its second point, copy and move between panes, is not part of S3 and stays open until S4/S5.
+- **Carried forward, not blocking:** live updates re-read the whole directory; tab reordering by mouse drag and T6 unobserved; view settings are saved globally, not per pane or folder; nothing exposed over AT-SPI (R-107, S11); the 80–90 ms start-up frame gap.
+- **Waiver:** none
+- **Follow-up:** S4.

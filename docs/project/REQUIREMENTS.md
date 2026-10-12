@@ -51,14 +51,14 @@ Conventions:
 ### R-005 — Tabs
 - **Priority:** must
 - **Acceptance:**
-  - [ ] Open, close, reorder and switch tabs by mouse and keyboard; middle-click a folder opens it in a new tab.
-  - [ ] Open tabs and their locations are restored on next start.
+  - [x] Open, close, reorder and switch tabs by mouse and keyboard; middle-click a folder opens it in a new tab.
+  - [x] Open tabs and their locations are restored on next start.
 - **Validation:** ui-test
 
 ### R-006 — Split view
 - **Priority:** must
 - **Acceptance:**
-  - [ ] A tab can be split into two panes with independent locations, each with its own view settings.
+  - [x] A tab can be split into two panes with independent locations, each with its own view settings.
   - [ ] Copy and move between panes work by drag-and-drop and by keyboard.
 - **Validation:** ui-test
 
