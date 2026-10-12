@@ -441,3 +441,27 @@
 - **Limits:** copy and paste are internal to Rustphin until S5 brings the system clipboard; cut entries are not shown dimmed; a name typed in the rename field replaces a name that was not valid UTF-8 with what is typed.
 - **Waiver:** none
 - **Follow-up:** W-039 trash view, W-040.
+
+### 2026-10-12 — W-039, W-040: trash view and Dolphin interoperability
+- **Phase:** 6 Implement (S4)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS, 232 tests. New tests: restore through the engine, with an occupied place skipped and reported, and its undo (trash again); mount points read from `mountinfo` with escapes undone; selected trash contents mapped to their records, orphans counted; everything an emptying removes; which folder counts as a trash view; naming of volume trashes; an irreversible operation does not block undoing the one before it.
+  - Observed in an isolated session with its own home (scenarios X1–X4, F5 completed): two files trashed in Rustphin and one trashed with `kioclient move … trash:/` (KDE's own trash implementation) were all listed in Rustphin's trash view; Restore put the KIO-trashed file back in the fixture; "Empty trash…" asked, and after Return `Trash/files` and `Trash/info` were empty on disk; Shift+Delete, Return deleted a file and the message offered no Undo. Earlier the same day Dolphin, started in the session, listed a file trashed by Rustphin with its original path. So trash entries are exchanged in both directions.
+  - Found and fixed while testing: "Emptied the trash." offered Undo, and an irreversible operation stayed in the history and blocked every earlier undo; such operations are no longer remembered.
+- **Not verified:** opening another volume's trash (the banner listed the machine's two real volume trashes; they belong to the user and were not opened); restoring several entries at once on screen; the trash view when the home trash does not exist yet (it is created on opening, covered by `home_files_dir` only indirectly).
+- **Limits:** the trash view shows stored names, not original paths or deletion dates; one trash directory at a time rather than a merged view; restore of an entry whose record is missing is refused with a message.
+- **Waiver:** none
+- **Follow-up:** none blocking.
+
+### 2026-10-12 — Implement gate, slice S4
+- **Phase:** 6 Implement
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` PASS with 232 tests; the engine gate (W-036) was passed before any operation UI was built. Per requirement:
+  - R-007 (file operations): create, rename, copy, move, trash, delete on single and multiple entries, nested folders, links and names that are not UTF-8 (engine tests); background execution with progress, count, speed and stop (W-035, W-038, scenario F8); conflict choices with apply to all (tests, scenario F6); no partial file under a final name and verified cross-filesystem moves (fault sweeps, kill test); trash by default and confirmed permanent delete (F3, F5); reflink then `copy_file_range` then read/write (implemented; the reflink path could not run on the test filesystem).
+  - R-008 (undo): rename, move, copy, create, trash and restore undone newest first; refusal with the entry and the reason when files changed (tests, scenarios F4, F7).
+  - R-009 (trash): freedesktop specification with per-volume directories (tests, volumes simulated); exchange with Dolphin/KIO in both directions (F9, X2); trash view with restore and confirmed emptying (X1–X4).
+  - R-103 (data safety): first two points shown by the engine gate for copy and move; batch rename comes in S9; atomic configuration writes were shown in S2.
+- **Carried forward, not blocking:** see the open loops in STATE.md: screens not yet observed, no sync to disk, no partial undo of an operation that replaced something, internal clipboard until S5, cross-filesystem and reflink behaviour only simulated or unreachable in tests.
+- **Waiver:** none
+- **Follow-up:** S5.

@@ -34,14 +34,14 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** The operation engine passes its fault-injection and kill-test suite **before** any operation UI is enabled; then R-007, R-008, R-009 criteria; trash interoperates with Dolphin.
 - **Requirements:** R-007, R-008, R-009, R-103
 - **Validation:** test (property, fault injection, kill tests), manual (Dolphin interop)
-- **Status:** todo
+- **Status:** done 2026-10-12 (see VALIDATION.md). Copy and paste are internal to Rustphin until S5.
 
 ## Slice S5 — Clipboard and drag-and-drop
 - **Outcome:** Copy, cut, paste and drag files between Rustphin and other applications.
 - **Acceptance:** R-010 and R-011 criteria, including names with spaces and non-ASCII characters and the no-data-control fallback.
 - **Requirements:** R-010, R-011
 - **Validation:** ui-test (with Dolphin), test (URI encoding), manual (non-KDE app)
-- **Status:** todo
+- **Status:** todo — next
 
 ## Slice S6 — Places, place groups, devices
 - **Outcome:** Places panel shared with KDE, user-defined collapsible groups, and mountable devices.

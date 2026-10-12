@@ -143,6 +143,53 @@ fn trashing_is_undone_by_restoring() {
     );
 }
 
+#[test]
+fn restoring_from_the_trash_puts_entries_back_and_its_undo_trashes_them_again() {
+    let d = dirs();
+    file(d.src.join("a.txt"), "a");
+    file(d.src.join("b.txt"), "b");
+    let before = tree(&d.src);
+    let trash = FolderTrash::new(&d.dst);
+    let trashed = run(
+        &RealFs,
+        &trash,
+        &Request::Trash {
+            paths: vec![d.src.join("a.txt"), d.src.join("b.txt")],
+        },
+        &mut Script::default(),
+    )
+    .unwrap();
+    let items: Vec<TrashedItem> = trashed
+        .changes
+        .iter()
+        .map(|change| match change {
+            Change::Trashed { item } => item.clone(),
+            other => panic!("unexpected {other:?}"),
+        })
+        .collect();
+    // Something took the place of the second entry.
+    file(d.src.join("b.txt"), "newcomer");
+
+    let mut script = Script::failures(&[Recovery::Skip]);
+    let outcome = run(&RealFs, &trash, &Request::Restore { items }, &mut script).unwrap();
+
+    assert_eq!(read(d.src.join("a.txt")), "a");
+    assert_eq!(read(d.src.join("b.txt")), "newcomer");
+    assert_eq!(read(d.dst.join("1/b.txt")), "b");
+    assert_eq!(
+        outcome.changes,
+        [Change::Restored {
+            original: d.src.join("a.txt")
+        }]
+    );
+    assert_eq!(outcome.skipped[0].path, d.src.join("b.txt"));
+
+    undo(&RealFs, &trash, &outcome.changes, &mut Script::default()).unwrap();
+    assert_eq!(names(&d.src), ["b.txt"]);
+    assert_eq!(read(d.dst.join("2/a.txt")), "a");
+    assert_ne!(tree(&d.src), before);
+}
+
 /// Runs `request` on the real filesystem and returns its changes.
 fn changes_of(request: Request, script: &mut Script) -> Vec<Change> {
     run(&RealFs, &NoTrash, &request, script).unwrap().changes
@@ -448,18 +495,40 @@ fn history_undoes_operations_newest_first_and_keeps_refused_ones() {
 #[test]
 fn history_forgets_the_oldest_operation_beyond_its_limit() {
     let mut history = History::default();
-    let change = |n: usize| Change::Deleted {
-        path: PathBuf::from(n.to_string()),
+    let change = |n: usize| Change::Restored {
+        original: PathBuf::from(n.to_string()),
     };
     for n in 0..=History::LIMIT {
-        history.push(Request::Delete { paths: Vec::new() }, vec![change(n)]);
+        history.push(Request::Restore { items: Vec::new() }, vec![change(n)]);
     }
 
     assert_eq!(history.len(), History::LIMIT);
-    assert!(matches!(
-        &history.last().unwrap().changes[..],
-        [Change::Deleted { path }] if path.to_str() == Some(History::LIMIT.to_string().as_str())
-    ));
+    assert_eq!(history.last().unwrap().changes, [change(History::LIMIT)]);
+}
+
+#[test]
+fn an_operation_that_cannot_be_undone_does_not_block_undoing_the_one_before() {
+    let d = dirs();
+    file(d.src.join("a.txt"), "a");
+    file(d.src.join("gone"), "gone");
+    let mut history = History::default();
+    for request in [
+        Request::Rename {
+            path: d.src.join("a.txt"),
+            new_name: "b.txt".into(),
+        },
+        Request::Delete {
+            paths: vec![d.src.join("gone")],
+        },
+    ] {
+        let outcome = run(&RealFs, &NoTrash, &request, &mut Script::default()).unwrap();
+        history.push(request, outcome.changes);
+    }
+
+    let undone = history.undo_last(&RealFs, &NoTrash, &mut Script::default());
+
+    assert!(matches!(undone, Some(Ok(record)) if matches!(record.request, Request::Rename { .. })));
+    assert_eq!(names(&d.src), ["a.txt"]);
 }
 
 // ---- Property: any sequence of operations can be undone back to the start ----

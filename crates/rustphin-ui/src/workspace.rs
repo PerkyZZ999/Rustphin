@@ -384,7 +384,9 @@ impl Workspace {
 
     /// The label of a tab: the name of the folder its active pane shows.
     fn label(tab: &Tab, cx: &App) -> SharedString {
-        match tab.browser().read(cx).location() {
+        let browser = tab.browser().read(cx);
+        match browser.location() {
+            Some(_) if browser.shows_trash() => "Trash".into(),
             Some(path) => folder_label(&path).into(),
             None => "New tab".into(),
         }
@@ -859,6 +861,28 @@ impl Workspace {
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
+            Question::ConfirmEmpty { entries, .. } => (
+                format!(
+                    "Empty the trash? It holds {} {}.",
+                    format::count(*entries),
+                    format::plural(*entries, "item", "items")
+                ),
+                vec![
+                    div()
+                        .child("Everything in it is deleted for good. It cannot be undone.")
+                        .into_any_element(),
+                ],
+                vec![
+                    Button::new("dialog-cancel")
+                        .outline()
+                        .label("Keep (Esc)")
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx))),
+                    Button::new("dialog-accept")
+                        .danger()
+                        .label("Empty the trash (Enter)")
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
+                ],
+            ),
         };
         let glow = BoxShadow {
             color: theme.selection.into(),
@@ -951,6 +975,8 @@ impl Workspace {
             (Some(Question::Failed { .. }), Answer::Cancel) => hub.recover(Recovery::Cancel, cx),
             (Some(Question::ConfirmDelete { .. }), Answer::Accept) => hub.confirm_delete(true, cx),
             (Some(Question::ConfirmDelete { .. }), Answer::Cancel) => hub.confirm_delete(false, cx),
+            (Some(Question::ConfirmEmpty { .. }), Answer::Accept) => hub.confirm_empty(true, cx),
+            (Some(Question::ConfirmEmpty { .. }), Answer::Cancel) => hub.confirm_empty(false, cx),
             _ => {}
         });
         self.apply_to_all = false;

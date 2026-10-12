@@ -212,6 +212,10 @@ pub struct Browser {
     rename_requested: Option<Vec<u8>>,
     /// Take the keyboard focus back at the next redraw.
     refocus: bool,
+    /// The trash directory whose contents this view is showing, if it is one.
+    trash_dir: Option<PathBuf>,
+    /// The user's other trash directories, on other volumes, while a trash is shown.
+    other_trashes: Vec<PathBuf>,
     focus: FocusHandle,
     /// The system's file-type databases, once loaded in the background.
     types: Option<Arc<Database>>,
@@ -281,6 +285,8 @@ impl Browser {
             select_when_seen: None,
             rename_requested: None,
             refocus: false,
+            trash_dir: None,
+            other_trashes: Vec::new(),
             focus,
             types: None,
             type_info: HashMap::new(),
@@ -346,6 +352,9 @@ impl Browser {
                     None => self.selection.sync(&snapshot),
                 }
                 let arrived = same_place.is_none();
+                if arrived {
+                    self.detect_trash(snapshot.path().to_owned(), cx);
+                }
                 let arrival = self.select_on_arrival.take_if(|_| !snapshot.is_loading());
                 let came_from = arrival.and_then(|name| snapshot.row_of(&name));
                 if let Some(row) = came_from {
@@ -879,6 +888,138 @@ impl Browser {
         }
     }
 
+    /// Whether this view is showing the contents of a trash.
+    pub fn shows_trash(&self) -> bool {
+        self.trash_dir.is_some()
+    }
+
+    /// Finds out in the background whether `path` shows a trash directory.
+    fn detect_trash(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        self.trash_dir = None;
+        self.other_trashes.clear();
+        let Some(trash) = hub(cx).read(cx).trash() else {
+            return;
+        };
+        cx.spawn(async move |view, cx| {
+            let shown = path.clone();
+            let (dir, others) = cx
+                .background_spawn(async move {
+                    let dir = trash.dir_showing(&shown);
+                    let others = match &dir {
+                        Some(dir) => trash
+                            .dirs()
+                            .into_iter()
+                            .filter(|other| other != dir)
+                            .collect(),
+                        None => Vec::new(),
+                    };
+                    (dir, others)
+                })
+                .await;
+            let _ = view.update(cx, |view, cx| {
+                // Only if the view is still where it was when this started.
+                if view.location().as_deref() == Some(path.as_path()) {
+                    view.trash_dir = dir;
+                    view.other_trashes = others;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Shows the trash.
+    fn open_trash(&mut self, cx: &mut Context<Self>) {
+        let Some(trash) = hub(cx).read(cx).trash() else {
+            return;
+        };
+        cx.spawn(async move |view, cx| {
+            let folder = cx
+                .background_spawn(async move { trash.home_files_dir() })
+                .await;
+            let _ = view.update(cx, |view, cx| {
+                match folder {
+                    Ok(folder) => view.open(folder),
+                    Err(error) => tracing::warn!(%error, "the trash could not be opened"),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn restore_selected(&mut self, cx: &mut Context<Self>) {
+        let contents = self.selected_paths();
+        if let Some(dir) = self.trash_dir.clone()
+            && !contents.is_empty()
+        {
+            hub(cx).update(cx, |hub, cx| hub.restore(dir, contents, cx));
+        }
+    }
+
+    /// The line that says this folder is the trash and offers what can be
+    /// done with it.
+    fn trash_banner(&self, dir: &Path, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement {
+        let dir = dir.to_owned();
+        let nothing_selected = self.selection.is_empty();
+        div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(space::SM))
+            .px(px(space::LG))
+            .py(px(space::SM))
+            .bg(theme.chrome)
+            .border_b_1()
+            .border_color(theme.border)
+            .child(
+                Icon::new(gpui_kit::assets::IconName::Trash)
+                    .size(px(size::ICON))
+                    .flex_none()
+                    .text_color(theme.text_muted),
+            )
+            .child(
+                div().flex_1().min_w_0().truncate().child("Trash").child(
+                    div()
+                        .text_size(px(text::SMALL))
+                        .text_color(theme.text_muted)
+                        .child("Items stay here until the trash is emptied."),
+                ),
+            )
+            // Each volume keeps its own trash; these lead to the others.
+            .children(self.other_trashes.iter().enumerate().map(|(index, other)| {
+                let files = other.join("files");
+                Button::new(("other-trash", index))
+                    .ghost()
+                    .small()
+                    .label(trash_label(other))
+                    .tooltip(format!("Show {}", other.display()))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.open(files.clone());
+                        cx.notify();
+                    }))
+            }))
+            .child(
+                Button::new("restore")
+                    .outline()
+                    .small()
+                    .label("Restore")
+                    .tooltip("Put the selected items back where they were")
+                    .disabled(nothing_selected)
+                    .on_click(cx.listener(|this, _, _, cx| this.restore_selected(cx))),
+            )
+            .child(
+                Button::new("empty-trash")
+                    .outline()
+                    .small()
+                    .label("Empty trash\u{2026}")
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        let dir = dir.clone();
+                        hub(cx).update(cx, |hub, cx| hub.empty_trash(dir, cx));
+                    })),
+            )
+    }
+
     /// The selected entries, as full paths.
     fn selected_paths(&self) -> Vec<PathBuf> {
         self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
@@ -892,6 +1033,10 @@ impl Browser {
 
     /// Starts renaming the focused entry in place.
     fn rename_focused(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Names in the trash belong to its records.
+        if self.trash_dir.is_some() {
+            return;
+        }
         let name = self
             .snapshot
             .as_ref()
@@ -975,6 +1120,9 @@ impl Browser {
         let (Some(parent), Some(snapshot)) = (self.location(), &self.snapshot) else {
             return;
         };
+        if self.trash_dir.is_some() {
+            return;
+        }
         let base = if folder { "New Folder" } else { "New File" };
         let name = operations::free_name(base, |name| snapshot.row_of(name.as_bytes()).is_some());
         self.select_when_seen = Some((name.clone().into_bytes(), true));
@@ -989,6 +1137,10 @@ impl Browser {
     }
 
     fn trash_selected(&mut self, cx: &mut Context<Self>) {
+        // What is already in the trash can only be deleted for good.
+        if self.trash_dir.is_some() {
+            return self.delete_selected(cx);
+        }
         let paths = self.selected_paths();
         if !paths.is_empty() {
             hub(cx).update(cx, |hub, _| hub.start(Request::Trash { paths }));
@@ -1006,7 +1158,9 @@ impl Browser {
     }
 
     fn paste(&mut self, cx: &mut Context<Self>) {
-        if let Some(into) = self.location() {
+        if let Some(into) = self.location()
+            && self.trash_dir.is_none()
+        {
             hub(cx).update(cx, |hub, cx| hub.paste(into, cx));
         }
     }
@@ -1075,8 +1229,17 @@ impl Browser {
                     .small()
                     .icon(gpui_kit::assets::IconName::FolderPlus)
                     .tooltip("New folder (F10)")
-                    .disabled(location.is_none())
+                    .disabled(location.is_none() || self.trash_dir.is_some())
                     .on_click(cx.listener(|this, _, _, cx| this.create_entry(true, cx))),
+            )
+            .child(
+                Button::new("open-trash")
+                    .ghost()
+                    .small()
+                    .icon(gpui_kit::assets::IconName::Trash)
+                    .selected(self.trash_dir.is_some())
+                    .tooltip("Trash")
+                    .on_click(cx.listener(|this, _, _, cx| this.open_trash(cx))),
             )
             .children(
                 [
@@ -1830,6 +1993,9 @@ impl Render for Browser {
             .when_some(self.failure.as_ref(), |view, failure| {
                 view.child(self.failure_banner(failure, theme, cx))
             })
+            .when_some(self.trash_dir.clone(), |view, dir| {
+                view.child(self.trash_banner(&dir, theme, cx))
+            })
             .child(
                 // The file list sits on a more solid surface than the glass
                 // toolbar and status line, so columns of text stay readable.
@@ -1855,6 +2021,30 @@ impl Render for Browser {
             .children(self.band_outline(theme));
         self.frames.end(frame_started);
         view
+    }
+}
+
+/// A short name for a trash directory: "Home trash" for the one in the data
+/// directory, otherwise "Trash on “volume”" after the volume's top folder.
+fn trash_label(dir: &Path) -> String {
+    let in_volume = dir
+        .file_name()
+        .is_some_and(|name| name.as_encoded_bytes().starts_with(b".Trash"));
+    let parent = dir.parent();
+    // `$top/.Trash/$uid` or `$top/.Trash-$uid`.
+    let top = match parent {
+        Some(shared) if shared.file_name() == Some(OsStr::new(".Trash")) => shared.parent(),
+        Some(top) if in_volume => Some(top),
+        _ => None,
+    };
+    match top {
+        Some(top) => {
+            let name = top
+                .file_name()
+                .map_or_else(|| "/".into(), |name| display_name(name.as_encoded_bytes()));
+            format!("Trash on \u{201c}{name}\u{201d}")
+        }
+        None => "Home trash".to_owned(),
     }
 }
 
@@ -2125,6 +2315,26 @@ mod tests {
         assert!(medium.modified && !medium.kind);
         let narrow = Columns::for_width(size::WIDTH_FOR_MODIFIED - 1.);
         assert!(!narrow.modified && !narrow.kind);
+    }
+
+    #[test]
+    fn trash_directories_are_named_after_their_volume() {
+        assert_eq!(
+            trash_label(Path::new("/mnt/data/.Trash-1000")),
+            "Trash on \u{201c}data\u{201d}"
+        );
+        assert_eq!(
+            trash_label(Path::new("/media/usb stick/.Trash/1000")),
+            "Trash on \u{201c}usb stick\u{201d}"
+        );
+        assert_eq!(
+            trash_label(Path::new("/.Trash-1000")),
+            "Trash on \u{201c}/\u{201d}"
+        );
+        assert_eq!(
+            trash_label(Path::new("/home/u/.local/share/Trash")),
+            "Home trash"
+        );
     }
 
     #[test]

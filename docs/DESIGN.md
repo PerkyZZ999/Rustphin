@@ -225,6 +225,7 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 - **Rename field:** shown in place of the entry's name. `surface-raised` with `text`, so it reads the same on a selected and an unselected row. It opens with the name selected up to the extension.
 - **Dialogs:** a floating surface 440 px wide, centred over the window dimmed with `scrim`. A `headline-sm` title that states the question, the facts needed to answer it in `data-md`, and the buttons right-aligned: the safe default is the `button-primary`, a destructive default uses the error colours, the others are outlined. Every button shows its key. Dialogs appear only when a decision is needed: a name conflict, a failed entry, a permanent delete.
 - **Activity lines:** under the panes, on `chrome-glass`, only while there is something to say. A running operation that has lasted 300 ms shows what it is doing, a 4 px progress bar (`secondary` on a `hover` track), counts and speed in `data-sm`, and a stop button. The result of the last operation shows as one line with an Undo button; it leaves by itself after 6 seconds, unless it reports a problem, which uses the error colours and stays until dismissed.
+- **Trash banner:** while a trash is shown, a line under the toolbar on `chrome-glass` names it, says how long items stay, and holds its actions: the trashes of other volumes as plain buttons, Restore (disabled without a selection) and "Empty trash…" as outlined buttons. The toolbar's trash button stays selected.
 - **Rubber band:** a 1 px `primary-bright` outline with a `hover` fill.
 - **Floating surfaces:** as level 3 above. Menu items follow the entry hover and selection rules.
 
@@ -243,7 +244,7 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 
 ## Implementation status
 
-As of 2026-10-12 the application implements the surfaces, text colours, selection, hover, error banner, toolbar, tab strip, split panes, dialogs, activity lines, the rename field, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings).
+As of 2026-10-12 the application implements the surfaces, text colours, selection, hover, error banner, toolbar, tab strip, split panes, dialogs, activity lines, the rename field, the trash banner, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings).
 
 Floating surfaces (`surface-raised`, `border-accent`, the glow) are used by dialogs; menus and the palette do not exist yet. The cyan signal is used by the progress bar. Not yet applied in code: the emerald signal, `primary-bright` on focused inputs, and the type column, which still uses Inter.
 

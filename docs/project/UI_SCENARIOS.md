@@ -70,6 +70,10 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | F7 | Select a file, Ctrl+X, enter a folder, Ctrl+V, then Ctrl+Z | The file moves into the folder, and back |
 | F8 | Create a folder of 30,000 empty files from a shell, select it, Ctrl+C, Ctrl+V | A progress line "Copying “many” to “…”" with a moving bar, a count "n of 30,001" and a stop button |
 | F9 | After F3, launch `dolphin trash:/` in the same session | Dolphin's trash lists the file with its original path |
+| X1 | After trashing two files (F3), click the trash button in the toolbar | The window title and tab read "Trash"; a banner "Trash" with Restore (disabled) and "Empty trash…"; the two files are listed |
+| X2 | From a shell in the session: `kioclient move <fixture>/notes.txt trash:/`; look at the trash view | notes.txt is listed too, without a reload |
+| X3 | Click notes.txt, click Restore | "Restored “notes.txt” from the trash." and the file is back in the fixture |
+| X4 | Click "Empty trash…", Return | A dialog "Empty the trash? It holds 2 items."; after Return the list is empty, the line reads "Emptied the trash." with no Undo button, and `Trash/files` and `Trash/info` are empty on disk |
 | L1 | Launch the release build on a 500,000-entry folder (`rust-tc bench-listing` creates `target/bench/listing-500k`); press End | Status "500,000 items"; the last entry is selected and visible within a second |
 
 ## Not covered by these scenarios
@@ -77,4 +81,5 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.
 - Narrow-window column dropping, frame rate, and anything that needs a second application.
 - Reordering tabs by dragging with the mouse.
+- The trashes of other volumes: the banner lists the real ones of the machine, which belong to the user and are not opened in tests.
 - The failure dialog (it needs an entry that fails mid-operation) and the dialogs' buttons by mouse.

@@ -71,6 +71,12 @@ impl FreedesktopTrash {
         &self.home_trash
     }
 
+    /// The folder holding the home trash's contents, created if missing.
+    pub fn home_files_dir(&self) -> io::Result<PathBuf> {
+        self.prepare(&self.home_trash)?;
+        Ok(self.home_trash.join("files"))
+    }
+
     /// Creates `dir` and its `files` and `info` subdirectories if missing.
     fn prepare(&self, dir: &Path) -> io::Result<()> {
         for path in [dir.to_owned(), dir.join("files"), dir.join("info")] {
@@ -178,6 +184,83 @@ impl FreedesktopTrash {
     pub fn list_home(&self) -> io::Result<Vec<TrashEntry>> {
         self.list_dir(&self.home_trash)
     }
+
+    /// Every trash directory of this user that exists: the home trash first,
+    /// then those at the top of mounted volumes.
+    pub fn dirs(&self) -> Vec<PathBuf> {
+        let is_dir = |path: &Path| {
+            self.fs
+                .info(path)
+                .is_ok_and(|info| info.kind == EntryKind::Directory)
+        };
+        let mut dirs = vec![self.home_trash.clone()];
+        let mounts = self
+            .fs
+            .read(Path::new("/proc/self/mountinfo"))
+            .map(|text| mount_points(&text))
+            .unwrap_or_default();
+        for top in mounts {
+            let shared = top.join(".Trash");
+            let shared_ok = self
+                .fs
+                .info(&shared)
+                .is_ok_and(|info| info.kind == EntryKind::Directory && info.mode & 0o1000 != 0);
+            let candidates = [
+                shared_ok.then(|| shared.join(self.uid.to_string())),
+                Some(top.join(format!(".Trash-{}", self.uid))),
+            ];
+            for dir in candidates.into_iter().flatten() {
+                if is_dir(&dir.join("files")) && !dirs.contains(&dir) {
+                    dirs.push(dir);
+                }
+            }
+        }
+        dirs
+    }
+
+    /// The trash directory whose contents are shown when `path` is listed:
+    /// `path` is the `files` folder of one of [`Self::dirs`].
+    pub fn dir_showing(&self, path: &Path) -> Option<PathBuf> {
+        let dir = path.parent()?;
+        (path.file_name() == Some(OsStr::new("files"))
+            && self.dirs().iter().any(|known| known == dir))
+        .then(|| dir.to_owned())
+    }
+
+    /// The trashed entries of `dir` whose content is one of `contents`, and
+    /// how many of `contents` have no record and so no place to go back to.
+    pub fn items_for(
+        &self,
+        dir: &Path,
+        contents: &[PathBuf],
+    ) -> io::Result<(Vec<TrashedItem>, usize)> {
+        let items: Vec<TrashedItem> = self
+            .list_dir(dir)?
+            .into_iter()
+            .map(|entry| entry.item)
+            .filter(|item| contents.contains(&item.content))
+            .collect();
+        let without_record = contents.len() - items.len().min(contents.len());
+        Ok((items, without_record))
+    }
+
+    /// Everything that emptying the trash directory `dir` removes: the
+    /// trashed contents and their records.
+    pub fn everything_in(&self, dir: &Path) -> io::Result<Vec<PathBuf>> {
+        let mut paths = Vec::new();
+        for part in ["files", "info"] {
+            let folder = dir.join(part);
+            let listing = match self.fs.read_dir(&folder) {
+                Ok(listing) => listing,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error),
+            };
+            for entry in listing {
+                paths.push(folder.join(OsStr::from_bytes(&entry?.name)));
+            }
+        }
+        Ok(paths)
+    }
 }
 
 impl Trash for FreedesktopTrash {
@@ -250,6 +333,44 @@ impl Trash for FreedesktopTrash {
         let _ = self.fs.remove_file(&item.record);
         Ok(())
     }
+}
+
+/// The mount points listed in the text of `/proc/self/mountinfo`.
+fn mount_points(mountinfo: &[u8]) -> Vec<PathBuf> {
+    mountinfo
+        .split(|&byte| byte == b'\n')
+        // Fields: id, parent id, device, root, mount point, …
+        .filter_map(|line| line.split(|&byte| byte == b' ').nth(4))
+        .map(|field| PathBuf::from(OsString::from_vec(unescape_octal(field))))
+        .filter(|path| path.is_absolute())
+        .collect()
+}
+
+/// Undoes the kernel's `\040`-style escapes for spaces, tabs, newlines and
+/// backslashes in mount points.
+fn unescape_octal(field: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(field.len());
+    let mut rest = field;
+    while let [byte, tail @ ..] = rest {
+        let digit = |b: u8| (b'0'..=b'7').contains(&b).then(|| b - b'0');
+        match (byte, tail) {
+            (b'\\', [a, b, c, after @ ..]) => match (digit(*a), digit(*b), digit(*c)) {
+                (Some(a), Some(b), Some(c)) if a <= 3 => {
+                    out.push(a << 6 | b << 3 | c);
+                    rest = after;
+                }
+                _ => {
+                    out.push(*byte);
+                    rest = tail;
+                }
+            },
+            _ => {
+                out.push(*byte);
+                rest = tail;
+            }
+        }
+    }
+    out
 }
 
 /// The name an entry gets inside the trash on the n-th try: its own name,
@@ -594,6 +715,51 @@ mod tests {
                 return;
             }
         }
+    }
+
+    #[test]
+    fn mount_points_are_read_with_their_escapes_undone() {
+        let text = b"36 25 0:31 / / rw,relatime shared:1 - btrfs /dev/sda2 rw\n\
+            98 36 8:17 / /mnt/My\\040Disk rw - ext4 /dev/sdb1 rw\n\
+            99 36 8:18 / /mnt/back\\134slash rw - ext4 /dev/sdb2 rw\n\
+            garbage\n";
+        assert_eq!(
+            mount_points(text),
+            [
+                PathBuf::from("/"),
+                PathBuf::from("/mnt/My Disk"),
+                PathBuf::from("/mnt/back\\slash")
+            ]
+        );
+    }
+
+    #[test]
+    fn selected_contents_map_to_their_records_and_emptying_lists_everything() {
+        let h = home();
+        let trash = trash_on(&h, RealFs);
+        let a = trash.trash(&file(&h.work.join("a"), "a")).unwrap();
+        let b = trash.trash(&file(&h.work.join("b"), "b")).unwrap();
+        let orphan = file(&h.trash_dir.join("files/orphan"), "no record");
+
+        let (items, without_record) = trash
+            .items_for(&h.trash_dir, &[b.content.clone(), orphan.clone()])
+            .unwrap();
+        assert_eq!(items, std::slice::from_ref(&b));
+        assert_eq!(without_record, 1);
+
+        let mut everything = trash.everything_in(&h.trash_dir).unwrap();
+        everything.sort();
+        let mut expected = vec![a.content, b.content, orphan, a.record, b.record];
+        expected.sort();
+        assert_eq!(everything, expected);
+
+        assert_eq!(
+            trash.dir_showing(&h.trash_dir.join("files")),
+            Some(h.trash_dir.clone())
+        );
+        assert_eq!(trash.dir_showing(&h.trash_dir), None);
+        assert_eq!(trash.dir_showing(&h.work), None);
+        assert_eq!(trash.dirs()[0], h.trash_dir);
     }
 
     #[test]

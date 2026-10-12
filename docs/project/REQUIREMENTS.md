@@ -59,34 +59,34 @@ Conventions:
 - **Priority:** must
 - **Acceptance:**
   - [x] A tab can be split into two panes with independent locations, each with its own view settings.
-  - [ ] Copy and move between panes work by drag-and-drop and by keyboard.
+  - [ ] Copy and move between panes work by drag-and-drop and by keyboard. (Keyboard: done in S4 with Ctrl+C/X/V; drag-and-drop: S5.)
 - **Validation:** ui-test
 
 ### R-007 — File operations
 - **Priority:** must
 - **Description:** Create folder, create empty file, rename, copy, move, trash, permanently delete.
 - **Acceptance:**
-  - [ ] Each operation works on single and multiple selections, including nested folders, symlinks (not followed on copy of the link itself) and names that are not valid UTF-8.
-  - [ ] Operations run in the background with progress, speed, remaining count and a cancel control; the UI stays responsive.
-  - [ ] A name conflict offers skip, overwrite, rename and "apply to all"; nothing is overwritten without that choice.
-  - [ ] A cancelled or failed copy leaves no partial file under the final name.
-  - [ ] A move across filesystems removes the source only after the copy is complete and verified by size.
-  - [ ] Delete sends to trash by default; permanent delete requires explicit confirmation.
-  - [ ] Copies use reflink or `copy_file_range` where the filesystem supports it.
+  - [x] Each operation works on single and multiple selections, including nested folders, symlinks (not followed on copy of the link itself) and names that are not valid UTF-8.
+  - [x] Operations run in the background with progress, speed, remaining count and a cancel control; the UI stays responsive.
+  - [x] A name conflict offers skip, overwrite, rename and "apply to all"; nothing is overwritten without that choice.
+  - [x] A cancelled or failed copy leaves no partial file under the final name.
+  - [x] A move across filesystems removes the source only after the copy is complete and verified by size.
+  - [x] Delete sends to trash by default; permanent delete requires explicit confirmation.
+  - [x] Copies use reflink or `copy_file_range` where the filesystem supports it.
 - **Validation:** test (property and fault-injection tests in temporary directories), manual
 
 ### R-008 — Undo
 - **Priority:** must
 - **Acceptance:**
-  - [ ] Rename, move, copy, create and trash can be undone in reverse order within the session.
-  - [ ] Undo refuses, with an explanation, when the affected files have changed since the operation.
+  - [x] Rename, move, copy, create and trash can be undone in reverse order within the session.
+  - [x] Undo refuses, with an explanation, when the affected files have changed since the operation.
 - **Validation:** test
 
 ### R-009 — Trash
 - **Priority:** must
 - **Acceptance:**
-  - [ ] Trash follows the freedesktop trash specification, including per-volume trash directories, so items trashed in Rustphin appear in Dolphin's trash and the reverse.
-  - [ ] The trash view supports restore and empty trash (with confirmation).
+  - [x] Trash follows the freedesktop trash specification, including per-volume trash directories, so items trashed in Rustphin appear in Dolphin's trash and the reverse.
+  - [x] The trash view supports restore and empty trash (with confirmation).
 - **Validation:** test, manual (interop with Dolphin)
 
 ### R-010 — Drag-and-drop
@@ -188,7 +188,7 @@ Conventions:
 ### R-103 — Data safety
 - **Priority:** must
 - **Acceptance:**
-  - [ ] No code path overwrites or permanently deletes user data without an explicit user choice in that operation.
+  - [x] No code path overwrites or permanently deletes user data without an explicit user choice in that operation.
   - [ ] Killing the process at any point during copy, move or batch rename leaves every source file either intact or fully present at its destination.
   - [ ] Configuration and place-group files are written atomically (write, sync, rename).
 - **Validation:** test (fault injection, kill tests)

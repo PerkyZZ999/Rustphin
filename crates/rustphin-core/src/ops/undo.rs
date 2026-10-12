@@ -161,6 +161,13 @@ fn check(fs: &dyn Fs, change: &Change) -> Result<(), UndoError> {
             expect_free(fs, &item.original)
         }
         Change::RemovedEmptyDir { path, .. } => expect_free(fs, path),
+        Change::Restored { original } => match fs.info(original) {
+            Ok(_) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                Err(UndoError::Missing(original.clone()))
+            }
+            Err(error) => Err(io_error(original)(error)),
+        },
         Change::Replaced { path } => Err(UndoError::Replaced(path.clone())),
         Change::Deleted { path } => Err(UndoError::Deleted(path.clone())),
         Change::PartlyMoved { from, .. } => Err(UndoError::PartlyMoved(from.clone())),
@@ -212,6 +219,12 @@ fn revert(engine: &mut Engine<'_>, change: &Change) -> Result<(), UndoError> {
         Change::RemovedEmptyDir { path, mode } => {
             fs.create_dir(path, *mode).map_err(io_error(path))
         }
+        // Back into the trash, under a new record.
+        Change::Restored { original } => engine
+            .trash
+            .trash(original)
+            .map(drop)
+            .map_err(io_error(original)),
         Change::Replaced { path } => Err(UndoError::Replaced(path.clone())),
         Change::Deleted { path } => Err(UndoError::Deleted(path.clone())),
         Change::PartlyMoved { from, .. } => Err(UndoError::PartlyMoved(from.clone())),
@@ -237,9 +250,11 @@ impl History {
     /// Operations remembered; older ones are forgotten.
     pub const LIMIT: usize = 100;
 
-    /// Remembers an operation. One that changed nothing is not remembered.
+    /// Remembers an operation. One that changed nothing is not remembered,
+    /// and neither is one that did something irreversible: it could never be
+    /// undone and would only stand in the way of undoing what came before.
     pub fn push(&mut self, request: Request, changes: Vec<Change>) {
-        if changes.is_empty() {
+        if changes.is_empty() || !changes.iter().all(Change::is_reversible) {
             return;
         }
         if self.records.len() == Self::LIMIT {

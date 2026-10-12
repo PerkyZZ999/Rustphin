@@ -6,7 +6,7 @@
 //! core's operation engine on its own threads.
 
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
@@ -86,6 +86,13 @@ pub enum Question {
         /// What would be deleted.
         paths: Vec<PathBuf>,
     },
+    /// Emptying the trash needs the user's explicit yes.
+    ConfirmEmpty {
+        /// Number of trashed entries.
+        entries: usize,
+        /// Everything to remove: the entries and their records.
+        paths: Vec<PathBuf>,
+    },
 }
 
 /// A message about something that just happened.
@@ -112,6 +119,11 @@ pub struct Clip {
 /// The application's file operations and their state.
 pub struct Hub {
     ops: Operations,
+    /// The desktop trash, when there is one.
+    trash: Option<Arc<FreedesktopTrash>>,
+    /// Wording for operations whose request does not describe them well:
+    /// what it is doing, and what it will have done.
+    labels: HashMap<OpId, (String, String)>,
     /// Operations in progress, oldest first.
     pub running: Vec<Running>,
     /// Open questions; the first is the one shown.
@@ -131,14 +143,15 @@ impl Global for GlobalHub {}
 /// Creates the application's [`Hub`]. Call once at start-up.
 pub fn init(cx: &mut App) {
     let fs = Arc::new(RealFs);
-    let trash: Arc<dyn Trash> = match FreedesktopTrash::for_user(fs.clone()) {
-        Some(trash) => Arc::new(trash),
+    let trash = FreedesktopTrash::for_user(fs.clone()).map(Arc::new);
+    let engine_trash: Arc<dyn Trash> = match &trash {
+        Some(trash) => trash.clone(),
         None => {
             tracing::warn!("no data directory is known, so there is no trash");
             Arc::new(NoTrash)
         }
     };
-    let (ops, events) = Operations::new(fs, trash);
+    let (ops, events) = Operations::new(fs, engine_trash);
     let hub = cx.new(|cx: &mut Context<Hub>| {
         cx.spawn(async move |hub, cx| {
             while let Ok(event) = events.recv_async().await {
@@ -150,6 +163,8 @@ pub fn init(cx: &mut App) {
         .detach();
         Hub {
             ops,
+            trash,
+            labels: HashMap::new(),
             running: Vec::new(),
             questions: VecDeque::new(),
             notice: None,
@@ -222,6 +237,87 @@ impl Hub {
             && confirmed
         {
             self.start(Request::Delete { paths });
+        }
+        cx.notify();
+    }
+
+    /// The desktop trash, when there is one.
+    pub fn trash(&self) -> Option<Arc<FreedesktopTrash>> {
+        self.trash.clone()
+    }
+
+    /// Brings the trashed entries whose contents are `contents` back from
+    /// the trash directory `dir`.
+    pub fn restore(&mut self, dir: PathBuf, contents: Vec<PathBuf>, cx: &mut Context<Self>) {
+        let Some(trash) = self.trash() else { return };
+        cx.spawn(async move |hub, cx| {
+            let found = cx
+                .background_spawn(async move { trash.items_for(&dir, &contents) })
+                .await;
+            let _ = hub.update(cx, |hub, cx| match found {
+                Ok((items, without_record)) => {
+                    if without_record > 0 {
+                        hub.set_notice(
+                            format!(
+                                "{} {} no record of where it came from and cannot be restored. Move it out by hand.",
+                                count(without_record),
+                                plural(without_record, "entry has", "entries have")
+                            ),
+                            true,
+                            cx,
+                        );
+                    }
+                    if !items.is_empty() {
+                        hub.start(Request::Restore { items });
+                    }
+                }
+                Err(error) => hub.set_notice(format!("The trash could not be read: {error}."), true, cx),
+            });
+        })
+        .detach();
+    }
+
+    /// Asks for confirmation, then removes everything in the trash directory `dir`.
+    pub fn empty_trash(&mut self, dir: PathBuf, cx: &mut Context<Self>) {
+        let Some(trash) = self.trash() else { return };
+        cx.spawn(async move |hub, cx| {
+            let found = cx
+                .background_spawn(async move {
+                    let entries = trash.list_dir(&dir)?.len();
+                    Ok::<_, std::io::Error>((entries, trash.everything_in(&dir)?))
+                })
+                .await;
+            let _ = hub.update(cx, |hub, cx| match found {
+                Ok((_, paths)) if paths.is_empty() => {
+                    hub.set_notice("The trash is already empty.".to_owned(), false, cx);
+                }
+                Ok((entries, paths)) => {
+                    hub.questions
+                        .push_back(Question::ConfirmEmpty { entries, paths });
+                    cx.notify();
+                }
+                Err(error) => {
+                    hub.set_notice(format!("The trash could not be read: {error}."), true, cx)
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Answers the empty-trash confirmation being shown.
+    pub fn confirm_empty(&mut self, confirmed: bool, cx: &mut Context<Self>) {
+        if let Some(Question::ConfirmEmpty { .. }) = self.questions.front()
+            && let Some(Question::ConfirmEmpty { paths, .. }) = self.questions.pop_front()
+            && confirmed
+        {
+            let id = self.ops.start(Request::Delete { paths });
+            self.labels.insert(
+                id,
+                (
+                    "Emptying the trash".to_owned(),
+                    "emptied the trash".to_owned(),
+                ),
+            );
         }
         cx.notify();
     }
@@ -299,10 +395,14 @@ impl Hub {
     fn on_event(&mut self, event: OpEvent, cx: &mut Context<Self>) {
         match event {
             OpEvent::Started { id, request, undo } => {
+                let (label, done) = self
+                    .labels
+                    .remove(&id)
+                    .unwrap_or_else(|| (activity(&request, undo), past(&request)));
                 self.running.push(Running {
                     id,
-                    label: activity(&request, undo),
-                    done: past(&request),
+                    label,
+                    done,
                     undo,
                     progress: Progress::default(),
                     started: Instant::now(),
@@ -338,7 +438,7 @@ impl Hub {
                     Question::Conflict { id: asker, .. } | Question::Failed { id: asker, .. } => {
                         *asker != id
                     }
-                    Question::ConfirmDelete { .. } => true,
+                    Question::ConfirmDelete { .. } | Question::ConfirmEmpty { .. } => true,
                 });
                 let (done, undo) = finished
                     .as_ref()
@@ -375,6 +475,10 @@ pub fn what(paths: &[PathBuf]) -> String {
     }
 }
 
+fn originals(items: &[rustphin_core::ops::TrashedItem]) -> Vec<PathBuf> {
+    items.iter().map(|item| item.original.clone()).collect()
+}
+
 /// What a request does, for the progress line: "Copying 3 items to “x”".
 /// With `undo`, what reverting it does.
 pub fn activity(request: &Request, undo: bool) -> String {
@@ -394,6 +498,7 @@ pub fn activity(request: &Request, undo: bool) -> String {
             format!("Moving {} to {}", what(sources), folder_name(into))
         }
         Request::Trash { paths } => format!("Moving {} to the trash", what(paths)),
+        Request::Restore { items } => format!("Restoring {}", what(&originals(items))),
         Request::Delete { paths } => format!("Deleting {}", what(paths)),
     }
 }
@@ -413,6 +518,9 @@ pub fn past(request: &Request) -> String {
             format!("moved {} to {}", what(sources), folder_name(into))
         }
         Request::Trash { paths } => format!("moved {} to the trash", what(paths)),
+        Request::Restore { items } => {
+            format!("restored {} from the trash", what(&originals(items)))
+        }
         Request::Delete { paths } => format!("deleted {}", what(paths)),
     }
 }
@@ -453,7 +561,12 @@ fn outcome_notice(done: &str, outcome: &Outcome) -> Option<Notice> {
         return (!quiet).then(|| Notice {
             text: format!("{}.", upper_first(done)),
             is_error: false,
-            offers_undo: !outcome.changes.is_empty(),
+            // Only what the history keeps: see `History::push`.
+            offers_undo: !outcome.changes.is_empty()
+                && outcome
+                    .changes
+                    .iter()
+                    .all(rustphin_core::ops::Change::is_reversible),
         });
     }
     let mut text = if outcome.completed {
@@ -679,11 +792,21 @@ mod tests {
     fn a_finished_operation_that_changed_something_offers_undo() {
         let outcome = Outcome {
             completed: true,
-            changes: vec![rustphin_core::ops::Change::Deleted { path: "/a".into() }],
+            changes: vec![rustphin_core::ops::Change::Restored {
+                original: "/a".into(),
+            }],
             skipped: Vec::new(),
         };
         let notice = result_notice("moved “a” to the trash", false, &Finished::Done(outcome));
         assert!(notice.unwrap().offers_undo);
+
+        let deleted = Outcome {
+            completed: true,
+            changes: vec![rustphin_core::ops::Change::Deleted { path: "/a".into() }],
+            skipped: Vec::new(),
+        };
+        let notice = result_notice("deleted “a”", false, &Finished::Done(deleted));
+        assert!(!notice.unwrap().offers_undo);
     }
 
     #[test]

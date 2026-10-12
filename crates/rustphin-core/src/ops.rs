@@ -69,6 +69,11 @@ pub enum Request {
         /// Entries to trash.
         paths: Vec<PathBuf>,
     },
+    /// Bring each of `items` back from the trash to where it was.
+    Restore {
+        /// Entries in the trash.
+        items: Vec<TrashedItem>,
+    },
     /// Remove each of `paths` for good, with everything inside it. The caller
     /// must have had the user confirm exactly this; nothing can bring the
     /// entries back.
@@ -290,6 +295,11 @@ pub enum Change {
         /// Where it went.
         item: TrashedItem,
     },
+    /// An entry was brought back from the trash.
+    Restored {
+        /// Where it is again.
+        original: PathBuf,
+    },
     /// An entry was removed for good by explicit choice. The operation cannot
     /// be undone past this point.
     Deleted {
@@ -304,6 +314,17 @@ pub enum Change {
         /// Its permission bits.
         mode: u32,
     },
+}
+
+impl Change {
+    /// Whether this change can be reverted. Replacing a file, deleting for
+    /// good and a move that stopped half-way cannot.
+    pub fn is_reversible(&self) -> bool {
+        !matches!(
+            self,
+            Self::Replaced { .. } | Self::Deleted { .. } | Self::PartlyMoved { .. }
+        )
+    }
 }
 
 /// An entry that was left out, and why.
@@ -372,6 +393,11 @@ pub fn run(
             let plan = engine.plan_removal(paths, false)?;
             engine.controller.progress(&engine.progress);
             engine.trash_all(plan).is_ok()
+        }
+        Request::Restore { items } => {
+            engine.progress.items_total = items.len() as u64;
+            engine.controller.progress(&engine.progress);
+            engine.restore_all(items).is_ok()
         }
         Request::Delete { paths } => {
             let plan = engine.plan_removal(paths, true)?;
@@ -646,6 +672,24 @@ impl Engine<'_> {
                 }
                 Err(reason) => self.skip(&node, reason),
             }
+        }
+        Ok(())
+    }
+
+    fn restore_all(&mut self, items: &[TrashedItem]) -> Result<(), Stop> {
+        let trash = self.trash;
+        for item in items {
+            self.checkpoint(&item.original)?;
+            match self.attempt(&item.original, |_| Ok(trash.restore(item)))? {
+                Ok(()) => self.changes.push(Change::Restored {
+                    original: item.original.clone(),
+                }),
+                Err(reason) => self.skipped.push(Skipped {
+                    path: item.original.clone(),
+                    reason,
+                }),
+            }
+            self.finished(1);
         }
         Ok(())
     }
