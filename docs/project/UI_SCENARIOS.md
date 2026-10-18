@@ -7,12 +7,12 @@ Replayable checks of the running application, driven by an agent through the kwi
 1. Build: `cargo build --package rustphin`.
 2. Create the fixture in a new scratch directory (never in the user's files): `tests/ui/make-fixture.sh <dir>`. Scenarios U1 and U2 change it, so use a fresh one afterwards.
 3. Start an isolated session: `session_start` with `app_command` = `target/debug/rustphin <dir>`, `isolate_home: true`, `screen_width: 1280`, `screen_height: 800`.
-4. Wait about three seconds for the window before sending input.
+4. Wait for a screenshot showing the window before sending input; debug startup can take ten seconds or more.
 
 Notes for the agent:
 
 - The application is not visible to `list_windows` or `find_ui_elements` (nothing is exposed over AT-SPI in these sessions), so observe with screenshots and act by keyboard or coordinates.
-- With the 1280×800 screen the window is centred: toolbar at y≈115, column headings at y≈151, first row at y≈184 and 28 px per row at the default zoom; the view buttons are at x≈1015, 1043 and 1071 and the hidden-files toggle at x≈1099. Re-read a screenshot if the layout has changed.
+- With the 1280×800 screen the window is centred: toolbar at y≈115, column headings at y≈151, first row at y≈184 and 28 px per row at the default zoom; the labelled Actions button is at the right of the location bar. View controls and hidden-files toggling are in its palette or on their shortcuts. Re-read a screenshot if the layout has changed.
 - Spell punctuation keys literally: `ctrl+=`, `ctrl+-`.
 - The isolated session has no blur, so the opaque theme is shown. It uses the default `breeze-dark` icons.
 - Stop the session when done. Before deleting the fixture run `chmod 755 <dir>/locked`.
@@ -43,10 +43,10 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | O1 | Click the Size heading twice | Largest first (video.mp4, report.pdf, …), folders still on top, a down arrow on Size |
 | O2 | Click the Modified heading | Oldest first among files: photo.JPG (2023), notes.txt (2024), video.mp4 (2025) |
 | O3 | Click the Type heading | Files without an extension first (Makefile, mystery), then by extension: gz, JPG, mp4, pdf, rs, txt |
-| V1 | Ctrl+1 (or the first view button) | Grid of large icons with names underneath; Down then Right moves to the second cell of the first row |
+| V1 | Ctrl+1 | Grid of large icons with names underneath; Down then Right moves to the second cell of the first row |
 | V2 | Ctrl+2 | Compact grid: small icon beside each name, several per row |
 | V3 | Ctrl+= then Ctrl+- twice, then Ctrl+0 | Icons grow, shrink below the default, and return to the default size |
-| V4 | Ctrl+3 (or the third view button) | Details view again, with sizes and dates |
+| V4 | Ctrl+3 | Details view again, with sizes and dates |
 | P1 | Set icons view, zoom in once, sort by Type, show hidden; read `<isolated home>/.config/rustphin/settings.toml` | `mode = "icons"`, `zoom = 2`, `sort = "type"`, `show_hidden = true` |
 | P2 | Kill the app and `launch_app` it again in the same session | Opens in the icons view at that zoom, sorted by type, hidden files shown |
 | U1 | Select two files; from a shell create a file, delete one of the selected files and rename another file in the fixture; wait one second | All three changes are shown without a reload; the surviving selected file is still selected; the list has not scrolled |
@@ -70,7 +70,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | F7 | Select a file, Ctrl+X, enter a folder, Ctrl+V, then Ctrl+Z | The file moves into the folder, and back |
 | F8 | Create a folder of 30,000 empty files from a shell, select it, Ctrl+C, Ctrl+V | A progress line "Copying “many” to “…”" with a moving bar, a count "n of 30,001" and a stop button |
 | F9 | After F3, launch `dolphin trash:/` in the same session | Dolphin's trash lists the file with its original path |
-| X1 | After trashing two files (F3), click the trash button in the toolbar | The window title and tab read "Trash"; a banner "Trash" with Restore (disabled) and "Empty trash…"; the two files are listed |
+| X1 | After trashing two files (F3), open Actions, search `trash open`, Enter | The window title and tab read "Trash"; a banner "Trash" with Restore (disabled) and "Empty trash…"; the two files are listed |
 | X2 | From a shell in the session: `kioclient move <fixture>/notes.txt trash:/`; look at the trash view | notes.txt is listed too, without a reload |
 | X3 | Click notes.txt, click Restore | "Restored “notes.txt” from the trash." and the file is back in the fixture |
 | X4 | Click "Empty trash…", Return | A dialog "Empty the trash? It holds 2 items."; after Return the list is empty, the line reads "Emptied the trash." with no Undo button, and `Trash/files` and `Trash/info` are empty on disk |
@@ -83,7 +83,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | G4 | With Dolphin open on a folder, drag a file from Dolphin onto Rustphin's list | The same move-or-copy dialog; `C` copies it into the folder shown |
 | G5 | Tile Rustphin to the left (Super+Left), drag a file by its name into Dolphin's view | Dolphin shows its own Move/Copy/Link menu; "Copy Here" copies the file, name intact |
 | G6 | Press in a row's Size column and drag down across rows | A rubber band selects the rows, as before drags existed |
-| K1 | In a fresh isolated home, look at the left panel | "Places" with two buttons, and "No places yet. Add the folder shown with Ctrl+D, or drag a folder here." |
+| K1 | In a fresh isolated home, look at the left panel | "Places" without secondary header buttons, and "No places yet. Add the folder shown with Ctrl+D, or drag a folder here." |
 | K2 | Ctrl+D; enter a folder; Ctrl+D | Both folders are listed; the one being shown has an accent bar and a highlighted row; `<isolated home>/.local/share/user-places.xbel` holds two `<bookmark>` elements |
 | K3 | Tab (focus the panel), Ctrl+Shift+G, type `Work`, Return, Up, G | A heading "Work" with an arrow; the place above it moves under the heading, indented; `<isolated home>/.config/rustphin/place-groups.toml` lists the group with that place's identifier |
 | K4 | F2 on a place, type a new name, Return; then start `dolphin /tmp` in the session | Dolphin's Places lists both places, ungrouped, with the new name; within a second Rustphin's panel also lists the "Home" and "Trash" entries Dolphin added to the file |
@@ -108,6 +108,15 @@ Use an isolated fixture and home as above. These checks never activate a device 
 | Q6 | Query `clear recent`, Enter; inspect recent-locations.toml; restart in the same isolated home | Palette stays open with "Recent folders cleared."; saved locations are empty. After restart only newly completed visits can reappear |
 | Q7 | Query `zzzxnoaction`; press Ctrl+T and F3; Escape | Helpful no-match text; no tab or split opens behind the palette; Escape returns focus |
 | Q8 | Select a fixture file, Shift+Delete; Ctrl+Shift+P; Escape | Delete confirmation stays on top, palette does not open, Escape keeps the file |
+
+## Progressive disclosure (S8)
+
+| # | Steps | Expected |
+|---|---|---|
+| J1 | Open the fixture in one unsplit tab | Places, navigation/location bar, file view and status line; no secondary view/create/trash buttons; a labelled Actions button is visible |
+| J2 | Click Actions, query `new folder`, Enter | Existing operation engine creates a folder and opens its inline rename field; F10 still does the same |
+| J3 | Actions, query `new group`, Enter; name it Work | Places panel receives focus, creates the group and opens its name field; group is saved in place-groups.toml |
+| J4 | Use Actions for view modes, zoom, hidden files, sorting, split view, new file, trash and place controls | Each control is selected after opening Actions once; corresponding existing shortcuts still work; unavailable future features are absent |
 
 ## Not covered by these scenarios
 

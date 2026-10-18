@@ -4,7 +4,7 @@
 //! Views take every visual value from here. Colours are named for their role,
 //! not their hue. Spacing follows a 4-pixel grid.
 
-use gpui_kit::{App, Global, Rgba, px, rgb, rgba};
+use gpui_kit::{App, BoxShadow, Global, Rgba, point, px, rgb, rgba};
 
 /// Spacing scale in pixels (4-pixel grid).
 pub mod space {
@@ -166,6 +166,17 @@ impl Theme {
             hover: rgba(0xffffff14),
             danger: rgb(0xff9b9b),
             danger_surface: rgb(0x3a1a1f),
+        }
+    }
+
+    /// The tight accent glow used by solid floating surfaces (D-017).
+    pub fn floating_shadow(&self) -> BoxShadow {
+        BoxShadow {
+            color: self.selection.into(),
+            offset: point(px(0.), px(0.)),
+            blur_radius: px(space::LG),
+            spread_radius: px(-size::RADIUS),
+            inset: false,
         }
     }
 

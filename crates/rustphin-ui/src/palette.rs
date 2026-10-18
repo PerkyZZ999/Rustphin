@@ -322,6 +322,7 @@ impl Render for Palette {
                     .gap(px(space::SM))
                     .p(px(space::MD))
                     .bg(theme.raised)
+                    .shadow(vec![theme.floating_shadow()])
                     .rounded(px(size::RADIUS))
                     .border_1()
                     .border_color(theme.border_accent)

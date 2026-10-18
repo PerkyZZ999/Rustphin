@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-18 — W-057 command palette and persistent history
+- Latest validation entry: VALIDATION.md, 2026-10-18 — W-058 progressive disclosure
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -36,7 +36,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Implement W-058 (progressive disclosure) and W-059 (complete S8 reachability and 10,000-location UI latency checks). Verify UI changes through kwin-mcp in an isolated home; use `rust-tc` for every check and commit after every task.
+- Complete W-059 (S8 reachability, restart/clear-history, focus, narrow-window and 10,000-location UI latency checks). Verify UI changes through kwin-mcp in an isolated home; use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

@@ -16,7 +16,7 @@ use gpui_kit::{
     InteractiveElement, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
     SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions,
     component::{
-        Icon, Selectable as _, Sizable as _,
+        Icon, Sizable as _,
         button::{Button, ButtonVariants as _},
         input::{Input, InputEvent, InputState},
     },
@@ -1239,7 +1239,6 @@ impl Sidebar {
 
 impl Render for Sidebar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        use gpui_kit::assets::IconName as I;
         let theme = *cx.global::<Theme>();
         if let Some(row) = self.rename_requested.take() {
             cx.defer_in(window, |this, window, cx| {
@@ -1303,8 +1302,6 @@ impl Render for Sidebar {
                 lines.push(self.device_row(device, theme, window, cx));
             }
         }
-        let any_hidden = places.iter().any(|place| place.hidden);
-        let current = self.current.clone();
 
         let header = div()
             .flex()
@@ -1324,45 +1321,7 @@ impl Render for Sidebar {
                     .text_size(px(text::SMALL))
                     .text_color(theme.text_muted)
                     .child("Places"),
-            )
-            .child(
-                Button::new("add-place")
-                    .ghost()
-                    .small()
-                    .icon(I::BookmarkPlus)
-                    .tooltip("Add the folder shown to the places (Ctrl+D)")
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(folder) = current.clone() {
-                            this.add_place(folder, None, cx);
-                        }
-                    })),
-            )
-            .child(
-                Button::new("new-group")
-                    .ghost()
-                    .small()
-                    .icon(I::ListPlus)
-                    .tooltip("New group (Ctrl+Shift+G)")
-                    .on_click(cx.listener(|this, _, _, cx| this.new_group(cx))),
-            )
-            .when(any_hidden, |header| {
-                header.child(
-                    Button::new("show-hidden-places")
-                        .ghost()
-                        .small()
-                        .icon(if self.show_hidden { I::Eye } else { I::EyeOff })
-                        .selected(self.show_hidden)
-                        .tooltip(if self.show_hidden {
-                            "Stop listing hidden places"
-                        } else {
-                            "List hidden places too"
-                        })
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.show_hidden = !this.show_hidden;
-                            cx.notify();
-                        })),
-                )
-            });
+            );
 
         let list = Self::drop_target(div().id("places-list"), None, theme, cx)
             .flex()

@@ -3,15 +3,15 @@
 use std::path::{Path, PathBuf};
 
 use gpui_kit::{
-    AnyElement, App, AppContext as _, BoxShadow, Context, Entity, FocusHandle,
-    InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions,
+    AnyElement, App, AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _,
+    IntoElement, KeyBinding, MouseButton, ParentElement as _, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions,
     component::{
         Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
         checkbox::Checkbox,
     },
-    div, point,
+    div,
     prelude::FluentBuilder as _,
     px,
 };
@@ -1206,13 +1206,6 @@ impl Workspace {
                 ],
             ),
         };
-        let glow = BoxShadow {
-            color: theme.selection.into(),
-            offset: point(px(0.), px(0.)),
-            blur_radius: px(space::LG),
-            spread_radius: px(-2.),
-            inset: false,
-        };
         div()
             .absolute()
             .inset_0()
@@ -1256,7 +1249,7 @@ impl Workspace {
                     .bg(theme.raised)
                     .border_1()
                     .border_color(theme.border_accent)
-                    .shadow(vec![glow])
+                    .shadow(vec![theme.floating_shadow()])
                     .text_color(theme.text)
                     .font_family(text::FAMILY_BODY)
                     .text_size(px(text::BODY))

@@ -17,7 +17,7 @@ use gpui_kit::{
     ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
     UniformListScrollHandle, Window, actions,
     component::{
-        Disableable as _, Icon, IconName, Selectable as _, Sizable as _,
+        Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
         input::{Input, InputEvent, InputState},
     },
@@ -851,12 +851,6 @@ impl Browser {
         }
     }
 
-    fn show_hidden(&self) -> bool {
-        self.model
-            .as_ref()
-            .is_some_and(|model| model.options().show_hidden)
-    }
-
     /// Tells the view how wide it is drawn, so columns and the location bar
     /// adapt to a pane and not to the whole window.
     pub fn set_width(&mut self, width: f32) {
@@ -1220,7 +1214,6 @@ impl Browser {
             .is_some_and(DirectoryModel::can_go_forward);
         let location = self.location();
         let can_up = location.as_deref().and_then(Path::parent).is_some();
-        let show_hidden = self.show_hidden();
 
         div()
             .flex()
@@ -1271,70 +1264,14 @@ impl Browser {
                 }
             }))
             .child(
-                Button::new("new-folder")
+                Button::new("actions")
                     .ghost()
                     .small()
-                    .icon(gpui_kit::assets::IconName::FolderPlus)
-                    .tooltip("New folder (F10)")
-                    .disabled(location.is_none() || self.trash_dir.is_some())
-                    .on_click(cx.listener(|this, _, _, cx| this.create_entry(true, cx))),
-            )
-            .child(
-                Button::new("open-trash")
-                    .ghost()
-                    .small()
-                    .icon(gpui_kit::assets::IconName::Trash)
-                    .selected(self.trash_dir.is_some())
-                    .tooltip("Trash")
-                    .on_click(cx.listener(|this, _, _, cx| this.open_trash(cx))),
-            )
-            .children(
-                [
-                    (
-                        "view-icons",
-                        ViewMode::Icons,
-                        gpui_kit::assets::IconName::LayoutGrid,
-                        "Icons (Ctrl+1)",
-                    ),
-                    (
-                        "view-compact",
-                        ViewMode::Compact,
-                        gpui_kit::assets::IconName::LayoutList,
-                        "Compact (Ctrl+2)",
-                    ),
-                    (
-                        "view-details",
-                        ViewMode::Details,
-                        gpui_kit::assets::IconName::Table,
-                        "Details (Ctrl+3)",
-                    ),
-                ]
-                .map(|(id, mode, icon, tooltip)| {
-                    Button::new(id)
-                        .ghost()
-                        .small()
-                        .icon(icon)
-                        .selected(self.mode == mode)
-                        .tooltip(tooltip)
-                        .on_click(cx.listener(move |this, _, _, cx| this.set_mode(mode, cx)))
-                }),
-            )
-            .child(
-                Button::new("hidden")
-                    .ghost()
-                    .small()
-                    .icon(if show_hidden {
-                        IconName::Eye
-                    } else {
-                        IconName::EyeOff
-                    })
-                    .selected(show_hidden)
-                    .tooltip(if show_hidden {
-                        "Hide hidden files (Ctrl+H)"
-                    } else {
-                        "Show hidden files (Ctrl+H)"
-                    })
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_hidden(cx))),
+                    .label("Actions")
+                    .tooltip("Search actions and folders (Ctrl+Shift+P)")
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(Box::new(crate::workspace::OpenPalette), cx);
+                    }),
             )
     }
 

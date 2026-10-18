@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-10-18 — W-058 progressive disclosure
+- **Phase:** 6 Implement (S8)
+- **Result:** pass for the simpler default chrome; final acceptance checklist remains W-059
+- **Change:** the browser toolbar keeps Back/Forward/Up, breadcrumbs or location input, and one labelled Actions button. Secondary creation, trash, view and hidden-file buttons move to the palette; existing keyboard shortcuts remain. The Places header becomes a label; its add/group/hidden-place actions remain in the palette and shortcuts. Removed unused imports and the obsolete hidden-state toolbar accessor. Palette and dialogs now share the design's floating-surface shadow from Theme. DESIGN.md was edited before implementation; old UI-scenario button references were updated and J1–J4 describe reachability checks.
+- **Evidence:** `rust-tc doctor` PASS, 310 tests; DESIGN.md linter zero errors/eight orphan-token warnings; debug application built. No new pure logic warranted additional unit tests.
+- **Observed:** fresh explicit fixture tab in the same isolated KWin/home has the simpler toolbar and Places header. Clicking Actions opens the palette; choosing New folder creates the fixture folder and focuses its inline name field. After Escape, choosing New group focuses the places panel and opens its name field; entering Work saves that name in place-groups.toml. Normal screenshots show the shared royal-blue glow, solid palette, readable text and full-width selection. No real device was activated.
+- **Follow-up:** W-059 replays reachability more broadly, checks persistence, folded places, Tab navigation and narrow layouts, measures the 10,000-location UI path and closes S8 against evidence.
+
 ### 2026-10-18 — W-057 command palette and persistent history
 - **Phase:** 6 Implement (S8)
 - **Result:** pass for palette integration; progressive disclosure and final latency acceptance remain W-058/W-059
