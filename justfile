@@ -180,6 +180,11 @@ bench-listing:
     cargo run --release --quiet --package rustphin-core --example bench_listing -- target/bench/listing-500k
 
 
+# Fuzzy ranking on 10,000 recent locations; fails above R-015's 50 ms limit.
+bench-palette:
+    cargo run --release --quiet --package rustphin-core --example bench_palette
+
+
 # Run the application. Pass a folder to open, e.g. `rust-tc run ~/Documents`.
 run *args:
     cargo run --release --package rustphin -- {{args}}
@@ -210,5 +215,6 @@ toolchain-help:
     @echo
     @echo "  rust-tc run [FOLDER]  Build and run the application"
     @echo "  rust-tc bench-listing 500,000-entry listing benchmark (R-101)"
+    @echo "  rust-tc bench-palette 10,000-location palette benchmark (R-015)"
     @echo "  rust-tc layers        Crate layering check (part of doctor)"
     @echo "  rust-tc msrv          Build on Rust 1.95 (part of doctor)"

@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-18 — W-055 baseline quality gate restored
+- Latest validation entry: VALIDATION.md, 2026-10-18 — W-056 fuzzy matching and recent-location history
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -36,7 +36,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Implement W-056 (fuzzy matching, recent-location history and 10,000-location benchmark). Then W-057 to W-059 complete S8. Verify UI changes through kwin-mcp in an isolated home; use `rust-tc` for every check and commit after every task.
+- Implement W-057 (palette UI, successful-visit tracking and byte-safe history persistence). W-058 and W-059 complete progressive disclosure and S8 acceptance. Verify UI changes through kwin-mcp in an isolated home; use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

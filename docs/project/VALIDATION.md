@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-10-18 — W-056 fuzzy matching and recent-location history
+- **Phase:** 6 Implement (S8)
+- **Result:** pass for the headless foundation; no palette UI yet
+- **Change:** core `SearchQuery` ranks exact names, prefixes, word substrings, other substrings and subsequences, with Unicode lowercasing, stable ties and bounded result count. `RecentLocations` keeps at most 10,000 distinct absolute paths, newest first, preserves raw bytes, rejects NUL/relative paths and can be cleared. Neither API performs I/O. No dependencies added.
+- **Evidence:** `rust-tc quick` and `rust-tc doctor` PASS, 302 tests (11 new). Eleven hand mutations run through `rust-tc test` were detected by their intended new tests: Unicode/query normalisation, match-class ranking, missing/repeated characters, gap preference, tie order, result limit, revisit deduplication, restore deduplication, history bound, byte preservation and clearing. The initial gap mutation survived because candidate length also determined the same order; the case was strengthened and that mutation then failed. All source mutations were restored.
+- **Performance:** `rust-tc bench-palette` PASS: 10,000 generated paths, six queries including Unicode, subsequences and no match, 20 runs each; worst per-query times 0.298–2.091 ms including query creation, matching and sorting, below R-015's 50 ms limit. This measures the matcher, not input-to-frame latency in the future UI.
+- **Follow-up:** W-057 wires these APIs to the palette and persistent history; W-059 verifies the complete interaction. Existing S1–S7 limitations remain.
+
 ### 2026-10-18 — W-055 baseline quality gate restored
 - **Phase:** 6 Implement (S8 preparation)
 - **Result:** pass
