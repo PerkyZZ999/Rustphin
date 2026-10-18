@@ -76,7 +76,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** R-017 and R-018 criteria; activating files opens the default application, with confirmation for executables.
 - **Requirements:** R-001 (open-with part), R-017, R-018
 - **Validation:** test (D-Bus), ui-test, manual
-- **Status:** todo
+- **Status:** in progress
 
 ## Slice S11 — Hardening for daily use
 - **Outcome:** Ready for the two-week daily-driver trial.

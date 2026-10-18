@@ -43,11 +43,19 @@ impl Session {
 
     /// A session with one tab showing `folder`.
     pub fn single(folder: PathBuf) -> Self {
+        Self::folders(vec![folder])
+    }
+
+    /// One tab per folder, in order, with the first one showing.
+    pub fn folders(paths: Vec<PathBuf>) -> Self {
         Self::new(
-            vec![SessionTab {
-                panes: vec![folder],
-                active_pane: 0,
-            }],
+            paths
+                .into_iter()
+                .map(|folder| SessionTab {
+                    panes: vec![folder],
+                    active_pane: 0,
+                })
+                .collect(),
             0,
         )
     }
@@ -108,6 +116,13 @@ mod tests {
     fn a_single_folder_makes_one_unsplit_tab() {
         let session = Session::single(PathBuf::from("/tmp"));
         assert_eq!(session.tabs, [tab(&["/tmp"], 0)]);
+        assert_eq!(session.active, 0);
+    }
+
+    #[test]
+    fn several_folders_make_one_tab_each_with_the_first_showing() {
+        let session = Session::folders(vec![PathBuf::from("/a"), PathBuf::from("/b")]);
+        assert_eq!(session.tabs, [tab(&["/a"], 0), tab(&["/b"], 0)]);
         assert_eq!(session.active, 0);
     }
 

@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-10-18 — W-064 desktop entry and command-line tabs
+- **Phase:** 6 Implement (S10)
+- **Result:** pass for the desktop entry and argument parsing; ShowItems is W-065
+- **Change:** `assets/rustphin.desktop` names Rustphin as a handler for `inode/directory` and passes URLs to `rustphin %U`. Command-line paths and `file:` URLs become one tab each, in order, instead of restoring the session. A path that names an existing file opens the folder that contains it. A URL for another host is ignored.
+- **Evidence:** `rust-tc doctor` PASS, 341 tests. A hand mutation that kept the program name as an argument failed `no_arguments_opens_nothing_explicit`; the skip was restored. The desktop file is checked by a test for its type, folder MIME type, `%U` and window class. Not yet tried from the Plasma menu or as the system default.
+- **Follow-up:** W-065 is the FileManager1 ShowItems interface.
+
 ### 2026-10-18 — W-063 batch-rename scenarios; S9 closed
 - **Phase:** 6 Implement (S9)
 - **Result:** pass for the dialog on screen. S9 closed. Killing the process during a rename remains open (R-103).

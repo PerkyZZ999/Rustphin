@@ -14,6 +14,8 @@ Requires Rust (stable, 1.95 or later), a Wayland session and a Vulkan driver.
 cargo run --release --package rustphin -- ~/Documents
 ```
 
+Several folders, or `file://` URLs, open as separate tabs. A path that names a file opens the folder that contains it. `assets/rustphin.desktop` registers Rustphin as a handler for folders.
+
 Set `RUSTPHIN_OPAQUE=1` to turn off window translucency.
 
 ## Development

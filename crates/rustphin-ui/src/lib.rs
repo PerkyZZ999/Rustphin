@@ -10,6 +10,7 @@ mod filetypes;
 mod format;
 mod groups;
 mod history;
+mod launch;
 mod layout;
 mod operations;
 mod palette;
@@ -32,11 +33,13 @@ use rustphin_platform::blur::{BackgroundBlur, NoBlur, WaylandBlur};
 
 use crate::{session::Session, settings::Settings, theme::Theme, workspace::Workspace};
 
+pub use launch::launch_targets;
+
 /// How the application should start.
 #[derive(Debug, Clone)]
 pub struct Options {
-    /// A folder to open instead of restoring the previous session's tabs.
-    pub start: Option<PathBuf>,
+    /// Folders to open as tabs. Empty restores the previous session.
+    pub starts: Vec<PathBuf>,
     /// The folder to show when there is neither a start folder nor a session.
     pub home: PathBuf,
     /// Draw opaque surfaces even when the compositor could blur.
@@ -60,15 +63,16 @@ pub fn run(options: Options) {
         .map(|text| Settings::parse(&text))
         .unwrap_or_default();
     let session_path = rustphin_platform::config::state_dir().map(|dir| dir.join("session.toml"));
-    // An explicit folder replaces the remembered tabs for this run; they are
+    // Explicit folders replace the remembered tabs for this run; they are
     // still overwritten by what is open when the tabs next change.
-    let session = match &options.start {
-        Some(folder) => Session::single(folder.clone()),
-        None => session_path
+    let session = if options.starts.is_empty() {
+        session_path
             .as_deref()
             .and_then(|path| rustphin_platform::config::read(path).ok().flatten())
             .map(|text| Session::parse(&text))
-            .unwrap_or_default(),
+            .unwrap_or_default()
+    } else {
+        Session::folders(options.starts.clone())
     };
     gpui_kit::application()
         // The complete icon set: the default bundle lacks the view-mode icons.

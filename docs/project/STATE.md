@@ -4,7 +4,7 @@
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S9 done; S10 not started
-- **Status:** active — S10 not started
+- **Status:** active — S10 in progress
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-18
 
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-18 — W-063 batch-rename scenarios; S9 closed
+- Latest validation entry: VALIDATION.md, 2026-10-18 — W-064 desktop entry and command-line tabs
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -38,7 +38,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-064: a desktop entry, and command-line paths and `file://` URLs open as tabs (R-017). Use `rust-tc` for every check and commit after every task.
+- Start W-065: `org.freedesktop.FileManager1` ShowItems opens the folder and selects the item, tested on a private bus (R-017). Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

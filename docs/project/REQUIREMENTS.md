@@ -156,9 +156,9 @@ Conventions:
 ### R-017 — Default file manager integration
 - **Priority:** should
 - **Acceptance:**
-  - [ ] A desktop entry lets Rustphin be set as the default handler for folders.
+  - [x] A desktop entry lets Rustphin be set as the default handler for folders.
   - [ ] "Show in folder" requests from other applications (the `org.freedesktop.FileManager1` D-Bus interface) open the folder and select the item.
-  - [ ] Paths and `file://` URLs given on the command line open as tabs.
+  - [x] Paths and `file://` URLs given on the command line open as tabs.
 - **Validation:** test (D-Bus), manual
 
 ### R-018 — Context menu and properties

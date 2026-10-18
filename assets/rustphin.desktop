@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Rustphin
+GenericName=File Manager
+Comment=Browse and manage files
+Exec=rustphin %U
+Icon=system-file-manager
+Terminal=false
+MimeType=inode/directory;
+Categories=System;FileTools;FileManager;
+StartupNotify=true
+StartupWMClass=rustphin
