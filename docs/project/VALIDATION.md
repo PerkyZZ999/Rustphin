@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-10-18 — W-060 batch-rename plan
+- **Phase:** 6 Implement (S9)
+- **Result:** pass for the plan and preview; nothing is renamed yet
+- **Change:** `RenameRules::preview` rewrites selected names by plain or regular-expression replacement, by a counter pattern (`#`, start, step, padding, `@` for the current name), or by Unicode case. It reports duplicate targets, names that a staying file already has, and names that cannot be used. It does not read or write the filesystem. The `regex` crate was added to the core; its licence is MIT OR Apache-2.0.
+- **Evidence:** `rust-tc doctor` PASS, 330 tests. A hand mutation that stopped flagging duplicate targets failed `two_files_given_the_same_name_are_both_flagged`; the check was restored.
+- **Follow-up:** W-061 applies one accepted plan through the operation engine as a single undo step.
+
 ### 2026-10-18 — W-059 palette acceptance; S8 closed
 - **Phase:** 6 Implement (S8)
 - **Result:** pass. S8 closed. Two limits are recorded below and are not treated as S8 failures.

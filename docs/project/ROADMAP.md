@@ -69,7 +69,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** R-016 criteria.
 - **Requirements:** R-016
 - **Validation:** test, ui-test
-- **Status:** todo
+- **Status:** in progress
 
 ## Slice S10 — Desktop integration
 - **Outcome:** Rustphin can be the default file manager: opens from other apps, offers a context menu, "Open with" and properties.

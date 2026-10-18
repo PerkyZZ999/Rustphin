@@ -18,6 +18,7 @@ test-support = []
 flume.workspace = true
 notify.workspace = true
 rayon.workspace = true
+regex.workspace = true
 rustix.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
