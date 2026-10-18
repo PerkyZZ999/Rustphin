@@ -10,18 +10,18 @@ use std::{
 };
 
 use gpui_kit::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, EventEmitter,
+    AnyElement, App, AppContext as _, ClickEvent, Context, Edges, Entity, EventEmitter,
     ExternalDragPayload, ExternalPaths, FileDragPaths, FocusHandle, Focusable as _,
     InteractiveElement, IntoElement, KeyBinding, KeyDownEvent, Modifiers, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render,
     ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
-    UniformListScrollHandle, Window, actions,
+    UniformListScrollHandle, Window, actions, anchored,
     component::{
         Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
         input::{Input, InputEvent, InputState},
     },
-    div, img,
+    div, img, point,
     prelude::FluentBuilder as _,
     px, uniform_list,
 };
@@ -36,6 +36,7 @@ use crate::{
     filetypes::{Database, TypeInfo},
     format::{self, count, plural},
     layout::{self, Layout, Rect, ViewMode},
+    menu::{self, MenuCommand, MenuEffect, MenuKey},
     operations::{self, hub},
     settings::Settings,
     theme::{Theme, size, space, text},
@@ -43,6 +44,8 @@ use crate::{
 };
 
 const KEY_CONTEXT: &str = "Browser";
+/// The selection's context menu, while it has the keyboard focus.
+const MENU_CONTEXT: &str = "ContextMenu";
 /// The browser while no text field inside it has focus.
 const LIST_CONTEXT: &str = "Browser && !Input";
 /// How far the pointer must move with the button down before a rubber band starts.
@@ -97,6 +100,13 @@ actions!(
         Copy,
         Cut,
         Paste,
+        OpenContextMenu,
+        MenuUp,
+        MenuDown,
+        MenuLeft,
+        MenuRight,
+        MenuAccept,
+        MenuClose,
         OpenTrash,
         RestoreTrash,
         EmptyTrash,
@@ -161,6 +171,16 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-c", Copy, list),
         KeyBinding::new("ctrl-x", Cut, list),
         KeyBinding::new("ctrl-v", Paste, list),
+        KeyBinding::new("shift-f10", OpenContextMenu, list),
+    ]);
+    let menu = Some(MENU_CONTEXT);
+    cx.bind_keys([
+        KeyBinding::new("up", MenuUp, menu),
+        KeyBinding::new("down", MenuDown, menu),
+        KeyBinding::new("left", MenuLeft, menu),
+        KeyBinding::new("right", MenuRight, menu),
+        KeyBinding::new("enter", MenuAccept, menu),
+        KeyBinding::new("escape", MenuClose, menu),
     ]);
 }
 
@@ -192,6 +212,15 @@ pub enum BrowserEvent {
     OpenInNewTab(PathBuf),
     /// A folder was successfully listed, rather than merely requested.
     Visited(PathBuf),
+    /// Activate the file at this path: open it, or ask before running it.
+    Activate(PathBuf),
+    /// Open this file with the application whose desktop-file id is `id`.
+    OpenWith {
+        /// Desktop-file id, such as `org.kde.kate.desktop`.
+        id: String,
+        /// The file to open.
+        path: PathBuf,
+    },
     /// Rename these selected names together. `staying` is every other name
     /// in the folder.
     BatchRename {
@@ -247,6 +276,10 @@ pub struct Browser {
     /// The user's other trash directories, on other volumes, while a trash is shown.
     other_trashes: Vec<PathBuf>,
     focus: FocusHandle,
+    /// The context menu, while one is open.
+    menu: Option<OpenMenu>,
+    /// Holds the keyboard focus while the context menu is open.
+    menu_focus: FocusHandle,
     /// The system's file-type databases, once loaded in the background.
     types: Option<Arc<Database>>,
     /// Icon and description per MIME type, filled in as rows need them.
@@ -301,6 +334,7 @@ impl Browser {
         // Whatever contains this view decides when it gets the keyboard focus:
         // a view created for a background tab must not take it.
         let focus = cx.focus_handle();
+        let menu_focus = cx.focus_handle();
 
         let mut this = Self {
             model: None,
@@ -325,6 +359,8 @@ impl Browser {
             press_on_entry: false,
             other_trashes: Vec::new(),
             focus,
+            menu: None,
+            menu_focus,
             types: None,
             type_info: HashMap::new(),
             types_pending: HashSet::new(),
@@ -464,6 +500,7 @@ impl Browser {
     }
 
     fn open(&mut self, path: PathBuf) {
+        self.menu = None;
         if let Some(model) = &mut self.model {
             self.generation = model.open(path);
             self.failure = None;
@@ -543,9 +580,236 @@ impl Browser {
         ))
     }
 
-    fn on_mouse_down(&mut self, event: &MouseDownEvent, _: &mut Window, _: &mut Context<Self>) {
+    /// Opens the context menu for `row`, or for empty space when `row` is
+    /// `None`. A row that is not selected becomes the selection.
+    fn show_menu(
+        &mut self,
+        row: Option<usize>,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.renaming.is_some() || self.editing_location {
+            return;
+        }
+        if let Some(row) = row {
+            let selected = self
+                .snapshot
+                .as_ref()
+                .is_some_and(|snapshot| self.selection.contains(snapshot, row));
+            if !selected {
+                self.change_selection(
+                    |selection, snapshot| selection.select_only(snapshot, row),
+                    cx,
+                );
+            }
+        }
+        let entries = menu::context_menu(&self.menu_facts(row.is_some(), cx));
+        let Some(state) = menu::initial(&entries) else {
+            return;
+        };
+        self.menu = Some(OpenMenu { at, entries, state });
+        self.menu_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    fn menu_facts(&self, on_selection: bool, cx: &App) -> menu::MenuFacts {
+        let snapshot = self.snapshot.as_ref().filter(|_| on_selection);
+        let rows = snapshot
+            .map(|snapshot| self.selection.rows(snapshot))
+            .unwrap_or_default();
+        let single_container =
+            rows.len() == 1 && snapshot.is_some_and(|snapshot| snapshot.is_container(rows[0]));
+        let applications = if rows.len() == 1 && !single_container {
+            snapshot
+                .zip(self.types.as_ref())
+                .map(|(snapshot, types)| {
+                    types
+                        .applications(types.mime_type(snapshot.name(rows[0]), false))
+                        .into_iter()
+                        .map(|app| menu::AppChoice {
+                            id: app.id,
+                            name: app.name,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let can_paste = hub(cx)
+            .read(cx)
+            .clip
+            .as_ref()
+            .is_some_and(|clip| !clip.paths.is_empty());
+        menu::MenuFacts {
+            on_selection,
+            count: rows.len(),
+            single_container,
+            in_trash: self.trash_dir.is_some(),
+            can_paste,
+            applications,
+            types_ready: self.types.is_some(),
+        }
+    }
+
+    fn menu_anchor(&self) -> Point<Pixels> {
+        let bounds = self.scroll.0.borrow().base_handle.bounds();
+        if bounds.size.height > px(0.) {
+            point(
+                bounds.origin.x + px(space::LG),
+                bounds.origin.y + px(space::LG),
+            )
+        } else {
+            point(px(space::LG), px(size::TOOLBAR + space::LG))
+        }
+    }
+
+    fn open_selection_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.menu.is_some() {
+            self.menu = None;
+            self.focus.focus(window, cx);
+            cx.notify();
+            return;
+        }
+        let at = self.menu_anchor();
+        if self.selection.is_empty() {
+            self.show_menu(None, at, window, cx);
+        } else if let Some(row) = self.focus_row {
+            self.show_menu(Some(row), at, window, cx);
+        }
+    }
+
+    fn on_menu_key(&mut self, key: MenuKey, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(effect) = self
+            .menu
+            .as_mut()
+            .map(|menu| menu::on_key(&menu.entries, &mut menu.state, key))
+        else {
+            return;
+        };
+        match effect {
+            MenuEffect::Stay => cx.notify(),
+            MenuEffect::Close => {
+                self.menu = None;
+                self.focus.focus(window, cx);
+                cx.notify();
+            }
+            MenuEffect::Run(command) => self.run_menu(command, window, cx),
+        }
+    }
+
+    fn run_menu(&mut self, command: MenuCommand, window: &mut Window, cx: &mut Context<Self>) {
+        self.menu = None;
+        match command {
+            MenuCommand::Open => {
+                if let Some(row) = self.focus_row {
+                    self.activate_row(row, cx);
+                }
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::OpenWith(app) => {
+                if let Some(path) = self.selected_paths().into_iter().next()
+                    && self.selection.len() == 1
+                {
+                    cx.emit(BrowserEvent::OpenWith { id: app.id, path });
+                }
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::Cut => {
+                self.pick_up_selected(true, cx);
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::Copy => {
+                self.pick_up_selected(false, cx);
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::Paste => {
+                self.paste(cx);
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::Rename => self.rename_focused(window, cx),
+            MenuCommand::MoveToTrash => {
+                self.trash_selected(cx);
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::Delete => {
+                self.delete_selected(cx);
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::Restore => {
+                self.restore_selected(cx);
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::NewFolder => {
+                self.create_entry(true, cx);
+                // Creating focuses the new name once it appears.
+            }
+            MenuCommand::NewFile => self.create_entry(false, cx),
+        }
+        cx.notify();
+    }
+
+    fn hover_menu(
+        &mut self,
+        cursor: usize,
+        submenu: bool,
+        sub_cursor: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(menu) = &mut self.menu else {
+            return;
+        };
+        if menu.state.cursor == cursor
+            && menu.state.submenu == submenu
+            && (!submenu || menu.state.sub_cursor == sub_cursor)
+        {
+            return;
+        }
+        menu.state.cursor = cursor;
+        menu.state.submenu = submenu;
+        if submenu {
+            menu.state.sub_cursor = sub_cursor;
+        }
+        cx.notify();
+    }
+
+    fn entry_right_click(
+        row: usize,
+        cx: &mut Context<Self>,
+    ) -> impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static {
+        cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+            cx.stop_propagation();
+            this.show_menu(Some(row), event.position, window, cx);
+        })
+    }
+
+    fn on_background_menu(
+        &mut self,
+        event: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.show_menu(None, event.position, window, cx);
+    }
+
+    fn on_mouse_down(
+        &mut self,
+        event: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.ignore_click = false;
         self.band = None;
+        // A press outside the menu closes it and does not also select.
+        if self.menu.is_some() {
+            self.menu = None;
+            self.ignore_click = true;
+            self.press_on_entry = false;
+            self.focus.focus(window, cx);
+            cx.notify();
+            return;
+        }
         // The press landed on something draggable: no rubber band.
         if std::mem::take(&mut self.press_on_entry) {
             return;
@@ -689,10 +953,15 @@ impl Browser {
         let Some(snapshot) = &self.snapshot else {
             return;
         };
-        if row < snapshot.len() && snapshot.is_container(row) {
-            self.open(snapshot.entry_path(row));
-            cx.notify();
+        if row >= snapshot.len() {
+            return;
         }
+        if snapshot.is_container(row) {
+            self.open(snapshot.entry_path(row));
+        } else {
+            cx.emit(BrowserEvent::Activate(snapshot.entry_path(row)));
+        }
+        cx.notify();
     }
 
     fn go_up(&mut self, cx: &mut Context<Self>) {
@@ -1831,7 +2100,8 @@ impl Browser {
                             .px(px(space::SM))
                             .child(line)
                             .on_click(Self::entry_click(row, cx))
-                            .on_mouse_down(MouseButton::Middle, Self::entry_middle_click(row, cx));
+                            .on_mouse_down(MouseButton::Middle, Self::entry_middle_click(row, cx))
+                            .on_mouse_down(MouseButton::Right, Self::entry_right_click(row, cx));
                         if entry.container {
                             Self::drop_target(line, Some(row), theme, cx)
                         } else {
@@ -1919,6 +2189,10 @@ impl Browser {
                                     .on_mouse_down(
                                         MouseButton::Middle,
                                         Self::entry_middle_click(row, cx),
+                                    )
+                                    .on_mouse_down(
+                                        MouseButton::Right,
+                                        Self::entry_right_click(row, cx),
                                     ),
                                 row,
                                 cx,
@@ -2037,6 +2311,200 @@ impl Browser {
             .text_color(theme.text_muted)
             .child(div().flex_1().min_w_0().truncate().child(message))
     }
+
+    /// The open context menu, in window coordinates, or nothing.
+    fn menu_layer(&self, theme: Theme, cx: &mut Context<Self>) -> Option<gpui_kit::AnyElement> {
+        let menu = self.menu.as_ref()?;
+        let at = menu.at;
+        let entries = menu.entries.clone();
+        let state = menu.state;
+        let panel = self.menu_column(&entries, state.cursor, false, "menu-column", theme, cx);
+        let submenu = state.submenu.then(|| {
+            entries.get(state.cursor).and_then(|entry| match entry {
+                menu::MenuEntry::Submenu { items, .. } => {
+                    Some(self.menu_column(items, state.sub_cursor, true, "menu-apps", theme, cx))
+                }
+                _ => None,
+            })
+        });
+        Some(
+            anchored()
+                .position(at)
+                .snap_to_window_with_margin(Edges::all(px(space::SM)))
+                .child(
+                    div()
+                        .key_context(MENU_CONTEXT)
+                        .track_focus(&self.menu_focus)
+                        .on_action(cx.listener(|this, _: &MenuUp, window, cx| {
+                            this.on_menu_key(MenuKey::Up, window, cx);
+                        }))
+                        .on_action(cx.listener(|this, _: &MenuDown, window, cx| {
+                            this.on_menu_key(MenuKey::Down, window, cx);
+                        }))
+                        .on_action(cx.listener(|this, _: &MenuLeft, window, cx| {
+                            this.on_menu_key(MenuKey::Left, window, cx);
+                        }))
+                        .on_action(cx.listener(|this, _: &MenuRight, window, cx| {
+                            this.on_menu_key(MenuKey::Right, window, cx);
+                        }))
+                        .on_action(cx.listener(|this, _: &MenuAccept, window, cx| {
+                            this.on_menu_key(MenuKey::Accept, window, cx);
+                        }))
+                        .on_action(cx.listener(|this, _: &MenuClose, window, cx| {
+                            this.on_menu_key(MenuKey::Close, window, cx);
+                        }))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                        .occlude()
+                        .flex()
+                        .items_start()
+                        .child(panel)
+                        .children(submenu.flatten()),
+                )
+                .into_any_element(),
+        )
+    }
+
+    /// One column of menu rows. `nested` is the application list.
+    fn menu_column(
+        &self,
+        entries: &[menu::MenuEntry],
+        cursor: usize,
+        nested: bool,
+        column: &'static str,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let rows = entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| self.menu_row(entry, index, cursor, nested, theme, cx));
+        div()
+            .id(column)
+            .flex()
+            .flex_col()
+            .w(px(size::MENU))
+            .max_h(px(size::MENU_VISIBLE))
+            .overflow_y_scroll()
+            .p(px(space::XS))
+            .rounded(px(size::RADIUS))
+            .bg(theme.raised)
+            .border_1()
+            .border_color(theme.border_accent)
+            .shadow(vec![theme.floating_shadow()])
+            .font_family(text::FAMILY_BODY)
+            .text_size(px(text::BODY))
+            .children(rows)
+    }
+
+    fn menu_row(
+        &self,
+        entry: &menu::MenuEntry,
+        index: usize,
+        cursor: usize,
+        nested: bool,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::AnyElement {
+        let current = index == cursor;
+        match entry {
+            menu::MenuEntry::Separator => div()
+                .h(px(1.))
+                .my(px(space::XS))
+                .bg(theme.border)
+                .into_any_element(),
+            menu::MenuEntry::Submenu { label, .. } => self
+                .menu_button(label, true, true, current, theme, cx)
+                .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                    this.hover_menu(index, true, 0, cx);
+                }))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.on_menu_key(MenuKey::Right, window, cx);
+                }))
+                .into_any_element(),
+            menu::MenuEntry::Item {
+                label,
+                command,
+                enabled,
+            } => {
+                let command = command.clone();
+                let enabled = *enabled;
+                self.menu_button(label, enabled, false, current && enabled, theme, cx)
+                    .when(enabled, |row| {
+                        row.on_mouse_move(cx.listener(move |this, _, _, cx| {
+                            if nested {
+                                let cursor = this
+                                    .menu
+                                    .as_ref()
+                                    .map(|menu| menu.state.cursor)
+                                    .unwrap_or(0);
+                                this.hover_menu(cursor, true, index, cx);
+                            } else {
+                                this.hover_menu(index, false, 0, cx);
+                            }
+                        }))
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.run_menu(command.clone(), window, cx);
+                            },
+                        ))
+                    })
+                    .into_any_element()
+            }
+        }
+    }
+
+    fn menu_button(
+        &self,
+        label: &str,
+        enabled: bool,
+        submenu: bool,
+        current: bool,
+        theme: Theme,
+        _: &mut Context<Self>,
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+        div()
+            .id(SharedString::from(format!(
+                "menu-{}-{}-{label}",
+                if submenu { "sub" } else { "item" },
+                if current { "on" } else { "off" }
+            )))
+            .flex()
+            .items_center()
+            .gap(px(space::SM))
+            .h(px(size::ROW))
+            .px(px(space::SM))
+            .rounded(px(size::RADIUS))
+            .border_l(px(size::SELECTION_BAR))
+            .border_color(gpui_kit::transparent_black())
+            .when(current, |row| row.border_color(theme.accent))
+            .when(current, |row| {
+                row.bg(theme.selection).text_color(theme.on_selection)
+            })
+            .when(!current && enabled, |row| row.text_color(theme.text))
+            .when(!enabled, |row| row.text_color(theme.text_muted))
+            .child(div().flex_1().min_w_0().truncate().child(label.to_owned()))
+            .when(submenu, |row| {
+                row.child(
+                    Icon::new(IconName::ChevronRight)
+                        .size(px(size::ICON_SMALL))
+                        .text_color(if current {
+                            theme.on_selection
+                        } else {
+                            theme.text_muted
+                        }),
+                )
+            })
+    }
+}
+
+/// The menu opened for a selection or for empty space.
+struct OpenMenu {
+    at: Point<Pixels>,
+    entries: Vec<menu::MenuEntry>,
+    state: menu::MenuState,
 }
 
 impl Render for Browser {
@@ -2202,6 +2670,9 @@ impl Render for Browser {
             .on_action(cx.listener(|this, _: &Copy, _, cx| this.pick_up_selected(false, cx)))
             .on_action(cx.listener(|this, _: &Cut, _, cx| this.pick_up_selected(true, cx)))
             .on_action(cx.listener(|this, _: &Paste, _, cx| this.paste(cx)))
+            .on_action(cx.listener(|this, _: &OpenContextMenu, window, cx| {
+                this.open_selection_menu(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &CancelEdit, window, cx| {
                 if this.renaming.is_some() {
                     this.finish_rename(false, window, cx);
@@ -2236,6 +2707,7 @@ impl Render for Browser {
                     .flex_col()
                     .min_h_0()
                     .bg(theme.content)
+                    .on_mouse_down(MouseButton::Right, cx.listener(Self::on_background_menu))
                     .map(|content| match &snapshot {
                         Some(snapshot) if !snapshot.is_empty() => {
                             if self.mode == ViewMode::Details {
@@ -2249,7 +2721,8 @@ impl Render for Browser {
                     }),
             )
             .child(self.status(theme))
-            .children(self.band_outline(theme));
+            .children(self.band_outline(theme))
+            .children(self.menu_layer(theme, cx));
         self.frames.end(frame_started);
         view
     }

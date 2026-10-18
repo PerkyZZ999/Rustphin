@@ -28,6 +28,25 @@ pub fn data_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+/// Directories searched for configuration, most important first: the user's
+/// own config directory, then the system ones.
+pub fn config_dirs() -> Vec<PathBuf> {
+    let absolute = |path: PathBuf| path.is_absolute().then_some(path);
+    let mut dirs = Vec::new();
+    if let Some(home) = config_home() {
+        dirs.push(home);
+    }
+    let system = env::var_os("XDG_CONFIG_DIRS")
+        .filter(|dirs| !dirs.is_empty())
+        .unwrap_or_else(|| "/etc/xdg".into());
+    for dir in env::split_paths(&system).filter_map(absolute) {
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+    dirs
+}
+
 /// The directory holding the user's configuration files.
 pub fn config_home() -> Option<PathBuf> {
     env::var_os("XDG_CONFIG_HOME")

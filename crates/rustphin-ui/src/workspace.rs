@@ -67,6 +67,7 @@ actions!(
         DialogReplace,
         DialogToggleAll,
         DialogCopy,
+        DialogOpen,
         ToggleSidebar,
         AddPlace,
         OpenPalette,
@@ -120,6 +121,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("r", DialogReplace, Some(DIALOG_CONTEXT)),
         KeyBinding::new("a", DialogToggleAll, Some(DIALOG_CONTEXT)),
         KeyBinding::new("c", DialogCopy, Some(DIALOG_CONTEXT)),
+        KeyBinding::new("o", DialogOpen, Some(DIALOG_CONTEXT)),
     ]);
 }
 
@@ -190,6 +192,8 @@ pub struct Workspace {
     pub(crate) rename: Option<crate::rename_dialog::RenameDialog>,
     /// Folders other applications asked to be shown, applied on the next frame.
     pending_shows: Vec<rustphin_platform::file_manager::Shown>,
+    /// A program or shortcut waiting for confirmation before it runs.
+    launch: Option<LaunchPrompt>,
     _history: Subscription,
     _places: Subscription,
 }
@@ -267,6 +271,7 @@ impl Workspace {
             palette_from_sidebar: false,
             rename: None,
             pending_shows: Vec::new(),
+            launch: None,
             _history: cx.observe(&history(cx), |this, _, cx| this.refresh_palette(cx)),
             _places: cx.observe(&sidebar, |this, _, cx| this.refresh_palette(cx)),
         };
@@ -364,6 +369,10 @@ impl Workspace {
         match event {
             BrowserEvent::OpenInNewTab(path) => self.open_tab(path.clone(), false, window, cx),
             BrowserEvent::Visited(path) => history(cx).read(cx).visit(path.clone()),
+            BrowserEvent::Activate(path) => self.consider_launch(path.clone(), cx),
+            BrowserEvent::OpenWith { id, path } => {
+                self.open_with(id.clone(), path.clone(), cx);
+            }
             BrowserEvent::BatchRename {
                 directory,
                 selected,
@@ -384,6 +393,180 @@ impl Workspace {
                 cx.notify();
             }
         }
+    }
+
+    /// Classifies a file off the UI thread, opens a document, or asks before
+    /// running a program or a shortcut.
+    fn consider_launch(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        if self.launch.is_some() || !hub(cx).read(cx).questions.is_empty() {
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            let outcome = cx.background_spawn(async move { classify(&path) }).await;
+            let _ = this.update(cx, |this, cx| match outcome {
+                LaunchOutcome::Opened(Ok(())) => {}
+                LaunchOutcome::Opened(Err(message)) => {
+                    hub(cx).update(cx, |hub, cx| hub.say(message, true, cx));
+                }
+                LaunchOutcome::Ask {
+                    path,
+                    name,
+                    program,
+                } => {
+                    this.launch = Some(LaunchPrompt {
+                        path,
+                        name,
+                        program,
+                    });
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Opens a file with one chosen application, off the UI thread.
+    fn open_with(&mut self, id: String, path: PathBuf, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move { rustphin_platform::apps::open_with(&id, &path) })
+                .await;
+            if let Err(error) = result {
+                let _ = this.update(cx, |_, cx| {
+                    hub(cx).update(cx, |hub, cx| hub.say(error.to_string(), true, cx));
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// The confirmation before a program or a shortcut runs.
+    fn launch_dialog(
+        &self,
+        prompt: &LaunchPrompt,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let name = prompt.name.clone();
+        let program = prompt.program;
+        let body = if program {
+            "This file is a program. Running it executes it on this computer. Open hands it to the default application instead."
+        } else {
+            "This is an application shortcut. Running it starts that application."
+        };
+        div()
+            .absolute()
+            .inset_0()
+            .occlude()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(theme.scrim)
+            .child(
+                div()
+                    .key_context(DIALOG_CONTEXT)
+                    .track_focus(&self.dialog_focus)
+                    .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
+                        this.answer_launch(true, false, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
+                        this.answer_launch(false, false, cx);
+                    }))
+                    .on_action(cx.listener(move |this, _: &DialogOpen, _, cx| {
+                        if program {
+                            this.answer_launch(false, true, cx);
+                        }
+                    }))
+                    .flex()
+                    .flex_col()
+                    .gap(px(space::MD))
+                    .w(px(size::DIALOG))
+                    .p(px(space::LG))
+                    .rounded(px(size::RADIUS))
+                    .bg(theme.raised)
+                    .border_1()
+                    .border_color(theme.border_accent)
+                    .shadow(vec![theme.floating_shadow()])
+                    .text_color(theme.text)
+                    .font_family(text::FAMILY_BODY)
+                    .text_size(px(text::BODY))
+                    .line_height(px(text::LINE))
+                    .child(
+                        div()
+                            .font_family(text::FAMILY_HEADING)
+                            .text_size(px(text::HEADING))
+                            .child(format!("Run “{name}”?")),
+                    )
+                    .child(body)
+                    .child(
+                        div()
+                            .flex()
+                            .justify_end()
+                            .gap(px(space::SM))
+                            .pt(px(space::SM))
+                            .child(
+                                Button::new("launch-keep")
+                                    .small()
+                                    .primary()
+                                    .label("Keep (Esc)")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.answer_launch(false, false, cx);
+                                    })),
+                            )
+                            .when(program, |row| {
+                                row.child(
+                                    Button::new("launch-open")
+                                        .small()
+                                        .outline()
+                                        .label("Open (O)")
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.answer_launch(false, true, cx);
+                                        })),
+                                )
+                            })
+                            .child(
+                                Button::new("launch-run")
+                                    .small()
+                                    .danger()
+                                    .label("Run (Enter)")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.answer_launch(true, false, cx);
+                                    })),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    /// Applies the run dialog: run the file, open it, or leave it alone.
+    fn answer_launch(&mut self, run: bool, open: bool, cx: &mut Context<Self>) {
+        let Some(prompt) = self.launch.take() else {
+            return;
+        };
+        if run || open {
+            let path = prompt.path;
+            let program = prompt.program;
+            cx.spawn(async move |this, cx| {
+                let result = cx
+                    .background_spawn(async move {
+                        if open {
+                            rustphin_platform::apps::open_with_default(&path)
+                        } else if program {
+                            rustphin_platform::apps::run_program(&path)
+                        } else {
+                            rustphin_platform::apps::run_desktop(&path)
+                        }
+                    })
+                    .await;
+                if let Err(error) = result {
+                    let _ = this.update(cx, |_, cx| {
+                        hub(cx).update(cx, |hub, cx| hub.say(error.to_string(), true, cx));
+                    });
+                }
+            })
+            .detach();
+        }
+        cx.notify();
     }
 
     fn palette_candidates(&self, cx: &App) -> Vec<Candidate> {
@@ -865,7 +1048,7 @@ impl Render for Workspace {
         // A dialog takes the keyboard while it is open and gives it back to
         // the active pane when the last one closes.
         let hub = hub(cx);
-        let dialog_open = !hub.read(cx).questions.is_empty();
+        let dialog_open = !hub.read(cx).questions.is_empty() || self.launch.is_some();
         if dialog_open && self.palette.is_some() {
             self.palette = None;
             self.palette_subscription = None;
@@ -931,7 +1114,13 @@ impl Render for Workspace {
 
         let activity = self.activity(hub.read(cx), theme);
         let question = hub.read(cx).questions.front().cloned();
-        let dialog = question.map(|question| self.dialog(&question, theme, cx));
+        let dialog = if let Some(question) = question {
+            Some(self.dialog(&question, theme, cx))
+        } else {
+            self.launch
+                .as_ref()
+                .map(|prompt| self.launch_dialog(prompt, theme, cx))
+        };
 
         div()
             .key_context(KEY_CONTEXT)
@@ -1442,6 +1631,54 @@ enum Answer {
 }
 
 /// The name shown for a folder: its last component, or `/` for the root.
+/// A program or shortcut the user has been asked about.
+struct LaunchPrompt {
+    path: PathBuf,
+    /// The name in the question.
+    name: String,
+    /// An executable file, rather than an application shortcut.
+    program: bool,
+}
+
+/// The background classification of one activation.
+enum LaunchOutcome {
+    /// A document was handed to the default application, or classification failed.
+    Opened(Result<(), String>),
+    /// Ask before running.
+    Ask {
+        path: PathBuf,
+        name: String,
+        program: bool,
+    },
+}
+
+fn classify(path: &Path) -> LaunchOutcome {
+    match rustphin_platform::apps::launch_kind(path) {
+        rustphin_platform::apps::LaunchKind::Document => LaunchOutcome::Opened(
+            rustphin_platform::apps::open_with_default(path).map_err(|error| error.to_string()),
+        ),
+        rustphin_platform::apps::LaunchKind::Program => LaunchOutcome::Ask {
+            path: path.to_owned(),
+            name: file_label(path),
+            program: true,
+        },
+        rustphin_platform::apps::LaunchKind::Desktop { name } => LaunchOutcome::Ask {
+            path: path.to_owned(),
+            name,
+            program: false,
+        },
+        rustphin_platform::apps::LaunchKind::Unreadable(message) => {
+            LaunchOutcome::Opened(Err(message))
+        }
+    }
+}
+
+fn file_label(path: &Path) -> String {
+    path.file_name()
+        .map(|name| display_name(name.as_bytes()).into_owned())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
 fn folder_label(path: &Path) -> String {
     match path.file_name() {
         Some(name) => display_name(name.as_encoded_bytes()).into_owned(),

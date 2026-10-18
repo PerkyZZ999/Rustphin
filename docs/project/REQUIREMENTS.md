@@ -16,7 +16,7 @@ Conventions:
   - [ ] Opening a directory lists every entry Dolphin lists for it, with hidden files off by default and a toggle to show them.
   - [ ] Back, forward and up work with mouse and keyboard; history is kept per tab.
   - [ ] A breadcrumb location bar switches to an editable path field; an invalid path shows an inline error and keeps the current view.
-  - [ ] Activating a file opens it with the system default application; executables and `.desktop` files ask before running.
+  - [x] Activating a file opens it with the system default application; executables and `.desktop` files ask before running.
   - [ ] An unreadable directory shows an inline error state, not a crash or an empty view.
 - **Validation:** test (model), ui-test (navigation), manual (open-with)
 
@@ -164,7 +164,7 @@ Conventions:
 ### R-018 — Context menu and properties
 - **Priority:** should
 - **Acceptance:**
-  - [ ] Right-click offers the operations of R-007 to R-011 relevant to the selection, plus "Open with" listing applications registered for the MIME type.
+  - [x] Right-click offers the operations of R-007 to R-011 relevant to the selection, plus "Open with" listing applications registered for the MIME type.
   - [ ] A properties view shows name, type, size (computed in the background for folders), times and permissions, and can change permissions.
 - **Validation:** ui-test, manual
 

@@ -12,6 +12,7 @@ mod groups;
 mod history;
 mod launch;
 mod layout;
+mod menu;
 mod operations;
 mod palette;
 mod rename_dialog;

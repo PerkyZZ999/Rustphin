@@ -56,6 +56,10 @@ pub mod size {
     pub const DEVICE_ROW: f32 = 48.;
     /// Width of the places panel.
     pub const SIDEBAR: f32 = 220.;
+    /// Width of a context menu and of its application list.
+    pub const MENU: f32 = 240.;
+    /// Tallest a context menu grows before it scrolls: twelve rows.
+    pub const MENU_VISIBLE: f32 = 336.;
     /// Width of a dialog.
     pub const DIALOG: f32 = 440.;
     /// Width of the batch-rename dialog, which has a two-column preview.

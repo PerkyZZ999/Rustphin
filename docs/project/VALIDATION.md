@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-10-18 — W-066 context menu and run confirmation
+- **Phase:** 6 Implement (S10)
+- **Result:** pass for the menu contents, application lookup and the decision to ask before running. Not yet seen on screen; that is W-068.
+- **Change:** Right-click, or Shift+F10, opens a menu for the selection (open, open with, cut, copy, paste, rename, trash, delete) or, on empty space, paste and new entries. Trash offers restore instead of a second trash. Open with lists applications registered for the file's type, default first, including a parent type, and leaves out removed ones. A normal file opens with the default application. An executable or a `.desktop` file asks first: Keep does nothing, Run starts it, and an executable can instead be opened. Commands are started directly, not through a shell. A desktop file that is not valid UTF-8 or is not an application is skipped.
+- **Evidence:** `rust-tc doctor` PASS, 362 tests. A hand edit that disabled Move to trash failed `several_files_cannot_be_opened_or_renamed_as_one`; it was restored. A hand edit that ignored removed associations failed `the_default_application_leads_and_a_removed_one_is_absent`; it was restored. `npx @google/design.md lint docs/DESIGN.md` reported 0 errors. The menu was not opened in a session; W-068 does that.
+- **Follow-up:** W-067 is the properties view. Seeing the menu in an isolated session is part of W-068.
+
 ### 2026-10-18 — W-065 ShowItems
 - **Phase:** 6 Implement (S10)
 - **Result:** pass on a private bus and in the headless grouping; not yet called from another application on the real session bus

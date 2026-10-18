@@ -7,7 +7,7 @@
 use std::{path::Path, sync::Arc};
 
 use gpui_kit::SharedString;
-use rustphin_platform::{icons::IconTheme, mime::MimeDb, xdg};
+use rustphin_platform::{apps::Associations, icons::IconTheme, mime::MimeDb, xdg};
 
 /// Theme used when the desktop settings name none.
 const DEFAULT_THEME: &str = "breeze-dark";
@@ -25,6 +25,7 @@ pub struct TypeInfo {
 pub struct Database {
     mimes: MimeDb,
     theme: IconTheme,
+    apps: Associations,
 }
 
 impl Database {
@@ -37,12 +38,18 @@ impl Database {
         Self {
             mimes: MimeDb::load(&data_dirs),
             theme: IconTheme::load(&theme, &data_dirs),
+            apps: Associations::load(&xdg::config_dirs(), &data_dirs),
         }
     }
 
     /// The MIME type of an entry by its name. Does not touch the disk.
     pub fn mime_type(&self, name: &[u8], is_dir: bool) -> &str {
         self.mimes.mime_type(name, is_dir)
+    }
+
+    /// Applications registered for `mime`, default first. Does not touch the disk.
+    pub fn applications(&self, mime: &str) -> Vec<rustphin_platform::apps::Application> {
+        self.apps.for_type(mime)
     }
 
     /// Finds the icon and description of a type. Blocking: call from a
