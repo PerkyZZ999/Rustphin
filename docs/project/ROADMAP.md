@@ -69,7 +69,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** R-016 criteria.
 - **Requirements:** R-016
 - **Validation:** test, ui-test
-- **Status:** in progress
+- **Status:** done 2026-10-18 (see VALIDATION.md). Open: killing the process during a rename can leave a file under a `.rustphin-part-` name.
 
 ## Slice S10 — Desktop integration
 - **Outcome:** Rustphin can be the default file manager: opens from other apps, offers a context menu, "Open with" and properties.

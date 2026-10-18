@@ -1,5 +1,19 @@
 # Validation evidence
 
+### 2026-10-18 — W-063 batch-rename scenarios; S9 closed
+- **Phase:** 6 Implement (S9)
+- **Result:** pass for the dialog on screen. S9 closed. Killing the process during a rename remains open (R-103).
+- **Change:** scenarios B1–B4 added to UI_SCENARIOS.md. No application code.
+- **UI evidence:** isolated KWin, isolated home, generated files only. No device was activated. Release build.
+  - B1: Ctrl+A was not used; Down and Shift+Down selected `note.txt` and `other.txt` (status "2 of 2 items selected"). F2 opened a solid dialog, "Rename 2 items", Replace filled and Pattern and Case outlined. Both current names were listed. The sentence "There is nothing to find. Enter the text that should be replaced." was shown and Rename was disabled.
+  - B2: Find `note`, replace `other`. The preview showed both files becoming `other.txt`, with the sentences for a duplicate target and for a name a staying file already has. Rename stayed disabled.
+  - B3: The replacement was changed to `photo`. The preview showed `note.txt` → `photo.txt` and `other.txt` unchanged, with no problem sentence, and Rename filled. Enter closed the dialog. The list and the directory then held `other.txt` (6 bytes) and `photo.txt` (5 bytes, the original note).
+  - B4: Ctrl+A, F2, Escape. The directory listing immediately afterwards was still only those two names. The capture after Escape was the same size as the closed list view; the session cleanup then removed the image, so that frame was not re-read.
+  - Pattern, on a second fixture (`aa.txt`, `bb.txt`): the mode showed `@-#`, start 1, step 1, the sentence explaining `#` and `@`, and the preview `aa.txt-1`, `bb.txt-2`.
+  - Case: Lower case, Upper case and Capitalise words were shown. Lower case was selected. The sentence "Nothing would change. Edit the rule to give the files new names." was shown and Rename was disabled, because the names were already lower case.
+- **Not claimed:** a regular expression typed on screen (the checkbox was visible; the expression itself is covered by the W-060 test), a counter padded with more than one `#` typed on screen (the sentence states that rule; the unit test checks it), undo of a batch rename on screen (the engine test exchanges two names and undoes that one history entry), and a process killed mid-rename.
+- **Follow-up:** S10 is desktop integration. The kill gap stays open.
+
 ### 2026-10-18 — W-062 batch-rename dialog
 - **Phase:** 6 Implement (S9)
 - **Result:** pass for the dialog's construction; it has not yet been replayed on screen

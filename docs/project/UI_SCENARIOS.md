@@ -119,6 +119,17 @@ Use an isolated fixture and home as above. These checks never activate a device 
 | J4 | Use Actions for view modes, zoom, hidden files, sorting, split view, new file, trash and place controls | Each control is selected after opening Actions once; corresponding existing shortcuts still work; unavailable future features are absent |
 | J5 | Make one pane narrower than 320 px, then narrower than 240 px | Forward and Up leave first; Back leaves under 240 px. Alt+Left, Alt+Right and Alt+Up still navigate. Actions stays. The status line stays inside the pane |
 
+## Batch rename (S9)
+
+Use two or more files in the fixture. Do not activate a device.
+
+| # | Steps | Expected |
+|---|---|---|
+| B1 | Select two files, F2 | A solid dialog titled for both items, with Replace, Pattern and Case. Replace is filled. The preview lists both current names. A sentence says what to type, and Rename is disabled |
+| B2 | Find `note`, replace with `other` | The preview shows `note` becoming `other`, a sentence that the name is already used, and Rename still disabled |
+| B3 | Change the replacement to `photo`, Enter | `note` is now `photo` on disk and in the list; `other` is unchanged; the dialog is gone |
+| B4 | Select the two files again, F2, Escape | The dialog closes and both names stay as they are |
+
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.

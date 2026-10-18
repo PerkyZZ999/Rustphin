@@ -3,8 +3,8 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S1–S8 done; S9 not started
-- **Status:** active — S9 in progress
+- **Current phase:** 6 (Vertical-slice implementation) — S1–S9 done; S10 not started
+- **Status:** active — S10 not started
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-18
 
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-18 — W-062 batch-rename dialog
+- Latest validation entry: VALIDATION.md, 2026-10-18 — W-063 batch-rename scenarios; S9 closed
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -38,7 +38,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-063: record and replay the rename dialog in an isolated KWin session/home, and close S9 only against the observed evidence (R-016). Use `rust-tc` for every check and commit after every task.
+- Start W-064: a desktop entry, and command-line paths and `file://` URLs open as tabs (R-017). Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

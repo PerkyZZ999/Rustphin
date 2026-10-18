@@ -1,14 +1,19 @@
 # Work items (current slice)
 
 ## Current slice
-S9 — Advanced batch rename (in progress)
+S10 — Desktop integration (not started)
 
-**Done when:** with several files selected, rename offers find/replace (plain and regular expression), a counter pattern and case changes; a live preview shows every old and new name; conflicts are flagged and block applying; applying is all-or-nothing and one undo step (R-016).
+**Done when:** Rustphin can be chosen as the handler for folders, opens `ShowItems` and command-line paths as tabs, and offers a context menu, Open with and properties (R-017, R-018).
 
 ## Queue
-- [ ] W-063 — Record and replay the rename scenario in an isolated KWin session/home, and close S9 only against the observed evidence (R-016).
+- [ ] W-064 — Desktop entry and command-line paths and `file://` URLs open as tabs (R-017).
+- [ ] W-065 — `org.freedesktop.FileManager1` ShowItems opens the folder and selects the item, tested on a private bus (R-017).
+- [ ] W-066 — Context menu for the selection, including Open with the applications registered for the type (R-018, R-001). Activating a file still confirms before running an executable.
+- [ ] W-067 — Properties: name, type, size, times and permissions, with folder size computed off the UI thread, and a way to change permissions (R-018, D-017).
+- [ ] W-068 — Replay the desktop-integration scenarios in an isolated session and close S10 only against the observed evidence (R-017, R-018).
 
 ## Done (recent)
+- [x] W-063 — Record and replay the rename scenario in an isolated KWin session/home, and close S9 only against the observed evidence (R-016).
 - [x] W-062 — Rename dialog: live preview, a written conflict, apply and cancel. Update DESIGN.md before the dialog (R-016, D-017).
 - [x] W-061 — Apply one plan through the operation engine as a single all-or-nothing undo step, with fault injection (R-016, R-008, D-011).
 - [x] W-060 — Core batch-rename plan: find/replace, a counter pattern and case changes, with a preview and conflict flags, and no filesystem writes (R-016).

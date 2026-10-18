@@ -147,10 +147,10 @@ Conventions:
 ### R-016 — Advanced batch rename
 - **Priority:** must
 - **Acceptance:**
-  - [ ] With several files selected, rename opens a dialog offering find/replace (plain and regular expression), a pattern with counters (start, step, padding), and case changes.
-  - [ ] A live preview shows old and new names for the whole selection before anything is changed.
-  - [ ] Conflicts (duplicate targets, existing files, invalid names) are flagged in the preview and block applying.
-  - [ ] Applying is all-or-nothing and is a single undo step.
+  - [x] With several files selected, rename opens a dialog offering find/replace (plain and regular expression), a pattern with counters (start, step, padding), and case changes.
+  - [x] A live preview shows old and new names for the whole selection before anything is changed.
+  - [x] Conflicts (duplicate targets, existing files, invalid names) are flagged in the preview and block applying.
+  - [x] Applying is all-or-nothing and is a single undo step.
 - **Validation:** test, ui-test
 
 ### R-017 — Default file manager integration
