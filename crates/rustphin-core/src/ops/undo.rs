@@ -150,6 +150,15 @@ fn check(fs: &dyn Fs, change: &Change) -> Result<(), UndoError> {
             expect_unchanged(fs, to, info)?;
             expect_free(fs, from)
         }
+        Change::BatchRenamed { items } => {
+            for item in items {
+                expect_unchanged(fs, &item.to, &item.info)?;
+            }
+            for item in items {
+                super::batch::source_is_available(fs, &item.from, items)?;
+            }
+            Ok(())
+        }
         Change::Trashed { item } => {
             fs.info(&item.content).map_err(|error| {
                 if error.kind() == io::ErrorKind::NotFound {
@@ -193,6 +202,7 @@ fn revert(engine: &mut Engine<'_>, change: &Change) -> Result<(), UndoError> {
             expect_unchanged(fs, to, info)?;
             engine.trash.trash(to).map(drop).map_err(io_error(to))
         }
+        Change::BatchRenamed { items } => super::batch::revert_batch(fs, items),
         Change::Moved { from, to, info } => {
             expect_unchanged(fs, to, info)?;
             let node = Node {

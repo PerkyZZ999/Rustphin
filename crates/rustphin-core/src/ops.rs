@@ -50,6 +50,18 @@ pub enum Request {
         /// Its new name.
         new_name: OsString,
     },
+    /// Rename every pair inside one directory, or change nothing.
+    ///
+    /// Refused before the first change when a new name is unusable, two files
+    /// would receive the same name, or a file that is not part of the plan
+    /// already has a new name. A swap or a chain is applied through temporary
+    /// names and remembered as one change, so undo puts every file back.
+    RenameBatch {
+        /// The directory that holds every file.
+        directory: PathBuf,
+        /// Current name, then the name it should have.
+        pairs: Vec<(OsString, OsString)>,
+    },
     /// Copy each of `sources`, with everything inside it, into the directory `into`.
     Copy {
         /// Entries to copy. Symbolic links are copied as links.
@@ -249,6 +261,17 @@ pub trait Controller {
     fn failure(&mut self, failure: &Failure) -> Recovery;
 }
 
+/// One file in a [`Change::BatchRenamed`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchRename {
+    /// Where the file was.
+    pub from: PathBuf,
+    /// Where the file is.
+    pub to: PathBuf,
+    /// The file at `to` right after the rename.
+    pub info: FileInfo,
+}
+
 /// One change an operation made, in the order they happened.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
@@ -267,6 +290,11 @@ pub enum Change {
         to: PathBuf,
         /// The entry at `to` right after the move.
         info: FileInfo,
+    },
+    /// Several renames that were applied together, including swaps.
+    BatchRenamed {
+        /// Each file's old path, its path now, and the entry there.
+        items: Vec<BatchRename>,
     },
     /// A new copy.
     Copied {
@@ -379,6 +407,7 @@ pub fn run(
             engine.rename(path, new_name)?;
             true
         }
+        Request::RenameBatch { directory, pairs } => engine.rename_batch(directory, pairs)?,
         Request::Copy { sources, into } => {
             let plan = engine.plan_transfer(sources, into, false)?;
             engine.controller.progress(&engine.progress);
@@ -1224,6 +1253,7 @@ enum Placed {
     LeftOut,
 }
 
+mod batch;
 #[cfg(any(test, feature = "test-support"))]
 pub mod faults;
 mod undo;

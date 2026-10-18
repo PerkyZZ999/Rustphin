@@ -1277,3 +1277,121 @@ fn a_process_killed_at_any_step_of_a_move_loses_nothing() {
         );
     }
 }
+
+#[test]
+fn a_batch_rename_is_one_undo_of_every_file() {
+    let d = dirs();
+    file(d.src.join("a"), "A");
+    file(d.src.join("b"), "B");
+    file(d.src.join("c"), "C");
+    let request = Request::RenameBatch {
+        directory: d.src.clone(),
+        pairs: vec![
+            ("a".into(), "a-1".into()),
+            ("b".into(), "b-1".into()),
+            ("c".into(), "c-1".into()),
+        ],
+    };
+    let outcome = go(&request, &mut Script::default());
+    assert!(outcome.completed);
+    assert_eq!(read(d.src.join("a-1")), "A");
+    assert_eq!(read(d.src.join("b-1")), "B");
+    assert!(matches!(
+        outcome.changes.as_slice(),
+        [Change::BatchRenamed { items }] if items.len() == 3
+    ));
+
+    let mut history = History::default();
+    history.push(request, outcome.changes);
+    assert_eq!(history.len(), 1);
+    history
+        .undo_last(&RealFs, &NoTrash, &mut Script::default())
+        .unwrap()
+        .unwrap();
+    assert_eq!(read(d.src.join("a")), "A");
+    assert_eq!(read(d.src.join("b")), "B");
+    assert_eq!(read(d.src.join("c")), "C");
+}
+
+#[test]
+fn a_batch_rename_can_exchange_two_names_and_undo_the_exchange() {
+    let d = dirs();
+    file(d.src.join("left"), "L");
+    file(d.src.join("right"), "R");
+    let request = Request::RenameBatch {
+        directory: d.src.clone(),
+        pairs: vec![
+            ("left".into(), "right".into()),
+            ("right".into(), "left".into()),
+        ],
+    };
+    let outcome = go(&request, &mut Script::default());
+    assert_eq!(read(d.src.join("left")), "R");
+    assert_eq!(read(d.src.join("right")), "L");
+    let mut history = History::default();
+    history.push(request, outcome.changes);
+    history
+        .undo_last(&RealFs, &NoTrash, &mut Script::default())
+        .unwrap()
+        .unwrap();
+    assert_eq!(read(d.src.join("left")), "L");
+    assert_eq!(read(d.src.join("right")), "R");
+}
+
+#[test]
+fn a_batch_rename_can_take_a_name_another_selected_file_is_leaving() {
+    let d = dirs();
+    file(d.src.join("a"), "A");
+    file(d.src.join("b"), "B");
+    go(
+        &Request::RenameBatch {
+            directory: d.src.clone(),
+            pairs: vec![("a".into(), "b".into()), ("b".into(), "c".into())],
+        },
+        &mut Script::default(),
+    );
+    assert_eq!(read(d.src.join("b")), "A");
+    assert_eq!(read(d.src.join("c")), "B");
+    assert!(!d.src.join("a").exists());
+}
+
+#[test]
+fn a_batch_rename_refuses_a_name_that_is_staying_and_changes_nothing() {
+    let d = dirs();
+    file(d.src.join("a"), "A");
+    file(d.src.join("b"), "B");
+    let error = run(
+        &RealFs,
+        &NoTrash,
+        &Request::RenameBatch {
+            directory: d.src.clone(),
+            pairs: vec![("a".into(), "b".into())],
+        },
+        &mut Script::default(),
+    )
+    .unwrap_err();
+    assert!(matches!(error, OpError::AlreadyExists(_)));
+    assert_eq!(read(d.src.join("a")), "A");
+    assert_eq!(read(d.src.join("b")), "B");
+}
+
+#[test]
+fn a_failed_batch_rename_puts_every_file_back() {
+    let d = dirs();
+    file(d.src.join("a"), "A");
+    file(d.src.join("b"), "B");
+    let request = Request::RenameBatch {
+        directory: d.src.clone(),
+        pairs: vec![("a".into(), "a2".into()), ("b".into(), "b2".into())],
+    };
+    // Two files take four renames: each to a temporary name, then each to its final name.
+    for step in 0..4 {
+        let fs = FaultFs::failing_at(step, faults::Fault::Error);
+        let outcome = run(&fs, &NoTrash, &request, &mut Script::default()).unwrap();
+        assert!(!outcome.completed, "step {step} was reported as finished");
+        assert!(outcome.changes.is_empty(), "step {step} left a change");
+        assert!(fs.hit(), "step {step} was never reached");
+        assert_eq!(read(d.src.join("a")), "A", "step {step}");
+        assert_eq!(read(d.src.join("b")), "B", "step {step}");
+    }
+}

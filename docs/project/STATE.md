@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-18 — W-060 batch-rename plan
+- Latest validation entry: VALIDATION.md, 2026-10-18 — W-061 apply a batch rename
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -23,6 +23,7 @@
 - Product: view settings are one global file; a pane's own view settings last for the session only
 - Task: file operations not yet seen on screen: the failure dialog, stopping with the stop button, rename in the icons and compact views, new file, the speed display, another volume's trash
 - Task: copied data is not synced to disk, so power loss during a copy is not covered (killing the process is)
+- Task: killing the process during a batch rename can leave a file under a `.rustphin-part-` name (R-103)
 - Product: an operation that replaced or deleted something cannot be undone at all, even its reversible parts
 - Manual: drag a file from Rustphin into an application that is not a KDE one (R-010); needs the user's desktop
 - Task: in isolated test sessions the window was see-through without blur (other windows showed behind it unblurred). To check: whether the compositor accepts the blur request while its blur effect is off, and whether the opaque theme should be used then
@@ -37,7 +38,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-061: apply one accepted rename plan through the operation engine as a single all-or-nothing undo step, with fault injection (R-016, R-008, D-011). Use `rust-tc` for every check and commit after every task.
+- Start W-062: the rename dialog with a live preview, a written conflict, apply and cancel. Update DESIGN.md before the dialog (R-016, D-017). Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

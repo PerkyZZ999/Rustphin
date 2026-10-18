@@ -677,6 +677,11 @@ pub fn activity(request: &Request, undo: bool) -> String {
         Request::Rename { path, new_name } => {
             format!("Renaming {} to {}", folder_name(path), quoted(new_name))
         }
+        Request::RenameBatch { pairs, .. } => format!(
+            "Renaming {} {}",
+            count(pairs.len()),
+            plural(pairs.len(), "item", "items")
+        ),
         Request::Copy { sources, into } => {
             format!("Copying {} to {}", what(sources), folder_name(into))
         }
@@ -697,6 +702,11 @@ pub fn past(request: &Request) -> String {
         Request::Rename { path, new_name } => {
             format!("renamed {} to {}", folder_name(path), quoted(new_name))
         }
+        Request::RenameBatch { pairs, .. } => format!(
+            "renamed {} {}",
+            count(pairs.len()),
+            plural(pairs.len(), "item", "items")
+        ),
         Request::Copy { sources, into } => {
             format!("copied {} to {}", what(sources), folder_name(into))
         }

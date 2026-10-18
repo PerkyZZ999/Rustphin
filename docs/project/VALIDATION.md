@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-10-18 — W-061 apply a batch rename
+- **Phase:** 6 Implement (S9)
+- **Result:** pass for applying and undoing one plan; a killed process is not yet covered
+- **Change:** `Request::RenameBatch` renames every pair in one directory or, when a rename fails and the repairs succeed, changes nothing. Swaps and chains go through temporary names and are stored as one `Change::BatchRenamed`, so one undo puts every file back. A name already used by a file that is staying is refused before any change.
+- **Evidence:** `rust-tc doctor` PASS, 335 tests. Five new tests: three renames undone as one history entry, an exchange of two names undone, a chain onto a name another selected file is leaving, a refusal that leaves both files in place, and a fault on each of the four renames of a two-file plan with every file back at its original name and content. A hand mutation that skipped the repair failed `a_failed_batch_rename_puts_every_file_back` because an original file was missing; the repair was restored.
+- **Not claimed:** killing the process mid-rename. A crash can leave a file under a `.rustphin-part-` name, which is neither its old name nor its new one. That part of R-103 stays open.
+- **Follow-up:** W-062 is the dialog. The kill gap stays until a batch rename can be finished or reversed after the process dies.
+
 ### 2026-10-18 — W-060 batch-rename plan
 - **Phase:** 6 Implement (S9)
 - **Result:** pass for the plan and preview; nothing is renamed yet
