@@ -93,6 +93,13 @@ pub enum Request {
         /// Entries to delete. A symbolic link is removed, not what it points to.
         paths: Vec<PathBuf>,
     },
+    /// Give `path` these permission bits. Other attributes stay as they are.
+    SetMode {
+        /// The entry to change.
+        path: PathBuf,
+        /// Permission bits, including any special bits that should remain.
+        mode: u32,
+    },
 }
 
 /// An entry that is in the trash.
@@ -334,6 +341,15 @@ pub enum Change {
         /// The removed entry.
         path: PathBuf,
     },
+    /// Permission bits were changed.
+    ModeSet {
+        /// The entry.
+        path: PathBuf,
+        /// The bits before the change, so it can be undone.
+        previous: u32,
+        /// The entry right after the change.
+        info: FileInfo,
+    },
     /// A folder that was empty after its contents were merged into another
     /// folder by a move, and was removed.
     RemovedEmptyDir {
@@ -432,6 +448,10 @@ pub fn run(
             let plan = engine.plan_removal(paths, true)?;
             engine.controller.progress(&engine.progress);
             engine.delete_all(plan).is_ok()
+        }
+        Request::SetMode { path, mode } => {
+            engine.set_mode(path, *mode)?;
+            true
         }
     };
     Ok(Outcome {
@@ -565,6 +585,23 @@ impl Engine<'_> {
         }
         let info = self.fs.info(&path).map_err(io_error(&path))?;
         self.changes.push(Change::Created { path, info });
+        Ok(())
+    }
+
+    /// Sets permission bits. A mode that is already in place changes nothing.
+    fn set_mode(&mut self, path: &Path, mode: u32) -> Result<(), OpError> {
+        let mode = mode & 0o7777;
+        let before = self.fs.info(path).map_err(io_error(path))?;
+        if before.mode == mode {
+            return Ok(());
+        }
+        self.fs.set_mode(path, mode).map_err(io_error(path))?;
+        let info = self.fs.info(path).unwrap_or(FileInfo { mode, ..before });
+        self.changes.push(Change::ModeSet {
+            path: path.to_owned(),
+            previous: before.mode,
+            info,
+        });
         Ok(())
     }
 

@@ -240,6 +240,11 @@ impl Fs for FaultFs {
         RealFs.remove_dir(path)
     }
 
+    fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
+        self.plain_step()?;
+        RealFs.set_mode(path, mode)
+    }
+
     fn set_attributes(&self, path: &Path, info: &FileInfo) -> io::Result<()> {
         self.plain_step()?;
         RealFs.set_attributes(path, info)

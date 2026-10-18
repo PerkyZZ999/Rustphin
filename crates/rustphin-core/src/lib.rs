@@ -7,6 +7,7 @@
 mod details;
 mod entry;
 mod fs;
+mod mode;
 mod model;
 pub mod ops;
 mod recent;
@@ -17,6 +18,10 @@ mod sort;
 
 pub use entry::{CHUNK_LEN, Chunk, EntryKind, EntryStore, display_name};
 pub use fs::{COPY_STEP, FileInfo, Fs, Metadata, RawEntry, RealFs, WatchGuard};
+pub use mode::{
+    combine_mode, execute_bit, has_bit, has_special, octal_mode, read_bit, symbolic_mode, with_bit,
+    write_bit,
+};
 pub use model::{DirectoryModel, LoadError, ModelEvent, Snapshot, ViewOptions};
 pub use recent::{RECENT_LOCATION_LIMIT, RecentLocations};
 pub use rename::{CaseChange, NameProblem, Preview, PreviewRow, RenameRules};

@@ -165,6 +165,11 @@ pub trait Fs: Send + Sync + 'static {
     fn write_new(&self, _path: &Path, _content: &[u8]) -> io::Result<()> {
         Err(io::ErrorKind::Unsupported.into())
     }
+
+    /// Sets the permission bits of `path`. Other attributes are left as they are.
+    fn set_mode(&self, _path: &Path, _mode: u32) -> io::Result<()> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
 }
 
 /// Keeps a [`Fs::watch`] alive; dropping it ends the watch.
@@ -319,6 +324,10 @@ impl Fs for RealFs {
 
     fn remove_dir(&self, path: &Path) -> io::Result<()> {
         fs::remove_dir(path)
+    }
+
+    fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
+        fs::set_permissions(path, fs::Permissions::from_mode(mode & 0o7777))
     }
 
     fn set_attributes(&self, path: &Path, info: &FileInfo) -> io::Result<()> {

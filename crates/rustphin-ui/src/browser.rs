@@ -27,8 +27,8 @@ use gpui_kit::{
 };
 use jiff::tz::TimeZone;
 use rustphin_core::{
-    DirectoryModel, LoadError, ModelEvent, RealFs, Selection, Snapshot, SortKey, ViewOptions,
-    display_name, ops::Request,
+    DirectoryModel, EntryKind, LoadError, ModelEvent, RealFs, Selection, Snapshot, SortKey,
+    ViewOptions, display_name, ops::Request,
 };
 
 use crate::{
@@ -97,6 +97,7 @@ actions!(
         NewFile,
         MoveToTrash,
         DeletePermanently,
+        ShowProperties,
         Copy,
         Cut,
         Paste,
@@ -168,6 +169,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-alt-n", NewFile, list),
         KeyBinding::new("delete", MoveToTrash, list),
         KeyBinding::new("shift-delete", DeletePermanently, list),
+        KeyBinding::new("alt-enter", ShowProperties, list),
         KeyBinding::new("ctrl-c", Copy, list),
         KeyBinding::new("ctrl-x", Cut, list),
         KeyBinding::new("ctrl-v", Paste, list),
@@ -214,6 +216,13 @@ pub enum BrowserEvent {
     Visited(PathBuf),
     /// Activate the file at this path: open it, or ask before running it.
     Activate(PathBuf),
+    /// Show properties for this entry.
+    Properties {
+        /// The entry.
+        path: PathBuf,
+        /// A readable type, such as "Plain text document".
+        type_label: String,
+    },
     /// Open this file with the application whose desktop-file id is `id`.
     OpenWith {
         /// Desktop-file id, such as `org.kde.kate.desktop`.
@@ -746,8 +755,48 @@ impl Browser {
                 // Creating focuses the new name once it appears.
             }
             MenuCommand::NewFile => self.create_entry(false, cx),
+            MenuCommand::Properties => self.open_properties(window, cx),
         }
         cx.notify();
+    }
+
+    /// Asks for the properties of the one selected entry.
+    fn open_properties(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(snapshot) = self.snapshot.clone() else {
+            return;
+        };
+        let rows = self.selection.rows(&snapshot);
+        if rows.len() != 1 {
+            return;
+        }
+        let row = rows[0];
+        let path = snapshot.entry_path(row);
+        let type_label = self.properties_type(&snapshot, row);
+        self.menu = None;
+        cx.emit(BrowserEvent::Properties { path, type_label });
+        self.focus.focus(window, cx);
+    }
+
+    fn properties_type(&self, snapshot: &Snapshot, row: usize) -> String {
+        if snapshot.kind(row) == EntryKind::Symlink {
+            return "Symbolic link".to_owned();
+        }
+        let mime = self
+            .types
+            .as_ref()
+            .map(|types| types.mime_type(snapshot.name(row), snapshot.is_container(row)));
+        if let Some(description) = mime
+            .and_then(|mime| self.type_info.get(mime))
+            .map(|info| info.description.to_string())
+            .filter(|text| !text.is_empty())
+        {
+            return description;
+        }
+        if snapshot.is_container(row) {
+            "Folder".to_owned()
+        } else {
+            "File".to_owned()
+        }
     }
 
     fn hover_menu(
@@ -2666,6 +2715,9 @@ impl Render for Browser {
             .on_action(cx.listener(|this, _: &MoveToTrash, _, cx| this.trash_selected(cx)))
             .on_action(cx.listener(|this, _: &DeletePermanently, _, cx| {
                 this.delete_selected(cx);
+            }))
+            .on_action(cx.listener(|this, _: &ShowProperties, window, cx| {
+                this.open_properties(window, cx);
             }))
             .on_action(cx.listener(|this, _: &Copy, _, cx| this.pick_up_selected(false, cx)))
             .on_action(cx.listener(|this, _: &Cut, _, cx| this.pick_up_selected(true, cx)))

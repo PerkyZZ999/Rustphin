@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-10-18 — W-067 properties
+- **Phase:** 6 Implement (S10)
+- **Result:** pass for the facts, the folder-size walk and changing permissions. Not yet seen on screen; that is W-068.
+- **Change:** Alt+Enter or Properties opens a dialog for the one selected entry: name, type, size, modified, accessed and created when the filesystem has it. A folder's size is added up off the UI thread, without following symbolic links, and says when some items could not be read. Closing the dialog stops that walk. Permissions are nine checkboxes; special bits are kept. Apply writes them through the operation engine, so the change can be undone, and a failed write leaves the old mode. A shortcut shows where it points and does not change permissions. `ShowItemProperties` now delivers the local paths.
+- **Evidence:** `rust-tc doctor` PASS, 368 tests. A hand edit that counted a symbolic link's length failed `a_folder_size_adds_files_skips_links_and_counts_what_it_cannot_read` (153 bytes instead of 105); the skip was restored. `npx @google/design.md lint docs/DESIGN.md` reported 0 errors. The dialog was not opened in a session.
+- **Follow-up:** W-068 replays the desktop-integration scenarios, including this dialog and the context menu.
+
 ### 2026-10-18 — W-066 context menu and run confirmation
 - **Phase:** 6 Implement (S10)
 - **Result:** pass for the menu contents, application lookup and the decision to ask before running. Not yet seen on screen; that is W-068.

@@ -691,6 +691,7 @@ pub fn activity(request: &Request, undo: bool) -> String {
         Request::Trash { paths } => format!("Moving {} to the trash", what(paths)),
         Request::Restore { items } => format!("Restoring {}", what(&originals(items))),
         Request::Delete { paths } => format!("Deleting {}", what(paths)),
+        Request::SetMode { path, .. } => format!("Changing permissions of {}", folder_name(path)),
     }
 }
 
@@ -718,6 +719,7 @@ pub fn past(request: &Request) -> String {
             format!("restored {} from the trash", what(&originals(items)))
         }
         Request::Delete { paths } => format!("deleted {}", what(paths)),
+        Request::SetMode { path, .. } => format!("changed permissions of {}", folder_name(path)),
     }
 }
 

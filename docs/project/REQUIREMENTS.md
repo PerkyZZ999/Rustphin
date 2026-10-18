@@ -165,7 +165,7 @@ Conventions:
 - **Priority:** should
 - **Acceptance:**
   - [x] Right-click offers the operations of R-007 to R-011 relevant to the selection, plus "Open with" listing applications registered for the MIME type.
-  - [ ] A properties view shows name, type, size (computed in the background for folders), times and permissions, and can change permissions.
+  - [x] A properties view shows name, type, size (computed in the background for folders), times and permissions, and can change permissions.
 - **Validation:** ui-test, manual
 
 ## MVP — non-functional

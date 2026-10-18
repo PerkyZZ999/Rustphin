@@ -15,6 +15,7 @@ mod layout;
 mod menu;
 mod operations;
 mod palette;
+mod properties;
 mod rename_dialog;
 mod session;
 mod settings;

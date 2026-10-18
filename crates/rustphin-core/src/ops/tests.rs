@@ -1395,3 +1395,39 @@ fn a_failed_batch_rename_puts_every_file_back() {
         assert_eq!(read(d.src.join("b")), "B", "step {step}");
     }
 }
+
+#[test]
+fn permissions_change_and_come_back_and_a_failure_changes_nothing() {
+    let d = dirs();
+    let path = d.src.join("note");
+    file(&path, "hi");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+    let outcome = go(
+        &Request::SetMode {
+            path: path.clone(),
+            mode: 0o755,
+        },
+        &mut Script::default(),
+    );
+    assert_eq!(mode_of(&path), 0o755);
+    super::undo::undo(&RealFs, &NoTrash, &outcome.changes, &mut Script::default()).unwrap();
+    assert_eq!(mode_of(&path), 0o644);
+
+    let fs = FaultFs::failing_at(0, faults::Fault::Error);
+    let failed = run(
+        &fs,
+        &NoTrash,
+        &Request::SetMode {
+            path: path.clone(),
+            mode: 0o707,
+        },
+        &mut Script::default(),
+    );
+    assert!(failed.is_err());
+    assert!(fs.hit());
+    assert_eq!(mode_of(&path), 0o644);
+}
+
+fn mode_of(path: &Path) -> u32 {
+    fs::symlink_metadata(path).unwrap().mode() & 0o777
+}

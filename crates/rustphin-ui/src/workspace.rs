@@ -3,6 +3,7 @@
 use std::{
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
+    sync::{Arc, atomic::Ordering},
 };
 
 use gpui_kit::{
@@ -21,7 +22,7 @@ use gpui_kit::{
 use jiff::tz::TimeZone;
 use rustphin_core::{
     FileInfo, display_name,
-    ops::{ConflictChoice, Recovery},
+    ops::{ConflictChoice, Recovery, Request},
 };
 
 use crate::{
@@ -31,6 +32,7 @@ use crate::{
     history::history,
     operations::{self, Hub, Notice, Question, Running, hub},
     palette::{Candidate, Palette, PaletteEvent, Target},
+    properties::{PropertiesDialog, SizeLine},
     session::{Session, SessionTab},
     settings::Settings,
     sidebar::{Sidebar, SidebarEvent},
@@ -194,6 +196,12 @@ pub struct Workspace {
     pending_shows: Vec<rustphin_platform::file_manager::Shown>,
     /// A program or shortcut waiting for confirmation before it runs.
     launch: Option<LaunchPrompt>,
+    /// Properties of one entry, while that dialog is open.
+    pub(crate) properties: Option<PropertiesDialog>,
+    /// Distinguishes a properties read from one the user has already closed.
+    property_token: u64,
+    /// Paths other applications asked to see properties for.
+    pending_properties: Vec<PathBuf>,
     _history: Subscription,
     _places: Subscription,
 }
@@ -272,6 +280,9 @@ impl Workspace {
             rename: None,
             pending_shows: Vec::new(),
             launch: None,
+            properties: None,
+            property_token: 0,
+            pending_properties: Vec::new(),
             _history: cx.observe(&history(cx), |this, _, cx| this.refresh_palette(cx)),
             _places: cx.observe(&sidebar, |this, _, cx| this.refresh_palette(cx)),
         };
@@ -283,10 +294,17 @@ impl Workspace {
                     let next = cx
                         .background_spawn(async move { queue.recv_async().await })
                         .await;
-                    let Ok(shown) = next else { break };
+                    let Ok(call) = next else { break };
                     if this
                         .update(cx, |this, cx| {
-                            this.pending_shows.extend(shown);
+                            match call {
+                                rustphin_platform::file_manager::Call::Show(shown) => {
+                                    this.pending_shows.extend(shown);
+                                }
+                                rustphin_platform::file_manager::Call::Properties(paths) => {
+                                    this.pending_properties.extend(paths);
+                                }
+                            }
                             cx.notify();
                         })
                         .is_err()
@@ -370,6 +388,9 @@ impl Workspace {
             BrowserEvent::OpenInNewTab(path) => self.open_tab(path.clone(), false, window, cx),
             BrowserEvent::Visited(path) => history(cx).read(cx).visit(path.clone()),
             BrowserEvent::Activate(path) => self.consider_launch(path.clone(), cx),
+            BrowserEvent::Properties { path, type_label } => {
+                self.open_properties(path.clone(), type_label.clone(), cx);
+            }
             BrowserEvent::OpenWith { id, path } => {
                 self.open_with(id.clone(), path.clone(), cx);
             }
@@ -393,6 +414,118 @@ impl Workspace {
                 cx.notify();
             }
         }
+    }
+
+    /// Opens the properties dialog and reads the entry off the UI thread.
+    fn open_properties(&mut self, path: PathBuf, type_label: String, cx: &mut Context<Self>) {
+        if self.properties.is_some()
+            || self.launch.is_some()
+            || self.rename.is_some()
+            || !hub(cx).read(cx).questions.is_empty()
+        {
+            return;
+        }
+        self.property_token += 1;
+        let token = self.property_token;
+        self.properties = Some(PropertiesDialog::loading(path.clone(), type_label, token));
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            let read = cx
+                .background_spawn(async move { rustphin_platform::properties::read(&path) })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                let Some(dialog) = this
+                    .properties
+                    .as_mut()
+                    .filter(|dialog| dialog.token == token)
+                else {
+                    return;
+                };
+                match read {
+                    Ok(facts) => {
+                        let directory =
+                            facts.kind == rustphin_platform::properties::Kind::Directory;
+                        dialog.set_facts(facts);
+                        cx.notify();
+                        if directory {
+                            this.measure_folder(token, cx);
+                        }
+                    }
+                    Err(error) => {
+                        dialog.error = Some(format!("Could not read this item: {error}."));
+                        cx.notify();
+                    }
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Measures a folder's size without blocking the window.
+    fn measure_folder(&mut self, token: u64, cx: &mut Context<Self>) {
+        let Some(dialog) = self
+            .properties
+            .as_ref()
+            .filter(|dialog| dialog.token == token)
+        else {
+            return;
+        };
+        let path = dialog.path.clone();
+        let cancel = Arc::clone(&dialog.cancel);
+        cx.spawn(async move |this, cx| {
+            let measured = cx
+                .background_spawn(async move {
+                    rustphin_platform::properties::folder_size(&path, &cancel)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                let Some(dialog) = this
+                    .properties
+                    .as_mut()
+                    .filter(|dialog| dialog.token == token)
+                else {
+                    return;
+                };
+                match measured {
+                    Ok(size) if size.cancelled => {}
+                    Ok(size) => {
+                        dialog.size = SizeLine::Folder {
+                            bytes: size.bytes,
+                            unreadable: size.unreadable,
+                        };
+                        cx.notify();
+                    }
+                    Err(error) => {
+                        dialog.size =
+                            SizeLine::Failed(format!("The size could not be calculated: {error}."));
+                        cx.notify();
+                    }
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Writes the edited permissions through the operation engine, then closes.
+    pub(crate) fn apply_properties(&mut self, cx: &mut Context<Self>) {
+        let Some(dialog) = self.properties.as_ref() else {
+            return;
+        };
+        if !dialog.editable || dialog.mode == dialog.original {
+            return;
+        }
+        let path = dialog.path.clone();
+        let mode = dialog.mode & 0o7777;
+        self.close_properties(cx);
+        hub(cx).update(cx, |hub, _| hub.start(Request::SetMode { path, mode }));
+    }
+
+    /// Closes the properties dialog and stops a folder measurement.
+    pub(crate) fn close_properties(&mut self, cx: &mut Context<Self>) {
+        if let Some(dialog) = self.properties.take() {
+            dialog.cancel.store(true, Ordering::Relaxed);
+        }
+        cx.notify();
     }
 
     /// Classifies a file off the UI thread, opens a document, or asks before
@@ -634,7 +767,11 @@ impl Workspace {
     }
 
     fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.palette.is_some() || self.rename.is_some() || !hub(cx).read(cx).questions.is_empty()
+        if self.palette.is_some()
+            || self.rename.is_some()
+            || self.properties.is_some()
+            || self.launch.is_some()
+            || !hub(cx).read(cx).questions.is_empty()
         {
             return;
         }
@@ -1014,6 +1151,15 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.pending_properties.is_empty()
+            && self.properties.is_none()
+            && self.launch.is_none()
+            && self.rename.is_none()
+            && hub(cx).read(cx).questions.is_empty()
+        {
+            let path = self.pending_properties.remove(0);
+            self.open_properties(path, "File".to_owned(), cx);
+        }
         if !self.pending_shows.is_empty() {
             let pending = std::mem::take(&mut self.pending_shows);
             for (index, shown) in pending.into_iter().enumerate() {
@@ -1048,7 +1194,9 @@ impl Render for Workspace {
         // A dialog takes the keyboard while it is open and gives it back to
         // the active pane when the last one closes.
         let hub = hub(cx);
-        let dialog_open = !hub.read(cx).questions.is_empty() || self.launch.is_some();
+        let dialog_open = !hub.read(cx).questions.is_empty()
+            || self.launch.is_some()
+            || self.properties.is_some();
         if dialog_open && self.palette.is_some() {
             self.palette = None;
             self.palette_subscription = None;
@@ -1201,6 +1349,13 @@ impl Render for Workspace {
             .children(dialog)
             .when(self.rename.is_some(), |workspace| {
                 let element = self.rename.as_ref().map(|dialog| dialog.render(theme, cx));
+                workspace.children(element)
+            })
+            .when(self.properties.is_some(), |workspace| {
+                let element = self
+                    .properties
+                    .as_ref()
+                    .map(|dialog| dialog.render(&self.dialog_focus, &self.zone, theme, cx));
                 workspace.children(element)
             })
             .children(self.palette.clone())

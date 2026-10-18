@@ -16,6 +16,15 @@ use crate::uri::path_from_uri;
 const NAME: &str = "org.freedesktop.FileManager1";
 const PATH: &str = "/org/freedesktop/FileManager1";
 
+/// What another application asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Call {
+    /// Open these folders, selecting the named items.
+    Show(Vec<Shown>),
+    /// Show properties for these paths.
+    Properties(Vec<PathBuf>),
+}
+
 /// A folder to show, and the names to select in it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shown {
@@ -77,6 +86,14 @@ pub fn show_folders(uris: &[impl AsRef<[u8]>]) -> Vec<Shown> {
     shown
 }
 
+/// Local paths a properties request names. Anything that is not a local file
+/// is left out.
+pub fn property_paths(uris: &[impl AsRef<[u8]>]) -> Vec<PathBuf> {
+    uris.iter()
+        .filter_map(|uri| path_from_uri(uri.as_ref()))
+        .collect()
+}
+
 fn push(shown: &mut Vec<Shown>, folder: PathBuf, name: Option<OsString>) {
     if let Some(group) = shown.iter_mut().find(|group| group.folder == folder) {
         if let Some(name) = name {
@@ -91,27 +108,28 @@ fn push(shown: &mut Vec<Shown>, folder: PathBuf, name: Option<OsString>) {
 }
 
 struct Service {
-    requests: flume::Sender<Vec<Shown>>,
+    requests: flume::Sender<Call>,
 }
 
 #[interface(name = "org.freedesktop.FileManager1")]
 impl Service {
     fn show_items(&self, uris: Vec<String>, _startup_id: String) {
-        let _ = self.requests.send(show_items(&uris));
+        let _ = self.requests.send(Call::Show(show_items(&uris)));
     }
 
     fn show_folders(&self, uris: Vec<String>, _startup_id: String) {
-        let _ = self.requests.send(show_folders(&uris));
+        let _ = self.requests.send(Call::Show(show_folders(&uris)));
     }
 
-    /// Accepted so callers are not told the method is missing. The properties
-    /// window is a later slice.
-    fn show_item_properties(&self, _uris: Vec<String>, _startup_id: String) {}
+    /// Asks for the properties of each local path.
+    fn show_item_properties(&self, uris: Vec<String>, _startup_id: String) {
+        let _ = self.requests.send(Call::Properties(property_paths(&uris)));
+    }
 }
 
 /// A running service and the requests it receives.
 pub struct ServiceHandle {
-    requests: flume::Receiver<Vec<Shown>>,
+    requests: flume::Receiver<Call>,
     _connection: zbus::blocking::Connection,
 }
 
@@ -137,12 +155,12 @@ impl ServiceHandle {
     }
 
     /// The next request, if one is waiting.
-    pub fn try_recv(&self) -> Option<Vec<Shown>> {
+    pub fn try_recv(&self) -> Option<Call> {
         self.requests.try_recv().ok()
     }
 
     /// A clone of the queue, so a task can wait without borrowing this handle.
-    pub fn receiver(&self) -> flume::Receiver<Vec<Shown>> {
+    pub fn receiver(&self) -> flume::Receiver<Call> {
         self.requests.clone()
     }
 }
@@ -262,7 +280,9 @@ mod tests {
         proxy
             .call::<_, _, ()>("ShowItems", &(vec![file_uri(&file)], String::new()))
             .unwrap();
-        let shown = incoming.recv_timeout(Duration::from_secs(2)).unwrap();
+        let Call::Show(shown) = incoming.recv_timeout(Duration::from_secs(2)).unwrap() else {
+            panic!("expected a show request");
+        };
         drop(server);
         assert_eq!(shown[0].folder, dir.path());
         assert_eq!(shown[0].select, [OsString::from("picked.txt")]);

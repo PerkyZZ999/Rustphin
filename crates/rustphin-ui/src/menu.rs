@@ -31,6 +31,8 @@ pub enum MenuCommand {
     MoveToTrash,
     /// Delete the selection for good, after the usual confirmation.
     Delete,
+    /// Show properties for the one selected entry.
+    Properties,
     /// Bring the selection back from the trash.
     Restore,
     /// Create a folder.
@@ -147,6 +149,8 @@ fn selection_menu(facts: &MenuFacts) -> Vec<MenuEntry> {
         entries.push(item("Move to trash", MenuCommand::MoveToTrash, true));
     }
     entries.push(item("Delete…", MenuCommand::Delete, true));
+    entries.push(MenuEntry::Separator);
+    entries.push(item("Properties", MenuCommand::Properties, one));
     entries
 }
 
@@ -374,7 +378,9 @@ mod tests {
                 "",
                 "Rename",
                 "Move to trash",
-                "Delete…"
+                "Delete…",
+                "",
+                "Properties"
             ]
         );
         match &entries[1] {

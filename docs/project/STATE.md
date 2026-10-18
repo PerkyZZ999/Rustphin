@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-18 — W-066 context menu
+- Latest validation entry: VALIDATION.md, 2026-10-18 — W-067 properties
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -38,7 +38,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-067: properties — name, type, size, times and permissions, with folder size computed off the UI thread, and a way to change permissions (R-018, D-017). Use `rust-tc` for every check and commit after every task.
+- Start W-068: replay the desktop-integration scenarios in an isolated session and close S10 only against the observed evidence (R-017, R-018). Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

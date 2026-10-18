@@ -6,10 +6,10 @@ S10 — Desktop integration (in progress)
 **Done when:** Rustphin can be chosen as the handler for folders, opens `ShowItems` and command-line paths as tabs, and offers a context menu, Open with and properties (R-017, R-018).
 
 ## Queue
-- [ ] W-067 — Properties: name, type, size, times and permissions, with folder size computed off the UI thread, and a way to change permissions (R-018, D-017).
 - [ ] W-068 — Replay the desktop-integration scenarios in an isolated session and close S10 only against the observed evidence (R-017, R-018).
 
 ## Done (recent)
+- [x] W-067 — Properties: name, type, size, times and permissions, with folder size computed off the UI thread, and a way to change permissions (R-018, D-017).
 - [x] W-066 — Context menu for the selection, including Open with the applications registered for the type (R-018, R-001). Activating a file still confirms before running an executable.
 - [x] W-065 — `org.freedesktop.FileManager1` ShowItems opens the folder and selects the item, tested on a private bus (R-017).
 - [x] W-064 — Desktop entry and command-line paths and `file://` URLs open as tabs (R-017).
