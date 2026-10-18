@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-18 — W-061 apply a batch rename
+- Latest validation entry: VALIDATION.md, 2026-10-18 — W-062 batch-rename dialog
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -38,7 +38,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-062: the rename dialog with a live preview, a written conflict, apply and cancel. Update DESIGN.md before the dialog (R-016, D-017). Use `rust-tc` for every check and commit after every task.
+- Start W-063: record and replay the rename dialog in an isolated KWin session/home, and close S9 only against the observed evidence (R-016). Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

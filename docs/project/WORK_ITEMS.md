@@ -6,10 +6,10 @@ S9 — Advanced batch rename (in progress)
 **Done when:** with several files selected, rename offers find/replace (plain and regular expression), a counter pattern and case changes; a live preview shows every old and new name; conflicts are flagged and block applying; applying is all-or-nothing and one undo step (R-016).
 
 ## Queue
-- [ ] W-062 — Rename dialog: live preview, a written conflict, apply and cancel. Update DESIGN.md before the dialog (R-016, D-017).
 - [ ] W-063 — Record and replay the rename scenario in an isolated KWin session/home, and close S9 only against the observed evidence (R-016).
 
 ## Done (recent)
+- [x] W-062 — Rename dialog: live preview, a written conflict, apply and cancel. Update DESIGN.md before the dialog (R-016, D-017).
 - [x] W-061 — Apply one plan through the operation engine as a single all-or-nothing undo step, with fault injection (R-016, R-008, D-011).
 - [x] W-060 — Core batch-rename plan: find/replace, a counter pattern and case changes, with a preview and conflict flags, and no filesystem writes (R-016).
 - [x] W-059 — Record palette and reachability scenarios, replay them with the relevant existing scenarios in an isolated KWin session/home, measure palette latency, and close S8 only against the observed evidence (R-015, R-106).

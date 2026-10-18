@@ -89,6 +89,12 @@ components:
     width: 320px
   toolbar-back-navigation:
     width: 240px
+  rename-dialog:
+    width: 640px
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.lg}"
   toolbar-button:
     textColor: "{colors.text}"
     rounded: "{rounded.sm}"
@@ -237,6 +243,7 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 - **Split panes:** two equal panes separated by a 1 px `border` line. A 2 px `primary-bright` line above a pane marks the one that receives keyboard input; it is only drawn while a tab is split.
 - **Rename field:** shown in place of the entry's name. `surface-raised` with `text`, so it reads the same on a selected and an unselected row. It opens with the name selected up to the extension.
 - **Dialogs:** a floating surface 440 px wide, centred over the window dimmed with `scrim`. A `headline-sm` title that states the question, the facts needed to answer it in `data-md`, and the buttons right-aligned: the safe default is the `button-primary`, a destructive default uses the error colours, the others are outlined. Every button shows its key. Dialogs appear only when a decision is needed: a name conflict, a failed entry, a permanent delete.
+- **Batch rename:** F2 with two or more selected files opens a 640 px solid raised dialog, inset by at least 16 px on a narrow window. Three labelled modes — Replace, Pattern and Case — and the chosen one uses the primary fill. Replace has Find, Replace with, and a Regular expression checkbox. Pattern has the pattern, a start and a step, and a sentence: `#` is the counter, the number of `#` signs is the padding, `@` is the current name. Case offers lower case, upper case and capitalised words. The preview lists every old name and its new name, and scrolls after 240 px. A problem is a full sentence under that row, in the error colour and in words. A problem with the rule is a sentence above the list. Rename stays disabled while a problem remains or nothing would change. Rename (Enter) uses the operation engine; Cancel (Esc) closes and changes nothing.
 - **Activity lines:** under the panes, on `chrome-glass`, only while there is something to say. A running operation that has lasted 300 ms shows what it is doing, a 4 px progress bar (`secondary` on a `hover` track), counts and speed in `data-sm`, and a stop button. The result of the last operation shows as one line with an Undo button; it leaves by itself after 6 seconds, unless it reports a problem, which uses the error colours and stays until dismissed.
 - **Trash banner:** while a trash is shown, a line under the toolbar on `chrome-glass` names it, says how long items stay, and holds its actions: the trashes of other volumes as plain buttons, Restore (disabled without a selection) and "Empty trash…" as outlined buttons. The trash banner and window title identify the current location; opening trash is available through Actions.
 - **Cut entries:** drawn at half opacity until they are pasted or the clipboard changes.
@@ -264,7 +271,7 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 
 ## Implementation status
 
-As of 2026-10-18 the application implements the surfaces, text colours, selection, hover, error banner, toolbar (including the 320 px and 240 px navigation breakpoints), tab strip, split panes, dialogs, activity lines, the rename field, the trash banner, the places panel, the command palette and labelled Actions entry, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings). The status line truncates inside its pane.
+As of 2026-10-18 the application implements the surfaces, text colours, selection, hover, error banner, toolbar (including the 320 px and 240 px navigation breakpoints), tab strip, split panes, dialogs, the batch-rename dialog, activity lines, the rename field, the trash banner, the places panel, the command palette and labelled Actions entry, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings). The status line truncates inside its pane.
 
 Floating surfaces (`surface-raised`, `border-accent`, the glow) are used by dialogs; the palette also uses them; menus do not exist yet. The cyan signal is used by the progress bar. Not yet applied in code: the emerald signal, `primary-bright` on focused inputs, and the type column, which still uses Inter.
 

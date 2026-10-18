@@ -106,6 +106,8 @@ pub fn bind_keys(cx: &mut App) {
         ),
         KeyBinding::new("enter", DialogAccept, Some(DIALOG_CONTEXT)),
         KeyBinding::new("escape", DialogCancel, Some(DIALOG_CONTEXT)),
+        // A text field inside a dialog has its own context. Escape still cancels.
+        KeyBinding::new("escape", DialogCancel, Some("Dialog > Input")),
         KeyBinding::new("s", DialogSkip, Some(DIALOG_CONTEXT)),
         KeyBinding::new("k", DialogKeepBoth, Some(DIALOG_CONTEXT)),
         KeyBinding::new("r", DialogReplace, Some(DIALOG_CONTEXT)),
@@ -177,6 +179,8 @@ pub struct Workspace {
     palette: Option<Entity<Palette>>,
     palette_subscription: Option<Subscription>,
     palette_from_sidebar: bool,
+    /// Batch rename, when several files are being renamed together.
+    pub(crate) rename: Option<crate::rename_dialog::RenameDialog>,
     _history: Subscription,
     _places: Subscription,
 }
@@ -252,6 +256,7 @@ impl Workspace {
             palette: None,
             palette_subscription: None,
             palette_from_sidebar: false,
+            rename: None,
             _history: cx.observe(&history(cx), |this, _, cx| this.refresh_palette(cx)),
             _places: cx.observe(&sidebar, |this, _, cx| this.refresh_palette(cx)),
         };
@@ -327,6 +332,25 @@ impl Workspace {
         match event {
             BrowserEvent::OpenInNewTab(path) => self.open_tab(path.clone(), false, window, cx),
             BrowserEvent::Visited(path) => history(cx).read(cx).visit(path.clone()),
+            BrowserEvent::BatchRename {
+                directory,
+                selected,
+                staying,
+            } => {
+                if !hub(cx).read(cx).questions.is_empty() {
+                    return;
+                }
+                self.palette = None;
+                self.palette_subscription = None;
+                self.rename = Some(crate::rename_dialog::RenameDialog::open(
+                    directory.clone(),
+                    selected.clone(),
+                    staying.clone(),
+                    window,
+                    cx,
+                ));
+                cx.notify();
+            }
         }
     }
 
@@ -395,7 +419,8 @@ impl Workspace {
     }
 
     fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.palette.is_some() || !hub(cx).read(cx).questions.is_empty() {
+        if self.palette.is_some() || self.rename.is_some() || !hub(cx).read(cx).questions.is_empty()
+        {
             return;
         }
         self.palette_from_sidebar = self.sidebar.read(cx).is_focused(window, cx);
@@ -532,7 +557,7 @@ impl Workspace {
         cx.notify();
     }
 
-    fn focus_active(&self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn focus_active(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.tabs
             .active()
             .browser()
@@ -758,6 +783,9 @@ impl Render for Workspace {
             self.palette = None;
             self.palette_subscription = None;
         }
+        if dialog_open {
+            self.rename = None;
+        }
         if dialog_open && !self.dialog_focus.is_focused(window) {
             let focus = self.dialog_focus.clone();
             cx.defer_in(window, move |_, window, cx| focus.focus(window, cx));
@@ -895,6 +923,10 @@ impl Render for Workspace {
             )
             .children(activity)
             .children(dialog)
+            .when(self.rename.is_some(), |workspace| {
+                let element = self.rename.as_ref().map(|dialog| dialog.render(theme, cx));
+                workspace.children(element)
+            })
             .children(self.palette.clone())
     }
 }

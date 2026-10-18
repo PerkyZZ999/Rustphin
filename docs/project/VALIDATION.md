@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-10-18 — W-062 batch-rename dialog
+- **Phase:** 6 Implement (S9)
+- **Result:** pass for the dialog's construction; it has not yet been replayed on screen
+- **Change:** F2 with two or more selected files opens a solid dialog. Replace, Pattern and Case are labelled modes, the chosen one filled. The preview lists every current and new name and writes each problem as a sentence. Rename stays disabled while a problem remains or nothing would change. Enter runs `Request::RenameBatch`; Escape closes without a change. DESIGN.md was edited before the dialog; the linter reports zero errors and the same eight orphan-token warnings.
+- **Evidence:** `rust-tc doctor` PASS, 335 tests. No new pure function: the preview rules are the W-060 tests, and the apply path is the W-061 tests. The dialog calls those APIs.
+- **Follow-up:** W-063 replays the dialog in an isolated session, including a conflict that blocks Rename and a successful apply.
+
 ### 2026-10-18 — W-061 apply a batch rename
 - **Phase:** 6 Implement (S9)
 - **Result:** pass for applying and undoing one plan; a killed process is not yet covered

@@ -13,6 +13,7 @@ mod history;
 mod layout;
 mod operations;
 mod palette;
+mod rename_dialog;
 mod session;
 mod settings;
 mod sidebar;

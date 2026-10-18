@@ -2,7 +2,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     os::unix::ffi::OsStrExt as _,
     path::{Path, PathBuf},
     sync::Arc,
@@ -192,6 +192,16 @@ pub enum BrowserEvent {
     OpenInNewTab(PathBuf),
     /// A folder was successfully listed, rather than merely requested.
     Visited(PathBuf),
+    /// Rename these selected names together. `staying` is every other name
+    /// in the folder.
+    BatchRename {
+        /// The folder that holds the files.
+        directory: PathBuf,
+        /// Selected names, in list order.
+        selected: Vec<OsString>,
+        /// Names in the folder that are not selected.
+        staying: Vec<OsString>,
+    },
 }
 
 impl EventEmitter<BrowserEvent> for Browser {}
@@ -1077,6 +1087,29 @@ impl Browser {
         // Names in the trash belong to its records.
         if self.trash_dir.is_some() {
             return;
+        }
+        if let Some(snapshot) = self.snapshot.as_ref() {
+            let rows = self.selection.rows(snapshot);
+            if rows.len() >= 2 {
+                let selected: Vec<OsString> = rows
+                    .iter()
+                    .map(|row| OsStr::from_bytes(snapshot.name(*row)).to_owned())
+                    .collect();
+                let chosen: HashSet<Vec<u8>> = selected
+                    .iter()
+                    .map(|name| name.as_bytes().to_vec())
+                    .collect();
+                let staying = (0..snapshot.len())
+                    .filter(|row| !chosen.contains(snapshot.name(*row)))
+                    .map(|row| OsStr::from_bytes(snapshot.name(row)).to_owned())
+                    .collect();
+                cx.emit(BrowserEvent::BatchRename {
+                    directory: snapshot.path().to_owned(),
+                    selected,
+                    staying,
+                });
+                return;
+            }
         }
         let name = self
             .snapshot
