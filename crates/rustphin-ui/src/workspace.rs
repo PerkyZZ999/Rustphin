@@ -1,11 +1,14 @@
 //! The window's content: tabs, each showing one folder or two side by side.
 
-use std::path::{Path, PathBuf};
+use std::{
+    os::unix::ffi::OsStrExt,
+    path::{Path, PathBuf},
+};
 
 use gpui_kit::{
-    AnyElement, App, AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _,
-    IntoElement, KeyBinding, MouseButton, ParentElement as _, Render, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions,
+    AnyElement, App, AppContext as _, Context, Entity, FocusHandle, Global,
+    InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions,
     component::{
         Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -34,6 +37,10 @@ use crate::{
     tabs::Tabs,
     theme::{Theme, size, space, text},
 };
+
+/// Keeps the file-manager service connected for the life of the application.
+pub(crate) struct ShowService(pub(crate) rustphin_platform::file_manager::ServiceHandle);
+impl Global for ShowService {}
 
 const KEY_CONTEXT: &str = "Workspace";
 /// A dialog that is waiting for an answer.
@@ -181,6 +188,8 @@ pub struct Workspace {
     palette_from_sidebar: bool,
     /// Batch rename, when several files are being renamed together.
     pub(crate) rename: Option<crate::rename_dialog::RenameDialog>,
+    /// Folders other applications asked to be shown, applied on the next frame.
+    pending_shows: Vec<rustphin_platform::file_manager::Shown>,
     _history: Subscription,
     _places: Subscription,
 }
@@ -257,9 +266,32 @@ impl Workspace {
             palette_subscription: None,
             palette_from_sidebar: false,
             rename: None,
+            pending_shows: Vec::new(),
             _history: cx.observe(&history(cx), |this, _, cx| this.refresh_palette(cx)),
             _places: cx.observe(&sidebar, |this, _, cx| this.refresh_palette(cx)),
         };
+        if let Some(service) = cx.try_global::<ShowService>() {
+            let incoming = service.0.receiver();
+            cx.spawn(async move |this, cx| {
+                loop {
+                    let queue = incoming.clone();
+                    let next = cx
+                        .background_spawn(async move { queue.recv_async().await })
+                        .await;
+                    let Ok(shown) = next else { break };
+                    if this
+                        .update(cx, |this, cx| {
+                            this.pending_shows.extend(shown);
+                            cx.notify();
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        }
         workspace.focus_active(window, cx);
         workspace
     }
@@ -509,6 +541,50 @@ impl Workspace {
         }
     }
 
+    /// Opens `folder` and selects `names`. The active pane is reused when it
+    /// already shows that folder; otherwise a new tab does.
+    fn open_showing(
+        &mut self,
+        folder: PathBuf,
+        names: Vec<Vec<u8>>,
+        activate: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let showing =
+            self.tabs.active().browser().read(cx).location().as_deref() == Some(folder.as_path());
+        if showing {
+            self.tabs.active().browser().update(cx, |browser, cx| {
+                browser.reveal(folder, names, cx);
+            });
+            if activate {
+                self.focus_active(window, cx);
+            }
+            return;
+        }
+        let settings = self.tabs.active().browser().read(cx).settings();
+        let pane = Self::pane(
+            folder.clone(),
+            settings,
+            self.settings_path.clone(),
+            window,
+            cx,
+        );
+        pane.browser
+            .update(cx, |browser, cx| browser.reveal(folder, names, cx));
+        let previous = self.tabs.active_index();
+        self.tabs.open(Tab {
+            panes: vec![pane],
+            active: 0,
+        });
+        if activate {
+            self.focus_active(window, cx);
+        } else {
+            self.tabs.activate(previous);
+        }
+        cx.notify();
+    }
+
     /// Opens `path` in a new tab beside the active one, using the active
     /// folder's view settings. With `activate`, the new tab is shown.
     fn open_tab(
@@ -755,6 +831,17 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.pending_shows.is_empty() {
+            let pending = std::mem::take(&mut self.pending_shows);
+            for (index, shown) in pending.into_iter().enumerate() {
+                let names = shown
+                    .select
+                    .iter()
+                    .map(|name| name.as_bytes().to_vec())
+                    .collect();
+                self.open_showing(shown.folder, names, index == 0, window, cx);
+            }
+        }
         let theme = *cx.global::<Theme>();
 
         // The pane that holds the keyboard focus is the active one.

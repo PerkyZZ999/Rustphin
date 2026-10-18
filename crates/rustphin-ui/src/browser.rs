@@ -223,7 +223,8 @@ pub struct Browser {
     typed: String,
     typed_at: Option<Instant>,
     /// Entry to select once the directory being opened has been listed.
-    select_on_arrival: Option<Vec<u8>>,
+    /// Names to select once the folder being opened has finished listing.
+    select_on_arrival: Option<Vec<Vec<u8>>>,
     failure: Option<Failure>,
     editing_location: bool,
     location_input: Entity<InputState>,
@@ -398,9 +399,9 @@ impl Browser {
                     thumbs(cx).update(cx, |thumbs, _| thumbs.forget_folder(&folder));
                 }
                 let arrival = self.select_on_arrival.take_if(|_| !snapshot.is_loading());
-                let came_from = arrival.and_then(|name| snapshot.row_of(&name));
-                if let Some(row) = came_from {
-                    self.selection.select_only(&snapshot, row);
+                let arrived_names = arrival.is_some();
+                if let Some(names) = arrival {
+                    select_names(&mut self.selection, &snapshot, &names);
                 }
                 // The entry this view just created or renamed has shown up.
                 let awaited = self
@@ -429,7 +430,7 @@ impl Browser {
                 }
                 self.snapshot = Some(snapshot);
                 // A live update must not move the view; only arriving does.
-                if arrived || came_from.is_some() || awaited.is_some() {
+                if arrived || arrived_names || awaited.is_some() {
                     self.reveal_focus();
                 }
             }
@@ -703,7 +704,7 @@ impl Browser {
         if let Some(generation) = model.up() {
             self.generation = generation;
             self.failure = None;
-            self.select_on_arrival = came_from;
+            self.select_on_arrival = came_from.map(|name| vec![name]);
             cx.notify();
         }
     }
@@ -976,6 +977,29 @@ impl Browser {
     /// Shows `folder`.
     pub fn go_to(&mut self, folder: PathBuf, cx: &mut Context<Self>) {
         self.open(folder);
+        cx.notify();
+    }
+
+    /// Shows `folder` and selects `names` once its listing is ready.
+    /// Names that are not in the listing are left unselected.
+    pub fn reveal(&mut self, folder: PathBuf, names: Vec<Vec<u8>>, cx: &mut Context<Self>) {
+        let here = self.location().as_deref() == Some(folder.as_path());
+        let ready = self
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.path() == folder.as_path() && !snapshot.is_loading());
+        if here && ready {
+            if let Some(snapshot) = self.snapshot.clone() {
+                select_names(&mut self.selection, &snapshot, &names);
+                self.focus_row = self.selection.focus_row(&snapshot);
+                self.reveal_focus();
+            }
+        } else {
+            self.select_on_arrival = Some(names);
+            if !here {
+                self.open(folder);
+            }
+        }
         cx.notify();
     }
 
@@ -2464,6 +2488,20 @@ impl Entry {
             })
             // Cut entries are on their way out: drawn faded until pasted.
             .when(self.cut, |surface| surface.opacity(0.5))
+    }
+}
+
+fn select_names(selection: &mut Selection, snapshot: &Snapshot, names: &[Vec<u8>]) {
+    let mut selected = false;
+    for name in names {
+        if let Some(row) = snapshot.row_of(name) {
+            if selected {
+                selection.toggle(snapshot, row);
+            } else {
+                selection.select_only(snapshot, row);
+                selected = true;
+            }
+        }
     }
 }
 

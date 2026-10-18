@@ -86,6 +86,12 @@ pub fn run(options: Options) {
             );
             operations::init(cx);
             history::init(cx);
+            if let Some(service) = rustphin_platform::file_manager::ServiceHandle::session() {
+                tracing::info!("listening for requests to show files");
+                cx.set_global(workspace::ShowService(service));
+            } else {
+                tracing::info!("not listening for requests to show files");
+            }
             palette::bind_keys(cx);
             thumbs::init(cx);
             browser::bind_keys(cx);

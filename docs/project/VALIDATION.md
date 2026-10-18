@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-10-18 — W-065 ShowItems
+- **Phase:** 6 Implement (S10)
+- **Result:** pass on a private bus and in the headless grouping; not yet called from another application on the real session bus
+- **Change:** Rustphin serves `org.freedesktop.FileManager1`. `ShowItems` for a file opens its folder and selects its name; several files in one folder are one request; a directory opens itself; a missing file is still named in its parent. The window applies those requests on the next frame, reusing the current tab when it is already there. If another file manager owns the bus name, Rustphin logs that and continues. `ShowItemProperties` is accepted and does nothing until the properties view exists.
+- **Evidence:** `rust-tc doctor` PASS, 346 tests. A private peer-to-peer connection, with no session bus, called `ShowItems` and the service reported the folder and the file name. A hand mutation that treated a directory as a file to select failed `a_directory_opens_itself_and_a_missing_file_is_still_named`; the check was restored.
+- **Follow-up:** W-066 is the context menu. Seeing ShowItems from another application on the desktop remains for the S10 scenario pass.
+
 ### 2026-10-18 — W-064 desktop entry and command-line tabs
 - **Phase:** 6 Implement (S10)
 - **Result:** pass for the desktop entry and argument parsing; ShowItems is W-065

@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-18 — W-064 desktop entry and command-line tabs
+- Latest validation entry: VALIDATION.md, 2026-10-18 — W-065 ShowItems
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -38,7 +38,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-065: `org.freedesktop.FileManager1` ShowItems opens the folder and selects the item, tested on a private bus (R-017). Use `rust-tc` for every check and commit after every task.
+- Start W-066: a context menu for the selection, including Open with the applications registered for the type (R-018, R-001). Activating a file still confirms before running an executable. Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake
