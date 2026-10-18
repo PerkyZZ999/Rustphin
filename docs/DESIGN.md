@@ -85,6 +85,10 @@ components:
     backgroundColor: "{colors.chrome-glass}"
     height: 44px
     padding: "{spacing.sm}"
+  toolbar-full-navigation:
+    width: 320px
+  toolbar-back-navigation:
+    width: 240px
   toolbar-button:
     textColor: "{colors.text}"
     rounded: "{rounded.sm}"
@@ -197,10 +201,10 @@ All three families are installed on the reference system. They are not bundled y
 Everything sits on a 4-pixel grid; use only the `spacing` tokens.
 
 - **Window, top to bottom:** toolbar (44 px), an inline message when something failed, the file area (fills the rest), status line (28 px). Hairline `border` lines separate them.
-- **Toolbar:** back, forward and up on the left; the location as clickable segments that turn into a path field; view-mode and hidden-files controls on the right.
+- **Toolbar:** navigation buttons on the left, a flexible location field, and labelled Actions on the right. Below 320 px per pane Forward and Up leave the bar; below 240 px Back also leaves. These commands remain in Actions and on their shortcuts.
 - **File area:** one of three views. Details has a 28 px heading row and columns for name (fills), size (88 px, right-aligned), modified (144 px) and type (184 px). Icons and compact are grids whose cells grow with the five zoom levels. Rows and cells have an 8 px side gutter.
 - **Narrow windows:** below 760 px the type column goes, below 560 px the date column; the name always keeps its width. The location collapses leading folders into an ellipsis and shows the last four.
-- **Planned, not built:** a places rail on the left, collapsible between 56 and 240 px; an information panel on the right, 320 px, becoming an overlay below 1024 px.
+- **Places panel:** 220 px on the left, hidden or shown with F9 or Actions. Split panes share the remaining width. Entry content and the truncated status line stay inside their pane at narrow widths.
 
 ## Elevation & Depth
 
@@ -260,7 +264,7 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 
 ## Implementation status
 
-As of 2026-10-18 the application implements the surfaces, text colours, selection, hover, error banner, toolbar, tab strip, split panes, dialogs, activity lines, the rename field, the trash banner, the places panel, the command palette and labelled Actions entry, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings).
+As of 2026-10-18 the application implements the surfaces, text colours, selection, hover, error banner, toolbar (including the 320 px and 240 px navigation breakpoints), tab strip, split panes, dialogs, activity lines, the rename field, the trash banner, the places panel, the command palette and labelled Actions entry, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings). The status line truncates inside its pane.
 
 Floating surfaces (`surface-raised`, `border-accent`, the glow) are used by dialogs; the palette also uses them; menus do not exist yet. The cyan signal is used by the progress bar. Not yet applied in code: the emerald signal, `primary-bright` on focused inputs, and the type column, which still uses Inter.
 

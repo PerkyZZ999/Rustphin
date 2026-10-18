@@ -25,6 +25,10 @@ pub mod size {
     pub const ROW: f32 = 28.;
     /// Height of the toolbar.
     pub const TOOLBAR: f32 = 44.;
+    /// Minimum pane width for all three navigation buttons.
+    pub const TOOLBAR_FULL_MIN: f32 = 320.;
+    /// Minimum pane width for the Back button.
+    pub const TOOLBAR_BACK_MIN: f32 = 240.;
     /// Height of the status line.
     pub const STATUS: f32 = 28.;
     /// Height of the tab strip.

@@ -1,5 +1,21 @@
 # Validation evidence
 
+### 2026-10-18 — W-059 palette acceptance; S8 closed
+- **Phase:** 6 Implement (S8)
+- **Result:** pass. S8 closed. Two limits are recorded below and are not treated as S8 failures.
+- **Change:** a pane under 320 px drops Forward and Up; under 240 px it also drops Back. The location and Actions stay. The status line truncates inside the pane. `Navigation::for_width` is the tested rule. DESIGN.md gained the two widths before the behaviour, and the design linter reports zero errors and the same eight orphan-token warnings as before.
+- **Evidence:** `rust-tc doctor` PASS, 311 tests. A hand mutation changing the 320 px comparison from `>=` to `>` failed `narrow_panes_drop_forward_and_up_then_back` on the boundary; the comparison was restored. The core `rust-tc bench-palette` result from W-056 is unchanged and was not re-run.
+- **UI evidence:** isolated KWin, isolated home, generated fixture only. No device row was activated. Release build for the latency and restart checks.
+  - Q1: Tab moved the selection from Back to Forward; Shift+Tab moved it back. The query stayed empty. Escape returned to the file pane. Selection fill was the royal-blue primary on a normal screenshot.
+  - Q4: docs was added as a place, moved into a group named Work, and the group was folded (right arrow and a count of 1). Query `place docs` still selected `Place: docs`, and Enter opened that folder. The group stayed folded.
+  - Q6: `clear recent` left the palette open with "Recent folders cleared." `recent-locations.toml` became `version = 1` and `locations = []`. After restart in the same home the 10,000 seeded paths were gone. The launched fixture was then the only saved visit. Opening `other` wrote that folder first and the fixture second.
+  - J1: at 960×640 the toolbar shows Back, Forward, Up, the location and labelled Actions. Places and the status line are present. One tab, so no tab strip.
+  - J5: a pane about 260 px wide kept Back and dropped Forward and Up; the date column was also gone. Splitting that window put each pane under 240 px: Back, Forward and Up were all gone, Actions stayed, and the status read "1 of 3 items…" with the rest cut off. Alt+Left returned from docs to the fixture in that state. Alt+Right and Alt+Up were not pressed there.
+  - Latency: 10,000 saved locations plus 75 commands, one tab and Clear, which is 10,077 candidates. The debug log `palette results rendered` measures from the start of the search (the input change) to the render that shows the new results, not the compositor's present. Worst keystroke in the session was 10,536 µs. The empty-query render after opening was 3,927 µs. Both are under R-015's 50 ms.
+  - Every application action was in that open set: 10,000 locations + 75 `command!` entries + the current tab + Clear = 10,077, matching the logged result count. Running a chosen row was observed for the folded place and for clear.
+- **Not claimed:** screen-reader output, blur on the real desktop, Alt+Right and Alt+Up while the buttons are hidden, and a status string long enough to need the ellipsis outside the split. At the split width the 88 px size column remains, so entry names can disappear; that is the existing column rule, not a new one. Properties are still S10. There is no separate filter control.
+- **Follow-up:** S9 is batch rename (R-016). The clipped names in a very narrow split stay an open loop.
+
 ### 2026-10-18 — W-058 progressive disclosure
 - **Phase:** 6 Implement (S8)
 - **Result:** pass for the simpler default chrome; final acceptance checklist remains W-059

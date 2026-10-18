@@ -138,10 +138,10 @@ Conventions:
 ### R-015 — Command palette and fuzzy jump
 - **Priority:** must
 - **Acceptance:**
-  - [ ] One shortcut opens a palette that lists every application action with its shortcut and runs the chosen one.
-  - [ ] Typing fuzzy-matches actions, places, open tabs and recently visited folders; Enter navigates or runs.
-  - [ ] Results update within 50 ms of a keystroke with 10,000 recent locations.
-  - [ ] Recent-location history is stored locally and can be cleared.
+  - [x] One shortcut opens a palette that lists every application action with its shortcut and runs the chosen one.
+  - [x] Typing fuzzy-matches actions, places, open tabs and recently visited folders; Enter navigates or runs.
+  - [x] Results update within 50 ms of a keystroke with 10,000 recent locations.
+  - [x] Recent-location history is stored locally and can be cleared.
 - **Validation:** test (matching and ranking), bench, ui-test
 
 ### R-016 — Advanced batch rename
@@ -214,9 +214,9 @@ Conventions:
 ### R-106 — Progressive disclosure
 - **Priority:** must
 - **Acceptance:**
-  - [ ] The default window shows only: places panel, tab strip, location bar, the view, and a minimal status line.
+  - [x] The default window shows only: places panel, tab strip, location bar, the view, and a minimal status line.
   - [ ] Secondary controls (view options, filters, split, operation details, properties) appear on hover, selection, shortcut or through the palette, and each is reachable in at most two steps.
-  - [ ] Nothing available only through hover lacks a keyboard or palette path.
+  - [x] Nothing available only through hover lacks a keyboard or palette path.
 - **Validation:** manual (design checklist), ui-test (reachability)
 
 ### R-107 — Accessibility baseline

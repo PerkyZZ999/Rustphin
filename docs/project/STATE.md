@@ -3,8 +3,8 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S1–S7 done; S8 in progress
-- **Status:** active — S8 in progress
+- **Current phase:** 6 (Vertical-slice implementation) — S1–S8 done; S9 not started
+- **Status:** active — S9 not started
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-10-18
 
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-18 — W-058 progressive disclosure
+- Latest validation entry: VALIDATION.md, 2026-10-18 — W-059 palette acceptance; S8 closed
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -29,6 +29,7 @@
 - Task: not seen on screen in S5: dropping on a tab, drags in the icons and compact views, copy (not cut) between Rustphin and Dolphin, the clipboard fallback notice
 - Manual: mount, unmount and safely remove a real USB drive from the places panel, and unmount one in use to see the reason (R-013); needs the user
 - Task: places panel not yet seen on screen: hiding a place, reordering by keyboard, an edit made in Dolphin other than adding; its width is fixed and its visibility is not remembered
+- Task: in a very narrow split the 88 px size column remains, so entry names can clip away
 - Task: thumbnails not yet observed: reuse of a thumbnail Dolphin made and the reverse on screen (the cache format is unit-tested against the specification's example); JPEG, GIF and WebP files; scrolling a large picture folder
 - Open items carried forward from Discovery are listed in DISCOVERY.md
 
@@ -36,7 +37,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Complete W-059 (S8 reachability, restart/clear-history, focus, narrow-window and 10,000-location UI latency checks). Verify UI changes through kwin-mcp in an isolated home; use `rust-tc` for every check and commit after every task.
+- Start W-060: the core batch-rename plan (find/replace, counters, case, preview, conflicts) with no filesystem writes (R-016). Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

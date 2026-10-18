@@ -117,11 +117,12 @@ Use an isolated fixture and home as above. These checks never activate a device 
 | J2 | Click Actions, query `new folder`, Enter | Existing operation engine creates a folder and opens its inline rename field; F10 still does the same |
 | J3 | Actions, query `new group`, Enter; name it Work | Places panel receives focus, creates the group and opens its name field; group is saved in place-groups.toml |
 | J4 | Use Actions for view modes, zoom, hidden files, sorting, split view, new file, trash and place controls | Each control is selected after opening Actions once; corresponding existing shortcuts still work; unavailable future features are absent |
+| J5 | Make one pane narrower than 320 px, then narrower than 240 px | Forward and Up leave first; Back leaves under 240 px. Alt+Left, Alt+Right and Alt+Up still navigate. Actions stays. The status line stays inside the pane |
 
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.
-- Narrow-window column dropping, frame rate, and anything that needs a second application.
+- Frame rate, and anything that needs a second application. A very narrow split still keeps the size column, so names can clip; that was seen in J5 and is not a separate scenario.
 - Reordering tabs by dragging with the mouse, and dropping entries on a tab.
 - Dragging to an application that is not a KDE one, and a session without a data-control protocol: neither is available in the test session.
 - The trashes of other volumes: the banner lists the real ones of the machine, which belong to the user and are not opened in tests.

@@ -1215,6 +1215,7 @@ impl Browser {
         let location = self.location();
         let can_up = location.as_deref().and_then(Path::parent).is_some();
 
+        let navigation = Navigation::for_width(self.width);
         div()
             .flex()
             .flex_none()
@@ -1225,37 +1226,43 @@ impl Browser {
             .bg(theme.chrome)
             .border_b_1()
             .border_color(theme.border)
-            .child(
-                Button::new("back")
-                    .ghost()
-                    .small()
-                    .icon(IconName::ArrowLeft)
-                    .tooltip("Back (Alt+Left)")
-                    .disabled(!can_back)
-                    .on_click(
-                        cx.listener(|this, _, _, cx| this.navigate(DirectoryModel::back, cx)),
-                    ),
-            )
-            .child(
-                Button::new("forward")
-                    .ghost()
-                    .small()
-                    .icon(IconName::ArrowRight)
-                    .tooltip("Forward (Alt+Right)")
-                    .disabled(!can_forward)
-                    .on_click(
-                        cx.listener(|this, _, _, cx| this.navigate(DirectoryModel::forward, cx)),
-                    ),
-            )
-            .child(
-                Button::new("up")
-                    .ghost()
-                    .small()
-                    .icon(IconName::ArrowUp)
-                    .tooltip("Up one folder (Alt+Up)")
-                    .disabled(!can_up)
-                    .on_click(cx.listener(|this, _, _, cx| this.go_up(cx))),
-            )
+            .when(navigation.back, |bar| {
+                bar.child(
+                    Button::new("back")
+                        .ghost()
+                        .small()
+                        .icon(IconName::ArrowLeft)
+                        .tooltip("Back (Alt+Left)")
+                        .disabled(!can_back)
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.navigate(DirectoryModel::back, cx)),
+                        ),
+                )
+            })
+            .when(navigation.forward_and_up, |bar| {
+                bar.child(
+                    Button::new("forward")
+                        .ghost()
+                        .small()
+                        .icon(IconName::ArrowRight)
+                        .tooltip("Forward (Alt+Right)")
+                        .disabled(!can_forward)
+                        .on_click(
+                            cx.listener(|this, _, _, cx| {
+                                this.navigate(DirectoryModel::forward, cx)
+                            }),
+                        ),
+                )
+                .child(
+                    Button::new("up")
+                        .ghost()
+                        .small()
+                        .icon(IconName::ArrowUp)
+                        .tooltip("Up one folder (Alt+Up)")
+                        .disabled(!can_up)
+                        .on_click(cx.listener(|this, _, _, cx| this.go_up(cx))),
+                )
+            })
             .child(div().flex_1().min_w_0().px(px(space::XS)).map(|bar| {
                 if self.editing_location {
                     bar.child(Input::new(&self.location_input).small())
@@ -1971,7 +1978,7 @@ impl Browser {
             .font_family(text::FAMILY_DATA)
             .text_size(px(text::SMALL))
             .text_color(theme.text_muted)
-            .child(message)
+            .child(div().flex_1().min_w_0().truncate().child(message))
     }
 }
 
@@ -2150,6 +2157,7 @@ impl Render for Browser {
             .flex()
             .flex_col()
             .size_full()
+            .overflow_hidden()
             .text_color(theme.text)
             .font_family(text::FAMILY_BODY)
             .text_size(px(text::BODY))
@@ -2447,6 +2455,25 @@ fn crumbs_for_width(width: f32) -> usize {
     }
 }
 
+/// Which navigation buttons fit the pane. The rest stay on their shortcuts
+/// and in the command palette.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Navigation {
+    back: bool,
+    forward_and_up: bool,
+}
+
+impl Navigation {
+    /// Forward and Up leave first. Back leaves only when the pane can no
+    /// longer hold it beside the location and Actions.
+    fn for_width(width: f32) -> Self {
+        Self {
+            back: width >= size::TOOLBAR_BACK_MIN,
+            forward_and_up: width >= size::TOOLBAR_FULL_MIN,
+        }
+    }
+}
+
 /// Which optional columns fit the view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Columns {
@@ -2549,6 +2576,18 @@ mod tests {
         assert_eq!(crumbs_for_width(639.), 2);
         assert_eq!(crumbs_for_width(479.), 1);
         assert_eq!(crumbs_for_width(0.), 1);
+    }
+
+    #[test]
+    fn narrow_panes_drop_forward_and_up_then_back() {
+        let wide = Navigation::for_width(size::TOOLBAR_FULL_MIN);
+        assert!(wide.back && wide.forward_and_up);
+        let medium = Navigation::for_width(size::TOOLBAR_FULL_MIN - 1.);
+        assert!(medium.back && !medium.forward_and_up);
+        let back_only = Navigation::for_width(size::TOOLBAR_BACK_MIN);
+        assert!(back_only.back && !back_only.forward_and_up);
+        let narrow = Navigation::for_width(size::TOOLBAR_BACK_MIN - 1.);
+        assert!(!narrow.back && !narrow.forward_and_up);
     }
 
     #[test]
