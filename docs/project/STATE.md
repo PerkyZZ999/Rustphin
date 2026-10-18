@@ -3,10 +3,10 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S1–S7 done; S8 next
-- **Status:** active — between slices
+- **Current phase:** 6 (Vertical-slice implementation) — S1–S7 done; S8 in progress
+- **Status:** active — S8 in progress
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
-- **Last updated:** 2026-10-12
+- **Last updated:** 2026-10-18
 
 ## Authority boundaries
 - Agent may decide: stack-local, reversible implementation details consistent with locked decisions; document structure; disposable spike code.
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-12 — Implement gate, slice S7
+- Latest validation entry: VALIDATION.md, 2026-10-18 — W-055 baseline quality gate restored
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -33,10 +33,10 @@
 - Open items carried forward from Discovery are listed in DISCOVERY.md
 
 ## Blockers
-- None
+- None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start S8 (command palette and progressive disclosure): write its work items from ROADMAP.md. Verify UI changes through kwin-mcp in an isolated home. Use `rust-tc` for every check and commit after every task.
+- Implement W-056 (fuzzy matching, recent-location history and 10,000-location benchmark). Then W-057 to W-059 complete S8. Verify UI changes through kwin-mcp in an isolated home; use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

@@ -1,14 +1,18 @@
 # Work items (current slice)
 
 ## Current slice
-S8 — Command palette and progressive disclosure (not started)
+S8 — Command palette and progressive disclosure (in progress)
 
-**Done when:** see ROADMAP.md; work items are written when the slice starts.
+**Done when:** the palette reaches every application action, places, open tabs and recent folders; matching 10,000 recent locations takes at most 50 ms; history is local and clearable; the default window exposes only the essentials and secondary controls remain reachable within two steps (R-015, R-106).
 
 ## Queue
-- None. S7 is closed; S8 is planned in ROADMAP.md and its work items are written when it starts.
+- [ ] W-056 — Core fuzzy matching and bounded, deduplicated recent-location history, preserving raw path bytes. Behaviour tests, mutation checks and a `rust-tc` benchmark on 10,000 locations (R-015, R-104).
+- [ ] W-057 — Palette UI: one shortcut, search actions/places/tabs/recent folders, visible shortcuts, keyboard and mouse activation, safe focus handling and empty state. Persist and clear recent folders through platform config I/O off the UI thread (R-015).
+- [ ] W-058 — Progressive disclosure: simplify the default window, keep secondary controls reachable within two steps, and provide a keyboard or palette path for every hover control. Update DESIGN.md before its implementation (R-106, D-017).
+- [ ] W-059 — Record palette and reachability scenarios, replay them with the relevant existing scenarios in an isolated KWin session/home, measure palette latency, and close S8 only against the observed evidence (R-015, R-106).
 
 ## Done (recent)
+- [x] W-055 — Restored the baseline quality gate with three individually documented maintenance-notice exceptions approved by the maintainer on 2026-10-18; `rust-tc doctor` PASS, 291 tests. Toolkit and dependency versions unchanged.
 - [x] S7 — Thumbnails: W-052 to W-054, closed 2026-10-12 (see VALIDATION.md)
 - [x] W-054 — Scenario H1 for thumbnails added to UI_SCENARIOS.md and run (R-014)
 - [x] W-053 — Views show thumbnails in place of the type icon for PNG, JPEG, GIF, WebP and BMP files when icons are 32 px or larger; only entries being drawn are asked for; leaving a folder drops what it was waiting for; a folder that is read again has its pictures checked again (R-014)

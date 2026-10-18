@@ -1,5 +1,22 @@
 # Validation evidence
 
+### 2026-10-18 — W-055 baseline quality gate restored
+- **Phase:** 6 Implement (S8 preparation)
+- **Result:** pass
+- **Approval:** The maintainer explicitly approved the three proposed exceptions and continuing S8 in this chat on 2026-10-18.
+- **Change:** `deny.toml` individually documents RUSTSEC-2026-0370, RUSTSEC-2026-0371 and RUSTSEC-2026-0372, their retained dependency paths and review at the next toolkit upgrade. These are informational lifecycle notices; no vulnerability exception, dependency update, toolkit upgrade or lock change was made.
+- **Evidence:** `rust-tc doctor` PASS: formatting, clippy, 291 tests, doctests, dependency advisories/licences/bans/sources, unused dependencies, feature checks, layering and Rust 1.95 check. Existing duplicate-version warnings remain warnings under the reviewed policy.
+- **Follow-up:** W-056 starts the S8 implementation; W-057 to W-059 cover the palette, progressive disclosure and UI acceptance.
+
+### 2026-10-18 — S8 baseline gate blocked by new maintenance advisories
+- **Phase:** 6 Implement (S8 preparation, W-055)
+- **Result:** blocked; no application changes made
+- **Evidence:** `rust-tc doctor` ran before edits. Formatting, compilation through clippy, 291 tests and doctests passed. Dependency checking failed on three informational maintenance notices: RUSTSEC-2026-0370 (`zvariant`), RUSTSEC-2026-0371 (`zbus_names`) and RUSTSEC-2026-0372 (`zvariant_derive`). Licences, bans and sources passed. The command stopped at `deps`; subsequent gates were not run by that invocation.
+- **Investigation:** the dependency paths printed by cargo-deny include the pinned GPUI toolkit's AT-SPI, portal and keyring dependencies as well as Rustphin's zbus 5 device integration. Upstream confirms that the three standalone crates were merged into zbus 6 and deprecated: https://github.com/z-galaxy/zbus/issues/2043. Updating only the direct zbus dependency cannot eliminate the toolkit's copies.
+- **Proposal:** individually document these three lifecycle exceptions in `deny.toml`, retaining the toolkit pin and requiring review at its next upgrade. Exact proposed patch: `/tmp/rustphin-proposed-advisory-policy.patch`. Not applied; owner approval requested because AGENTS.md prohibits suppressing gate failures.
+- **Remaining baseline checks:** `rust-tc features`, `rust-tc layers` and `rust-tc msrv` each passed when run separately after the doctor command stopped. `git diff --check` passed for the planning and evidence edits. These do not turn the failed doctor result into a pass.
+- **Follow-up:** resolve W-055 before application work. No commit while `rust-tc doctor` fails. S8 work items W-056 to W-059 are planned in WORK_ITEMS.md.
+
 ### 2026-10-12 — Intake gate
 - **Phase:** 0 Intake
 - **Result:** pass

@@ -11,11 +11,16 @@ all-features = true
 
 [advisories]
 yanked = "deny"
-# "Unmaintained" notices (not vulnerabilities) for crates that arrive only
-# through the pinned UI toolkit, gpui-kit =0.7.3 / gpui-pre =0.3.9 (decision
-# D-001). They cannot be replaced from this workspace. Re-check this list at
-# every toolkit upgrade and delete entries that no longer apply.
+# Informational lifecycle notices, not vulnerability exceptions. The pinned
+# UI toolkit (D-001) retains these crates. The zbus 5 stack also backs our
+# UDisks2 integration; upgrading that alone cannot remove the toolkit copies.
+# Re-check every entry at each toolkit upgrade and remove resolved notices.
 ignore = [
+    # Approved by the maintainer on 2026-10-18: upstream merged these
+    # standalone crates into zbus 6; the pinned toolkit still requires zbus 5.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: retained by the pinned toolkit and our zbus 5 device integration; review at toolkit upgrade" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: retained by the pinned toolkit and our zbus 5 device integration; review at toolkit upgrade" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: retained through zvariant in the pinned toolkit and zbus 5; review at toolkit upgrade" },
     { id = "RUSTSEC-2024-0384", reason = "instant: transitive dependency of the pinned UI toolkit" },
     { id = "RUSTSEC-2024-0436", reason = "paste: transitive dependency of the pinned UI toolkit" },
     { id = "RUSTSEC-2026-0206", reason = "rustybuzz: text shaping inside the pinned UI toolkit" },
