@@ -97,6 +97,13 @@ actions!(
         Copy,
         Cut,
         Paste,
+        OpenTrash,
+        RestoreTrash,
+        EmptyTrash,
+        SortName,
+        SortSize,
+        SortModified,
+        SortType,
     ]
 );
 
@@ -183,6 +190,8 @@ impl Failure {
 pub enum BrowserEvent {
     /// Show this folder in a new tab (a middle click on it).
     OpenInNewTab(PathBuf),
+    /// A folder was successfully listed, rather than merely requested.
+    Visited(PathBuf),
 }
 
 impl EventEmitter<BrowserEvent> for Browser {}
@@ -194,6 +203,8 @@ pub struct Browser {
     snapshot: Option<Arc<Snapshot>>,
     /// The newest request; older snapshots are ignored.
     generation: u64,
+    /// Last successful visit announced to the workspace history.
+    visited: Option<PathBuf>,
     selection: Selection,
     /// Row of the selection's focus in the current snapshot, looked up once
     /// per snapshot instead of on every frame.
@@ -284,6 +295,7 @@ impl Browser {
             model: None,
             snapshot: None,
             generation: 0,
+            visited: None,
             selection: Selection::default(),
             focus_row: None,
             typed: String::new(),
@@ -400,6 +412,11 @@ impl Browser {
                     self.refocus = true;
                 }
                 self.focus_row = self.selection.focus_row(&snapshot);
+                if !snapshot.is_loading() && self.visited.as_deref() != Some(snapshot.path()) {
+                    let path = snapshot.path().to_owned();
+                    self.visited = Some(path.clone());
+                    cx.emit(BrowserEvent::Visited(path));
+                }
                 self.snapshot = Some(snapshot);
                 // A live update must not move the view; only arriving does.
                 if arrived || came_from.is_some() || awaited.is_some() {
@@ -2156,6 +2173,19 @@ impl Render for Browser {
                 cx.listener(|this, _: &Reload, _, cx| this.navigate(DirectoryModel::reload, cx)),
             )
             .on_action(cx.listener(|this, _: &ToggleHidden, _, cx| this.toggle_hidden(cx)))
+            .on_action(cx.listener(|this, _: &OpenTrash, _, cx| this.open_trash(cx)))
+            .on_action(cx.listener(|this, _: &RestoreTrash, _, cx| this.restore_selected(cx)))
+            .on_action(cx.listener(|this, _: &EmptyTrash, _, cx| {
+                if let Some(dir) = this.trash_dir.clone() {
+                    hub(cx).update(cx, |hub, cx| hub.empty_trash(dir, cx));
+                }
+            }))
+            .on_action(cx.listener(|this, _: &SortName, _, cx| this.sort_by(SortKey::Name, cx)))
+            .on_action(cx.listener(|this, _: &SortSize, _, cx| this.sort_by(SortKey::Size, cx)))
+            .on_action(
+                cx.listener(|this, _: &SortModified, _, cx| this.sort_by(SortKey::Modified, cx)),
+            )
+            .on_action(cx.listener(|this, _: &SortType, _, cx| this.sort_by(SortKey::Type, cx)))
             .on_action(
                 cx.listener(|this, _: &EditLocation, window, cx| this.edit_location(window, cx)),
             )

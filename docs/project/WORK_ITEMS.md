@@ -6,11 +6,11 @@ S8 — Command palette and progressive disclosure (in progress)
 **Done when:** the palette reaches every application action, places, open tabs and recent folders; matching 10,000 recent locations takes at most 50 ms; history is local and clearable; the default window exposes only the essentials and secondary controls remain reachable within two steps (R-015, R-106).
 
 ## Queue
-- [ ] W-057 — Palette UI: one shortcut, search actions/places/tabs/recent folders, visible shortcuts, keyboard and mouse activation, safe focus handling and empty state. Persist and clear recent folders through platform config I/O off the UI thread (R-015).
 - [ ] W-058 — Progressive disclosure: simplify the default window, keep secondary controls reachable within two steps, and provide a keyboard or palette path for every hover control. Update DESIGN.md before its implementation (R-106, D-017).
 - [ ] W-059 — Record palette and reachability scenarios, replay them with the relevant existing scenarios in an isolated KWin session/home, measure palette latency, and close S8 only against the observed evidence (R-015, R-106).
 
 ## Done (recent)
+- [x] W-057 — Palette UI: one shortcut, search actions/places/tabs/recent folders, visible shortcuts, keyboard and mouse activation, safe focus handling and empty state. Persist and clear recent folders through platform config I/O off the UI thread (R-015).
 - [x] W-056 — Core fuzzy matching and bounded, deduplicated recent-location history, preserving raw path bytes. Behaviour tests, mutation checks and a `rust-tc` benchmark on 10,000 locations (R-015, R-104).
 - [x] W-055 — Restored the baseline quality gate with three individually documented maintenance-notice exceptions approved by the maintainer on 2026-10-18; `rust-tc doctor` PASS, 291 tests. Toolkit and dependency versions unchanged.
 - [x] S7 — Thumbnails: W-052 to W-054, closed 2026-10-12 (see VALIDATION.md)

@@ -136,6 +136,15 @@ components:
     backgroundColor: "{colors.surface-raised}"
     textColor: "{colors.text}"
     rounded: "{rounded.sm}"
+  command-palette:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+    width: 640px
+    padding: "{spacing.md}"
+  palette-result:
+    height: 48px
+    typography: "{typography.body-md}"
   status-line:
     backgroundColor: "{colors.chrome-glass}"
     textColor: "{colors.text-muted}"
@@ -234,6 +243,8 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 - **Rubber band:** a 1 px `primary-bright` outline with a `hover` fill.
 - **Floating surfaces:** as level 3 above. Menu items follow the entry hover and selection rules.
 
+- **Command palette:** Ctrl+Shift+P opens a 640 px solid raised surface, inset by at least 16 px on narrow windows, over the scrim. A visible label names its search field. Up to seven 48 px results are shown at once in a scrolling list; each has a name, a category/path and its shortcut when available. Search covers actions, places, open tabs and recent folders. Selection uses the primary fill plus a leading marker. Up/Down or Tab/Shift+Tab changes the selection, Enter runs it, Escape or clicking the scrim closes it and returns focus. Background navigation is blocked. A pending query cannot activate a stale result; the empty state asks for another search. History failures and clear-history confirmation are written out in the palette footer.
+
 ## Do's and Don'ts
 
 - Do take every colour, size, spacing and radius from the tokens; add a token before adding a literal.
@@ -249,8 +260,8 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 
 ## Implementation status
 
-As of 2026-10-12 the application implements the surfaces, text colours, selection, hover, error banner, toolbar, tab strip, split panes, dialogs, activity lines, the rename field, the trash banner, the places panel, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings).
+As of 2026-10-18 the application implements the surfaces, text colours, selection, hover, error banner, toolbar, tab strip, split panes, dialogs, activity lines, the rename field, the trash banner, the places panel, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings).
 
-Floating surfaces (`surface-raised`, `border-accent`, the glow) are used by dialogs; menus and the palette do not exist yet. The cyan signal is used by the progress bar. Not yet applied in code: the emerald signal, `primary-bright` on focused inputs, and the type column, which still uses Inter.
+Floating surfaces (`surface-raised`, `border-accent`, the glow) are used by dialogs; the palette also uses them; menus do not exist yet. The cyan signal is used by the progress bar. Not yet applied in code: the emerald signal, `primary-bright` on focused inputs, and the type column, which still uses Inter.
 
 Changed from the first draft of this document, by the user's decision on 2026-10-12: the accent is royal blue, not indigo; corners are 2 px, not square; monospace is for data only, with Inter for file names. Removed because the toolkit cannot do it: backdrop blur on popovers and panels inside the window. Removed because Rustphin has no such feature planned for its first release: terminal docks, checksum and hex inspectors, tree connectors.

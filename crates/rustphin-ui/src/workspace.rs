@@ -23,8 +23,11 @@ use rustphin_core::{
 
 use crate::{
     browser::{Browser, BrowserEvent, DraggedEntries},
+    commands::{self, Scope},
     format,
+    history::history,
     operations::{self, Hub, Notice, Question, Running, hub},
+    palette::{Candidate, Palette, PaletteEvent, Target},
     session::{Session, SessionTab},
     settings::Settings,
     sidebar::{Sidebar, SidebarEvent},
@@ -59,13 +62,21 @@ actions!(
         DialogCopy,
         ToggleSidebar,
         AddPlace,
+        OpenPalette,
+        StopOperations,
+        DismissNotice,
     ]
 );
 
 /// Registers the tab and split-view shortcuts. They match Dolphin's defaults.
 pub fn bind_keys(cx: &mut App) {
-    let context = Some(KEY_CONTEXT);
+    let context = Some("Workspace && !Dialog && !Palette");
     cx.bind_keys([
+        KeyBinding::new(
+            "ctrl-shift-p",
+            OpenPalette,
+            Some("Workspace && !Dialog && !Palette"),
+        ),
         KeyBinding::new("ctrl-t", NewTab, context),
         KeyBinding::new("ctrl-w", CloseTab, context),
         KeyBinding::new("ctrl-tab", NextTab, context),
@@ -76,11 +87,23 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-pagedown", MoveTabRight, context),
         KeyBinding::new("f3", ToggleSplit, context),
         KeyBinding::new("f9", ToggleSidebar, context),
-        KeyBinding::new("ctrl-d", AddPlace, Some("Workspace && !Input && !Dialog")),
+        KeyBinding::new(
+            "ctrl-d",
+            AddPlace,
+            Some("Workspace && !Input && !Dialog && !Palette"),
+        ),
         // Tab moves between the two panes, except while typing in a field.
-        KeyBinding::new("tab", OtherPane, Some("Workspace && !Input")),
+        KeyBinding::new(
+            "tab",
+            OtherPane,
+            Some("Workspace && !Input && !Dialog && !Palette"),
+        ),
         // Not while typing: there Ctrl+Z undoes the typing.
-        KeyBinding::new("ctrl-z", Undo, Some("Workspace && !Input && !Dialog")),
+        KeyBinding::new(
+            "ctrl-z",
+            Undo,
+            Some("Workspace && !Input && !Dialog && !Palette"),
+        ),
         KeyBinding::new("enter", DialogAccept, Some(DIALOG_CONTEXT)),
         KeyBinding::new("escape", DialogCancel, Some(DIALOG_CONTEXT)),
         KeyBinding::new("s", DialogSkip, Some(DIALOG_CONTEXT)),
@@ -151,6 +174,11 @@ pub struct Workspace {
     sidebar_visible: bool,
     _hub: Subscription,
     _sidebar: Subscription,
+    palette: Option<Entity<Palette>>,
+    palette_subscription: Option<Subscription>,
+    palette_from_sidebar: bool,
+    _history: Subscription,
+    _places: Subscription,
 }
 
 impl Workspace {
@@ -218,9 +246,14 @@ impl Workspace {
             zone: TimeZone::system(),
             // Progress, questions and messages change outside this view.
             _hub: cx.observe(&hub(cx), |_, _, cx| cx.notify()),
-            sidebar,
+            sidebar: sidebar.clone(),
             sidebar_visible: true,
             _sidebar: sidebar_events,
+            palette: None,
+            palette_subscription: None,
+            palette_from_sidebar: false,
+            _history: cx.observe(&history(cx), |this, _, cx| this.refresh_palette(cx)),
+            _places: cx.observe(&sidebar, |this, _, cx| this.refresh_palette(cx)),
         };
         workspace.focus_active(window, cx);
         workspace
@@ -293,7 +326,137 @@ impl Workspace {
     ) {
         match event {
             BrowserEvent::OpenInNewTab(path) => self.open_tab(path.clone(), false, window, cx),
+            BrowserEvent::Visited(path) => history(cx).read(cx).visit(path.clone()),
         }
+    }
+
+    fn palette_candidates(&self, cx: &App) -> Vec<Candidate> {
+        let mut candidates: Vec<_> = commands::commands()
+            .iter()
+            .enumerate()
+            .map(|(index, command)| {
+                Candidate::new(
+                    command.label.to_owned(),
+                    match command.scope {
+                        Scope::Browser => "Action · active pane",
+                        Scope::Sidebar => "Action · selected place or group",
+                    }
+                    .to_owned(),
+                    command.shortcut.to_owned(),
+                    Target::Command(index),
+                )
+            })
+            .collect();
+        for (index, tab) in self.tabs.iter().enumerate() {
+            if let Some(path) = tab.browser().read(cx).location() {
+                candidates.push(Candidate::new(
+                    format!("Tab: {}", Self::label(tab, cx)),
+                    display_name(path.as_os_str().as_encoded_bytes()).into_owned(),
+                    String::new(),
+                    Target::Tab(index),
+                ));
+            }
+        }
+        for place in self.sidebar.read(cx).palette_places() {
+            if let Some(path) = &place.path {
+                candidates.push(Candidate::new(
+                    format!("Place: {}", display_name(place.title.as_bytes())),
+                    display_name(path.as_os_str().as_encoded_bytes()).into_owned(),
+                    String::new(),
+                    Target::Folder(path.clone()),
+                ));
+            }
+        }
+        for path in history(cx).read(cx).locations.paths() {
+            candidates.push(Candidate::new(
+                format!("Recent: {}", folder_label(path)),
+                display_name(path.as_os_str().as_encoded_bytes()).into_owned(),
+                String::new(),
+                Target::Folder(path.clone()),
+            ));
+        }
+        candidates.push(Candidate::new(
+            "History: Clear recent folders".to_owned(),
+            "Forget saved folder visits on this computer".to_owned(),
+            String::new(),
+            Target::ClearHistory,
+        ));
+        candidates
+    }
+
+    fn refresh_palette(&mut self, cx: &mut Context<Self>) {
+        if let Some(palette) = self.palette.clone() {
+            let candidates = self.palette_candidates(cx);
+            let status = history(cx).read(cx).status.clone();
+            palette.update(cx, |palette, cx| {
+                palette.set_candidates(candidates, status, cx)
+            });
+        }
+    }
+
+    fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.is_some() || !hub(cx).read(cx).questions.is_empty() {
+            return;
+        }
+        self.palette_from_sidebar = self.sidebar.read(cx).is_focused(window, cx);
+        let candidates = self.palette_candidates(cx);
+        let status = history(cx).read(cx).status.clone();
+        let palette = cx.new(|cx| Palette::new(candidates, status, window, cx));
+        self.palette_subscription = Some(cx.subscribe_in(&palette, window, Self::on_palette_event));
+        self.palette = Some(palette);
+        cx.notify();
+    }
+
+    fn on_palette_event(
+        &mut self,
+        _: &Entity<Palette>,
+        event: &PaletteEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if matches!(event, PaletteEvent::Chosen(Target::ClearHistory)) {
+            history(cx).read(cx).clear();
+            return;
+        }
+        self.palette = None;
+        self.palette_subscription = None;
+        if self.palette_from_sidebar {
+            self.sidebar
+                .update(cx, |sidebar, cx| sidebar.focus(window, cx));
+        } else {
+            self.focus_active(window, cx);
+        }
+        match event {
+            PaletteEvent::Closed | PaletteEvent::Chosen(Target::ClearHistory) => {}
+            PaletteEvent::Chosen(Target::Folder(path)) => {
+                self.tabs
+                    .active()
+                    .browser()
+                    .update(cx, |browser, cx| browser.go_to(path.clone(), cx));
+                self.focus_active(window, cx);
+            }
+            PaletteEvent::Chosen(Target::Tab(index)) => self.activate(*index, window, cx),
+            PaletteEvent::Chosen(Target::Command(index)) => {
+                if let Some(command) = commands::commands().get(*index) {
+                    let action = command.action;
+                    match command.scope {
+                        Scope::Browser => {
+                            self.focus_active(window, cx);
+                            window.dispatch_action(action(), cx);
+                        }
+                        Scope::Sidebar => {
+                            self.sidebar_visible = true;
+                            let sidebar = self.sidebar.clone();
+                            window.on_next_frame(move |window, cx| {
+                                sidebar.update(cx, |sidebar, cx| sidebar.focus(window, cx));
+                                window.dispatch_action(action(), cx);
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        cx.notify();
     }
 
     fn on_sidebar_event(
@@ -591,6 +754,10 @@ impl Render for Workspace {
         // the active pane when the last one closes.
         let hub = hub(cx);
         let dialog_open = !hub.read(cx).questions.is_empty();
+        if dialog_open && self.palette.is_some() {
+            self.palette = None;
+            self.palette_subscription = None;
+        }
         if dialog_open && !self.dialog_focus.is_focused(window) {
             let focus = self.dialog_focus.clone();
             cx.defer_in(window, move |_, window, cx| focus.focus(window, cx));
@@ -694,6 +861,20 @@ impl Render for Workspace {
                         .update(cx, |sidebar, cx| sidebar.add_place(folder, None, cx));
                 }
             }))
+            .on_action(
+                cx.listener(|this, _: &OpenPalette, window, cx| this.open_palette(window, cx)),
+            )
+            .on_action(|_: &DismissNotice, _, cx| {
+                operations::hub(cx).update(cx, Hub::dismiss_notice)
+            })
+            .on_action(|_: &StopOperations, _, cx| {
+                operations::hub(cx).update(cx, |hub, _| {
+                    let ids: Vec<_> = hub.running.iter().map(|running| running.id).collect();
+                    for id in ids {
+                        hub.cancel(id);
+                    }
+                });
+            })
             .relative()
             .flex()
             .flex_col()
@@ -714,6 +895,7 @@ impl Render for Workspace {
             )
             .children(activity)
             .children(dialog)
+            .children(self.palette.clone())
     }
 }
 
@@ -839,7 +1021,7 @@ impl Workspace {
                     .ghost()
                     .xsmall()
                     .label("Dismiss")
-                    .on_click(|_, _, cx| hub(cx).update(cx, Hub::dismiss_notice)),
+                    .on_click(|_, _, cx| operations::hub(cx).update(cx, Hub::dismiss_notice)),
             )
     }
 

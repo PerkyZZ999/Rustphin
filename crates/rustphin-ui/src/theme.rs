@@ -54,6 +54,10 @@ pub mod size {
     pub const SIDEBAR: f32 = 220.;
     /// Width of a dialog.
     pub const DIALOG: f32 = 440.;
+    /// Maximum width of the command palette.
+    pub const PALETTE: f32 = 640.;
+    /// Height of a command result, including its second line.
+    pub const PALETTE_ROW: f32 = 48.;
     /// Height of a progress bar.
     pub const PROGRESS: f32 = 4.;
     /// Width of a progress bar in the activity line.
@@ -256,6 +260,16 @@ mod tests {
             ),
             ("danger on its surface", theme.danger, theme.danger_surface),
             ("text on a dialog", theme.text, theme.raised),
+            (
+                "text on palette hover",
+                theme.text,
+                over(theme.hover, theme.raised),
+            ),
+            (
+                "muted text on palette hover",
+                theme.text_muted,
+                over(theme.hover, theme.raised),
+            ),
             ("muted text on a dialog", theme.text_muted, theme.raised),
             ("danger text on a dialog", theme.danger, theme.raised),
         ] {

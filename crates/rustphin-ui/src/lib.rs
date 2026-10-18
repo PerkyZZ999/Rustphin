@@ -4,12 +4,15 @@
 //! commands. It never reads the filesystem itself.
 
 mod browser;
+mod commands;
 mod diagnostics;
 mod filetypes;
 mod format;
 mod groups;
+mod history;
 mod layout;
 mod operations;
+mod palette;
 mod session;
 mod settings;
 mod sidebar;
@@ -77,6 +80,8 @@ pub fn run(options: Options) {
                 cx,
             );
             operations::init(cx);
+            history::init(cx);
+            palette::bind_keys(cx);
             thumbs::init(cx);
             browser::bind_keys(cx);
             workspace::bind_keys(cx);

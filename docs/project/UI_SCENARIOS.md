@@ -94,6 +94,21 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | H1 | Make a folder with a wide PNG, a tall PNG, a square PNG, a file named `broken.png` that is not an image, a text file and a subfolder; open it; Ctrl+1 | The three pictures show their own content, each keeping its proportions inside the icon's square; `broken.png` keeps the image type icon; the text file and folder keep theirs. `<isolated home>/.cache/thumbnails/normal/` holds three PNGs and `fail/rustphin-<version>/` one |
 | L1 | Launch the release build on a 500,000-entry folder (`rust-tc bench-listing` creates `target/bench/listing-500k`); press End | Status "500,000 items"; the last entry is selected and visible within a second |
 
+## Command palette (S8)
+
+Use an isolated fixture and home as above. These checks never activate a device command or touch a real volume.
+
+| # | Steps | Expected |
+|---|---|---|
+| Q1 | Ctrl+Shift+P; Down, Up, Tab, Shift+Tab; Escape | Solid palette with labelled search, shortcuts and a leading selection marker; keys move the result selection without editing the query; Escape returns to the pane |
+| Q2 | Open palette, type `view icons`, Enter; repeat with `view details` | Changes the active pane's view through the existing action; settings file agrees |
+| Q3 | Visit Documents, return to the fixture; palette query `recent documents`, Enter | Documents opens; recent-locations.toml contains distinct local file URIs, newest first; failed path requests are absent |
+| Q4 | Add Documents as a place, return to the fixture; query `place documents`, click its result | Documents opens in the active pane; the place is also searchable while its group is folded |
+| Q5 | Open two tabs on different folders; query `tab documents`, Enter | Switches to the existing Documents tab without adding a tab |
+| Q6 | Query `clear recent`, Enter; inspect recent-locations.toml; restart in the same isolated home | Palette stays open with "Recent folders cleared."; saved locations are empty. After restart only newly completed visits can reappear |
+| Q7 | Query `zzzxnoaction`; press Ctrl+T and F3; Escape | Helpful no-match text; no tab or split opens behind the palette; Escape returns focus |
+| Q8 | Select a fixture file, Shift+Delete; Ctrl+Shift+P; Escape | Delete confirmation stays on top, palette does not open, Escape keeps the file |
+
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.

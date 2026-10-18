@@ -63,6 +63,7 @@ actions!(
         NewGroup,
         CancelRename,
         Eject,
+        ToggleHiddenPlaces,
     ]
 );
 
@@ -259,6 +260,11 @@ fn now() -> u64 {
 }
 
 impl Sidebar {
+    /// Local, visible bookmarks offered by the palette, even in folded groups.
+    pub fn palette_places(&self) -> impl Iterator<Item = &Place> {
+        self.places.iter().filter(|place| is_shown(place, false))
+    }
+
     /// Creates the panel and starts reading the places.
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let places_path = rustphin_platform::xdg::data_dirs()
@@ -1398,6 +1404,10 @@ impl Render for Sidebar {
             }))
             .on_action(cx.listener(|this, _: &NextGroup, _, cx| this.cycle_group(cx)))
             .on_action(cx.listener(|this, _: &NewGroup, _, cx| this.new_group(cx)))
+            .on_action(cx.listener(|this, _: &ToggleHiddenPlaces, _, cx| {
+                this.show_hidden = !this.show_hidden;
+                cx.notify();
+            }))
             .on_action(cx.listener(|this, _: &Eject, _, cx| {
                 if let Some(Row::Device(id)) = this.focused.clone() {
                     this.eject(&id, cx);
