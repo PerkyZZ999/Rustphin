@@ -3,8 +3,10 @@
 A file manager for KDE Plasma on Wayland, written in Rust: a re-architecture of
 KDE's Dolphin with a dark frosted-glass interface.
 
-Status: early development. Slice S1 (open and browse a folder) is implemented;
-file operations are not. See `docs/project/` for the plan and its evidence.
+Status: slices S1–S10 are implemented and checked, including file operations,
+tabs, places, the command palette, batch rename and desktop integration.
+S11 hardening remains before the daily-driver trial. See
+[`docs/project/STATE.md`](docs/project/STATE.md) for current limits and next steps.
 
 ## Build and run
 

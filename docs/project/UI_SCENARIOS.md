@@ -130,10 +130,43 @@ Use two or more files in the fixture. Do not activate a device.
 | B3 | Change the replacement to `photo`, Enter | `note` is now `photo` on disk and in the list; `other` is unchanged; the dialog is gone |
 | B4 | Select the two files again, F2, Escape | The dialog closes and both names stay as they are |
 
+## Desktop integration (S10)
+
+Use a new scratch fixture with folders `Alpha` and `Beta Space`. In Alpha put a
+29-byte `note space.txt` (mode 0644), a folder containing one 100-byte file, a
+symbolic link to the note, a harmless executable that writes a marker inside the
+fixture, and an application `.desktop` shortcut to that executable. The marker
+must be absent before testing cancellation.
+
+In the isolated home's data directory, register two test applications named
+Fixture Editor and Fixture Viewer for `text/plain`. Each should only record its
+arguments in the scratch fixture and exit. Set Fixture Editor as the default in
+the isolated home's `mimeapps.list`. Register them before launching Rustphin:
+application associations are loaded at startup. Pass `XDG_CONFIG_DIRS=/etc/xdg`
+and `XDG_DATA_DIRS=/usr/local/share:/usr/share` to test apps so inherited paths
+do not include the user's personal configuration. All desktop-entry installation
+and handler changes below are confined to this isolated home.
+
+| # | Steps | Expected |
+|---|---|---|
+| I1 | Launch with `<fixture>/Alpha file://<fixture>/Beta%20Space` | Two tabs, Alpha and Beta Space, in that order; Alpha lists the fixture |
+| I2 | Right-click `note space.txt` | The note is selected; Open, Open with, Cut, Copy, Paste, Rename, Move to trash, Delete and Properties are listed; Paste is disabled without a clipboard payload |
+| I3 | From I2, Down, Right; Down, Enter | Open with lists Fixture Editor first and Fixture Viewer second; Viewer receives the exact note path including the space; the menu closes |
+| I4 | With the note selected, Enter | The default Fixture Editor receives that same path without a run confirmation |
+| I5 | Alt+Enter on the note | Properties shows its name, Plain text document, 29 B, timestamps, symbolic mode and 0644; Apply is disabled |
+| I6 | Toggle Group Write, Enter; inspect mode; Ctrl+Z | Before applying, the dialog shows 0664 and enables Apply. Afterwards the mode on disk is 0664 and a completion notice offers undo. Ctrl+Z restores 0644 |
+| I7 | Alt+Enter on the folder, then on the link, closing each with Escape | Folder size reaches 100 B; link says Symbolic link and Points to, with permission editing disabled |
+| I8 | Enter on the harmless executable; Escape; inspect marker; Enter, inspect prompt, Enter | The first prompt names the program and offers Keep, Open and Run. Cancellation leaves no marker; confirming Run creates it |
+| I9 | Enter on the application shortcut; Escape | A confirmation names the application, explains that it starts an application, and offers Keep and Run; Escape returns to the list |
+| I10 | Switch to Beta Space. From a separate process launched in the isolated session, call `org.freedesktop.FileManager1.ShowItems` at `/org/freedesktop/FileManager1`, with the note's encoded file URI and an empty startup id | The method returns successfully; an Alpha tab opens and selects `note space.txt` |
+| I11 | Call `ShowItemProperties` on that same interface with the note URI | Properties opens for the note with size, times and permissions; this route currently labels the type generically as File |
+| I12 | Close Rustphin. Copy `assets/rustphin.desktop` into the isolated data directory's applications folder, refresh its desktop database, and set the isolated `inode/directory` default to `rustphin.desktop`. Launch `xdg-open '<fixture>/Beta Space'` through the session with the release binary directory on PATH | Rustphin starts on Beta Space through the desktop entry; the process arguments contain that folder, with the space intact |
+| I13 | In Beta Space, right-click empty space, click New file; type `created.txt`, Enter. Shift+F10, click Properties | The empty-space menu offers Paste (disabled without a payload), New folder and New file. New file creates a zero-byte file and opens its inline name. The renamed file is on disk; the keyboard menu opens its properties |
+
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.
-- Frame rate, and anything that needs a second application. A very narrow split still keeps the size column, so names can clip; that was seen in J5 and is not a separate scenario.
+- Frame rate. A very narrow split still keeps the size column, so names can clip; that was seen in J5 and is not a separate scenario.
 - Reordering tabs by dragging with the mouse, and dropping entries on a tab.
 - Dragging to an application that is not a KDE one, and a session without a data-control protocol: neither is available in the test session.
 - The trashes of other volumes: the banner lists the real ones of the machine, which belong to the user and are not opened in tests.

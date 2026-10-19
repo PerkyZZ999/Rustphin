@@ -1,5 +1,24 @@
 # Validation evidence
 
+### 2026-10-19 — W-068 desktop acceptance; S10 closed
+- **Phase:** 6 Implement (S10)
+- **Result:** pass for R-017 and R-018's desktop paths. S10 closed; this is not acceptance for the daily-driver trial.
+- **Change:** added replayable scenarios I1–I13, refreshed the README's obsolete S1 status, and queued S11 hardening. No application code or dependencies changed.
+- **Checks:** `rust-tc doctor` PASS at baseline and after the session, 368 tests passed, none skipped. The complete gate includes formatting, clippy, doctests, advisories/licences, unused dependencies, feature checks, layers and Rust 1.95. `cargo build --release --package rustphin` and `git diff --check` PASS. No new automated tests; existing behaviour was exercised through the running release build.
+- **Environment:** used the installed `kwin-mcp-cli` with scoped `XDG_RUNTIME_DIR=/run/user/1000`, isolated KWin and `isolate_home: true`, 1280×800, generated files only. Additional apps used system-only XDG search directories plus the isolated data/config homes. No device row was activated and no host default handler was changed. AT-SPI did not list Rustphin, so normal screenshots, isolated state, process arguments and fixture contents supplied the evidence. The session was stopped after the checks.
+- **Observed:**
+  - I1: a filesystem path to Alpha and a `file://` URL ending `Beta%20Space` opened two tabs in that order. The session file held the two decoded paths.
+  - I2–I4: right-click selected the note and offered Open, Open with, Cut, Copy, Paste (disabled), Rename, Move to trash, Delete and Properties. The submenu listed the isolated default Fixture Editor first and Fixture Viewer second. Down/Right/Down/Enter chose Viewer; its argument log contained the exact `Alpha/note space.txt` path. Enter on the note then started Fixture Editor with that same path and no run prompt. The test applications only recorded arguments and exited.
+  - I5–I7: Alt+Enter showed the note name, Plain text document, 29 B, modified/accessed/created times, `rw-r--r--` and 0644. Group Write changed the display to 0664 and enabled Apply; Enter produced the completion notice and `stat` confirmed 0664. Ctrl+Z restored 0644 on disk. Folder properties reached the expected 100 B. Link properties said Symbolic link, displayed the target, and disabled permission editing with an explanation.
+  - I8–I9: activating the harmless program showed Keep, Open and Run. Its fixture marker was absent before and after Escape. Opening it again and confirming Run created the marker. Activating the `.desktop` shortcut showed the application name and Keep/Run, and Escape closed it; confirming that shortcut was not replayed.
+  - I10: while Beta Space was active, a separate `gdbus` process on the isolated session bus called `org.freedesktop.FileManager1.ShowItems` with the note URI. It returned `()`. Rustphin opened an Alpha tab and selected `note space.txt`, with status "1 of 5 items selected". The pre-existing Alpha tab remained; requests reuse the current matching location, not every matching tab.
+  - I11: a separate `ShowItemProperties` call opened the note's properties with 29 B, times and permissions. Its type was the generic File, unlike the browser route's Plain text document.
+  - I12: with Rustphin closed, its unchanged desktop entry was installed only in the isolated home and registered there for `inode/directory`. With the release directory on the child PATH, `xdg-open` on Beta Space launched Rustphin. Screenshot and process arguments both showed that exact folder. The host's handlers were untouched.
+  - I13: empty-space right-click showed disabled Paste, New folder and New file. Clicking New file created a zero-byte file and focused its inline name; typing `created.txt` and Enter left that exact name on disk. Shift+F10 opened its selection menu; clicking Properties showed Plain text document and 0 B.
+- **Not claimed:** all menu operations re-run (their operation and clipboard checks remain in S4/S5), a full graphical editor session, executing a desktop shortcut, properties at small window sizes, folder-measurement cancellation or unreadable-folder messages on screen, the real Plasma application menu or real-user default registration. Special permissions and operation failures retain the W-067 automated evidence. The D-Bus type-label limitation is carried in STATE.md.
+- **Waiver:** none.
+- **Follow-up:** W-069 assesses the remaining MVP gates and orders S11 hardening, including the existing data-preservation, accessibility and performance gaps.
+
 ### 2026-10-18 — W-067 properties
 - **Phase:** 6 Implement (S10)
 - **Result:** pass for the facts, the folder-size walk and changing permissions. Not yet seen on screen; that is W-068.

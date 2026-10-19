@@ -3,10 +3,10 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S1–S9 done; S10 not started
-- **Status:** active — S10 in progress
+- **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 not started
+- **Status:** active — ready for S11 hardening
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
-- **Last updated:** 2026-10-18
+- **Last updated:** 2026-10-19
 
 ## Authority boundaries
 - Agent may decide: stack-local, reversible implementation details consistent with locked decisions; document structure; disposable spike code.
@@ -14,14 +14,15 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-18 — W-067 properties
+- Latest validation entry: VALIDATION.md, 2026-10-19 — W-068 desktop acceptance; S10 closed
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
 - Product: nothing is exposed over AT-SPI in test sessions; affects R-107, to resolve in S11
 - Task: reordering tabs by mouse drag is implemented but was not exercised in a test session
 - Product: view settings are one global file; a pane's own view settings last for the session only
-- Task: file operations not yet seen on screen: the failure dialog, stopping with the stop button, rename in the icons and compact views, new file, the speed display, another volume's trash
+- Task: file operations not yet seen on screen: the failure dialog, stopping with the stop button, rename in the icons and compact views, the speed display, another volume's trash
+- Task: properties opened through D-Bus label the type generically as File; folder measurement cancellation, unreadable-folder reporting and small-window dialog layout are not yet observed on screen
 - Task: copied data is not synced to disk, so power loss during a copy is not covered (killing the process is)
 - Task: killing the process during a batch rename can leave a file under a `.rustphin-part-` name (R-103)
 - Product: an operation that replaced or deleted something cannot be undone at all, even its reversible parts
@@ -38,7 +39,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-068: replay the desktop-integration scenarios in an isolated session and close S10 only against the observed evidence (R-017, R-018). Use `rust-tc` for every check and commit after every task.
+- Start W-069: assess remaining MVP requirements and open loops, then order the S11 hardening queue. Preserve the data-loss, accessibility and performance gaps as release gates. Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

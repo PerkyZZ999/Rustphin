@@ -159,14 +159,14 @@ Conventions:
   - [x] A desktop entry lets Rustphin be set as the default handler for folders.
   - [x] "Show in folder" requests from other applications (the `org.freedesktop.FileManager1` D-Bus interface) open the folder and select the item.
   - [x] Paths and `file://` URLs given on the command line open as tabs.
-- **Validation:** test (D-Bus), manual
+- **Validation:** test (D-Bus), isolated desktop scenarios I1, I10 and I12; observed in W-068 (2026-10-19). Real-user default registration is not changed by tests.
 
 ### R-018 — Context menu and properties
 - **Priority:** should
 - **Acceptance:**
   - [x] Right-click offers the operations of R-007 to R-011 relevant to the selection, plus "Open with" listing applications registered for the MIME type.
   - [x] A properties view shows name, type, size (computed in the background for folders), times and permissions, and can change permissions.
-- **Validation:** ui-test, manual
+- **Validation:** isolated desktop scenarios I2–I9, I11 and I13; observed in W-068 (2026-10-19), with limits in VALIDATION.md.
 
 ## MVP — non-functional
 
