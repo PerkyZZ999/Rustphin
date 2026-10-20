@@ -6,7 +6,6 @@ S11 — Hardening for daily use (in progress)
 **Done when:** the S11 roadmap checks pass with evidence: contrast, keyboard operation and Orca, parser robustness, dependency licences and privacy. Outstanding safety and performance requirements remain visible before the two-week daily-driver trial.
 
 ## Queue
-- [ ] W-070 — Sync a copied regular file before publishing it. Expose the sync through `Fs`, propagate failures through the existing operation error path, and prove that failed syncs preserve sources and existing destinations with regression and mutation checks. This is a durability prerequisite, not proof of power-loss safety (R-007, R-103, D-011).
 - [ ] W-071 — Make interrupted batch renames recoverable without guessing which temporary files belong to them. Specify recovery and collision behaviour, then cover each mutation boundary with faults and process-kill checks before closing R-103's batch-rename gap.
 - [ ] W-072 — Audit namespace durability for cross-filesystem moves and atomic configuration writes: directory sync/order, delayed errors, source removal and restart recovery. Verify the supported contract; keep physical power-loss claims distinct from kill/fault tests (R-103).
 - [ ] W-073 — Re-measure R-101/R-102 with 500,000 entries, isolate the startup frame gap, and fix measured UI-thread stalls. Record headless timings, frame percentiles, resident memory and memory after tab closure.
@@ -17,6 +16,7 @@ S11 — Hardening for daily use (in progress)
 - [ ] W-078 — Reconcile every remaining acceptance checkbox with evidence, replay outstanding interop/device checks where safe, and record unresolved manual checks before proposing the daily-driver trial. No scope cuts or release-readiness claims without the required evidence.
 
 ## Done (recent)
+- [x] W-070 — `Fs::copy_file` now syncs content and attributes through the still-open destination before returning success. Sync failures use existing skip/retry/cancel handling. Four regression tests, cleanup/progress mutation checks and the full gate passed; directory durability and power-loss validation remain W-072.
 - [x] W-069 — Assessed the remaining MVP gates and ordered S11 around data preservation, performance, accessibility, parser robustness, visual/keyboard checks and privacy. Earlier slice closure is not daily-driver acceptance; see the 2026-10-20 evidence entry.
 - [x] W-068 — Desktop-integration scenarios I1–I13 replayed in an isolated KWin session/home; default folder dispatch, external ShowItems, menus, Open with, run confirmation and editable properties observed. S10 closed; limits in VALIDATION.md.
 - [x] W-067 — Properties: name, type, size, times and permissions, with folder size computed off the UI thread, and a way to change permissions (R-018, D-017).

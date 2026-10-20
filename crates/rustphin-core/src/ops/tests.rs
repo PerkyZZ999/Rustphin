@@ -318,6 +318,107 @@ fn a_copy_keeps_permissions_and_modification_time() {
 }
 
 #[test]
+fn a_failed_sync_never_publishes_a_copy() {
+    let d = dirs();
+    let source = d.src.join("a.txt");
+    file(&source, "whole source");
+    let fs = FaultFs::failing_sync();
+    let mut script = Script::failures(&[Recovery::Skip]);
+
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &copy(std::slice::from_ref(&source), &d.dst),
+        &mut script,
+    )
+    .unwrap();
+
+    assert!(names(&d.dst).is_empty());
+    assert_eq!(read(&source), "whole source");
+    assert_eq!(script.failed, [source]);
+    assert_eq!(outcome.skipped.len(), 1);
+    assert!(outcome.changes.is_empty());
+    assert!(fs.hit());
+}
+
+#[test]
+fn a_failed_sync_keeps_the_destination_that_would_be_replaced() {
+    let d = dirs();
+    let source = d.src.join("a.txt");
+    file(&source, "new content");
+    file(d.dst.join("a.txt"), "old content");
+    let fs = FaultFs::failing_sync();
+    let mut script = Script::conflicts(&[(ConflictChoice::Overwrite, false)]);
+    script.failures.push_back(Recovery::Skip);
+
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &copy(std::slice::from_ref(&source), &d.dst),
+        &mut script,
+    )
+    .unwrap();
+
+    assert_eq!(read(d.dst.join("a.txt")), "old content");
+    assert_eq!(names(&d.dst), ["a.txt"]);
+    assert_eq!(read(&source), "new content");
+    assert_eq!(script.failed, [source]);
+    assert!(outcome.changes.is_empty());
+    assert!(fs.hit());
+}
+
+#[test]
+fn a_failed_sync_keeps_a_cross_filesystem_moves_source() {
+    let d = dirs();
+    let source = d.src.join("a.txt");
+    file(&source, "whole source");
+    let fs = FaultFs::failing_sync().with_device(&d.dst);
+    let mut script = Script::failures(&[Recovery::Skip]);
+
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &move_(std::slice::from_ref(&source), &d.dst),
+        &mut script,
+    )
+    .unwrap();
+
+    assert_eq!(read(&source), "whole source");
+    assert!(names(&d.dst).is_empty());
+    assert_eq!(script.failed, [source]);
+    assert!(outcome.changes.is_empty());
+    assert!(fs.hit());
+}
+
+#[test]
+fn retrying_a_failed_sync_copies_the_whole_file() {
+    let d = dirs();
+    let source = d.src.join("a.txt");
+    file(&source, "whole source");
+    let fs = FaultFs::failing_sync();
+    let mut script = Script::failures(&[Recovery::Retry]);
+
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &copy(std::slice::from_ref(&source), &d.dst),
+        &mut script,
+    )
+    .unwrap();
+
+    assert_eq!(read(&source), "whole source");
+    assert_eq!(script.failed, [source]);
+    assert_eq!(names(&d.dst), ["a.txt"]);
+    assert_eq!(read(d.dst.join("a.txt")), "whole source");
+    assert!(outcome.skipped.is_empty());
+    assert_eq!(outcome.changes.len(), 1);
+    assert!(outcome.completed);
+    let last = script.reports.last().unwrap();
+    assert_eq!((last.bytes_done, last.bytes_total), (12, 12));
+    assert!(fs.hit());
+}
+
+#[test]
 fn a_copy_into_its_own_folder_gets_a_numbered_name_without_asking() {
     let d = dirs();
     file(d.src.join("report.tar.gz"), "data");
@@ -646,7 +747,7 @@ fn a_failing_file_can_be_skipped_and_the_rest_of_the_folder_is_copied() {
     file(d.src.join("folder/a"), "a");
     file(d.src.join("folder/b"), "b");
     file(d.src.join("folder/c"), "c");
-    // Steps: create folder, copy a, copy b (fails), copy c, …
+    // Steps: create folder, copy a, sync a (fails), copy b, …
     let fs = FaultFs::failing_at(2, faults::Fault::Error);
 
     let mut script = Script::failures(&[Recovery::Skip]);
@@ -692,7 +793,7 @@ fn a_cross_filesystem_move_keeps_the_originals_it_could_not_copy() {
     let d = dirs();
     file(d.src.join("folder/a"), "a");
     file(d.src.join("folder/b"), "b");
-    // Steps: create folder, copy first file, copy second file (fails), …
+    // Steps: create folder, copy first file, sync first file (fails), …
     let fs = FaultFs::failing_at(2, faults::Fault::Error).with_device(&d.dst);
 
     let mut script = Script::failures(&[Recovery::Skip]);

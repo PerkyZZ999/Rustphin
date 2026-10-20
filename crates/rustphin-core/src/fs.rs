@@ -102,7 +102,9 @@ pub trait Fs: Send + Sync + 'static {
     }
 
     /// Copies the regular file `from` to the new file `to`, with its
-    /// permission bits and modification time. Fails with
+    /// permission bits and modification time, syncing its content and attributes
+    /// before returning success. This does not sync the containing directory.
+    /// Fails with
     /// [`io::ErrorKind::AlreadyExists`] when `to` exists.
     ///
     /// `progress` is called with the number of bytes copied since its last
@@ -271,23 +273,7 @@ impl Fs for RealFs {
         to: &Path,
         progress: &mut dyn FnMut(u64) -> ControlFlow<()>,
     ) -> io::Result<()> {
-        let mut source = fs::File::open(from)?;
-        let metadata = source.metadata()?;
-        if !metadata.is_file() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "not a regular file",
-            ));
-        }
-        let mut target = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(metadata.mode() & 0o7777)
-            .open(to)?;
-        copy_contents(&mut source, &mut target, metadata.len(), progress)?;
-        // The mode given at creation is reduced by the umask; set it exactly.
-        target.set_permissions(fs::Permissions::from_mode(metadata.mode() & 0o7777))?;
-        target.set_modified(metadata.modified()?)
+        copy_file_with_sync(from, to, progress, || Ok(()))
     }
 
     fn read_link(&self, path: &Path) -> io::Result<PathBuf> {
@@ -356,6 +342,37 @@ impl Fs for RealFs {
         file.write_all(content)?;
         file.sync_all()
     }
+}
+
+/// Copies through the same open destination, with an injectable sync boundary.
+pub(crate) fn copy_file_with_sync(
+    from: &Path,
+    to: &Path,
+    progress: &mut dyn FnMut(u64) -> ControlFlow<()>,
+    before_sync: impl FnOnce() -> io::Result<()>,
+) -> io::Result<()> {
+    let mut source = fs::File::open(from)?;
+    let metadata = source.metadata()?;
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "not a regular file",
+        ));
+    }
+    let mut target = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(metadata.mode() & 0o7777)
+        .open(to)?;
+    copy_contents(&mut source, &mut target, metadata.len(), progress)?;
+    // The mode given at creation is reduced by the umask; set it exactly.
+    target.set_permissions(fs::Permissions::from_mode(metadata.mode() & 0o7777))?;
+    target.set_modified(metadata.modified()?)?;
+    before_sync()
+        .and_then(|()| target.sync_all())
+        .map_err(|error| {
+            io::Error::new(error.kind(), format!("could not sync copied file: {error}"))
+        })
 }
 
 /// Copies `len` bytes of file content: by sharing extents where the filesystem

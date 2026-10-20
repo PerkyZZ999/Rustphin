@@ -52,7 +52,7 @@ flowchart LR
 - **Sorter.** Produces an index (a vector of entry indices) on the CPU pool. Natural, case-insensitive comparison; folders-first as an option.
 - **Snapshot.** An immutable, cheaply shared view: entry store reference, sort index, filter, generation number. The UI reads row *n* in constant time. New snapshots replace old ones; selection is carried across by entry identity.
 - **Watcher.** inotify events are coalesced into batched changes applied to the store, followed by an incremental re-sort.
-- **Operation engine.** Plan → validate → execute → journal. Plans are data, so they can be previewed (conflicts, batch rename) and tested. Execution follows the D-011 rules. The journal feeds undo.
+- **Operation engine.** Plan → validate → execute → record completed changes for undo. Plans are data, so they can be previewed (conflicts, batch rename) and tested. Execution follows the D-011 rules. The current undo record is in memory; a durable recovery journal is not implemented. Regular-file copies sync content and attributes through their open destination handle before reporting success, before the engine publishes the temporary name. Directory-entry durability and batch-rename recovery remain W-071/W-072.
 
 ## Data flow
 
@@ -78,7 +78,7 @@ Stale results are discarded by generation number, so a fast navigation never sho
 | Failure | Detection | Response / recovery |
 |---|---|---|
 | Directory unreadable or vanishes while open | Error from listing or watcher | Inline error state; navigate to nearest existing parent on removal |
-| Copy or move interrupted (crash, power loss, cancel) | Temporary-name files left behind; journal entry incomplete | Sources intact by construction (D-011); leftover temporary files reported and cleaned on next start |
+| Copy or move interrupted (crash, power loss, cancel) | Operation error/cancel, or temporary-name files left after a crash | Error/cancel paths attempt temporary-copy cleanup; copied regular files are synced before publication. Fault tests cover copy/move; a process-kill test covers cross-filesystem moves. Namespace ordering, restart cleanup and power-loss validation remain open (W-071/W-072) |
 | Destination full or permission denied mid-operation | I/O error from worker | Operation pauses with skip / retry / cancel; completed items stay journaled for undo |
 | Shared places file changed or malformed | Watch event; parse error | Reload; on parse error keep last good in-memory state and never write over the file |
 | Place-group file refers to a vanished place ID | Reconciliation at load and on change | Drop the member silently; keep the group |

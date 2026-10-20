@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-20 — W-069 hardening assessment
+- Latest validation entry: VALIDATION.md, 2026-10-20 — W-070 copied-file syncing; 372 tests
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -23,7 +23,7 @@
 - Product: view settings are one global file; a pane's own view settings last for the session only
 - Task: file operations not yet seen on screen: the failure dialog, stopping with the stop button, rename in the icons and compact views, the speed display, another volume's trash
 - Task: properties opened through D-Bus label the type generically as File; folder measurement cancellation, unreadable-folder reporting and small-window dialog layout are not yet observed on screen
-- Task: copied data is not synced to disk, so power loss during a copy is not covered (killing the process is)
+- Task: copied regular-file data and attributes are synced before publication (W-070); directory entries and source-removal durability remain unaudited, so power loss is still not covered (W-072)
 - Task: killing the process during a batch rename can leave a file under a `.rustphin-part-` name (R-103)
 - Product: an operation that replaced or deleted something cannot be undone at all, even its reversible parts
 - Manual: drag a file from Rustphin into an application that is not a KDE one (R-010); needs the user's desktop
@@ -39,7 +39,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-070: sync copied regular files before publication, with failure-injection and mutation checks. W-071/W-072 retain batch-rename recovery and namespace durability as separate safety work. Use `rust-tc` for every check and commit after every task.
+- Start W-071: specify and implement safe recovery for interrupted batch renames, with collision handling and process-kill checks. Keep directory durability and power-loss validation separate in W-072. Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

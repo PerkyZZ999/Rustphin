@@ -33,6 +33,7 @@ struct State {
     fault: Option<(usize, Fault)>,
     dead: bool,
     hit: bool,
+    sync_failure: bool,
 }
 
 /// [`RealFs`] that counts every call which changes the filesystem and can make
@@ -59,6 +60,13 @@ impl FaultFs {
     pub fn failing_at(step: usize, fault: Fault) -> Self {
         let fs = Self::default();
         fs.lock().fault = Some((step, fault));
+        fs
+    }
+
+    /// Fails the first copied-file sync, after all bytes and attributes are written.
+    pub fn failing_sync() -> Self {
+        let fs = Self::default();
+        fs.lock().sync_failure = true;
         fs
     }
 
@@ -195,7 +203,16 @@ impl Fs for FaultFs {
             let _ = std::fs::write(to, &content[..content.len() / 2]);
         });
         match stepped {
-            Ok(()) => RealFs.copy_file(from, to, progress),
+            Ok(()) => crate::fs::copy_file_with_sync(from, to, progress, || {
+                self.plain_step()?;
+                let mut state = self.lock();
+                if std::mem::take(&mut state.sync_failure) {
+                    state.hit = true;
+                    Err(io::Error::other("injected copied-file sync failure"))
+                } else {
+                    Ok(())
+                }
+            }),
             // The half-written file is passed off as a finished copy.
             Err(error) if error.kind() == io::ErrorKind::WriteZero => Ok(()),
             Err(error) => Err(error),
