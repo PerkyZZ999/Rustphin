@@ -1,5 +1,14 @@
 # Validation evidence
 
+### 2026-10-20 — W-069 hardening assessment
+- **Phase:** 6 Implement (S11)
+- **Result:** assessment complete; S11 remains open. No application changes or newly accepted requirements.
+- **Checks:** `rust-tc doctor` PASS, 368 tests passed, none skipped. Testing-suite stack detector confirmed the Cargo/nextest setup. Read current requirements, state/open loops, Discovery carry-forwards and architecture; verified the relevant engine and filesystem paths through graph snippets and source, with no recorded index-coverage gaps in the five relied-on core files. Graph call resolution for generic filesystem methods is imprecise; source supplied the actual call order.
+- **Safety findings:** `RealFs::copy_file` copies data, applies permissions/time and returns without syncing; `Engine::copy_entry` can then publish it, and a cross-filesystem move can remove its source. Batch rename stages originals under temporary names and repairs ordinary errors, but has no persistent recovery record. The current move kill test does not prove batch-rename recovery or power-loss safety. Atomic config writes, source-removal ordering and namespace durability need a separate audit. W-070 starts with syncing copied regular files; W-071/W-072 retain the wider gaps.
+- **Other gates:** W-073 re-measures responsiveness/memory rather than treating old headless benchmarks as present-frame evidence. W-074 retains AccessKit/Orca as unverified. W-075 covers untrusted parsers and names. W-076 covers keyboard, contrast, fallbacks and outstanding UI paths. W-077 covers application privacy and clean builds. W-078 reconciles unchecked acceptance points with existing evidence and the remaining manual hardware/desktop checks. Unchecked boxes are not automatically missing implementations, and checked slice features do not imply complete MVP acceptance.
+- **Scope:** existing requirements and locked decisions unchanged; no user files, desktop settings or device state touched. No new fuzz target, dependency or toolkit change.
+- **Follow-up:** W-070, followed by the ordered queue in WORK_ITEMS.md. No daily-driver trial until the applicable gates are resolved.
+
 ### 2026-10-19 — W-068 desktop acceptance; S10 closed
 - **Phase:** 6 Implement (S10)
 - **Result:** pass for R-017 and R-018's desktop paths. S10 closed; this is not acceptance for the daily-driver trial.

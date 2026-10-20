@@ -83,7 +83,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** Contrast checks pass in both surface modes; Orca pass recorded; keyboard-only checklist passes; parser fuzzing has run without findings; dependency audit shows no network use and compatible licences.
 - **Requirements:** R-104 (parsers), R-105 (contrast), R-107, R-108
 - **Validation:** test, manual
-- **Status:** todo
+- **Status:** in progress, 2026-10-20; W-069 assessment and W-070–W-078 queue
 
 ## Traceability
 

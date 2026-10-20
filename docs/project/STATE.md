@@ -3,10 +3,10 @@
 - **Name:** Rustphin
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
-- **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 not started
-- **Status:** active — ready for S11 hardening
+- **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 in progress
+- **Status:** active — S11 safety hardening
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
-- **Last updated:** 2026-10-19
+- **Last updated:** 2026-10-20
 
 ## Authority boundaries
 - Agent may decide: stack-local, reversible implementation details consistent with locked decisions; document structure; disposable spike code.
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-19 — W-068 desktop acceptance; S10 closed
+- Latest validation entry: VALIDATION.md, 2026-10-20 — W-069 hardening assessment
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -39,7 +39,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-069: assess remaining MVP requirements and open loops, then order the S11 hardening queue. Preserve the data-loss, accessibility and performance gaps as release gates. Use `rust-tc` for every check and commit after every task.
+- Start W-070: sync copied regular files before publication, with failure-injection and mutation checks. W-071/W-072 retain batch-rename recovery and namespace durability as separate safety work. Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake
