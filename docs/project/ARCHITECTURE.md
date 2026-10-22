@@ -73,6 +73,12 @@ flowchart LR
 - Configuration, session, shared-place edits and history use `config::write_atomic`. Each writer exclusively creates a private (0600) temporary file, avoiding links and concurrent truncation, syncs file content, atomically renames it, then syncs the containing directory. Missing directories and their parent entries are synced while creating the path.
 - A pre-publication error cleans only the temporary file created by that writer. A post-publication directory-sync error reports that the replacement is already visible; callers cannot assume an error leaves the old contents. Cleanup errors are also reported. Existing UI callers already handle errors. This does not prove physical power-loss safety or serialize competing read/modify/write edits.
 
+### Performance diagnostics (W-073a)
+
+- `RUSTPHIN_FRAME_LOG` measures view descriptions, model/selection updates and visible-row construction. `RUSTPHIN_SCROLL_BENCH` drives 1,200 frames; an active benchmark never discards a long interval as idle. All excluded idle/startup gaps are counted with their longest duration.
+- The optional `diagnostics` feature enables the pinned toolkit's profiler through GPUI-Kit. `rust-tc build-diagnostics` builds it. A foreground-journal collector records draw phases, presentation, retained per-view work and foreground task polls, reporting discontinuities. Timing uses wall time, includes scheduler preemption, and logging/profiling adds overhead. Fast Rustphin callbacks do not imply a fast complete draw. Normal builds do not enable the toolkit profiler.
+- The feature adds GPLv3-compatible `hdrhistogram` (MIT/Apache-2.0, existing policy) through the toolkit. Cargo's lock resolution also records the toolkit's optional gpui-fast branch and its extra taffy version; that backend is not enabled or compiled by this feature. Toolkit versions remain pinned.
+
 ## Data flow
 
 1. The user acts in a view; the view dispatches an action.

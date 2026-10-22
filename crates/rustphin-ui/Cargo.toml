@@ -10,6 +10,11 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Use the pinned toolkit's frame profiler for R-101 measurements.
+# Its optional hdrhistogram is MIT/Apache-2.0, both allowed by deny.toml.
+diagnostics = ["gpui-kit/profiler"]
+
 [dependencies]
 rustphin-core.workspace = true
 rustphin-platform.workspace = true

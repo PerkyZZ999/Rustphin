@@ -188,3 +188,17 @@ The test binary comes from `rust-tc test`; its filename contains a build hash.
 - The trashes of other volumes: the banner lists the real ones of the machine, which belong to the user and are not opened in tests.
 - Mounting, unmounting and safely removing a volume: the session shares the machine's real device service, so these are only tested against a mock service in unit tests.
 - The failure dialog (it needs an entry that fails mid-operation) and the dialogs' buttons by mouse.
+
+## Performance and memory (S11 / W-073)
+
+Prepare the generated 500,000-entry fixture with `rust-tc bench-listing` and
+build with `rust-tc build-diagnostics`. Use an isolated KWin session/home and
+system-only XDG search paths. Never activate a device. Read normal screenshots
+to confirm the expected view; AT-SPI absence is not proof of a missing window.
+
+| # | Steps | Expected / evidence to retain |
+|---|---|---|
+| P1 | Launch the diagnostic binary on the generated large directory with `RUSTPHIN_FRAME_LOG=1` and `RUSTPHIN_SCROLL_BENCH=1`; wait for all ten summaries | Exactly 1,200 driven frames; retain per-window p50/p95/max, longest gap and exclusion count. A gap above 250 ms during active scrolling must remain counted. Excluded idle/startup gaps must still be reported |
+| P2 | Repeat P1 separately in details (Ctrl+3), icons (Ctrl+1) and compact (Ctrl+2); persist the mode before relaunch or seed only that isolated config | Confirm the mode and 500,000-item count on screen. Keep toolkit phase/foreground-task timings as well as view/row timings. An over-16 ms draw remains an open R-101 failure even if the model callback is fast |
+| P3 | In a fresh default build, open a small generated directory; record process RSS. Open the large fixture in a second tab, wait for details, record RSS; Ctrl+W closes that tab, confirm the small folder returns, record RSS again | Large-folder RSS below 400 MB; after actual tab closure within 50 MB of the small-folder baseline. Record units, elapsed time and which build; navigating away alone is not a tab-close measurement |
+| P4 | On the large fixture, refresh and send keyboard selection/sort input while details are loading; inspect completion and logs | Input changes the selection and the requested order appears. Record which loading phase was observed; a screenshot after completion alone cannot prove input responsiveness during the initial listing. Physical-display wheel/touchpad pacing remains separate from this virtual compositor benchmark |

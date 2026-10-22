@@ -381,7 +381,7 @@ impl Browser {
             icon_epoch: 0,
             settings_path,
             saved: settings.clone(),
-            frames: FrameLog::from_env(),
+            frames: FrameLog::from_env(cx),
             width: 0.,
             band: None,
             ignore_click: false,
@@ -419,6 +419,7 @@ impl Browser {
     }
 
     fn on_model_event(&mut self, event: ModelEvent, cx: &mut Context<Self>) {
+        let _task = self.frames.task("model_event");
         match event {
             // Generations above the last one asked for are re-reads the model
             // started itself after the directory changed.
@@ -430,9 +431,12 @@ impl Browser {
                     .filter(|shown| shown.path() == snapshot.path());
                 // Keeps the selection through a re-sort, and by name through a
                 // re-read of the same directory; a new directory starts empty.
-                match same_place {
-                    Some(shown) => self.selection.carry_over(shown, &snapshot),
-                    None => self.selection.sync(&snapshot),
+                {
+                    let _selection = self.frames.task("selection_snapshot");
+                    match same_place {
+                        Some(shown) => self.selection.carry_over(shown, &snapshot),
+                        None => self.selection.sync(&snapshot),
+                    }
                 }
                 let arrived = same_place.is_none();
                 if arrived {
@@ -2071,6 +2075,7 @@ impl Browser {
             "entries",
             snapshot.len(),
             cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+                let _rows = this.frames.task("visible_rows");
                 range
                     .map(|row| {
                         let entry = this.entry(&rows, row, cx);
@@ -2203,6 +2208,7 @@ impl Browser {
             "entries",
             len.div_ceil(per_row),
             cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+                let _rows = this.frames.task("visible_rows");
                 range
                     .map(|line| {
                         let first = line * per_row;

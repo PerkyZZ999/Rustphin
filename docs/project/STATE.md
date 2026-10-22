@@ -14,10 +14,10 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-22 — W-072c journal namespace ordering; 401 tests
+- Latest validation entry: VALIDATION.md, 2026-10-22 — W-073a trustworthy timing and scale/memory measurements; 402 tests
 
 ## Open loops
-- Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
+- Task: W-073a isolates startup stalls in toolkit drawing: initial prepaint 269–305 ms, plus a 76 ms layout pass in one details run. Model/selection/visible-row callbacks are sub-millisecond. Investigate background font-cache warming; R-101 remains open
 - Product: nothing is exposed over AT-SPI in test sessions; affects R-107, to resolve in S11
 - Task: reordering tabs by mouse drag is implemented but was not exercised in a test session
 - Product: view settings are one global file; a pane's own view settings last for the session only
@@ -39,7 +39,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Continue W-073: re-measure listing/sorting, startup frame gaps, scroll percentiles and RSS/after-tab-close on 500,000 entries. Fix measured UI-thread stalls, then proceed through the remaining S11 queue with `rust-tc doctor`, evidence updates and a local commit after every coherent task.
+- Continue W-073: timing instrumentation and three-view/memory baselines are committed. Test the pinned toolkit font-cache warming API on a background executor against the measured prepaint/layout stalls, then re-measure. Keep strict frame pacing and visible first-content criteria open until demonstrated. Proceed through the remaining S11 queue with full gates/evidence/commits per coherent task.
 
 ## Phase checklist
 - [x] 0 Intake

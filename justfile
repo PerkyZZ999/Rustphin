@@ -189,6 +189,10 @@ bench-palette:
 run *args:
     cargo run --release --package rustphin -- {{args}}
 
+# Build the optional pinned-toolkit profiler; launch only in the isolated UI harness.
+build-diagnostics:
+    cargo build --release --package rustphin --features diagnostics
+
 
 # ---------------------------------------------------------
 # Convenience

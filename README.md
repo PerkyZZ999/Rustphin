@@ -13,7 +13,7 @@ S11 hardening remains before the daily-driver trial. See
 Requires Rust (stable, 1.95 or later), a Wayland session and a Vulkan driver.
 
 ```bash
-cargo run --release --package rustphin -- ~/Documents
+rust-tc run ~/Documents
 ```
 
 Several folders, or `file://` URLs, open as separate tabs. A path that names a file opens the folder that contains it. `assets/rustphin.desktop` registers Rustphin as a handler for folders.
@@ -37,6 +37,16 @@ rust-tc doctor    # the full gate, run before every commit
 ```
 
 Contributor and agent instructions are in `AGENTS.md`.
+
+For performance investigation, `rust-tc build-diagnostics` builds the optional
+`diagnostics` feature using the pinned toolkit's profiler. In an isolated UI
+session, set `RUSTPHIN_FRAME_LOG=1` for view/model/row timing and toolkit
+layout, prepaint, paint, presentation and foreground-task timing.
+`RUSTPHIN_SCROLL_BENCH=1` drives 1,200 frames. Active benchmark stalls are
+counted even above 250 ms; idle exclusions and their longest gap are reported.
+See `docs/project/UI_SCENARIOS.md` for the fixture and memory protocol. Logs
+contain local paths and source locations; this is opt-in local diagnosis.
+
 
 ## Licence
 
