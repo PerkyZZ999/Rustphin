@@ -39,6 +39,7 @@ pub(super) fn save(fs: &dyn Fs, directory: &Path, slots: &[Slot]) -> io::Result<
     }
     let record = directory.join(RENAME_JOURNAL);
     fs.write_new(&record, &bytes)?;
+    fs.sync_directory(directory)?;
     fs.info(&record)
 }
 
@@ -161,10 +162,28 @@ impl<'a> Input<'a> {
     }
 }
 
-pub(super) fn remove(fs: &dyn Fs, directory: &Path, stamp: FileInfo) -> io::Result<()> {
+pub(super) enum Cleanup {
+    Durable,
+    Uncertain(io::Error),
+}
+
+pub(super) fn remove(fs: &dyn Fs, directory: &Path, stamp: FileInfo) -> io::Result<Cleanup> {
+    // Keep the durable journal until all preceding renames are synced.
+    fs.sync_directory(directory)?;
     let record = directory.join(RENAME_JOURNAL);
     if fs.info(&record)? != stamp {
         return Err(io::Error::other("the recovery record changed; it was kept"));
     }
-    fs.remove_file(&record)
+    fs.remove_file(&record)?;
+    // Removal has committed in the live namespace. A late error must never
+    // send the caller into rollback without a recovery record.
+    Ok(match fs.sync_directory(directory) {
+        Ok(()) => Cleanup::Durable,
+        Err(error) => Cleanup::Uncertain(io::Error::new(
+            error.kind(),
+            format!(
+                "the recovery record was removed, but its directory could not be synced: {error}"
+            ),
+        )),
+    })
 }

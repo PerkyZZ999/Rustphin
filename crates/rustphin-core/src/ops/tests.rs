@@ -1568,32 +1568,48 @@ fn a_batch_rename_refuses_a_name_that_is_staying_and_changes_nothing() {
 
 #[test]
 fn a_failed_batch_rename_puts_every_file_back() {
-    let d = dirs();
-    file(d.src.join("a"), "A");
-    file(d.src.join("b"), "B");
-    let request = Request::RenameBatch {
-        directory: d.src.clone(),
-        pairs: vec![("a".into(), "a2".into()), ("b".into(), "b2".into())],
-    };
-    // Sweep the record write, all entry renames and record removal.
+    // Sweep record creation, all renames and all namespace-sync boundaries.
     for step in 0.. {
+        let d = dirs();
+        file(d.src.join("a"), "A");
+        file(d.src.join("b"), "B");
+        let request = Request::RenameBatch {
+            directory: d.src.clone(),
+            pairs: vec![("a".into(), "a2".into()), ("b".into(), "b2".into())],
+        };
         let fs = FaultFs::failing_at(step, faults::Fault::Error);
         let result = run(&fs, &NoTrash, &request, &mut Script::default());
         if !fs.hit() {
             assert!(result.unwrap().completed);
-            assert!(step >= 6);
+            assert!(step >= 9);
             break;
         }
         match result {
-            Ok(outcome) => {
-                assert!(!outcome.completed, "step {step} was reported as finished");
-                assert!(outcome.changes.is_empty(), "step {step} left a change");
+            Ok(outcome) if outcome.completed => {
+                // Only a sync after journal removal can fail after commit.
+                assert_eq!(outcome.skipped.len(), 1);
+                assert!(outcome.skipped[0].reason.contains("record was removed"));
+                assert_eq!(names(&d.src), ["a2", "b2"]);
+                assert_eq!(read(d.src.join("a2")), "A");
+                assert_eq!(read(d.src.join("b2")), "B");
+                assert!(matches!(
+                    &outcome.changes[..],
+                    [Change::BatchRenamed { .. }]
+                ));
             }
-            Err(error) => assert!(matches!(error, OpError::Io { .. })),
+            other => {
+                match other {
+                    Ok(outcome) => assert!(outcome.changes.is_empty(), "step {step} left a change"),
+                    Err(error) => assert!(matches!(error, OpError::Io { .. })),
+                }
+                // An initial journal-directory sync error retains a valid
+                // record before staging; explicit recovery safely clears it.
+                recover_rename_batch(&RealFs, &d.src).unwrap();
+                assert_eq!(names(&d.src), ["a", "b"]);
+                assert_eq!(read(d.src.join("a")), "A", "step {step}");
+                assert_eq!(read(d.src.join("b")), "B", "step {step}");
+            }
         }
-        assert_eq!(names(&d.src), ["a", "b"]);
-        assert_eq!(read(d.src.join("a")), "A", "step {step}");
-        assert_eq!(read(d.src.join("b")), "B", "step {step}");
     }
 }
 
@@ -1641,7 +1657,7 @@ fn interrupted_batch(d: &Dirs) {
         pairs: vec![("a".into(), "b".into()), ("b".into(), "a".into())],
     };
     let _ = run(
-        &FaultFs::failing_at(2, faults::Fault::Crash),
+        &FaultFs::failing_at(3, faults::Fault::Crash),
         &NoTrash,
         &request,
         &mut Script::default(),
@@ -1704,6 +1720,80 @@ fn batch_swap(directory: &Path) -> Request {
         directory: directory.to_owned(),
         pairs: vec![("a".into(), "b".into()), ("b".into(), "a".into())],
     }
+}
+
+#[test]
+fn a_batch_never_stages_entries_when_its_journal_directory_cannot_sync() {
+    let d = dirs();
+    file(d.src.join("a"), "A");
+    file(d.src.join("b"), "B");
+    let fs = FaultFs::failing_directory_sync(0);
+
+    let error = run(&fs, &NoTrash, &batch_swap(&d.src), &mut Script::default()).unwrap_err();
+
+    assert!(matches!(error, OpError::Io { .. }));
+    assert_eq!(read(d.src.join("a")), "A");
+    assert_eq!(read(d.src.join("b")), "B");
+    assert!(d.src.join(RENAME_JOURNAL).is_file());
+    assert!(fs.hit());
+    assert_eq!(recover_rename_batch(&RealFs, &d.src).unwrap(), 2);
+    assert_eq!(names(&d.src), ["a", "b"]);
+}
+
+#[test]
+fn a_batch_keeps_recovery_until_published_names_are_synced() {
+    let d = dirs();
+    file(d.src.join("a"), "A");
+    file(d.src.join("b"), "B");
+    let fs = FaultFs::failing_directory_sync(1);
+
+    let outcome = run(&fs, &NoTrash, &batch_swap(&d.src), &mut Script::default()).unwrap();
+
+    assert!(!outcome.completed);
+    assert!(outcome.changes.is_empty());
+    assert_eq!(read(d.src.join("a")), "A");
+    assert_eq!(read(d.src.join("b")), "B");
+    assert_eq!(names(&d.src), ["a", "b"]);
+    assert_eq!(outcome.skipped.len(), 1);
+    assert!(fs.hit());
+}
+
+#[test]
+fn a_batch_does_not_roll_back_after_its_record_has_been_removed() {
+    let d = dirs();
+    file(d.src.join("a"), "A");
+    file(d.src.join("b"), "B");
+    let fs = FaultFs::failing_directory_sync(2);
+
+    let outcome = run(&fs, &NoTrash, &batch_swap(&d.src), &mut Script::default()).unwrap();
+
+    assert!(outcome.completed);
+    assert!(matches!(
+        &outcome.changes[..],
+        [Change::BatchRenamed { .. }]
+    ));
+    assert_eq!(read(d.src.join("a")), "B");
+    assert_eq!(read(d.src.join("b")), "A");
+    assert_eq!(names(&d.src), ["a", "b"]);
+    assert_eq!(outcome.skipped.len(), 1);
+    assert!(outcome.skipped[0].reason.contains("record was removed"));
+    assert!(fs.hit());
+}
+
+#[test]
+fn recovery_reports_a_late_sync_failure_after_restoring_original_names() {
+    let d = dirs();
+    interrupted_batch(&d);
+    let fs = FaultFs::failing_directory_sync(1);
+
+    let error = recover_rename_batch(&fs, &d.src).unwrap_err();
+
+    assert!(error.to_string().contains("record was removed"));
+    assert_eq!(names(&d.src), ["a", "b"]);
+    assert_eq!(read(d.src.join("a")), "A");
+    assert_eq!(read(d.src.join("b")), "B");
+    assert!(fs.hit());
+    assert_eq!(recover_rename_batch(&RealFs, &d.src).unwrap(), 0);
 }
 
 const BATCH_MODE: &str = "RUSTPHIN_TEST_BATCH_MODE";
@@ -1888,7 +1978,7 @@ fn recovery_preserves_raw_names_and_long_names() {
         pairs: vec![(raw.clone(), long.clone()), (long, raw)],
     };
     let _ = run(
-        &FaultFs::failing_at(2, faults::Fault::Crash),
+        &FaultFs::failing_at(3, faults::Fault::Crash),
         &NoTrash,
         &request,
         &mut Script::default(),

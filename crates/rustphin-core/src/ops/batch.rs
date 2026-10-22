@@ -80,8 +80,15 @@ impl Engine<'_> {
             });
             self.progress.items_done += 1;
         }
-        if let Err(error) = journal::remove(self.fs, directory, record_info) {
-            return finish(self, directory, &mut slots, record_info, error);
+        let cleanup = match journal::remove(self.fs, directory, record_info) {
+            Ok(cleanup) => cleanup,
+            Err(error) => return finish(self, directory, &mut slots, record_info, error),
+        };
+        if let journal::Cleanup::Uncertain(error) = cleanup {
+            self.skipped.push(Skipped {
+                path: directory.to_owned(),
+                reason: format!("renamed files are visible; {error}. Check this folder again with Recover original names after interruption to retry its directory sync"),
+            });
         }
         self.controller.progress(&self.progress);
         self.changes.push(Change::BatchRenamed { items });
@@ -225,14 +232,21 @@ fn finish(
     error: io::Error,
 ) -> Result<bool, OpError> {
     let restored = restore(engine.fs, slots);
-    let cleaned = restored && journal::remove(engine.fs, directory, record_info).is_ok();
+    let cleanup = restored.then(|| journal::remove(engine.fs, directory, record_info));
+    let reason = match cleanup {
+        Some(Ok(journal::Cleanup::Durable)) => {
+            format!("the rename stopped ({error}). Nothing was changed.")
+        }
+        Some(Ok(journal::Cleanup::Uncertain(sync_error))) => format!(
+            "original names were restored after the rename stopped ({error}); {sync_error}. Check recovery again to retry the directory sync"
+        ),
+        _ => format!(
+            "the rename stopped ({error}). Keep any recovery record and temporary entries. Use Recover original names after interruption in this folder to restore original names"
+        ),
+    };
     engine.skipped.push(Skipped {
         path: directory.to_owned(),
-        reason: if cleaned {
-            format!("the rename stopped ({error}). Nothing was changed.")
-        } else {
-            format!("the rename stopped ({error}). Recovery information was kept. Use Recover original names after interruption in this folder to restore original names; do not delete temporary entries.")
-        },
+        reason,
     });
     Ok(false)
 }
@@ -349,6 +363,8 @@ pub(super) fn recover(fs: &dyn crate::Fs, directory: &Path) -> Result<usize, OpE
     let record = directory.join(RENAME_JOURNAL);
     let Some((mut slots, record_info)) = journal::load(fs, directory).map_err(io_error(&record))?
     else {
+        // Also retries an earlier late cleanup sync after the record vanished.
+        fs.sync_directory(directory).map_err(io_error(directory))?;
         return Ok(0);
     };
     let mut current = HashSet::new();
@@ -404,6 +420,8 @@ pub(super) fn recover(fs: &dyn crate::Fs, directory: &Path) -> Result<usize, OpE
             )));
         }
     }
-    journal::remove(fs, directory, record_info).map_err(io_error(&record))?;
-    Ok(slots.len())
+    match journal::remove(fs, directory, record_info).map_err(io_error(&record))? {
+        journal::Cleanup::Durable => Ok(slots.len()),
+        journal::Cleanup::Uncertain(error) => Err(io_error(directory)(error)),
+    }
 }

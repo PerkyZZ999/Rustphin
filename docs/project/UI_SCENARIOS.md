@@ -168,7 +168,7 @@ and handler changes below are confined to this isolated home.
 Use a new scratch folder containing `a` with content `A` and `b` with content `B`.
 To create a genuine interrupted batch, run the compiled core test child
 `ops::tests::batch_kill_child` with `RUSTPHIN_TEST_KILL_DIR=<fixture>`,
-`RUSTPHIN_TEST_BATCH_MODE=rename` and `RUSTPHIN_TEST_KILL_STEP=3`. It must exit by
+`RUSTPHIN_TEST_BATCH_MODE=rename` and `RUSTPHIN_TEST_KILL_STEP=4`. It must exit by
 SIGKILL and leave the journal and two staged entries. Use only generated fixtures.
 The test binary comes from `rust-tc test`; its filename contains a build hash.
 

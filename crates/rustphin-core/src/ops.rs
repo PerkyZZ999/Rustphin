@@ -511,10 +511,13 @@ pub const TEMP_PREFIX: &str = ".rustphin-part-";
 pub const RENAME_JOURNAL: &str = ".rustphin-rename-journal";
 
 /// Restores an interrupted batch's original names after validating its record.
-/// No journal is a no-op. The caller must explicitly request this operation.
+/// With no journal, syncs the directory without moving entries.
+/// The caller must explicitly request this operation.
 /// Changed or missing entries and occupied original names refuse recovery.
 /// An I/O error during recovery can leave some entries staged; the record is
-/// kept so recovery can be retried. No existing entry is replaced.
+/// kept so recovery can be retried. If only the final cleanup sync fails, the
+/// original names are restored and the record is already removed; retrying
+/// syncs the directory. No existing entry is replaced.
 pub fn recover_rename_batch(fs: &dyn Fs, directory: &Path) -> Result<usize, OpError> {
     batch::recover(fs, directory)
 }
