@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-22 — W-071 batch-rename recovery; 388 tests
+- Latest validation entry: VALIDATION.md, 2026-10-22 — W-072a atomic configuration writes; 393 tests
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -39,7 +39,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-072: audit directory sync/order, delayed errors, source removal and atomic configuration writes. Preserve the distinction between explicit post-kill recovery and the literal R-103 criterion; do not claim power-loss safety from kill tests. Use `rust-tc` for every check and commit after every task.
+- Continue W-072: configuration-write hardening is committed; audit operation directory sync/order, delayed errors, source removal and restart recovery. Preserve the distinction between explicit post-kill recovery and the literal R-103 criterion; do not claim power-loss safety from kill tests. Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

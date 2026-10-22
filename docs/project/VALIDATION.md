@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-10-22 — W-072a atomic configuration write hardening
+- **Phase:** 6 Implement (S11)
+- **Result:** configuration portion complete; W-072 operation-ordering audit continues.
+- **Findings/change:** predictable `File::create` temporary paths could follow a preexisting link and truncate another file, concurrent writers shared the same path, default permissions exposed settings more widely, and directory-sync failures were discarded. Writes now use private exclusive temporary creation with collision retries, sync newly created directories/parents, file-sync before rename, and propagate directory-sync failures with an explicit already-published message. Only an owned temporary is cleaned after failure; cleanup errors are reported. No dependency, UI, unsafe or decision changes.
+- **Checks:** baseline `rust-tc doctor` PASS (388 tests); testing-suite detector run, required Rust reference read. Two initial public-API regressions failed against the old implementation (388 passed): unrelated symlink target overwritten and nonprivate configuration. `rust-tc quick` PASS (392 tests before concurrent case). Final restored `rust-tc doctor` PASS (393 tests, none skipped), including licences/advisories, features, layering and Rust 1.95. `git diff --check` PASS. Graph tools were unavailable; used direct source reads including every config writer.
+- **Effectiveness:** suppressing directory sync caused both new sync-error tests to fail; suppressing publication caused seven failures including concurrent whole-file publication. A fixed temporary-counter mutation survived the short concurrent run because exclusive create/retry can serialize successful writes; that test is bounded concurrency evidence, not exhaustive scheduling proof. All mutations restored before the final gate. The original red run proves the link and permissions regressions.
+- **Limits:** a reported late sync failure can leave the new whole file visible. No physical power-cut test, whole read/modify/write transaction lock, or external directory-race confinement is claimed. Newly created empty directories can remain on failure. No UI replay required: UI sources unchanged. W-072 continues with cross-filesystem publication/source-removal ordering and the batch journal's directory entries.
+
 ### 2026-10-22 — W-071 recover interrupted batch renames and undo
 - **Phase:** 6 Implement (S11)
 - **Result:** explicit journal-validated recovery implemented; W-071 complete. R-103's immediate-after-kill criterion and power-loss safety remain open, not reinterpreted as passed.

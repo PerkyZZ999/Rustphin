@@ -63,6 +63,11 @@ flowchart LR
 - Recovery restores original names, including swaps and an interrupted recovery. With no record it is a no-op. Record identity is checked before cleanup; a record another program changed is kept. Ordinary apply errors attempt rollback; successful apply/rollback checks the record identity again before cleanup. Batch undo uses the same recorded transaction path.
 - This proves recoverability after explicit recovery, not atomic multi-entry rename at the instant of SIGKILL. Older unjournaled staging files cannot be safely inferred. Namespace sync, power loss, physical-device errors and externally racing namespace changes remain outside this proof (W-072); no R-103 checkbox was relaxed.
 
+### Atomic configuration writes (W-072a)
+
+- Configuration, session, shared-place edits and history use `config::write_atomic`. Each writer exclusively creates a private (0600) temporary file, avoiding links and concurrent truncation, syncs file content, atomically renames it, then syncs the containing directory. Missing directories and their parent entries are synced while creating the path.
+- A pre-publication error cleans only the temporary file created by that writer. A post-publication directory-sync error reports that the replacement is already visible; callers cannot assume an error leaves the old contents. Cleanup errors are also reported. Existing UI callers already handle errors. This does not prove physical power-loss safety or serialize competing read/modify/write edits.
+
 ## Data flow
 
 1. The user acts in a view; the view dispatches an action.
