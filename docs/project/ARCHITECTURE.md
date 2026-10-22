@@ -78,6 +78,8 @@ flowchart LR
 - Before opening the first window, the UI awaits a background-executor task that calls the pinned text system's `prewarm_fonts`. It prepares the system default and the three design-token families in normal/medium/semibold styles; names remain defined by theme tokens. No fonts are installed, bundled or substituted.
 - The wait yields the UI executor rather than running font matching in a draw. Window creation then uses the same settings/session/geometry/theme/root-background path. This removes measured font-matching prepaint stalls, but does not prove all layout or GPU/bootstrap work fits 16 ms.
 
+- Details cells retain their fixed column surfaces while data is absent, but do not add an empty text child. The pinned shaper otherwise performs a cold generic-font scan for empty text even when the configured fonts are warm (W-073c). This avoids unnecessary layout work without changing visible placeholders or column geometry.
+
 ### Performance diagnostics (W-073a)
 
 - `RUSTPHIN_FRAME_LOG` measures view descriptions, model/selection updates and visible-row construction. `RUSTPHIN_SCROLL_BENCH` drives 1,200 frames; an active benchmark never discards a long interval as idle. All excluded idle/startup gaps are counted with their longest duration.

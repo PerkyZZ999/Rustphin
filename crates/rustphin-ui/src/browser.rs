@@ -2136,7 +2136,7 @@ impl Browser {
                                     .font_family(text::FAMILY_DATA)
                                     .text_size(px(text::DATA))
                                     .text_color(secondary)
-                                    .child(size_text),
+                                    .when(!size_text.is_empty(), |cell| cell.child(size_text)),
                             )
                             .when(columns.modified, |line| {
                                 line.child(
@@ -2146,7 +2146,9 @@ impl Browser {
                                         .font_family(text::FAMILY_DATA)
                                         .text_size(px(text::DATA))
                                         .text_color(secondary)
-                                        .child(modified_text),
+                                        .when(!modified_text.is_empty(), |cell| {
+                                            cell.child(modified_text)
+                                        }),
                                 )
                             })
                             .when(columns.kind, |line| {
@@ -2156,7 +2158,9 @@ impl Browser {
                                         .flex_none()
                                         .truncate()
                                         .text_color(secondary)
-                                        .child(description),
+                                        .when(!description.is_empty(), |cell| {
+                                            cell.child(description)
+                                        }),
                                 )
                             });
                         let line = div()
