@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-22 — W-072a atomic configuration writes; 393 tests
+- Latest validation entry: VALIDATION.md, 2026-10-22 — W-072b cross-filesystem move sync ordering; 397 tests
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -23,7 +23,7 @@
 - Product: view settings are one global file; a pane's own view settings last for the session only
 - Task: file operations not yet seen on screen: the failure dialog, stopping with the stop button, rename in the icons and compact views, the speed display, another volume's trash
 - Task: properties opened through D-Bus label the type generically as File; folder measurement cancellation, unreadable-folder reporting and small-window dialog layout are not yet observed on screen
-- Task: copied regular-file data and attributes are synced before publication (W-070); directory entries and source-removal durability remain unaudited, so power loss is still not covered (W-072)
+- Task: copied file data/attributes (W-070), copied directories and cross-filesystem destination publication before source removal (W-072b) are synced. Whole-source removal sync errors are reported; partial source-tree deletion, restart cleanup and physical power loss remain unproved
 - Task: new batch renames and undo have explicit, journal-validated recovery (W-071). A kill can still leave staged names until recovery is requested; older unjournaled temporary files are not guessed at. R-103's literal immediate-after-kill criterion and power-loss ordering remain open
 - Product: an operation that replaced or deleted something cannot be undone at all, even its reversible parts
 - Manual: drag a file from Rustphin into an application that is not a KDE one (R-010); needs the user's desktop
@@ -39,7 +39,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Continue W-072: configuration-write hardening is committed; audit operation directory sync/order, delayed errors, source removal and restart recovery. Preserve the distinction between explicit post-kill recovery and the literal R-103 criterion; do not claim power-loss safety from kill tests. Use `rust-tc` for every check and commit after every task.
+- Continue W-072: configuration and cross-filesystem move hardening are committed; finish batch-journal namespace ordering and document restart/power-loss limits. Preserve the distinction between explicit post-kill recovery and the literal R-103 criterion; do not claim power-loss safety from kill tests. Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

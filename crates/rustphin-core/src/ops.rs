@@ -1192,8 +1192,16 @@ impl Engine<'_> {
                     self.copy_tree(child, &to.join(name), created)?;
                 }
             }
-            if let Err(error) = fs.set_attributes(to, &node.info) {
-                tracing::warn!(path = %to.display(), %error, "could not copy folder attributes");
+            if let Err(reason) = self.attempt(to, |_| Ok(fs.set_attributes(to, &node.info)))? {
+                // A directory whose entries/attributes could not be synced must
+                // never authorise deletion of any part of its source tree.
+                self.left_out.insert(node.path.clone());
+                self.skipped.push(Skipped {
+                    path: node.path.clone(),
+                    reason: format!(
+                        "folder copy could not be synced; its original tree was kept: {reason}"
+                    ),
+                });
             }
         }
         self.finished(1);
@@ -1253,6 +1261,17 @@ impl Engine<'_> {
                 return Ok(other);
             }
         }
+        // Publication has happened. Retry only its sync, never the copy or
+        // replacement: both visible copies must survive a late sync failure.
+        let parent = target.parent().unwrap_or_else(|| Path::new("."));
+        let fs = self.fs;
+        if let Err(reason) = self.attempt(parent, |_| Ok(fs.sync_directory(parent)))? {
+            self.skipped.push(Skipped {
+                path: node.path.clone(),
+                reason: format!("copy is visible, but its directory could not be synced; the original was kept: {reason}"),
+            });
+            return Ok(Ok(Placed::Done));
+        }
         // In the record of changes it is a move, not a copy.
         self.changes
             .retain(|change| !matches!(change, Change::Copied { to, .. } if to == target));
@@ -1262,6 +1281,15 @@ impl Engine<'_> {
                     from: node.path.clone(),
                     to: target.to_owned(),
                     info,
+                });
+            }
+            let parent = node.path.parent().unwrap_or_else(|| Path::new("."));
+            if let Err(reason) = self.attempt(parent, |_| Ok(fs.sync_directory(parent)))? {
+                self.skipped.push(Skipped {
+                    path: node.path.clone(),
+                    reason: format!(
+                        "move is visible, but source removal could not be synced: {reason}"
+                    ),
                 });
             }
         } else {

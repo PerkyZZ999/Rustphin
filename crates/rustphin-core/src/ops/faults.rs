@@ -34,6 +34,8 @@ struct State {
     dead: bool,
     hit: bool,
     sync_failure: bool,
+    directory_sync_fault: Option<usize>,
+    directory_syncs: usize,
 }
 
 /// [`RealFs`] that counts every call which changes the filesystem and can make
@@ -67,6 +69,13 @@ impl FaultFs {
     pub fn failing_sync() -> Self {
         let fs = Self::default();
         fs.lock().sync_failure = true;
+        fs
+    }
+
+    /// Fails directory sync number `step` (from zero), once.
+    pub fn failing_directory_sync(step: usize) -> Self {
+        let fs = Self::default();
+        fs.lock().directory_sync_fault = Some(step);
         fs
     }
 
@@ -142,6 +151,18 @@ impl FaultFs {
 }
 
 impl FaultFs {
+    fn directory_sync_step(&self) -> io::Result<()> {
+        self.plain_step()?;
+        let mut state = self.lock();
+        let step = state.directory_syncs;
+        state.directory_syncs += 1;
+        if state.directory_sync_fault == Some(step) {
+            state.hit = true;
+            return Err(io::Error::other("injected directory sync failure"));
+        }
+        Ok(())
+    }
+
     /// A step that is not a file copy: [`Fault::ShortCopy`] does not affect it.
     fn plain_step(&self) -> io::Result<()> {
         match self.step(|| {}) {
@@ -262,9 +283,14 @@ impl Fs for FaultFs {
         RealFs.set_mode(path, mode)
     }
 
+    fn sync_directory(&self, path: &Path) -> io::Result<()> {
+        self.directory_sync_step()?;
+        RealFs.sync_directory(path)
+    }
+
     fn set_attributes(&self, path: &Path, info: &FileInfo) -> io::Result<()> {
         self.plain_step()?;
-        RealFs.set_attributes(path, info)
+        crate::fs::set_attributes_with_sync(path, info, || self.directory_sync_step())
     }
 
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {

@@ -190,7 +190,7 @@ Conventions:
 - **Acceptance:**
   - [x] No code path overwrites or permanently deletes user data without an explicit user choice in that operation.
   - [ ] Killing the process at any point during copy, move or batch rename leaves every source file either intact or fully present at its destination.
-  - [ ] Configuration and place-group files are written atomically (write, sync, rename).
+  - [x] Configuration and place-group files are written atomically (write, sync, rename).
 - **Validation:** test (fault injection, kill tests). W-071 (2026-10-22) demonstrates batch rename/undo recovery after SIGKILL, including recovery killed in turn. The immediate-after-kill checkbox stays open: original files may remain staged until explicit recovery. Power-loss ordering remains W-072.
 
 ### R-104 — Robustness with untrusted input

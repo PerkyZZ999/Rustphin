@@ -52,7 +52,7 @@ flowchart LR
 - **Sorter.** Produces an index (a vector of entry indices) on the CPU pool. Natural, case-insensitive comparison; folders-first as an option.
 - **Snapshot.** An immutable, cheaply shared view: entry store reference, sort index, filter, generation number. The UI reads row *n* in constant time. New snapshots replace old ones; selection is carried across by entry identity.
 - **Watcher.** inotify events are coalesced into batched changes applied to the store, followed by an incremental re-sort.
-- **Operation engine.** Plan → validate → execute → record completed changes for undo. Plans are data, so they can be previewed (conflicts, batch rename) and tested. Execution follows the D-011 rules. Normal undo history is in memory; batch rename and batch undo additionally write a synced recovery record before moving entries (W-071). Regular-file copies sync content and attributes through their open destination handle before reporting success, before the engine publishes the temporary name. Directory-entry durability remains W-072.
+- **Operation engine.** Plan → validate → execute → record completed changes for undo. Plans are data, so they can be previewed (conflicts, batch rename) and tested. Execution follows the D-011 rules. Normal undo history is in memory; batch rename and batch undo additionally write a synced recovery record before moving entries (W-071). Regular-file copies sync content and attributes through their open destination handle before reporting success, before the engine publishes the temporary name. Copied folders sync attributes/entries bottom-up through handles opened before final modes. Cross-filesystem moves additionally sync the published destination parent before deleting any source. A failed publication sync keeps the source and the copy record; retry syncs only. Complete source removal syncs its parent and reports late errors without repeating the move (W-072b). Partial source-tree removal and physical power-loss behaviour are not proven.
 
 ### Batch-rename recovery contract (W-071)
 
@@ -62,6 +62,11 @@ flowchart LR
 - Before moving anything, recovery matches every entry's recorded kind, device, inode, size, modification time and mode, and checks that every occupied destination belongs to the batch. Moves use no-replace rename and recheck entry identity. Missing/edited entries or occupied original names refuse preflight without changes. Later I/O errors can leave a partial recovery; the record remains and the same command can be retried.
 - Recovery restores original names, including swaps and an interrupted recovery. With no record it is a no-op. Record identity is checked before cleanup; a record another program changed is kept. Ordinary apply errors attempt rollback; successful apply/rollback checks the record identity again before cleanup. Batch undo uses the same recorded transaction path.
 - This proves recoverability after explicit recovery, not atomic multi-entry rename at the instant of SIGKILL. Older unjournaled staging files cannot be safely inferred. Namespace sync, power loss, physical-device errors and externally racing namespace changes remain outside this proof (W-072); no R-103 checkbox was relaxed.
+
+### Namespace limitations (W-072b)
+
+- `Fs::rename_new` requires kernel no-replace rename support. Unsupported filesystems now fail instead of using the former stat/ordinary-rename fallback, which could overwrite a concurrently created entry. An explicit replace still uses `rename_over`.
+- Directory sync errors are actionable operation failures. If copied-directory sync/attributes fail and the user skips, that complete source subtree is kept; the partial destination stays visible with a failure note. Regular copy publication and same-filesystem moves do not yet have a complete namespace-durability contract. Whole cross-filesystem moves sync destination first, source removal last; partial-source removals can reappear as duplicates after a crash. These barriers do not serialize unrelated applications modifying names/content between validation and mutation.
 
 ### Atomic configuration writes (W-072a)
 

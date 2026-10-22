@@ -438,6 +438,96 @@ fn a_copy_into_its_own_folder_gets_a_numbered_name_without_asking() {
 }
 
 #[test]
+fn a_published_move_copy_keeps_its_source_when_the_destination_directory_cannot_sync() {
+    let d = dirs();
+    let source = d.src.join("a");
+    file(&source, "whole file");
+    let fs = FaultFs::failing_directory_sync(0).with_device(&d.dst);
+    let mut script = Script::failures(&[Recovery::Skip]);
+
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &move_(std::slice::from_ref(&source), &d.dst),
+        &mut script,
+    )
+    .unwrap();
+
+    assert_eq!(read(&source), "whole file");
+    assert_eq!(read(d.dst.join("a")), "whole file");
+    assert_eq!(outcome.skipped.len(), 1);
+    assert!(matches!(&outcome.changes[..], [Change::Copied { .. }]));
+    assert!(fs.hit());
+}
+
+#[test]
+fn retrying_a_published_move_sync_does_not_copy_or_replace_again() {
+    let d = dirs();
+    let source = d.src.join("a");
+    file(&source, "whole file");
+    let fs = FaultFs::failing_directory_sync(0).with_device(&d.dst);
+    let mut script = Script::failures(&[Recovery::Retry]);
+
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &move_(std::slice::from_ref(&source), &d.dst),
+        &mut script,
+    )
+    .unwrap();
+
+    assert!(!source.exists());
+    assert_eq!(names(&d.dst), ["a"]);
+    assert_eq!(read(d.dst.join("a")), "whole file");
+    assert!(outcome.skipped.is_empty());
+    assert!(matches!(&outcome.changes[..], [Change::Moved { .. }]));
+    assert_eq!(script.failed, std::slice::from_ref(&d.dst));
+    assert_eq!(script.reports.last().unwrap().bytes_done, 10);
+    assert!(fs.hit());
+}
+
+#[test]
+fn a_folder_sync_failure_keeps_the_complete_source_tree() {
+    let d = dirs();
+    let source = d.src.join("folder");
+    file(source.join("nested/a"), "whole file");
+    let before = tree(&d.src);
+    let fs = FaultFs::failing_directory_sync(0).with_device(&d.dst);
+    let mut script = Script::failures(&[Recovery::Skip]);
+
+    let outcome = run(&fs, &NoTrash, &move_(&[source], &d.dst), &mut script).unwrap();
+
+    assert_eq!(tree(&d.src), before);
+    assert_eq!(read(d.dst.join("folder/nested/a")), "whole file");
+    assert_eq!(outcome.skipped.len(), 1);
+    assert!(fs.hit());
+}
+
+#[test]
+fn a_source_directory_sync_failure_reports_a_visible_move_without_repeating_it() {
+    let d = dirs();
+    let source = d.src.join("a");
+    file(&source, "whole file");
+    let fs = FaultFs::failing_directory_sync(1).with_device(&d.dst);
+    let mut script = Script::failures(&[Recovery::Skip]);
+
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &move_(std::slice::from_ref(&source), &d.dst),
+        &mut script,
+    )
+    .unwrap();
+
+    assert!(!source.exists());
+    assert_eq!(read(d.dst.join("a")), "whole file");
+    assert_eq!(outcome.skipped.len(), 1);
+    assert!(outcome.skipped[0].reason.contains("source removal"));
+    assert!(matches!(&outcome.changes[..], [Change::Moved { .. }]));
+    assert!(fs.hit());
+}
+
+#[test]
 fn numbered_names_keep_the_extension_and_hidden_names_whole() {
     assert_eq!(numbered("a.txt".as_ref(), 1), "a (1).txt");
     assert_eq!(numbered("folder".as_ref(), 2), "folder (2)");

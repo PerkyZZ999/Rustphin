@@ -152,7 +152,14 @@ pub trait Fs: Send + Sync + 'static {
         Err(io::ErrorKind::Unsupported.into())
     }
 
+    /// Syncs a directory's metadata and entries, refusing a final-component link.
+    /// Unsupported directory syncing is an error, not a successful durability claim.
+    fn sync_directory(&self, _path: &Path) -> io::Result<()> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
     /// Gives `path` the permission bits and modification time in `info`.
+    /// For a directory, syncs it through a handle opened before changing modes.
     fn set_attributes(&self, _path: &Path, _info: &FileInfo) -> io::Result<()> {
         Err(io::ErrorKind::Unsupported.into())
     }
@@ -297,18 +304,9 @@ impl Fs for RealFs {
 
     fn rename_new(&self, from: &Path, to: &Path) -> io::Result<()> {
         use rustix::fs::{CWD, RenameFlags, renameat_with};
-
-        match renameat_with(CWD, from, CWD, to, RenameFlags::NOREPLACE) {
-            // Some filesystems (older FUSE and network mounts) do not know the
-            // no-replace flag. There the check and the rename are two steps.
-            Err(rustix::io::Errno::INVAL | rustix::io::Errno::NOSYS) => {
-                if fs::symlink_metadata(to).is_ok() {
-                    return Err(io::ErrorKind::AlreadyExists.into());
-                }
-                fs::rename(from, to)
-            }
-            other => Ok(other?),
-        }
+        // Without kernel no-replace support, fail closed. A stat followed by
+        // ordinary rename could overwrite an entry created between the calls.
+        Ok(renameat_with(CWD, from, CWD, to, RenameFlags::NOREPLACE)?)
     }
 
     fn rename_over(&self, from: &Path, to: &Path) -> io::Result<()> {
@@ -327,21 +325,12 @@ impl Fs for RealFs {
         fs::set_permissions(path, fs::Permissions::from_mode(mode & 0o7777))
     }
 
-    fn set_attributes(&self, path: &Path, info: &FileInfo) -> io::Result<()> {
-        use rustix::fs::{AtFlags, CWD, Timespec, Timestamps, UTIME_OMIT, utimensat};
+    fn sync_directory(&self, path: &Path) -> io::Result<()> {
+        open_directory(path)?.sync_all()
+    }
 
-        fs::set_permissions(path, fs::Permissions::from_mode(info.mode))?;
-        let times = Timestamps {
-            last_access: Timespec {
-                tv_sec: 0,
-                tv_nsec: UTIME_OMIT,
-            },
-            last_modification: Timespec {
-                tv_sec: info.modified_ns.div_euclid(1_000_000_000) as i64,
-                tv_nsec: info.modified_ns.rem_euclid(1_000_000_000) as _,
-            },
-        };
-        Ok(utimensat(CWD, path, &times, AtFlags::empty())?)
+    fn set_attributes(&self, path: &Path, info: &FileInfo) -> io::Result<()> {
+        set_attributes_with_sync(path, info, || Ok(()))
     }
 
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
@@ -386,6 +375,42 @@ impl Fs for RealFs {
             .open(path)?;
         file.write_all(content)?;
         file.sync_all()
+    }
+}
+
+fn open_directory(path: &Path) -> io::Result<fs::File> {
+    let flags = rustix::fs::OFlags::DIRECTORY | rustix::fs::OFlags::NOFOLLOW;
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(flags.bits() as i32)
+        .open(path)
+}
+
+pub(crate) fn set_attributes_with_sync(
+    path: &Path,
+    info: &FileInfo,
+    before_sync: impl FnOnce() -> io::Result<()>,
+) -> io::Result<()> {
+    use rustix::fs::{AtFlags, CWD, Timespec, Timestamps, UTIME_OMIT, futimens, utimensat};
+    let times = Timestamps {
+        last_access: Timespec {
+            tv_sec: 0,
+            tv_nsec: UTIME_OMIT,
+        },
+        last_modification: Timespec {
+            tv_sec: info.modified_ns.div_euclid(1_000_000_000) as i64,
+            tv_nsec: info.modified_ns.rem_euclid(1_000_000_000) as _,
+        },
+    };
+    if info.kind == EntryKind::Directory {
+        let directory = open_directory(path)?;
+        directory.set_permissions(fs::Permissions::from_mode(info.mode))?;
+        futimens(&directory, &times)?;
+        before_sync()?;
+        directory.sync_all()
+    } else {
+        fs::set_permissions(path, fs::Permissions::from_mode(info.mode))?;
+        Ok(utimensat(CWD, path, &times, AtFlags::empty())?)
     }
 }
 
