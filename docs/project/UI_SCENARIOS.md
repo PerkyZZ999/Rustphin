@@ -163,6 +163,22 @@ and handler changes below are confined to this isolated home.
 | I12 | Close Rustphin. Copy `assets/rustphin.desktop` into the isolated data directory's applications folder, refresh its desktop database, and set the isolated `inode/directory` default to `rustphin.desktop`. Launch `xdg-open '<fixture>/Beta Space'` through the session with the release binary directory on PATH | Rustphin starts on Beta Space through the desktop entry; the process arguments contain that folder, with the space intact |
 | I13 | In Beta Space, right-click empty space, click New file; type `created.txt`, Enter. Shift+F10, click Properties | The empty-space menu offers Paste (disabled without a payload), New folder and New file. New file creates a zero-byte file and opens its inline name. The renamed file is on disk; the keyboard menu opens its properties |
 
+## Interrupted batch recovery (S11)
+
+Use a new scratch folder containing `a` with content `A` and `b` with content `B`.
+To create a genuine interrupted batch, run the compiled core test child
+`ops::tests::batch_kill_child` with `RUSTPHIN_TEST_KILL_DIR=<fixture>`,
+`RUSTPHIN_TEST_BATCH_MODE=rename` and `RUSTPHIN_TEST_KILL_STEP=3`. It must exit by
+SIGKILL and leave the journal and two staged entries. Use only generated fixtures.
+The test binary comes from `rust-tc test`; its filename contains a build hash.
+
+| # | Steps | Expected |
+|---|---|---|
+| BR1 | Open that fixture in an isolated session/home; Ctrl+Shift+P, query `recover original`, inspect the result, Enter | Browsing initially leaves the journal/staged entries alone. The named recovery command restores `a` = `A`, `b` = `B`; the list updates and journal/staging files are gone |
+| BR2 | Add a generated `.rustphin-rename-journal` containing invalid text, repeat the command | Visible error explaining that recovery could not finish and the record/temporary entries must be kept; the invalid record and both files are unchanged. Remove only this generated invalid record before BR3 |
+| BR3 | Select both files, F2; find `a`, replace with `b`; then change replacement to `c`, Enter; Ctrl+Z | Conflict text blocks Rename for `b`; `c` enables it. Applying leaves `b` = `B`, `c` = `A`, with no journal. Undo restores `a` = `A`, `b` = `B`, with no journal |
+| BR4 | Restart in the same fixture with no journal; run the recovery command again | Neutral "Checked rename recovery" completion notice; both files stay unchanged and no journal is created |
+
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.

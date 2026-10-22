@@ -162,7 +162,18 @@ pub trait Fs: Send + Sync + 'static {
         Err(io::ErrorKind::Unsupported.into())
     }
 
-    /// Creates the file `path` with `content`. Fails with
+    /// Reads at most `limit` bytes of a regular file, refusing links and larger files.
+    fn read_bounded(&self, _path: &Path, _limit: usize) -> io::Result<Vec<u8>> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
+    /// Holds an exclusive advisory lock on a directory until the guard is dropped.
+    /// Fails immediately if another batch operation holds the lock.
+    fn lock_directory(&self, _path: &Path) -> io::Result<Box<dyn Send>> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
+    /// Creates a private file `path` with `content` and syncs it. Fails with
     /// [`io::ErrorKind::AlreadyExists`] when something is there.
     fn write_new(&self, _path: &Path, _content: &[u8]) -> io::Result<()> {
         Err(io::ErrorKind::Unsupported.into())
@@ -337,8 +348,42 @@ impl Fs for RealFs {
         fs::read(path)
     }
 
+    fn read_bounded(&self, path: &Path, limit: usize) -> io::Result<Vec<u8>> {
+        let flags = rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::NONBLOCK;
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(flags.bits() as i32)
+            .open(path)?;
+        if !file.metadata()?.is_file() {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+        let mut bytes = Vec::new();
+        file.take(limit.saturating_add(1) as u64)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > limit {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "recovery record is too large",
+            ));
+        }
+        Ok(bytes)
+    }
+
+    fn lock_directory(&self, path: &Path) -> io::Result<Box<dyn Send>> {
+        let directory = fs::File::open(path.join("."))?;
+        rustix::fs::flock(
+            &directory,
+            rustix::fs::FlockOperation::NonBlockingLockExclusive,
+        )?;
+        Ok(Box::new(directory))
+    }
+
     fn write_new(&self, path: &Path, content: &[u8]) -> io::Result<()> {
-        let mut file = fs::File::create_new(path)?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(path)?;
         file.write_all(content)?;
         file.sync_all()
     }

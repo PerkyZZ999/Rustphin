@@ -6,7 +6,7 @@
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 in progress
 - **Status:** active — S11 safety hardening
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
-- **Last updated:** 2026-10-20
+- **Last updated:** 2026-10-22
 
 ## Authority boundaries
 - Agent may decide: stack-local, reversible implementation details consistent with locked decisions; document structure; disposable spike code.
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-20 — W-070 copied-file syncing; 372 tests
+- Latest validation entry: VALIDATION.md, 2026-10-22 — W-071 batch-rename recovery; 388 tests
 
 ## Open loops
 - Task: an 80–90 ms frame gap at start-up while a 500,000-entry folder loads
@@ -24,7 +24,7 @@
 - Task: file operations not yet seen on screen: the failure dialog, stopping with the stop button, rename in the icons and compact views, the speed display, another volume's trash
 - Task: properties opened through D-Bus label the type generically as File; folder measurement cancellation, unreadable-folder reporting and small-window dialog layout are not yet observed on screen
 - Task: copied regular-file data and attributes are synced before publication (W-070); directory entries and source-removal durability remain unaudited, so power loss is still not covered (W-072)
-- Task: killing the process during a batch rename can leave a file under a `.rustphin-part-` name (R-103)
+- Task: new batch renames and undo have explicit, journal-validated recovery (W-071). A kill can still leave staged names until recovery is requested; older unjournaled temporary files are not guessed at. R-103's literal immediate-after-kill criterion and power-loss ordering remain open
 - Product: an operation that replaced or deleted something cannot be undone at all, even its reversible parts
 - Manual: drag a file from Rustphin into an application that is not a KDE one (R-010); needs the user's desktop
 - Task: in isolated test sessions the window was see-through without blur (other windows showed behind it unblurred). To check: whether the compositor accepts the blur request while its blur effect is off, and whether the opaque theme should be used then
@@ -39,7 +39,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Start W-071: specify and implement safe recovery for interrupted batch renames, with collision handling and process-kill checks. Keep directory durability and power-loss validation separate in W-072. Use `rust-tc` for every check and commit after every task.
+- Start W-072: audit directory sync/order, delayed errors, source removal and atomic configuration writes. Preserve the distinction between explicit post-kill recovery and the literal R-103 criterion; do not claim power-loss safety from kill tests. Use `rust-tc` for every check and commit after every task.
 
 ## Phase checklist
 - [x] 0 Intake

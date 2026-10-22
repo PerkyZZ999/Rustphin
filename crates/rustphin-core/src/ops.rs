@@ -62,6 +62,11 @@ pub enum Request {
         /// Current name, then the name it should have.
         pairs: Vec<(OsString, OsString)>,
     },
+    /// Explicitly restore original names from an interrupted batch in one directory.
+    RecoverRenameBatch {
+        /// Directory holding the batch recovery record.
+        directory: PathBuf,
+    },
     /// Copy each of `sources`, with everything inside it, into the directory `into`.
     Copy {
         /// Entries to copy. Symbolic links are copied as links.
@@ -424,6 +429,21 @@ pub fn run(
             true
         }
         Request::RenameBatch { directory, pairs } => engine.rename_batch(directory, pairs)?,
+        Request::RecoverRenameBatch { directory } => match recover_rename_batch(fs, directory) {
+            Ok(count) => {
+                engine.progress.items_total = count as u64;
+                engine.progress.items_done = count as u64;
+                engine.controller.progress(&engine.progress);
+                true
+            }
+            Err(error) => {
+                engine.skipped.push(Skipped {
+                    path: directory.clone(),
+                    reason: format!("Recovery could not finish: {error}. Nothing was replaced. Keep any recovery record and temporary entries, resolve the problem, then retry recovery."),
+                });
+                false
+            }
+        },
         Request::Copy { sources, into } => {
             let plan = engine.plan_transfer(sources, into, false)?;
             engine.controller.progress(&engine.progress);
@@ -483,10 +503,21 @@ pub fn validate_name(name: &OsStr) -> Result<(), OpError> {
     })
 }
 
-/// Prefix of the temporary entries a copy writes before renaming them into
-/// place. Entries with this prefix left behind by a killed process are safe to
-/// remove.
+/// Prefix of temporary operation entries. A prefix alone never authorises
+/// cleanup: batch-rename entries can hold the only copy of an original file.
 pub const TEMP_PREFIX: &str = ".rustphin-part-";
+
+/// Recovery record in the directory whose entries a batch rename changes.
+pub const RENAME_JOURNAL: &str = ".rustphin-rename-journal";
+
+/// Restores an interrupted batch's original names after validating its record.
+/// No journal is a no-op. The caller must explicitly request this operation.
+/// Changed or missing entries and occupied original names refuse recovery.
+/// An I/O error during recovery can leave some entries staged; the record is
+/// kept so recovery can be retried. No existing entry is replaced.
+pub fn recover_rename_batch(fs: &dyn Fs, directory: &Path) -> Result<usize, OpError> {
+    batch::recover(fs, directory)
+}
 
 /// The operation was cancelled; unwind to the top.
 struct Stop;

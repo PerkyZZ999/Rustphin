@@ -6,7 +6,6 @@ S11 — Hardening for daily use (in progress)
 **Done when:** the S11 roadmap checks pass with evidence: contrast, keyboard operation and Orca, parser robustness, dependency licences and privacy. Outstanding safety and performance requirements remain visible before the two-week daily-driver trial.
 
 ## Queue
-- [ ] W-071 — Make interrupted batch renames recoverable without guessing which temporary files belong to them. Specify recovery and collision behaviour, then cover each mutation boundary with faults and process-kill checks before closing R-103's batch-rename gap.
 - [ ] W-072 — Audit namespace durability for cross-filesystem moves and atomic configuration writes: directory sync/order, delayed errors, source removal and restart recovery. Verify the supported contract; keep physical power-loss claims distinct from kill/fault tests (R-103).
 - [ ] W-073 — Re-measure R-101/R-102 with 500,000 entries, isolate the startup frame gap, and fix measured UI-thread stalls. Record headless timings, frame percentiles, resident memory and memory after tab closure.
 - [ ] W-074 — Resolve missing AccessKit exposure in the pinned toolkit, then run the Orca and visible-focus checks. Keep toolkit locks and runtime fallbacks; raise a blocked locked decision instead of working around it (R-004, R-107).
@@ -16,6 +15,7 @@ S11 — Hardening for daily use (in progress)
 - [ ] W-078 — Reconcile every remaining acceptance checkbox with evidence, replay outstanding interop/device checks where safe, and record unresolved manual checks before proposing the daily-driver trial. No scope cuts or release-readiness claims without the required evidence.
 
 ## Done (recent)
+- [x] W-071 — Batch rename and its undo now write a bounded, byte-preserving recovery record before moving entries. Explicit recovery restores original names after validating directory/entry identities and free destinations; changed records are kept. SIGKILL tests cover rename, undo and recovery. Palette recovery, refusal, rename and undo observed in isolation; full gate 388 tests. R-103 remains unchecked: files can still be staged immediately after a kill, before explicit recovery, and power-loss ordering is W-072.
 - [x] W-070 — `Fs::copy_file` now syncs content and attributes through the still-open destination before returning success. Sync failures use existing skip/retry/cancel handling. Four regression tests, cleanup/progress mutation checks and the full gate passed; directory durability and power-loss validation remain W-072.
 - [x] W-069 — Assessed the remaining MVP gates and ordered S11 around data preservation, performance, accessibility, parser robustness, visual/keyboard checks and privacy. Earlier slice closure is not daily-driver acceptance; see the 2026-10-20 evidence entry.
 - [x] W-068 — Desktop-integration scenarios I1–I13 replayed in an isolated KWin session/home; default folder dispatch, external ShowItems, menus, Open with, run confirmation and editable properties observed. S10 closed; limits in VALIDATION.md.

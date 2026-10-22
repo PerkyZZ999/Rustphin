@@ -203,7 +203,7 @@ fn revert(engine: &mut Engine<'_>, change: &Change) -> Result<(), UndoError> {
             expect_unchanged(fs, to, info)?;
             engine.trash.trash(to).map(drop).map_err(io_error(to))
         }
-        Change::BatchRenamed { items } => super::batch::revert_batch(fs, items),
+        Change::BatchRenamed { items } => super::batch::revert_batch(fs, items, engine.controller),
         Change::Moved { from, to, info } => {
             expect_unchanged(fs, to, info)?;
             let node = Node {

@@ -272,6 +272,16 @@ impl Fs for FaultFs {
         RealFs.read(path)
     }
 
+    fn read_bounded(&self, path: &Path, limit: usize) -> io::Result<Vec<u8>> {
+        self.alive()?;
+        RealFs.read_bounded(path, limit)
+    }
+
+    fn lock_directory(&self, path: &Path) -> io::Result<Box<dyn Send>> {
+        self.alive()?;
+        RealFs.lock_directory(path)
+    }
+
     fn write_new(&self, path: &Path, content: &[u8]) -> io::Result<()> {
         self.plain_step()?;
         RealFs.write_new(path, content)

@@ -1485,13 +1485,23 @@ fn a_failed_batch_rename_puts_every_file_back() {
         directory: d.src.clone(),
         pairs: vec![("a".into(), "a2".into()), ("b".into(), "b2".into())],
     };
-    // Two files take four renames: each to a temporary name, then each to its final name.
-    for step in 0..4 {
+    // Sweep the record write, all entry renames and record removal.
+    for step in 0.. {
         let fs = FaultFs::failing_at(step, faults::Fault::Error);
-        let outcome = run(&fs, &NoTrash, &request, &mut Script::default()).unwrap();
-        assert!(!outcome.completed, "step {step} was reported as finished");
-        assert!(outcome.changes.is_empty(), "step {step} left a change");
-        assert!(fs.hit(), "step {step} was never reached");
+        let result = run(&fs, &NoTrash, &request, &mut Script::default());
+        if !fs.hit() {
+            assert!(result.unwrap().completed);
+            assert!(step >= 6);
+            break;
+        }
+        match result {
+            Ok(outcome) => {
+                assert!(!outcome.completed, "step {step} was reported as finished");
+                assert!(outcome.changes.is_empty(), "step {step} left a change");
+            }
+            Err(error) => assert!(matches!(error, OpError::Io { .. })),
+        }
+        assert_eq!(names(&d.src), ["a", "b"]);
         assert_eq!(read(d.src.join("a")), "A", "step {step}");
         assert_eq!(read(d.src.join("b")), "B", "step {step}");
     }
@@ -1531,4 +1541,306 @@ fn permissions_change_and_come_back_and_a_failure_changes_nothing() {
 
 fn mode_of(path: &Path) -> u32 {
     fs::symlink_metadata(path).unwrap().mode() & 0o777
+}
+
+fn interrupted_batch(d: &Dirs) {
+    file(d.src.join("a"), "A");
+    file(d.src.join("b"), "B");
+    let request = Request::RenameBatch {
+        directory: d.src.clone(),
+        pairs: vec![("a".into(), "b".into()), ("b".into(), "a".into())],
+    };
+    let _ = run(
+        &FaultFs::failing_at(2, faults::Fault::Crash),
+        &NoTrash,
+        &request,
+        &mut Script::default(),
+    );
+}
+
+#[test]
+fn interrupted_batch_recovery_restores_a_swap_and_is_idempotent() {
+    let d = dirs();
+    interrupted_batch(&d);
+    assert_eq!(recover_rename_batch(&RealFs, &d.src).unwrap(), 2);
+    assert_eq!(names(&d.src), ["a", "b"]);
+    assert_eq!(read(d.src.join("a")), "A");
+    assert_eq!(read(d.src.join("b")), "B");
+    assert_eq!(recover_rename_batch(&RealFs, &d.src).unwrap(), 0);
+}
+
+#[test]
+fn recovery_refuses_a_taken_original_name_without_touching_anything() {
+    let d = dirs();
+    interrupted_batch(&d);
+    file(d.src.join("a"), "arrived meanwhile");
+    let before = tree(&d.src);
+    assert!(recover_rename_batch(&RealFs, &d.src).is_err());
+    assert_eq!(tree(&d.src), before);
+}
+
+#[test]
+fn recovery_refuses_a_changed_staged_file_without_touching_anything() {
+    let d = dirs();
+    interrupted_batch(&d);
+    let staged = fs::read_dir(&d.src)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| {
+            p.file_name()
+                .unwrap()
+                .as_bytes()
+                .starts_with(b".rustphin-part-rename-")
+        })
+        .unwrap();
+    file(staged, "changed after interruption");
+    let before = tree(&d.src);
+    assert!(recover_rename_batch(&RealFs, &d.src).is_err());
+    assert_eq!(tree(&d.src), before);
+}
+
+#[test]
+fn recovery_refuses_a_malformed_journal_without_touching_files() {
+    let d = dirs();
+    file(d.src.join("a"), "A");
+    file(d.src.join(RENAME_JOURNAL), "not a recovery record");
+    let before = tree(&d.src);
+    assert!(recover_rename_batch(&RealFs, &d.src).is_err());
+    assert_eq!(tree(&d.src), before);
+}
+
+fn batch_swap(directory: &Path) -> Request {
+    Request::RenameBatch {
+        directory: directory.to_owned(),
+        pairs: vec![("a".into(), "b".into()), ("b".into(), "a".into())],
+    }
+}
+
+const BATCH_MODE: &str = "RUSTPHIN_TEST_BATCH_MODE";
+
+#[test]
+fn batch_kill_child() {
+    let (Ok(step), Ok(directory), Ok(mode)) = (
+        std::env::var(KILL_STEP),
+        std::env::var(KILL_DIR),
+        std::env::var(BATCH_MODE),
+    ) else {
+        return;
+    };
+    let directory = PathBuf::from(directory);
+    let fs = FaultFs::failing_at(step.parse().unwrap(), faults::Fault::Kill);
+    match mode.as_str() {
+        "rename" => {
+            run(
+                &fs,
+                &NoTrash,
+                &batch_swap(&directory),
+                &mut Script::default(),
+            )
+            .unwrap();
+        }
+        "undo" => {
+            let outcome = go(&batch_swap(&directory), &mut Script::default());
+            super::undo::undo(&fs, &NoTrash, &outcome.changes, &mut Script::default()).unwrap();
+        }
+        "recover" => {
+            recover_rename_batch(&fs, &directory).unwrap();
+        }
+        _ => panic!("unknown batch child mode"),
+    }
+}
+
+fn kill_batch_at_every_step(mode: &str) {
+    use std::os::unix::process::ExitStatusExt;
+    for step in 0.. {
+        let d = dirs();
+        if mode == "recover" {
+            interrupted_batch(&d);
+        } else {
+            file(d.src.join("a"), "A");
+            file(d.src.join("b"), "B");
+        }
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "ops::tests::batch_kill_child"])
+            .env(KILL_STEP, step.to_string())
+            .env(KILL_DIR, &d.src)
+            .env(BATCH_MODE, mode)
+            .output()
+            .unwrap()
+            .status;
+        recover_rename_batch(&RealFs, &d.src).unwrap();
+        assert_eq!(names(&d.src), ["a", "b"], "{mode}, step {step}");
+        let contents = (read(d.src.join("a")), read(d.src.join("b")));
+        assert!(
+            contents == ("A".into(), "B".into()) || contents == ("B".into(), "A".into()),
+            "{mode}, step {step}: {contents:?}"
+        );
+        if status.success() {
+            assert!(step >= 3);
+            break;
+        }
+        assert_eq!(
+            status.signal(),
+            Some(9),
+            "{mode} child failed without SIGKILL: {status:?}"
+        );
+    }
+}
+
+#[test]
+fn killed_batch_renames_are_recoverable_at_every_mutation() {
+    kill_batch_at_every_step("rename");
+}
+#[test]
+fn killed_batch_undos_are_recoverable_at_every_mutation() {
+    kill_batch_at_every_step("undo");
+}
+#[test]
+fn killed_recovery_can_be_retried_at_every_mutation() {
+    kill_batch_at_every_step("recover");
+}
+
+#[test]
+fn a_second_batch_or_recovery_cannot_enter_a_locked_directory() {
+    let d = dirs();
+    file(d.src.join("a"), "A");
+    file(d.src.join("b"), "B");
+    let before = tree(&d.src);
+    let guard = RealFs.lock_directory(&d.src).unwrap();
+    assert!(
+        run(
+            &RealFs,
+            &NoTrash,
+            &batch_swap(&d.src),
+            &mut Script::default()
+        )
+        .is_err()
+    );
+    assert!(recover_rename_batch(&RealFs, &d.src).is_err());
+    assert_eq!(tree(&d.src), before);
+    drop(guard);
+    assert!(go(&batch_swap(&d.src), &mut Script::default()).completed);
+}
+
+#[test]
+fn recovery_does_not_guess_from_temporary_names_or_accept_links() {
+    let d = dirs();
+    file(d.src.join(".rustphin-part-rename-0"), "not ours");
+    let before = tree(&d.src);
+    assert_eq!(recover_rename_batch(&RealFs, &d.src).unwrap(), 0);
+    assert_eq!(tree(&d.src), before);
+    file(d.dst.join("record"), "not a recovery record");
+    symlink(d.dst.join("record"), d.src.join(RENAME_JOURNAL)).unwrap();
+    let before = tree(&d.src);
+    assert!(recover_rename_batch(&RealFs, &d.src).is_err());
+    assert_eq!(tree(&d.src), before);
+    assert_eq!(read(d.dst.join("record")), "not a recovery record");
+}
+
+#[test]
+fn a_copied_recovery_record_cannot_change_another_directory() {
+    let d = dirs();
+    interrupted_batch(&d);
+    fs::copy(d.src.join(RENAME_JOURNAL), d.dst.join(RENAME_JOURNAL)).unwrap();
+    for entry in fs::read_dir(&d.src).unwrap() {
+        let entry = entry.unwrap();
+        if entry.file_name() != RENAME_JOURNAL {
+            fs::hard_link(entry.path(), d.dst.join(entry.file_name())).unwrap();
+        }
+    }
+    let before = tree(&d.dst);
+    assert!(recover_rename_batch(&RealFs, &d.dst).is_err());
+    assert_eq!(tree(&d.dst), before);
+}
+
+#[test]
+fn bounded_reads_refuse_oversized_files_and_links() {
+    let d = dirs();
+    file(d.src.join("record"), "12345");
+    assert_eq!(
+        RealFs
+            .read_bounded(&d.src.join("record"), 4)
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::InvalidData
+    );
+    assert_eq!(
+        RealFs.read_bounded(&d.src.join("record"), 5).unwrap(),
+        b"12345"
+    );
+    symlink("record", d.src.join("link")).unwrap();
+    assert!(RealFs.read_bounded(&d.src.join("link"), 5).is_err());
+}
+
+#[test]
+fn recovery_rejects_a_newer_record_version_before_any_change() {
+    let d = dirs();
+    interrupted_batch(&d);
+    let record = d.src.join(RENAME_JOURNAL);
+    let mut bytes = fs::read(&record).unwrap();
+    bytes[15] = 2;
+    fs::write(&record, bytes).unwrap();
+    let before = tree(&d.src);
+    assert!(recover_rename_batch(&RealFs, &d.src).is_err());
+    assert_eq!(tree(&d.src), before);
+}
+
+#[test]
+fn recovery_preserves_raw_names_and_long_names() {
+    let d = dirs();
+    let raw = OsString::from_vec(b"bad\xff\nname".to_vec());
+    let long = OsString::from("x".repeat(255));
+    file(d.src.join(&raw), "raw");
+    file(d.src.join(&long), "long");
+    let before = tree(&d.src);
+    let request = Request::RenameBatch {
+        directory: d.src.clone(),
+        pairs: vec![(raw.clone(), long.clone()), (long, raw)],
+    };
+    let _ = run(
+        &FaultFs::failing_at(2, faults::Fault::Crash),
+        &NoTrash,
+        &request,
+        &mut Script::default(),
+    );
+    assert_eq!(recover_rename_batch(&RealFs, &d.src).unwrap(), 2);
+    assert_eq!(tree(&d.src), before);
+}
+
+#[test]
+fn a_recovery_request_reports_a_pause_and_keeps_its_record() {
+    let d = dirs();
+    interrupted_batch(&d);
+    let request = Request::RecoverRenameBatch {
+        directory: d.src.clone(),
+    };
+    let outcome = run(
+        &FaultFs::failing_at(0, faults::Fault::Error),
+        &NoTrash,
+        &request,
+        &mut Script::default(),
+    )
+    .unwrap();
+    assert!(!outcome.completed);
+    assert_eq!(outcome.skipped.len(), 1);
+    assert!(d.src.join(RENAME_JOURNAL).is_file());
+    assert_eq!(recover_rename_batch(&RealFs, &d.src).unwrap(), 2);
+    assert_eq!(names(&d.src), ["a", "b"]);
+}
+
+#[test]
+fn recovery_never_removes_a_record_changed_by_another_program() {
+    let d = dirs();
+    interrupted_batch(&d);
+    let record = d.src.join(RENAME_JOURNAL);
+    let replacement = record.clone();
+    let fs = FaultFs::new().with_meddler(move |step| {
+        if step == 0 {
+            file(&replacement, "changed recovery record; keep me");
+        }
+    });
+    assert!(recover_rename_batch(&fs, &d.src).is_err());
+    assert_eq!(read(record), "changed recovery record; keep me");
+    assert_eq!(read(d.src.join("a")), "A");
+    assert_eq!(read(d.src.join("b")), "B");
 }

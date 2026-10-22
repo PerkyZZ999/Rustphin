@@ -20,6 +20,13 @@ Several folders, or `file://` URLs, open as separate tabs. A path that names a f
 
 Set `RUSTPHIN_OPAQUE=1` to turn off window translucency.
 
+After an interrupted batch rename, open the affected folder, press Ctrl+Shift+P
+and search `recover original`. **Recover original names after interruption**
+validates the saved record and restores the original names. Keep recovery records
+and temporary entries when recovery reports a problem: staged entries may hold
+the only copy of an original file. Older batches without a record need manual
+inspection; Rustphin never guesses from temporary names.
+
 ## Development
 
 Checks run through the Rust-Toolchain command `rust-tc`:

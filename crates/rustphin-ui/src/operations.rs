@@ -682,6 +682,9 @@ pub fn activity(request: &Request, undo: bool) -> String {
             count(pairs.len()),
             plural(pairs.len(), "item", "items")
         ),
+        Request::RecoverRenameBatch { directory } => {
+            format!("Recovering original names in {}", folder_name(directory))
+        }
         Request::Copy { sources, into } => {
             format!("Copying {} to {}", what(sources), folder_name(into))
         }
@@ -708,6 +711,9 @@ pub fn past(request: &Request) -> String {
             count(pairs.len()),
             plural(pairs.len(), "item", "items")
         ),
+        Request::RecoverRenameBatch { directory } => {
+            format!("checked rename recovery in {}", folder_name(directory))
+        }
         Request::Copy { sources, into } => {
             format!("copied {} to {}", what(sources), folder_name(into))
         }

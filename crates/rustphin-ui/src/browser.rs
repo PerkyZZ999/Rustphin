@@ -98,6 +98,7 @@ actions!(
         MoveToTrash,
         DeletePermanently,
         ShowProperties,
+        RecoverRenames,
         Copy,
         Cut,
         Paste,
@@ -1552,6 +1553,17 @@ impl Browser {
         });
     }
 
+    fn recover_renames(&mut self, cx: &mut Context<Self>) {
+        if self.trash_dir.is_some() {
+            return;
+        }
+        if let Some(directory) = self.location() {
+            hub(cx).update(cx, |hub, _| {
+                hub.start(Request::RecoverRenameBatch { directory });
+            });
+        }
+    }
+
     fn trash_selected(&mut self, cx: &mut Context<Self>) {
         // What is already in the trash can only be deleted for good.
         if self.trash_dir.is_some() {
@@ -2712,6 +2724,7 @@ impl Render for Browser {
             }))
             .on_action(cx.listener(|this, _: &NewFolder, _, cx| this.create_entry(true, cx)))
             .on_action(cx.listener(|this, _: &NewFile, _, cx| this.create_entry(false, cx)))
+            .on_action(cx.listener(|this, _: &RecoverRenames, _, cx| this.recover_renames(cx)))
             .on_action(cx.listener(|this, _: &MoveToTrash, _, cx| this.trash_selected(cx)))
             .on_action(cx.listener(|this, _: &DeletePermanently, _, cx| {
                 this.delete_selected(cx);

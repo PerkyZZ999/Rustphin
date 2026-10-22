@@ -88,6 +88,12 @@ pub fn commands() -> Vec<Command> {
         command!("Files: New file", "Ctrl+Alt+N", Browser, b::NewFile),
         command!("Files: Rename selection", "F2", Browser, b::Rename),
         command!("Files: Properties", "Alt+Enter", Browser, b::ShowProperties),
+        command!(
+            "Files: Recover original names after interruption",
+            "",
+            Browser,
+            b::RecoverRenames
+        ),
         command!("Files: Copy selection", "Ctrl+C", Browser, b::Copy),
         command!("Files: Cut selection", "Ctrl+X", Browser, b::Cut),
         command!("Files: Paste into this folder", "Ctrl+V", Browser, b::Paste),

@@ -274,6 +274,12 @@ One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, inputs, banners, me
 
 ## Implementation status
 
+The Actions palette offers **Recover original names after interruption** for the
+current folder. It explicitly restores original names from a batch-rename
+recovery record. Browsing never starts recovery. A missing record is harmless;
+an invalid record, changed file or occupied original name produces an actionable
+error through the existing operation notice, without replacing that entry.
+
 As of 2026-10-18 the application implements the surfaces, text colours, selection, hover, error banner, toolbar (including the 320 px and 240 px navigation breakpoints), tab strip, split panes, dialogs, the batch-rename dialog, activity lines, the rename field, the trash banner, the places panel, the command palette and labelled Actions entry, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings). The status line truncates inside its pane.
 
 Floating surfaces (`surface-raised`, `border-accent`, the glow) are used by dialogs, the properties dialog, the palette and the context menu. The cyan signal is used by the progress bar. Not yet applied in code: the emerald signal, `primary-bright` on focused inputs, and the type column, which still uses Inter.
