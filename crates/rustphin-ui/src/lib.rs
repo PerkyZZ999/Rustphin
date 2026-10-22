@@ -106,61 +106,111 @@ pub fn run(options: Options) {
             })
             .detach();
 
-            let bounds = Bounds::centered(None, size(px(960.), px(640.)), cx);
-            let window_options = WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_min_size: Some(size(px(480.), px(320.))),
-                window_background: if options.force_opaque {
-                    WindowBackgroundAppearance::Opaque
-                } else {
-                    WindowBackgroundAppearance::Transparent
-                },
-                app_id: Some("rustphin".into()),
-                ..Default::default()
-            };
-            let opened = cx.open_window(window_options, |window, cx| {
-                let blur: &dyn BackgroundBlur = if options.force_opaque {
-                    &NoBlur
-                } else {
-                    &WaylandBlur
-                };
-                let translucent = match blur.enable(window, window) {
-                    Ok(()) => true,
-                    Err(reason) => {
-                        tracing::info!(%reason, "using the opaque theme");
-                        window.set_background_appearance(WindowBackgroundAppearance::Opaque);
-                        false
-                    }
-                };
-                let theme = Theme::obsidian(translucent);
-                theme.apply_to_components(cx);
-                cx.set_global(theme);
-                window.set_window_title("Rustphin");
-                let workspace = cx.new(|cx| {
-                    Workspace::new(
-                        session.clone(),
-                        options.home.clone(),
-                        session_path.clone(),
-                        settings.clone(),
-                        settings_path.clone(),
-                        window,
-                        cx,
-                    )
-                });
-                // The component library's root paints its own opaque background
-                // under the view. Clear it: the browser paints the window
-                // background itself, translucent when the compositor blurs.
-                cx.new(|cx| {
-                    gpui_kit::base::Root::new(workspace, window, cx)
-                        .bg(gpui_kit::transparent_black())
-                })
+            // Font matching can scan the installed font collection. Finish
+            // that work off-thread before the first view needs its fonts.
+            let text_system = cx.text_system().clone();
+            let warming = cx.background_executor().spawn(async move {
+                warm_fonts(&text_system);
             });
-            match opened {
-                Ok(_) => cx.activate(true),
-                Err(error) => {
-                    tracing::error!(%error, "could not open the main window");
-                    cx.quit();
-                }
-            }
+            cx.spawn(async move |cx| {
+                warming.await;
+                cx.update(|cx| {
+                    open_window(options, settings, session, settings_path, session_path, cx);
+                });
+            })
+            .detach();
         });
+}
+
+fn open_window(
+    options: Options,
+    settings: Settings,
+    session: Session,
+    settings_path: Option<PathBuf>,
+    session_path: Option<PathBuf>,
+    cx: &mut App,
+) {
+    let bounds = Bounds::centered(None, size(px(960.), px(640.)), cx);
+    let window_options = WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(bounds)),
+        window_min_size: Some(size(px(480.), px(320.))),
+        window_background: if options.force_opaque {
+            WindowBackgroundAppearance::Opaque
+        } else {
+            WindowBackgroundAppearance::Transparent
+        },
+        app_id: Some("rustphin".into()),
+        ..Default::default()
+    };
+    let opened = cx.open_window(window_options, |window, cx| {
+        let blur: &dyn BackgroundBlur = if options.force_opaque {
+            &NoBlur
+        } else {
+            &WaylandBlur
+        };
+        let translucent = match blur.enable(window, window) {
+            Ok(()) => true,
+            Err(reason) => {
+                tracing::info!(%reason, "using the opaque theme");
+                window.set_background_appearance(WindowBackgroundAppearance::Opaque);
+                false
+            }
+        };
+        let theme = Theme::obsidian(translucent);
+        theme.apply_to_components(cx);
+        cx.set_global(theme);
+        window.set_window_title("Rustphin");
+        let workspace = cx.new(|cx| {
+            Workspace::new(
+                session.clone(),
+                options.home.clone(),
+                session_path.clone(),
+                settings.clone(),
+                settings_path.clone(),
+                window,
+                cx,
+            )
+        });
+        // The component library's root paints its own opaque background
+        // under the view. Clear it: the browser paints the window
+        // background itself, translucent when the compositor blurs.
+        cx.new(|cx| {
+            gpui_kit::base::Root::new(workspace, window, cx).bg(gpui_kit::transparent_black())
+        })
+    });
+    match opened {
+        Ok(_) => cx.activate(true),
+        Err(error) => {
+            tracing::error!(%error, "could not open the main window");
+            cx.quit();
+        }
+    }
+}
+
+fn warm_fonts(text_system: &gpui_kit::TextSystem) {
+    let started = std::time::Instant::now();
+    let fonts: Vec<_> = [
+        gpui_kit::Font::default(),
+        gpui_kit::font(theme::text::FAMILY_BODY),
+        gpui_kit::font(theme::text::FAMILY_DATA),
+        gpui_kit::font(theme::text::FAMILY_HEADING),
+    ]
+    .into_iter()
+    .flat_map(|font| {
+        [
+            gpui_kit::FontWeight::NORMAL,
+            gpui_kit::FontWeight::MEDIUM,
+            gpui_kit::FontWeight::SEMIBOLD,
+        ]
+        .map(|weight| gpui_kit::Font {
+            weight,
+            ..font.clone()
+        })
+    })
+    .collect();
+    text_system.prewarm_fonts(&fonts);
+    tracing::info!(
+        elapsed_ms = started.elapsed().as_secs_f64() * 1e3,
+        "font caches warmed"
+    );
 }

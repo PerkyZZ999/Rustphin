@@ -182,8 +182,8 @@ Conventions:
 ### R-102 — Memory
 - **Priority:** should
 - **Acceptance:**
-  - [ ] Resident memory with one 500,000-entry directory open stays under 400 MB; closing the tab returns to within 50 MB of the starting figure.
-- **Validation:** bench
+  - [x] Resident memory with one 500,000-entry directory open stays under 400 MB; closing the tab returns to within 50 MB of the starting figure.
+- **Validation:** bench; W-073b (2026-10-22), final default release in isolated KWin: 130332 KiB small baseline, 162124 KiB large/details tab, 150112 KiB after closing that tab (19.3 MiB above baseline).
 
 ### R-103 — Data safety
 - **Priority:** must
