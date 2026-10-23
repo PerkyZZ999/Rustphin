@@ -128,6 +128,7 @@ Stale results are discarded by generation number, so a fast navigation never sho
 - **Fault injection (core):** the `Fs` trait fails or "crashes" at every step of copy, move and batch rename; assertions check the D-011 rules. Kill tests run a child process against a temporary directory.
 - **Integration and contract tests (platform):** places file round trips against fixtures from a real Dolphin; trash and thumbnail cache against their specifications; UDisks2 and FileManager1 against a mocked bus.
 - **Benchmarks:** headless listing, metadata and sort on generated 500,000-entry directories; results tracked over time (R-101, R-102).
+- **Accessibility:** the pinned Wayland adapter follows the session accessibility status. Entry rows expose names, selection and active-descendant focus through the public GPUI API; virtualised items carry positions and their container carries the total count. An active AT-SPI bus alone does not enable exposure. Input focus, the other composite widgets and Orca acceptance remain S11 work.
 - **UI tests:** scripted scenarios in an isolated KWin session with an isolated home, alongside the installed Dolphin: navigation, drag-and-drop, clipboard, tabs, palette. Frame timing collected for scrolling.
 - **Fuzzing:** parsers for the places file, `.desktop` files, URI lists.
 - **Manual checklists:** keyboard-only operation, visual review on the real desktop, Orca pass, real USB drive, a non-KDE drop target.

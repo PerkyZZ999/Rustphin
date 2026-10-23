@@ -10,12 +10,12 @@ use std::{
 };
 
 use gpui_kit::{
-    AnyElement, App, AppContext as _, AsyncApp, ClickEvent, Context, Edges, Entity, EventEmitter,
-    ExternalDragPayload, ExternalPaths, FileDragPaths, FocusHandle, Focusable as _,
-    InteractiveElement, IntoElement, KeyBinding, KeyDownEvent, Modifiers, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render,
-    ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
-    UniformListScrollHandle, WeakEntity, Window, actions, anchored,
+    AccessibleAction, AnyElement, App, AppContext as _, AsyncApp, ClickEvent, Context, Edges,
+    Entity, EventEmitter, ExternalDragPayload, ExternalPaths, FileDragPaths, FocusHandle,
+    Focusable as _, InteractiveElement, IntoElement, KeyBinding, KeyDownEvent, Modifiers,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point,
+    Render, Role, ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, UniformListScrollHandle, WeakEntity, Window, actions, anchored,
     component::{
         Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -1723,6 +1723,7 @@ impl Browser {
                         .small()
                         .icon(IconName::ArrowLeft)
                         .tooltip("Back (Alt+Left)")
+                        .accessibility_label("Back (Alt+Left)")
                         .disabled(!can_back)
                         .on_click(
                             cx.listener(|this, _, _, cx| this.navigate(DirectoryModel::back, cx)),
@@ -1736,6 +1737,7 @@ impl Browser {
                         .small()
                         .icon(IconName::ArrowRight)
                         .tooltip("Forward (Alt+Right)")
+                        .accessibility_label("Forward (Alt+Right)")
                         .disabled(!can_forward)
                         .on_click(
                             cx.listener(|this, _, _, cx| {
@@ -1749,13 +1751,18 @@ impl Browser {
                         .small()
                         .icon(IconName::ArrowUp)
                         .tooltip("Up one folder (Alt+Up)")
+                        .accessibility_label("Up one folder (Alt+Up)")
                         .disabled(!can_up)
                         .on_click(cx.listener(|this, _, _, cx| this.go_up(cx))),
                 )
             })
             .child(div().flex_1().min_w_0().px(px(space::XS)).map(|bar| {
                 if self.editing_location {
-                    bar.child(Input::new(&self.location_input).small())
+                    bar.child(
+                        Input::new(&self.location_input)
+                            .small()
+                            .aria_label("Folder location"),
+                    )
                 } else {
                     bar.child(self.breadcrumbs(location.as_deref(), theme, cx))
                 }
@@ -1792,6 +1799,8 @@ impl Browser {
 
         div()
             .id("breadcrumbs")
+            .role(Role::Group)
+            .aria_label("Folder location")
             .flex()
             .items_center()
             .h(px(size::ROW))
@@ -1828,6 +1837,8 @@ impl Browser {
                             .child(
                                 div()
                                     .id(("crumb", index))
+                                    .role(Role::Button)
+                                    .aria_label(label.clone())
                                     .px(px(space::XS))
                                     .rounded(px(size::RADIUS))
                                     .cursor_pointer()
@@ -1901,6 +1912,15 @@ impl Browser {
         let active = options.sort == key;
         div()
             .id(label)
+            .role(Role::Button)
+            .aria_label(format!("Sort by {label}"))
+            .when(active, |heading| {
+                heading.aria_description(if options.descending {
+                    "Sorted descending"
+                } else {
+                    "Sorted ascending"
+                })
+            })
             .flex()
             .items_center()
             .gap(px(space::XS))
@@ -1972,7 +1992,11 @@ impl Browser {
                 .rounded(px(size::RADIUS))
                 .bg(theme.raised)
                 .text_color(theme.text)
-                .child(Input::new(&self.rename_input).xsmall())
+                .child(
+                    Input::new(&self.rename_input)
+                        .xsmall()
+                        .aria_label("New name"),
+                )
         } else {
             div().truncate().child(entry.name.clone())
         }
@@ -2261,8 +2285,8 @@ impl Browser {
                                         }),
                                 )
                             });
-                        let line = div()
-                            .id(row)
+                        let line = entry
+                            .accessible(&rows, row, cx)
                             .w_full()
                             .h(px(layout.row_height))
                             .px(px(space::SM))
@@ -2347,8 +2371,8 @@ impl Browser {
                             };
                             let is_folder = entry.container;
                             let cell = Self::drag_source(
-                                div()
-                                    .id(row)
+                                entry
+                                    .accessible(&rows, row, cx)
                                     .flex_none()
                                     .w(px(cell_width))
                                     .h_full()
@@ -2467,6 +2491,9 @@ impl Browser {
             }
         };
         div()
+            .id("file-status")
+            .role(Role::Label)
+            .aria_value(message.clone())
             .flex()
             .flex_none()
             .items_center()
@@ -2714,6 +2741,9 @@ impl Render for Browser {
         }
 
         let view = div()
+            .id("file-browser")
+            .role(Role::Group)
+            .aria_label("File browser")
             .relative()
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
@@ -2876,6 +2906,13 @@ impl Render for Browser {
                 // toolbar and status line, so columns of text stay readable.
                 // Dropping on the view itself puts the entries in this folder.
                 Self::drop_target(div(), None, theme, cx)
+                    .id("file-list")
+                    .role(Role::ListBox)
+                    .aria_size_of_set(snapshot.as_ref().map_or(0, |snapshot| snapshot.len()))
+                    .aria_label(self.location().map_or_else(
+                        || "Files".to_owned(),
+                        |path| format!("Files in {}", display_name(path.as_os_str().as_bytes())),
+                    ))
                     .flex()
                     .flex_1()
                     .flex_col()
@@ -3074,6 +3111,35 @@ struct Entry {
 }
 
 impl Entry {
+    /// Semantics shared by the three virtualised entry layouts.
+    fn accessible(
+        &self,
+        rows: &Snapshot,
+        row: usize,
+        cx: &mut Context<Browser>,
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let view = cx.entity().downgrade();
+        div()
+            .id(("file", rows.entry_id(row) as usize))
+            .role(Role::ListBoxOption)
+            .aria_label(self.name.clone())
+            .aria_description(if self.container { "Folder" } else { "File" })
+            .aria_selected(self.selected)
+            .aria_position_in_set(row)
+            .when(self.focused && !self.renaming, |entry| {
+                entry.aria_active_descendant()
+            })
+            .on_a11y_action(AccessibleAction::Focus, move |_, window, cx| {
+                let _ = view.update(cx, |this, cx| {
+                    this.change_selection(
+                        |selection, snapshot| selection.select_only(snapshot, row),
+                        cx,
+                    );
+                    this.focus.focus(window, cx);
+                });
+            })
+    }
+
     /// Colour for secondary text and the placeholder icon.
     fn secondary(&self, theme: Theme) -> gpui_kit::Rgba {
         if self.selected {

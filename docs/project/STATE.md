@@ -14,11 +14,11 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-23 — W-073e large-selection refresh fix and final three-view measurements; 405 tests
+- Latest validation entry: VALIDATION.md, 2026-10-23 — W-074a AT-SPI environment diagnosis and file-list semantics; 405 tests
 
 ## Open loops
 - Task: W-073b–e fixed measured font/layout and selection-transfer stalls and stale navigation rows. Details first entries observed within 185.7 ms; all 500,000 selections survive refresh. Final three-view max draw 6.67 ms, but p95 intervals 16.72–16.98 ms do not pass strict 60 fps. Wider input/thumbnail task acceptance and physical-display pacing remain open under R-101
-- Product: nothing is exposed over AT-SPI in test sessions; affects R-107, to resolve in S11
+- Task: W-074a verified the pinned Wayland adapter after enabling IsEnabled on the isolated AT-SPI bus. File entries and navigation controls now expose names/selection/focus. Text-input focus, places/tabs/dialog/menu semantics, multi-selection capability and an Orca pass remain R-107 work; orca is not on PATH.
 - Task: reordering tabs by mouse drag is implemented but was not exercised in a test session
 - Product: view settings are one global file; a pane's own view settings last for the session only
 - Task: file operations not yet seen on screen: the failure dialog, stopping with the stop button, rename in the icons and compact views, the speed display, another volume's trash
@@ -39,7 +39,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Continue S11 W-074: investigate missing AccessKit/AT-SPI exposure in the pinned toolkit and identify a compatible fix or a concrete locked-decision blocker. W-073's measured stalls are fixed and final three-view measurements recorded; strict pacing/wider R-101 acceptance remains open for investigation/reconciliation. Full gate/evidence/commit after every coherent task.
+- Continue S11 W-074: continue text-input focus and places/tabs/dialog/menu semantics using the verified pinned adapter. Review multi-selection exposure and arrange the remaining Orca acceptance without claiming an unrun screen-reader pass. W-073's measured stalls are fixed and final three-view measurements recorded; strict pacing/wider R-101 acceptance remains open for investigation/reconciliation. Full gate/evidence/commit after every coherent task.
 
 ## Phase checklist
 - [x] 0 Intake

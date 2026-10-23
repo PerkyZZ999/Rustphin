@@ -212,3 +212,21 @@ to confirm the expected view; AT-SPI absence is not proof of a missing window.
 | P7 | F2 on a generated entry, Escape; navigate to another folder | Editor cancels without changing the fixture; old-folder rename/menu state is absent after arrival. ShowItems/reveal selection still uses its explicit arrival request |
 | P8 | On the completed 500,000-entry fixture, Ctrl+A, F5; wait for the replacement event and inspect status/logs | All 500,000 selections remain; name matching is off the UI thread. Retain model/selection-schedule/selection-apply maxima |
 | P9 | F5 then Home before completion; wait for the replacement; repeat while navigating away | The later single selection survives refresh; a superseded result never changes the new folder's selection. A scripted ordering check does not prove every concurrent interleaving |
+
+## Accessibility (S11 / W-074)
+
+The isolated AT-SPI bus can run while its `org.a11y.Status.IsEnabled` is false.
+Check it through the isolated session's `dbus_call` and, for these checks only,
+set it true using `org.freedesktop.DBus.Properties.Set` on `org.a11y.Bus`,
+`/org/a11y/bus`, interface `org.a11y.Status`, property `IsEnabled`.
+Never change the host desktop's accessibility setting. Wait for the window and
+fixture rows before sending keys. Missing AT-SPI exposure with this flag false
+is not proof of a missing toolkit adapter.
+
+| # | Steps | Expected / evidence to retain |
+|---|---|---|
+| A1 | Open a generated folder with sub, a.txt and b.txt; inspect the accessibility tree | Named file browser/list box, named navigation and sort controls, three named selectable file entries, readable status count |
+| A2 | Home, Down; switch Ctrl+1/Ctrl+2/Ctrl+3; query focused and selected entries | The selected entry retains both states in every view; screenshot confirms the visible selection marker |
+| A3 | Request Component.GrabFocus on generated b.txt through the isolated AT-SPI bus | b.txt becomes the focused selected entry and the status says one of three selected; normal keyboard navigation still works |
+| A4 | Inspect first entry attributes, then the generated 500,000-entry view after scrolling | First small-folder item has posinset=1 and setsize=3. Large-list items carry setsize=500000 and their actual positions; only visible/overscan rows are exposed |
+| A5 | F2, inspect, Escape; Ctrl+L, inspect, Escape | Named New name and Folder location fields; cancellation preserves fixtures. Record actual focused states separately from labels; text-input focus and Orca remain open until verified |
