@@ -1696,7 +1696,7 @@ impl Browser {
         }
     }
 
-    fn toolbar(&self, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement {
+    fn toolbar(&self, theme: Theme, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         let can_back = self.model.as_ref().is_some_and(DirectoryModel::can_go_back);
         let can_forward = self
             .model
@@ -1758,11 +1758,13 @@ impl Browser {
             })
             .child(div().flex_1().min_w_0().px(px(space::XS)).map(|bar| {
                 if self.editing_location {
-                    bar.child(
-                        Input::new(&self.location_input)
-                            .small()
-                            .aria_label("Folder location"),
-                    )
+                    bar.child(crate::input::named(
+                        Input::new(&self.location_input).small(),
+                        &self.location_input,
+                        "Folder location",
+                        window,
+                        cx,
+                    ))
                 } else {
                     bar.child(self.breadcrumbs(location.as_deref(), theme, cx))
                 }
@@ -1982,7 +1984,7 @@ impl Browser {
 
     /// The name of an entry on one line, or the field to edit it while it is
     /// being renamed.
-    fn name_cell(&self, entry: &Entry, theme: Theme) -> gpui_kit::Div {
+    fn name_cell(&self, entry: &Entry, theme: Theme, window: &Window, cx: &App) -> gpui_kit::Div {
         if entry.renaming {
             // Clicks in the field place the cursor; they must not reach the
             // row underneath or start a rubber band.
@@ -1992,11 +1994,13 @@ impl Browser {
                 .rounded(px(size::RADIUS))
                 .bg(theme.raised)
                 .text_color(theme.text)
-                .child(
-                    Input::new(&self.rename_input)
-                        .xsmall()
-                        .aria_label("New name"),
-                )
+                .child(crate::input::named(
+                    Input::new(&self.rename_input).xsmall(),
+                    &self.rename_input,
+                    "New name",
+                    window,
+                    cx,
+                ))
         } else {
             div().truncate().child(entry.name.clone())
         }
@@ -2214,7 +2218,7 @@ impl Browser {
         let list = uniform_list(
             "entries",
             snapshot.len(),
-            cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+            cx.processor(move |this, range: std::ops::Range<usize>, window, cx| {
                 let _rows = this.frames.task("visible_rows");
                 range
                     .map(|row| {
@@ -2260,7 +2264,7 @@ impl Browser {
                                             .when(entry.renaming, |handle| handle.flex_1())
                                             .child(entry.icon(layout.icon, theme))
                                             .child(
-                                                this.name_cell(&entry, theme)
+                                                this.name_cell(&entry, theme, window, cx)
                                                     .min_w_0()
                                                     .when(entry.renaming, |name| name.flex_1()),
                                             ),
@@ -2351,7 +2355,7 @@ impl Browser {
         let list = uniform_list(
             "entries",
             len.div_ceil(per_row),
-            cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+            cx.processor(move |this, range: std::ops::Range<usize>, window, cx| {
                 let _rows = this.frames.task("visible_rows");
                 range
                     .map(|line| {
@@ -2370,7 +2374,7 @@ impl Browser {
                                     .p(px(space::SM))
                                     .child(icon)
                                     .child(if entry.renaming {
-                                        this.name_cell(&entry, theme).w_full()
+                                        this.name_cell(&entry, theme, window, cx).w_full()
                                     } else {
                                         div()
                                             .w_full()
@@ -2385,7 +2389,11 @@ impl Browser {
                                     .gap(px(space::SM))
                                     .px(px(space::SM))
                                     .child(icon)
-                                    .child(this.name_cell(&entry, theme).flex_1().min_w_0())
+                                    .child(
+                                        this.name_cell(&entry, theme, window, cx)
+                                            .flex_1()
+                                            .min_w_0(),
+                                    )
                             };
                             let is_folder = entry.container;
                             let cell = Self::drag_source(
@@ -2912,7 +2920,7 @@ impl Render for Browser {
             .font_family(text::FAMILY_BODY)
             .text_size(px(text::BODY))
             .line_height(px(text::LINE))
-            .child(self.toolbar(theme, cx))
+            .child(self.toolbar(theme, window, cx))
             .when_some(self.failure.as_ref(), |view, failure| {
                 view.child(self.failure_banner(failure, theme, cx))
             })

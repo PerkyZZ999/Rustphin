@@ -156,7 +156,12 @@ impl RenameDialog {
         })
     }
 
-    pub fn render(&self, theme: Theme, cx: &mut Context<Workspace>) -> impl IntoElement {
+    pub fn render(
+        &self,
+        theme: Theme,
+        window: &Window,
+        cx: &mut Context<Workspace>,
+    ) -> impl IntoElement {
         let (plan_problem, preview) = match self.rules(cx) {
             Ok(rules) => {
                 let preview = rules.preview(&self.selected, &self.staying);
@@ -216,7 +221,7 @@ impl RenameDialog {
                             .child(format!("Rename {count} items")),
                     )
                     .child(self.modes(cx))
-                    .child(self.fields(theme, cx))
+                    .child(self.fields(theme, window, cx))
                     .when_some(plan_problem, |dialog, problem| {
                         dialog.child(note(theme.danger, problem))
                     })
@@ -287,14 +292,19 @@ impl RenameDialog {
         }))
     }
 
-    fn fields(&self, theme: Theme, cx: &mut Context<Workspace>) -> impl IntoElement {
+    fn fields(
+        &self,
+        theme: Theme,
+        window: &Window,
+        cx: &mut Context<Workspace>,
+    ) -> impl IntoElement {
         match self.mode {
             Mode::Replace => div()
                 .flex()
                 .flex_col()
                 .gap(px(space::SM))
-                .child(field(theme, "Find", Input::new(&self.find).small()))
-                .child(field(theme, "Replace with", Input::new(&self.replace).small()))
+                .child(field(theme, "Find", &self.find, window, cx))
+                .child(field(theme, "Replace with", &self.replace, window, cx))
                 .child(
                     Checkbox::new("rename-regex")
                         .label("Regular expression")
@@ -310,7 +320,7 @@ impl RenameDialog {
                 .flex()
                 .flex_col()
                 .gap(px(space::SM))
-                .child(field(theme, "Pattern", Input::new(&self.pattern).small()))
+                .child(field(theme, "Pattern", &self.pattern, window, cx))
                 .child(note(
                     theme.text_muted,
                     "# is the counter. The number of # signs is how many digits it has. @ is the file's current name.".to_owned(),
@@ -319,8 +329,8 @@ impl RenameDialog {
                     div()
                         .flex()
                         .gap(px(space::SM))
-                        .child(field(theme, "Start", Input::new(&self.start).small()))
-                        .child(field(theme, "Step", Input::new(&self.step).small())),
+                        .child(field(theme, "Start", &self.start, window, cx))
+                        .child(field(theme, "Step", &self.step, window, cx)),
                 ),
             Mode::Case => div().flex().gap(px(space::SM)).child(self.case_button(
                 "case-lower",
@@ -422,7 +432,13 @@ impl RenameDialog {
     }
 }
 
-fn field(theme: Theme, label: &'static str, input: impl IntoElement) -> impl IntoElement {
+fn field(
+    theme: Theme,
+    label: &'static str,
+    state: &Entity<InputState>,
+    window: &Window,
+    cx: &App,
+) -> impl IntoElement {
     div()
         .flex()
         .flex_col()
@@ -434,7 +450,13 @@ fn field(theme: Theme, label: &'static str, input: impl IntoElement) -> impl Int
                 .text_color(theme.text_muted)
                 .child(label),
         )
-        .child(input)
+        .child(crate::input::named(
+            Input::new(state).small(),
+            state,
+            label,
+            window,
+            cx,
+        ))
 }
 
 fn note(color: Rgba, message: String) -> impl IntoElement {

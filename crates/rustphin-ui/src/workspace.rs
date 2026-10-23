@@ -1366,7 +1366,10 @@ impl Render for Workspace {
             .children(activity)
             .children(dialog)
             .when(self.rename.is_some(), |workspace| {
-                let element = self.rename.as_ref().map(|dialog| dialog.render(theme, cx));
+                let element = self
+                    .rename
+                    .as_ref()
+                    .map(|dialog| dialog.render(theme, window, cx));
                 workspace.children(element)
             })
             .when(self.properties.is_some(), |workspace| {

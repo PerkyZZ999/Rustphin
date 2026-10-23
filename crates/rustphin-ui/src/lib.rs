@@ -10,6 +10,7 @@ mod filetypes;
 mod format;
 mod groups;
 mod history;
+mod input;
 mod launch;
 mod layout;
 mod menu;

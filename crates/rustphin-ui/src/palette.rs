@@ -336,7 +336,13 @@ impl Render for Palette {
                             .font_family(text::FAMILY_HEADING)
                             .child("Command palette"),
                     )
-                    .child(Input::new(&self.input))
+                    .child(crate::input::named(
+                        Input::new(&self.input),
+                        &self.input,
+                        "Search actions and folders",
+                        window,
+                        cx,
+                    ))
                     .map(|surface| {
                         if self.results.indices.is_empty() {
                             surface.child(

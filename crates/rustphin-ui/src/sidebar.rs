@@ -1181,7 +1181,14 @@ impl Sidebar {
             .hover(|row| row.bg(theme.hover))
     }
 
-    fn name_or_field(&self, row: &Row, name: SharedString, theme: Theme) -> gpui_kit::Div {
+    fn name_or_field(
+        &self,
+        row: &Row,
+        name: SharedString,
+        theme: Theme,
+        window: &Window,
+        cx: &App,
+    ) -> gpui_kit::Div {
         if self.renaming.as_ref() == Some(row) {
             div()
                 .flex_1()
@@ -1190,11 +1197,13 @@ impl Sidebar {
                 .bg(theme.raised)
                 .text_color(theme.text)
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .child(
-                    Input::new(&self.rename_input)
-                        .xsmall()
-                        .aria_label("New place or group name"),
-                )
+                .child(crate::input::named(
+                    Input::new(&self.rename_input).xsmall(),
+                    &self.rename_input,
+                    "New place or group name",
+                    window,
+                    cx,
+                ))
         } else {
             div().flex_1().min_w_0().truncate().child(name)
         }
@@ -1236,7 +1245,7 @@ impl Sidebar {
                         theme.text_muted
                     }),
             )
-            .child(self.name_or_field(&row, title, theme))
+            .child(self.name_or_field(&row, title, theme, window, cx))
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.focused = Some(click_row.clone());
                 this.focus.focus(window, cx);
@@ -1285,7 +1294,7 @@ impl Sidebar {
                 .size(px(size::ICON_SMALL))
                 .flex_none(),
             )
-            .child(self.name_or_field(&row, name.to_owned().into(), theme))
+            .child(self.name_or_field(&row, name.to_owned().into(), theme, window, cx))
             .when(collapsed && !members.is_empty(), |line| {
                 line.child(
                     div()
