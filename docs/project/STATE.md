@@ -14,11 +14,11 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-23 — W-074g properties dialog/facts/permissions semantics; 407 tests
+- Latest validation entry: VALIDATION.md, 2026-10-23 — W-074h operation/launch/batch-dialog semantics and cancellation; 407 tests
 
 ## Open loops
 - Task: W-073b–e fixed measured font/layout and selection-transfer stalls and stale navigation rows. Details first entries observed within 185.7 ms; all 500,000 selections survive refresh. Final three-view max draw 6.67 ms, but p95 intervals 16.72–16.98 ms do not pass strict 60 fps. Wider input/thumbnail task acceptance and physical-display pacing remain open under R-101
-- Task: W-074a verified the pinned Wayland adapter after enabling IsEnabled on the isolated AT-SPI bus. File entries and navigation controls now expose names/selection/focus. W-074b verifies additive selection/deselection through AT-SPI in all three views. W-074c verifies places/group/tab semantics, focus/actions and mouse tab reordering. Native expanded state is not mapped by the pinned adapter; spoken group state is present. W-074d verifies text-input focus in all plain-text fields. W-074e verifies palette dialog/results/selection semantics. W-074f verifies context-menu focus/actions. W-074g verifies properties semantics and permission labels. Native text interfaces, expanded/disabled flags, remaining operation/launch/batch dialog semantics and an Orca pass remain R-107 work; orca is not on PATH.
+- Task: W-074a verified the pinned Wayland adapter after enabling IsEnabled on the isolated AT-SPI bus. File entries and navigation controls now expose names/selection/focus. W-074b verifies additive selection/deselection through AT-SPI in all three views. W-074c verifies places/group/tab semantics, focus/actions and mouse tab reordering. Native expanded state is not mapped by the pinned adapter; spoken group state is present. W-074d verifies text-input focus in all plain-text fields. W-074e verifies palette dialog/results/selection semantics. W-074f verifies context-menu focus/actions. W-074g verifies properties semantics and permission labels. W-074h verifies operation/launch/batch dialogs and preview/error text. Native text interfaces, expanded/disabled flags, incremental client cache and an Orca pass remain R-107 work; orca is not on PATH.
 - Product: view settings are one global file; a pane's own view settings last for the session only
 - Task: file operations not yet seen on screen: the failure dialog, stopping with the stop button, rename in the icons and compact views, the speed display, another volume's trash
 - Task: properties opened through D-Bus label the type generically as File; folder measurement cancellation, unreadable-folder reporting and small-window dialog layout are not yet observed on screen
@@ -38,7 +38,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Continue S11 W-074: continue operation/launch/batch dialog semantics; investigate native text-range exposure through public APIs. Actual input focus now passes. Keep the native expanded/disabled-state findings explicit. Multiple-selection exposure is verified; arrange the remaining Orca acceptance without claiming an unrun screen-reader pass. W-073's measured stalls are fixed and final three-view measurements recorded; strict pacing/wider R-101 acceptance remains open for investigation/reconciliation. Full gate/evidence/commit after every coherent task.
+- Continue S11 W-074: investigate native text-range exposure through public APIs, then complete keyboard/focus coverage. Named dialogs, operation explanations and preview errors are now exposed and cancellation tested. Actual input focus now passes. Keep the native expanded/disabled-state findings explicit. Multiple-selection exposure is verified; arrange the remaining Orca acceptance without claiming an unrun screen-reader pass. W-073's measured stalls are fixed and final three-view measurements recorded; strict pacing/wider R-101 acceptance remains open for investigation/reconciliation. Full gate/evidence/commit after every coherent task.
 
 ## Phase checklist
 - [x] 0 Intake

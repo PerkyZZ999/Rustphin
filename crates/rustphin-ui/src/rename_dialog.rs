@@ -8,7 +8,7 @@ use std::{
 
 use gpui_kit::{
     App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _,
+    ParentElement as _, Rgba, Role, SharedString, StatefulInteractiveElement as _, Styled as _,
     Subscription, Window,
     component::{
         Disableable as _, Sizable as _,
@@ -187,6 +187,20 @@ impl RenameDialog {
             .child(
                 div()
                     .id("rename-dialog")
+                    .role(Role::Dialog)
+                    .aria_label(format!("Rename {count} items"))
+                    .aria_description(format!(
+                        "{} mode. {} Review the preview before Rename; Escape cancels.",
+                        match self.mode {
+                            Mode::Replace => "Replace",
+                            Mode::Pattern => "Pattern",
+                            Mode::Case => "Case",
+                        },
+                        plan_problem
+                            .as_deref()
+                            .unwrap_or("Only the preview is shown until Rename is activated.")
+                    ))
+                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
                     .key_context("Dialog")
                     .on_action(cx.listener(
                         |this, _: &crate::workspace::DialogAccept, window, cx| {
@@ -378,13 +392,23 @@ impl RenameDialog {
             preview
                 .rows
                 .iter()
-                .map(|row| {
+                .enumerate()
+                .map(|(index, row)| {
                     let problems: Vec<_> = row
                         .problems
                         .iter()
                         .map(|problem| problem.message())
                         .collect();
                     div()
+                        .id(("rename-preview-row", index))
+                        .role(Role::ListItem)
+                        .aria_label(format!(
+                            "{} becomes {}",
+                            display_name(row.from.as_bytes()),
+                            display_name(row.to.as_bytes()),
+                        ))
+                        .aria_description(problems.join(" "))
+                        .aria_position_in_set(index)
                         .flex()
                         .flex_col()
                         .py(px(space::XS))
@@ -416,6 +440,9 @@ impl RenameDialog {
             .flex_col()
             .gap(px(space::XS))
             .id("rename-preview")
+            .role(Role::List)
+            .aria_label("Rename preview")
+            .aria_size_of_set(self.selected.len())
             .max_h(px(size::RENAME_PREVIEW))
             .overflow_y_scroll()
             .child(
@@ -461,6 +488,9 @@ fn field(
 
 fn note(color: Rgba, message: String) -> impl IntoElement {
     div()
+        .id(SharedString::from(message.clone()))
+        .role(Role::Label)
+        .aria_value(message.clone())
         .text_size(px(text::SMALL))
         .text_color(color)
         .child(message)

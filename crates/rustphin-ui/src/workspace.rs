@@ -598,6 +598,11 @@ impl Workspace {
             .bg(theme.scrim)
             .child(
                 div()
+                    .id("launch-question")
+                    .role(Role::Dialog)
+                    .aria_label(format!("Run “{name}”?"))
+                    .aria_description(body)
+                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
                     .key_context(DIALOG_CONTEXT)
                     .track_focus(&self.dialog_focus)
                     .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
@@ -1526,6 +1531,9 @@ impl Workspace {
     fn dialog(&self, question: &Question, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
         let fact = |label: &'static str, value: String| {
             div()
+                .id(label)
+                .role(Role::Label)
+                .aria_value(format!("{label}: {value}"))
                 .flex()
                 .gap(px(space::SM))
                 .child(
@@ -1541,6 +1549,16 @@ impl Workspace {
                         .text_size(px(text::DATA))
                         .child(value),
                 )
+        };
+        let description = match question {
+            Question::Conflict { conflict, .. } => format!(
+                "Existing: {}. Incoming: {}. Choose an available action. Keep both uses another name; Stop cancels.",
+                self.describe(&conflict.target_info), self.describe(&conflict.source_info),
+            ),
+            Question::Failed { message, .. } => format!("{message}. Skip leaves this entry out and continues with the rest. Try again retries it; Stop cancels."),
+            Question::Drop { .. } => "Choose move or copy, or Cancel to keep the files where they are.".to_owned(),
+            Question::ConfirmDelete { .. } => "This does not use the trash. It cannot be undone. Keep or Escape cancels.".to_owned(),
+            Question::ConfirmEmpty { .. } => "Everything in the trash is deleted for good. It cannot be undone. Keep or Escape cancels.".to_owned(),
         };
         let (title, body, buttons): (String, Vec<AnyElement>, Vec<Button>) = match question {
             Question::Conflict { conflict, .. } => {
@@ -1700,6 +1718,11 @@ impl Workspace {
             .bg(theme.scrim)
             .child(
                 div()
+                    .id("operation-question")
+                    .role(Role::Dialog)
+                    .aria_label(title.clone())
+                    .aria_description(description)
+                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
                     .key_context(DIALOG_CONTEXT)
                     .track_focus(&self.dialog_focus)
                     .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
