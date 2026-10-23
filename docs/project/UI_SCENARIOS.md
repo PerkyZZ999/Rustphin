@@ -240,3 +240,6 @@ is not proof of a missing toolkit adapter.
 
 | A12 | Ctrl+L; select all, type a path and Enter; F2 on a generated file in each view; replace with one key, Ctrl+Z, Escape | Actual editor is focused through AT-SPI; navigation works, undo restores the filename, cancellation preserves fixture bytes |
 | A13 | Open palette and type a query; open two-file batch rename, focus Find/Replace with and Pattern/Start/Step through AT-SPI; F2 on generated bookmark/group | Each field has one named focused editable node, native focus reaches its actual editor, normal input works and Escape cancels. Do not infer Text/EditableText interfaces or Orca acceptance from focused state |
+
+| A14 | Open palette; inspect modal, list, positions/count and status. Select a different result through AT-SPI Selection; Down/Up/Tab | Exactly one named selected result changes while the input stays focused. Selection alone never runs a command; keep the native client alive until the resulting state is observed |
+| A15 | Query a no-match string; then view compact, Enter. Reopen, query view details and click its row | Empty list/status explain no matches; explicit keyboard and pointer activation change mode and close the palette. Escape returns keyboard control to the browser |

@@ -4,10 +4,10 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use crate::theme::{Theme, size, space, text};
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, EventEmitter, Focusable as _, InteractiveElement as _,
-    IntoElement, KeyBinding, MouseButton, ParentElement as _, Render, ScrollStrategy,
-    StatefulInteractiveElement as _, Styled as _, Subscription, Task, UniformListScrollHandle,
-    Window, actions,
+    AccessibleAction, App, AppContext as _, Context, Entity, EventEmitter, Focusable as _,
+    InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
+    Role, ScrollStrategy, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
+    UniformListScrollHandle, Window, actions,
     component::input::{Input, InputEvent, InputState},
     div,
     prelude::FluentBuilder as _,
@@ -105,6 +105,14 @@ impl Results {
         } else {
             self.indices.get(self.selected).copied()
         }
+    }
+
+    fn select(&mut self, generation: u64, row: usize) -> bool {
+        if generation != self.generation || self.pending || row >= self.indices.len() {
+            return false;
+        }
+        self.selected = row;
+        true
     }
 }
 
@@ -206,8 +214,33 @@ impl Palette {
     fn row(&self, row: usize, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let candidate = &self.candidates[self.results.indices[row]];
         let selected = self.results.selected == row;
+        let generation = self.results.generation;
+        let palette = cx.entity().downgrade();
+        let select = move |_: Option<&gpui_kit::accesskit::ActionData>,
+                           window: &mut Window,
+                           cx: &mut App| {
+            let _ = palette.update(cx, |this, cx| {
+                if !this.results.select(generation, row) {
+                    return;
+                }
+                this.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
+                this.input.focus_handle(cx).focus(window, cx);
+                cx.notify();
+            });
+        };
         div()
             .id(("palette-result", row))
+            .role(Role::ListBoxOption)
+            .aria_label(candidate.label.clone())
+            .aria_description(format!(
+                "{}. Select, then press Enter to run.",
+                candidate.detail
+            ))
+            .aria_keyshortcuts(candidate.shortcut.clone())
+            .aria_selected(selected)
+            .aria_position_in_set(row)
+            .on_a11y_action(AccessibleAction::Focus, select.clone())
+            .on_a11y_action(AccessibleAction::Click, select)
             .w_full()
             .flex()
             .items_center()
@@ -258,8 +291,9 @@ impl Palette {
                     .child(candidate.shortcut.clone()),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.results.selected = row;
-                this.confirm(cx);
+                if this.results.select(generation, row) {
+                    this.confirm(cx);
+                }
             }))
     }
 }
@@ -267,6 +301,19 @@ impl Palette {
 impl Render for Palette {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.global::<Theme>();
+        let result_status = if self.results.pending {
+            "Searching…".to_owned()
+        } else if let Some(index) = self.results.chosen() {
+            format!(
+                "{} results. Selected {} of {}: {}. Enter to run, Escape to close.",
+                self.results.indices.len(),
+                self.results.selected + 1,
+                self.results.indices.len(),
+                self.candidates[index].label,
+            )
+        } else {
+            "No matches. Try another action name or folder path.".to_owned()
+        };
         if !self.results.pending
             && let Some(started) = self.query_started.take()
         {
@@ -295,6 +342,24 @@ impl Render for Palette {
             size::PALETTE_ROW * self.results.indices.len().max(1) as f32,
         )))
         .track_scroll(&self.scroll);
+        let results = div()
+            .id("palette-result-list")
+            .role(Role::ListBox)
+            .aria_label("Search results")
+            .aria_size_of_set(self.results.indices.len())
+            .map(|list| {
+                if self.results.indices.is_empty() {
+                    list.child(div().p(px(space::MD)).text_color(theme.text_muted).child(
+                        if self.results.pending {
+                            "Searching…"
+                        } else {
+                            "No matches. Try another action name or folder path."
+                        },
+                    ))
+                } else {
+                    list.child(results)
+                }
+            });
         div()
             .absolute()
             .inset_0()
@@ -315,6 +380,11 @@ impl Render for Palette {
             .on_action(cx.listener(|_, _: &Cancel, _, cx| cx.emit(PaletteEvent::Closed)))
             .child(
                 div()
+                    .id("command-palette")
+                    .role(Role::Dialog)
+                    .aria_label("Command palette")
+                    .aria_description("Search actions and folders. Up, Down or Tab chooses a result; Enter runs it; Escape closes.")
+                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
                     .w_full()
                     .max_w(px(size::PALETTE))
                     .flex()
@@ -343,23 +413,15 @@ impl Render for Palette {
                         window,
                         cx,
                     ))
-                    .map(|surface| {
-                        if self.results.indices.is_empty() {
-                            surface.child(
-                                div().p(px(space::MD)).text_color(theme.text_muted).child(
-                                    if self.results.pending {
-                                        "Searching…"
-                                    } else {
-                                        "No matches. Try another action name or folder path."
-                                    },
-                                ),
-                            )
-                        } else {
-                            surface.child(results)
-                        }
-                    })
+                    .child(results)
                     .child(
                         div()
+                            .id("palette-status")
+                            .role(Role::Status)
+                            .aria_label(result_status)
+                            .a11y_synthetic_children(|builder| {
+                                builder.parent_node().set_live(gpui_kit::accesskit::Live::Polite);
+                            })
                             .text_size(px(text::SMALL))
                             .text_color(theme.text_muted)
                             .child("↑ ↓ or Tab to choose · Enter to run · Esc to close"),
@@ -367,6 +429,9 @@ impl Render for Palette {
                     .when_some(self.status.clone(), |surface, status| {
                         surface.child(
                             div()
+                                .id("palette-notice")
+                                .role(Role::Status)
+                                .aria_label(status.clone())
                                 .text_size(px(text::SMALL))
                                 .text_color(theme.text_muted)
                                 .child(status),
@@ -379,6 +444,30 @@ impl Render for Palette {
 #[cfg(test)]
 mod tests {
     use super::Results;
+
+    #[test]
+    fn a_selection_from_an_old_query_cannot_choose_a_new_result() {
+        let mut results = Results::default();
+        let old = results.begin();
+        assert!(results.complete(old, vec![2, 4]));
+        let latest = results.begin();
+        assert!(results.complete(latest, vec![7, 9]));
+        assert!(!results.select(old, 1));
+        assert_eq!(results.chosen(), Some(7));
+        assert!(results.select(latest, 1));
+        assert_eq!(results.chosen(), Some(9));
+    }
+
+    #[test]
+    fn pending_or_missing_results_cannot_be_selected() {
+        let mut results = Results::default();
+        let query = results.begin();
+        assert!(!results.select(query, 0));
+        assert_eq!(results.chosen(), None);
+        assert!(results.complete(query, vec![7, 9]));
+        assert!(!results.select(query, 2));
+        assert_eq!(results.chosen(), Some(7));
+    }
 
     #[test]
     fn a_late_query_cannot_replace_newer_results() {
