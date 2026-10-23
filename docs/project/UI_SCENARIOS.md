@@ -246,3 +246,5 @@ is not proof of a missing toolkit adapter.
 
 | A16 | Shift+F10 on a generated file; inspect menu/items; Down, Right on Open with, Left, Escape | Named File actions menu and one focused named item; native focus follows main/submenu keyboard cursor. Application submenu names do not imply launching any application |
 | A17 | Native focus Copy, Down; native activate Rename, Escape. Native activate Open with, Left/Escape | Focus alone never runs the item. Down skips disabled Paste; Rename opens the focused New name editor. Disabled Paste has no action and says Unavailable. Retain the pinned adapter enabled/expanded-flag findings separately |
+
+| A18 | Alt+Enter on generated a.txt; inspect facts, modal/focused dialog and permission names. Native toggle Owner Execute, Escape, reopen; native Close | All nine permission names distinguish Owner/Group/Others. UI changes enable Apply, Escape discards them; native Close closes. File mode and bytes stay unchanged without Apply. Query fresh native state if the client cache misses updates; retain cache warnings as a limit |

@@ -6,7 +6,8 @@ use std::{
 };
 
 use gpui_kit::{
-    AnyElement, FocusHandle, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _,
+    AnyElement, FocusHandle, InteractiveElement as _, IntoElement, ParentElement as _, Role,
+    StatefulInteractiveElement as _, Styled as _,
     component::{
         Disableable as _, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -28,6 +29,8 @@ use crate::{
     theme::{Theme, size, space, text},
     workspace::{DialogAccept, DialogCancel, Workspace},
 };
+
+const PERMISSION_CLASSES: [&str; 3] = ["Owner", "Group", "Others"];
 
 /// How far a folder's size has got.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -131,6 +134,10 @@ impl PropertiesDialog {
             .child(
                 div()
                     .id("properties-dialog")
+                    .role(Role::Dialog)
+                    .aria_label(format!("Properties: {}", self.title))
+                    .aria_description("File properties and permissions. Apply saves permission changes; Close or Escape discards unapplied changes.")
+                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
                     .key_context("Dialog")
                     .track_focus(focus)
                     .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
@@ -174,11 +181,19 @@ impl PropertiesDialog {
     ) -> gpui_kit::AnyElement {
         if let Some(error) = &self.error {
             return div()
+                .id("properties-error")
+                .role(Role::Status)
+                .aria_label(format!("{error} Close and try again."))
                 .child(format!("{error} Close and try again."))
                 .into_any_element();
         }
         let Some(facts) = &self.facts else {
-            return div().child("Reading properties…").into_any_element();
+            return div()
+                .id("properties-loading")
+                .role(Role::Status)
+                .aria_label("Reading properties…")
+                .child("Reading properties…")
+                .into_any_element();
         };
         let type_label = if facts.kind == Kind::Symlink {
             "Symbolic link".to_owned()
@@ -232,6 +247,10 @@ impl PropertiesDialog {
         let mode = combine_mode(self.mode, self.original);
         let editable = self.editable;
         div()
+            .id("permissions")
+            .role(Role::Group)
+            .aria_label("Permissions")
+            .aria_description(format!("{}  {}", symbolic_mode(mode), octal_mode(mode)))
             .flex()
             .flex_col()
             .gap(px(space::SM))
@@ -247,6 +266,9 @@ impl PropertiesDialog {
             .when(has_special(self.original), |column| {
                 column.child(
                     div()
+                        .id("special-permissions")
+                        .role(Role::Label)
+                        .aria_value("Setuid, setgid or the sticky bit is set, and is kept.")
                         .text_color(theme.text_muted)
                         .text_size(px(text::SMALL))
                         .child("Setuid, setgid or the sticky bit is set, and is kept."),
@@ -255,6 +277,9 @@ impl PropertiesDialog {
             .when(!editable && self.facts.is_some(), |column| {
                 column.child(
                     div()
+                        .id("shortcut-permissions")
+                        .role(Role::Label)
+                        .aria_value("Permissions of a shortcut are not changed here.")
                         .text_color(theme.text_muted)
                         .text_size(px(text::SMALL))
                         .child("Permissions of a shortcut are not changed here."),
@@ -271,8 +296,11 @@ impl PropertiesDialog {
         editable: bool,
         cx: &mut gpui_kit::Context<Workspace>,
     ) -> impl IntoElement {
-        let name = ["Owner", "Group", "Others"][class as usize];
+        let name = PERMISSION_CLASSES[class as usize];
         div()
+            .id(("permission-class", class as usize))
+            .role(Role::Group)
+            .aria_label(name)
             .flex()
             .items_center()
             .gap(px(space::SM))
@@ -293,6 +321,7 @@ impl PropertiesDialog {
         let checked = has_bit(self.mode, bit);
         Checkbox::new(format!("perm-{class}-{label}"))
             .label(label)
+            .accessibility_label(format!("{} {label}", PERMISSION_CLASSES[class as usize]))
             .checked(checked)
             .disabled(!editable)
             .on_click(cx.listener(move |this, checked: &bool, _, cx| {
@@ -338,6 +367,9 @@ impl PropertiesDialog {
 
 fn fact(label: &str, value: String, theme: Theme) -> impl IntoElement {
     div()
+        .id(gpui_kit::SharedString::from(format!("property-{label}")))
+        .role(Role::Label)
+        .aria_value(format!("{label}: {value}"))
         .flex()
         .items_baseline()
         .gap(px(space::MD))
