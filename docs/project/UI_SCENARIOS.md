@@ -243,3 +243,6 @@ is not proof of a missing toolkit adapter.
 
 | A14 | Open palette; inspect modal, list, positions/count and status. Select a different result through AT-SPI Selection; Down/Up/Tab | Exactly one named selected result changes while the input stays focused. Selection alone never runs a command; keep the native client alive until the resulting state is observed |
 | A15 | Query a no-match string; then view compact, Enter. Reopen, query view details and click its row | Empty list/status explain no matches; explicit keyboard and pointer activation change mode and close the palette. Escape returns keyboard control to the browser |
+
+| A16 | Shift+F10 on a generated file; inspect menu/items; Down, Right on Open with, Left, Escape | Named File actions menu and one focused named item; native focus follows main/submenu keyboard cursor. Application submenu names do not imply launching any application |
+| A17 | Native focus Copy, Down; native activate Rename, Escape. Native activate Open with, Left/Escape | Focus alone never runs the item. Down skips disabled Paste; Rename opens the focused New name editor. Disabled Paste has no action and says Unavailable. Retain the pinned adapter enabled/expanded-flag findings separately |

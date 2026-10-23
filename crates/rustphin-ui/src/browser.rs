@@ -2556,6 +2556,10 @@ impl Browser {
                 .snap_to_window_with_margin(Edges::all(px(space::SM)))
                 .child(
                     div()
+                        .id("context-menu")
+                        .role(Role::Menu)
+                        .aria_label("File actions")
+                        .aria_description("Up and Down choose an action. Right opens a submenu, Left returns. Enter runs the action; Escape closes.")
                         .key_context(MENU_CONTEXT)
                         .track_focus(&self.menu_focus)
                         .on_action(cx.listener(|this, _: &MenuUp, window, cx| {
@@ -2604,6 +2608,9 @@ impl Browser {
             .map(|(index, entry)| self.menu_row(entry, index, cursor, nested, theme, cx));
         div()
             .id(column)
+            .when(nested, |column| {
+                column.role(Role::Menu).aria_label("Open with applications")
+            })
             .flex()
             .flex_col()
             .w(px(size::MENU))
@@ -2630,6 +2637,11 @@ impl Browser {
         cx: &mut Context<Self>,
     ) -> gpui_kit::AnyElement {
         let current = index == cursor;
+        let active = current
+            && self
+                .menu
+                .as_ref()
+                .is_some_and(|menu| menu.state.submenu == nested);
         match entry {
             menu::MenuEntry::Separator => div()
                 .h(px(1.))
@@ -2638,6 +2650,23 @@ impl Browser {
                 .into_any_element(),
             menu::MenuEntry::Submenu { label, .. } => self
                 .menu_button(label, true, true, current, theme, cx)
+                .aria_expanded(current && self.menu.as_ref().is_some_and(|menu| menu.state.submenu))
+                .aria_description(
+                    if current && self.menu.as_ref().is_some_and(|menu| menu.state.submenu) {
+                        "Expanded application submenu. Left returns to File actions."
+                    } else {
+                        "Application submenu. Right or activate to open."
+                    },
+                )
+                .when(active, |row| row.aria_active_descendant())
+                .on_a11y_action(
+                    AccessibleAction::Focus,
+                    Self::accessible_menu_action(index, nested, false, cx),
+                )
+                .on_a11y_action(
+                    AccessibleAction::Click,
+                    Self::accessible_menu_action(index, nested, true, cx),
+                )
                 .on_mouse_move(cx.listener(move |this, _, _, cx| {
                     this.hover_menu(index, true, 0, cx);
                 }))
@@ -2654,8 +2683,17 @@ impl Browser {
                 let command = command.clone();
                 let enabled = *enabled;
                 self.menu_button(label, enabled, false, current && enabled, theme, cx)
+                    .when(active && enabled, |row| row.aria_active_descendant())
                     .when(enabled, |row| {
-                        row.on_mouse_move(cx.listener(move |this, _, _, cx| {
+                        row.on_a11y_action(
+                            AccessibleAction::Focus,
+                            Self::accessible_menu_action(index, nested, false, cx),
+                        )
+                        .on_a11y_action(
+                            AccessibleAction::Click,
+                            Self::accessible_menu_action(index, nested, true, cx),
+                        )
+                        .on_mouse_move(cx.listener(move |this, _, _, cx| {
                             if nested {
                                 let cursor = this
                                     .menu
@@ -2679,6 +2717,28 @@ impl Browser {
         }
     }
 
+    fn accessible_menu_action(
+        index: usize,
+        nested: bool,
+        activate: bool,
+        cx: &Context<Self>,
+    ) -> impl FnMut(Option<&gpui_kit::accesskit::ActionData>, &mut Window, &mut App) + use<> {
+        let view = cx.entity().downgrade();
+        move |_, window, cx| {
+            let _ = view.update(cx, |this, cx| {
+                let Some(menu) = &this.menu else {
+                    return;
+                };
+                let cursor = if nested { menu.state.cursor } else { index };
+                this.hover_menu(cursor, nested, index, cx);
+                this.menu_focus.focus(window, cx);
+                if activate {
+                    this.on_menu_key(MenuKey::Accept, window, cx);
+                }
+            });
+        }
+    }
+
     fn menu_button(
         &self,
         label: &str,
@@ -2690,10 +2750,22 @@ impl Browser {
     ) -> gpui_kit::Stateful<gpui_kit::Div> {
         div()
             .id(SharedString::from(format!(
-                "menu-{}-{}-{label}",
+                "menu-{}-{label}",
                 if submenu { "sub" } else { "item" },
-                if current { "on" } else { "off" }
             )))
+            .role(Role::MenuItem)
+            .aria_label(label.to_owned())
+            .when(!enabled, |row| {
+                row.aria_description("Unavailable.")
+                    .a11y_synthetic_children(|builder| builder.parent_node().set_disabled())
+            })
+            .when(submenu, |row| {
+                row.a11y_synthetic_children(|builder| {
+                    builder
+                        .parent_node()
+                        .set_has_popup(gpui_kit::accesskit::HasPopup::Menu)
+                })
+            })
             .flex()
             .items_center()
             .gap(px(space::SM))
