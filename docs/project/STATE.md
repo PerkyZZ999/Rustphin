@@ -6,7 +6,7 @@
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 in progress
 - **Status:** active — S11 safety hardening
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
-- **Last updated:** 2026-10-22
+- **Last updated:** 2026-10-23
 
 ## Authority boundaries
 - Agent may decide: stack-local, reversible implementation details consistent with locked decisions; document structure; disposable spike code.
@@ -14,10 +14,10 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-10-22 — W-073c remove empty metadata text layout stalls; 402 tests
+- Latest validation entry: VALIDATION.md, 2026-10-23 — W-073d navigation snapshot/focus fix and timed first entries; 402 tests
 
 ## Open loops
-- Task: W-073b/c remove the measured startup font/prepaint and empty-metadata layout stalls. Details trace: max draw 5.78 ms, layout 1.13 ms, model/selection update 1.12 ms. Keyboard selection and a size-sort request respond during details loading. Strict frame pacing and timed first-visible-content proof remain open under R-101
+- Task: W-073b/c remove the measured startup font/prepaint and empty-metadata layout stalls. Details trace: max draw 5.78 ms, layout 1.13 ms, model/selection update 1.12 ms. Keyboard selection and a size-sort request respond during details loading. W-073d fixes old-folder rows/actions during navigation; a fresh details warm-cache capture shows new entries within 185.7 ms. Strict frame pacing and final three-view/input coverage remain open under R-101
 - Product: nothing is exposed over AT-SPI in test sessions; affects R-107, to resolve in S11
 - Task: reordering tabs by mouse drag is implemented but was not exercised in a test session
 - Product: view settings are one global file; a pane's own view settings last for the session only
@@ -39,7 +39,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Continue W-073: measured font/prepaint and empty-metadata layout stalls are fixed. Measure warm-cache first-visible-content with timed compositor captures and finish the three-view checks. Keep strict frame pacing/physical-display limits explicit until demonstrated. Proceed through the remaining S11 queue with full gates/evidence/commits per coherent task.
+- Continue W-073: measured font/prepaint and empty-metadata layout stalls are fixed. Fresh details first-content capture is below 200 ms; finish the three-view checks and assess remaining measured UI work. Keep strict frame pacing/physical-display limits explicit until demonstrated. Proceed through the remaining S11 queue with full gates/evidence/commits per coherent task.
 
 ## Phase checklist
 - [x] 0 Intake

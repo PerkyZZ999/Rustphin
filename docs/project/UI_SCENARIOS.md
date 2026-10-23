@@ -202,3 +202,11 @@ to confirm the expected view; AT-SPI absence is not proof of a missing window.
 | P2 | Repeat P1 separately in details (Ctrl+3), icons (Ctrl+1) and compact (Ctrl+2); persist the mode before relaunch or seed only that isolated config | Confirm the mode and 500,000-item count on screen. Keep toolkit phase/foreground-task timings as well as view/row timings. An over-16 ms draw remains an open R-101 failure even if the model callback is fast |
 | P3 | In a fresh default build, open a small generated directory; record process RSS. Open the large fixture in a second tab, wait for details, record RSS; Ctrl+W closes that tab, confirm the small folder returns, record RSS again | Large-folder RSS below 400 MB; after actual tab closure within 50 MB of the small-folder baseline. Record units, elapsed time and which build; navigating away alone is not a tab-close measurement |
 | P4 | On the large fixture, press F5 and send keyboard selection/sort input while details are loading; inspect completion and logs | Input changes the selection and the requested order appears. Record which loading phase was observed; a screenshot after completion alone cannot prove input responsiveness during the initial listing. Physical-display wheel/touchpad pacing remains separate from this virtual compositor benchmark |
+
+### Navigation during loading (W-073d)
+
+| # | Steps | Expected / evidence to retain |
+|---|---|---|
+| P5 | From a selected file in a small generated folder, Ctrl+L/Ctrl+A/type the large fixture path; verify the field; send Enter with timed compositor captures | New path shows Loading until matching rows arrive. Previous-folder rows/selection actions never appear under the new path. Anchor before sending Enter and retain actual capture bounds; nominal delay alone is not elapsed proof |
+| P6 | From the small folder request a missing child; then Home, Shift+F10, F5, Ctrl+L | Failed navigation restores the folder/selection and explains the error. Refresh closes the menu and Ctrl+L still opens the path editor |
+| P7 | F2 on a generated entry, Escape; navigate to another folder | Editor cancels without changing the fixture; old-folder rename/menu state is absent after arrival. ShowItems/reveal selection still uses its explicit arrival request |

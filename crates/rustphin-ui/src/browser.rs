@@ -440,6 +440,12 @@ impl Browser {
                 }
                 let arrived = same_place.is_none();
                 if arrived {
+                    self.dismiss_menu();
+                    if self.renaming.take().is_some() {
+                        self.refocus = true;
+                    }
+                    self.rename_requested = None;
+                    self.select_when_seen = None;
                     self.detect_trash(snapshot.path().to_owned(), cx);
                     // What the previous folder was waiting for is not wanted now.
                     thumbs(cx).update(cx, |thumbs, _| thumbs.drop_waiting());
@@ -485,6 +491,7 @@ impl Browser {
                 }
             }
             ModelEvent::Moved { generation, from } if generation >= self.generation => {
+                self.dismiss_menu();
                 self.generation = generation;
                 self.select_on_arrival = None;
                 self.failure = Some(Failure {
@@ -514,10 +521,25 @@ impl Browser {
     }
 
     fn open(&mut self, path: PathBuf) {
-        self.menu = None;
+        self.dismiss_menu();
         if let Some(model) = &mut self.model {
             self.generation = model.open(path);
             self.failure = None;
+        }
+    }
+
+    /// Only the listing for the requested location may be rendered or acted on.
+    /// Keep the received snapshot for a failed navigation's history rollback.
+    fn current_snapshot(&self) -> Option<&Arc<Snapshot>> {
+        let location = self.location()?;
+        self.snapshot
+            .as_ref()
+            .filter(|snapshot| snapshot.path() == location)
+    }
+
+    fn dismiss_menu(&mut self) {
+        if self.menu.take().is_some() {
+            self.refocus = true;
         }
     }
 
@@ -527,7 +549,7 @@ impl Browser {
         change: impl FnOnce(&mut Selection, &Snapshot),
         cx: &mut Context<Self>,
     ) {
-        let Some(snapshot) = self.snapshot.clone() else {
+        let Some(snapshot) = self.current_snapshot().cloned() else {
             return;
         };
         change(&mut self.selection, &snapshot);
@@ -562,7 +584,7 @@ impl Browser {
 
     /// Moves the focus by keyboard; with `extend`, selects the range to it.
     fn move_selection(&mut self, motion: Motion, extend: bool, cx: &mut Context<Self>) {
-        let len = self.snapshot.as_ref().map_or(0, |snapshot| snapshot.len());
+        let len = self.current_snapshot().map_or(0, |snapshot| snapshot.len());
         let Some(row) = target_row(self.focus_row, len, motion) else {
             return;
         };
@@ -608,8 +630,7 @@ impl Browser {
         }
         if let Some(row) = row {
             let selected = self
-                .snapshot
-                .as_ref()
+                .current_snapshot()
                 .is_some_and(|snapshot| self.selection.contains(snapshot, row));
             if !selected {
                 self.change_selection(
@@ -628,7 +649,7 @@ impl Browser {
     }
 
     fn menu_facts(&self, on_selection: bool, cx: &App) -> menu::MenuFacts {
-        let snapshot = self.snapshot.as_ref().filter(|_| on_selection);
+        let snapshot = self.current_snapshot().filter(|_| on_selection);
         let rows = snapshot
             .map(|snapshot| self.selection.rows(snapshot))
             .unwrap_or_default();
@@ -767,7 +788,7 @@ impl Browser {
 
     /// Asks for the properties of the one selected entry.
     fn open_properties(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(snapshot) = self.snapshot.clone() else {
+        let Some(snapshot) = self.current_snapshot().cloned() else {
             return;
         };
         let rows = self.selection.rows(&snapshot);
@@ -906,8 +927,10 @@ impl Browser {
         if !band.active {
             return;
         }
-        let (Some(end), Some(snapshot)) = (self.list_point(event.position), self.snapshot.clone())
-        else {
+        let (Some(end), Some(snapshot)) = (
+            self.list_point(event.position),
+            self.current_snapshot().cloned(),
+        ) else {
             return;
         };
         let layout = self.mode.layout(self.zoom);
@@ -972,8 +995,7 @@ impl Browser {
         let (prefix, advance) = type_ahead_query(&self.typed);
         let from = self.focus_row.map_or(0, |row| row + usize::from(advance));
         let found = self
-            .snapshot
-            .as_ref()
+            .current_snapshot()
             .and_then(|snapshot| snapshot.find_prefix(prefix.as_bytes(), from));
         if let Some(row) = found {
             self.change_selection(
@@ -1004,7 +1026,7 @@ impl Browser {
     }
 
     fn activate_row(&mut self, row: usize, cx: &mut Context<Self>) {
-        let Some(snapshot) = &self.snapshot else {
+        let Some(snapshot) = self.current_snapshot() else {
             return;
         };
         if row >= snapshot.len() {
@@ -1025,6 +1047,7 @@ impl Browser {
                 .map(|name| name.as_encoded_bytes().to_vec())
         });
         if let Some(generation) = model.up() {
+            self.dismiss_menu();
             self.generation = generation;
             self.failure = None;
             self.select_on_arrival = came_from.map(|name| vec![name]);
@@ -1038,6 +1061,7 @@ impl Browser {
         cx: &mut Context<Self>,
     ) {
         if let Some(generation) = self.model.as_mut().and_then(step) {
+            self.dismiss_menu();
             self.generation = generation;
             self.failure = None;
             cx.notify();
@@ -1259,7 +1283,7 @@ impl Browser {
 
     /// Whether this view is showing the contents of a trash.
     pub fn shows_trash(&self) -> bool {
-        self.trash_dir.is_some()
+        self.current_snapshot().is_some() && self.trash_dir.is_some()
     }
 
     /// Finds out in the background whether `path` shows a trash directory.
@@ -1308,11 +1332,10 @@ impl Browser {
     pub fn reveal(&mut self, folder: PathBuf, names: Vec<Vec<u8>>, cx: &mut Context<Self>) {
         let here = self.location().as_deref() == Some(folder.as_path());
         let ready = self
-            .snapshot
-            .as_ref()
+            .current_snapshot()
             .is_some_and(|snapshot| snapshot.path() == folder.as_path() && !snapshot.is_loading());
         if here && ready {
-            if let Some(snapshot) = self.snapshot.clone() {
+            if let Some(snapshot) = self.current_snapshot().cloned() {
                 select_names(&mut self.selection, &snapshot, &names);
                 self.focus_row = self.selection.focus_row(&snapshot);
                 self.reveal_focus();
@@ -1420,7 +1443,7 @@ impl Browser {
 
     /// The selected entries, as full paths.
     fn selected_paths(&self) -> Vec<PathBuf> {
-        self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
+        self.current_snapshot().map_or_else(Vec::new, |snapshot| {
             self.selection
                 .rows(snapshot)
                 .into_iter()
@@ -1435,7 +1458,7 @@ impl Browser {
         if self.trash_dir.is_some() {
             return;
         }
-        if let Some(snapshot) = self.snapshot.as_ref() {
+        if let Some(snapshot) = self.current_snapshot() {
             let rows = self.selection.rows(snapshot);
             if rows.len() >= 2 {
                 let selected: Vec<OsString> = rows
@@ -1459,8 +1482,7 @@ impl Browser {
             }
         }
         let name = self
-            .snapshot
-            .as_ref()
+            .current_snapshot()
             .zip(self.focus_row)
             .filter(|(snapshot, row)| self.selection.contains(snapshot, *row))
             .map(|(snapshot, row)| snapshot.name(row).to_vec());
@@ -1473,8 +1495,7 @@ impl Browser {
     /// before the extension selected.
     fn begin_rename(&mut self, name: Vec<u8>, window: &mut Window, cx: &mut Context<Self>) {
         let Some((snapshot, row)) = self
-            .snapshot
-            .as_ref()
+            .current_snapshot()
             .and_then(|snapshot| Some((snapshot, snapshot.row_of(&name)?)))
         else {
             return;
@@ -1538,7 +1559,7 @@ impl Browser {
     /// Creates an empty folder or file with a free default name and starts
     /// renaming it, so the name can be typed straight away.
     fn create_entry(&mut self, folder: bool, cx: &mut Context<Self>) {
-        let (Some(parent), Some(snapshot)) = (self.location(), &self.snapshot) else {
+        let (Some(parent), Some(snapshot)) = (self.location(), self.current_snapshot()) else {
             return;
         };
         if self.trash_dir.is_some() {
@@ -1882,7 +1903,7 @@ impl Browser {
     /// The entries a drag that started on `row` carries: the whole selection
     /// when the row is part of it, otherwise that row alone.
     fn drag_paths(&self, row: usize) -> Vec<PathBuf> {
-        match &self.snapshot {
+        match self.current_snapshot() {
             Some(snapshot) if row < snapshot.len() => {
                 if self.selection.contains(snapshot, row) {
                     self.selected_paths()
@@ -1970,7 +1991,7 @@ impl Browser {
         if self.trash_dir.is_some() {
             return;
         }
-        let into = match (row, &self.snapshot) {
+        let into = match (row, self.current_snapshot()) {
             (Some(row), Some(snapshot)) if row < snapshot.len() => Some(snapshot.entry_path(row)),
             (Some(_), _) => None,
             (None, _) => self.location(),
@@ -1994,8 +2015,7 @@ impl Browser {
     ) -> impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static {
         cx.listener(move |this, _: &MouseDownEvent, _, cx| {
             let folder = this
-                .snapshot
-                .as_ref()
+                .current_snapshot()
                 .filter(|snapshot| row < snapshot.len() && snapshot.is_container(row))
                 .map(|snapshot| snapshot.entry_path(row));
             if let Some(path) = folder {
@@ -2343,7 +2363,7 @@ impl Browser {
     }
 
     fn status(&self, theme: Theme) -> impl IntoElement {
-        let message = match &self.snapshot {
+        let message = match self.current_snapshot() {
             None => "Loading\u{2026}".to_owned(),
             Some(snapshot) => {
                 let shown = snapshot.len();
@@ -2582,7 +2602,7 @@ impl Render for Browser {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let frame_started = self.frames.begin();
         let theme = *cx.global::<Theme>();
-        let snapshot = self.snapshot.clone();
+        let snapshot = self.current_snapshot().cloned();
         // A pane in a split is narrower than the window; whatever contains
         // this view says how wide it is.
         if self.width <= 0. {
@@ -2716,7 +2736,7 @@ impl Render for Browser {
             .on_action(cx.listener(|this, _: &OpenTrash, _, cx| this.open_trash(cx)))
             .on_action(cx.listener(|this, _: &RestoreTrash, _, cx| this.restore_selected(cx)))
             .on_action(cx.listener(|this, _: &EmptyTrash, _, cx| {
-                if let Some(dir) = this.trash_dir.clone() {
+                if let Some(dir) = this.trash_dir.clone().filter(|_| this.shows_trash()) {
                     hub(cx).update(cx, |hub, cx| hub.empty_trash(dir, cx));
                 }
             }))
@@ -2769,9 +2789,10 @@ impl Render for Browser {
             .when_some(self.failure.as_ref(), |view, failure| {
                 view.child(self.failure_banner(failure, theme, cx))
             })
-            .when_some(self.trash_dir.clone(), |view, dir| {
-                view.child(self.trash_banner(&dir, theme, cx))
-            })
+            .when_some(
+                self.trash_dir.clone().filter(|_| snapshot.is_some()),
+                |view, dir| view.child(self.trash_banner(&dir, theme, cx)),
+            )
             .child(
                 // The file list sits on a more solid surface than the glass
                 // toolbar and status line, so columns of text stay readable.
@@ -2833,7 +2854,7 @@ impl DraggedEntries {
             return Vec::new();
         };
         let browser = browser.read(cx);
-        let Some(snapshot) = &browser.snapshot else {
+        let Some(snapshot) = browser.current_snapshot() else {
             return Vec::new();
         };
         if self.row < snapshot.len() && !browser.selection.contains(snapshot, self.row) {
