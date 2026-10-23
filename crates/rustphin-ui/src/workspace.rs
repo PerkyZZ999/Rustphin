@@ -9,7 +9,8 @@ use std::{
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, FocusHandle, Global,
     InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions,
+    Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window,
+    actions,
     component::{
         Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -1041,6 +1042,10 @@ impl Workspace {
                 let is_active = index == active;
                 div()
                     .id(("tab", index))
+                    .role(Role::Tab)
+                    .aria_label(label.clone())
+                    .aria_selected(is_active)
+                    .aria_position_in_set(index)
                     .group("tab")
                     .flex()
                     .flex_none()
@@ -1073,6 +1078,7 @@ impl Workspace {
                             .xsmall()
                             .icon(IconName::Close)
                             .tooltip("Close tab (Ctrl+W)")
+                            .accessibility_label(format!("Close {label} tab (Ctrl+W)"))
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 cx.stop_propagation();
                                 this.close_tab(index, window, cx);
@@ -1134,7 +1140,18 @@ impl Workspace {
                 .border_b_1()
                 .border_color(theme.border)
                 .text_size(px(text::SMALL))
-                .children(tabs)
+                .child(
+                    div()
+                        .id("folder-tabs")
+                        .role(Role::TabList)
+                        .aria_label("Open folders")
+                        .aria_size_of_set(tabs.len())
+                        .aria_orientation(gpui_kit::Orientation::Horizontal)
+                        .flex()
+                        .items_center()
+                        .h_full()
+                        .children(tabs),
+                )
                 .child(
                     div().px(px(space::XS)).child(
                         Button::new("new-tab")
@@ -1142,6 +1159,7 @@ impl Workspace {
                             .xsmall()
                             .icon(IconName::Plus)
                             .tooltip("New tab (Ctrl+T)")
+                            .accessibility_label("New tab (Ctrl+T)")
                             .on_click(cx.listener(|this, _, window, cx| this.new_tab(window, cx))),
                     ),
                 ),

@@ -12,9 +12,10 @@ use std::{
 };
 
 use gpui_kit::{
-    AnyElement, App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable as _,
-    InteractiveElement, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions,
+    AccessibleAction, AnyElement, App, AppContext as _, Context, Entity, EventEmitter, FocusHandle,
+    Focusable as _, InteractiveElement, IntoElement, KeyBinding, MouseButton, ParentElement as _,
+    Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window,
+    actions,
     component::{
         Icon, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -716,8 +717,25 @@ impl Sidebar {
         let (click_row, middle_row) = (row.clone(), row.clone());
         let eject_id = device.id.clone();
         let name: SharedString = device_name(device).into();
-        self.row_surface(&row, is_current, theme, window, cx)
-            .id(SharedString::from(format!("device-{}", device.id)))
+        let line = self
+            .row_surface(&row, is_current, theme, window, cx)
+            .id(SharedString::from(format!("device-{}", device.id)));
+        let eject_label = format!(
+            "{} {}",
+            if device.removable && device.can_power_off() {
+                "Safely remove"
+            } else {
+                "Unmount"
+            },
+            name
+        );
+        self.row_semantics(line, &row, name.clone(), is_current, window, cx)
+            .aria_level(1)
+            .aria_description(if device.mount_point.is_some() {
+                "Mounted volume"
+            } else {
+                "Unmounted volume"
+            })
             .h(px(size::DEVICE_ROW))
             // A volume that is not mounted is listed, but fainter.
             .when(device.mount_point.is_none(), |line| {
@@ -782,6 +800,7 @@ impl Sidebar {
                         .ghost()
                         .xsmall()
                         .icon(I::Eject)
+                        .accessibility_label(eject_label)
                         .tooltip(if device.removable && device.can_power_off() {
                             "Safely remove (E)"
                         } else {
@@ -1095,6 +1114,46 @@ impl Sidebar {
             })
     }
 
+    fn row_semantics(
+        &self,
+        line: gpui_kit::Stateful<gpui_kit::Div>,
+        row: &Row,
+        label: SharedString,
+        current: bool,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let view = cx.entity().downgrade();
+        let focus_view = view.clone();
+        let focus_row = row.clone();
+        let click_row = row.clone();
+        line.role(Role::TreeItem)
+            .aria_label(label)
+            .when(!matches!(row, Row::Group(_)), |line| {
+                line.aria_selected(current)
+            })
+            .when(
+                self.focused.as_ref() == Some(row)
+                    && self.is_focused(window, cx)
+                    && self.renaming.as_ref() != Some(row),
+                |line| line.aria_active_descendant(),
+            )
+            .on_a11y_action(AccessibleAction::Focus, move |_, window, cx| {
+                let _ = focus_view.update(cx, |this, cx| {
+                    this.focused = Some(focus_row.clone());
+                    this.focus.focus(window, cx);
+                    cx.notify();
+                });
+            })
+            .on_a11y_action(AccessibleAction::Click, move |_, window, cx| {
+                let _ = view.update(cx, |this, cx| {
+                    this.focused = Some(click_row.clone());
+                    this.focus.focus(window, cx);
+                    this.open(&click_row, false, cx);
+                });
+            })
+    }
+
     fn row_surface(
         &self,
         row: &Row,
@@ -1131,7 +1190,11 @@ impl Sidebar {
                 .bg(theme.raised)
                 .text_color(theme.text)
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .child(Input::new(&self.rename_input).xsmall())
+                .child(
+                    Input::new(&self.rename_input)
+                        .xsmall()
+                        .aria_label("New place or group name"),
+                )
         } else {
             div().flex_1().min_w_0().truncate().child(name)
         }
@@ -1156,7 +1219,10 @@ impl Sidebar {
         let middle_row = row.clone();
         let line = self
             .row_surface(&row, is_current, theme, window, cx)
-            .id(SharedString::from(format!("place-{}", place.id)))
+            .id(SharedString::from(format!("place-{}", place.id)));
+        let line = self
+            .row_semantics(line, &row, title.clone(), is_current, window, cx)
+            .aria_level(if indented { 2 } else { 1 })
             .when(indented, |line| line.pl(px(space::LG + space::SM)))
             // A hidden place is only listed while hidden ones are shown.
             .when(place.hidden, |line| line.opacity(0.5))
@@ -1193,7 +1259,7 @@ impl Sidebar {
         &self,
         index: usize,
         group: &crate::groups::Group,
-        members: usize,
+        members: &[&Place],
         theme: Theme,
         window: &Window,
         cx: &mut Context<Self>,
@@ -1204,7 +1270,7 @@ impl Sidebar {
         let click_row = row.clone();
         let line = self
             .row_surface(&row, false, theme, window, cx)
-            .id(("group", index))
+            .id(("group-heading", index))
             .mt(px(space::SM))
             .text_color(theme.text_muted)
             .font_family(text::FAMILY_HEADING)
@@ -1220,12 +1286,12 @@ impl Sidebar {
                 .flex_none(),
             )
             .child(self.name_or_field(&row, name.to_owned().into(), theme))
-            .when(collapsed && members > 0, |line| {
+            .when(collapsed && !members.is_empty(), |line| {
                 line.child(
                     div()
                         .flex_none()
                         .font_family(text::FAMILY_DATA)
-                        .child(members.to_string()),
+                        .child(members.len().to_string()),
                 )
             })
             .on_click(cx.listener(move |this, _, window, cx| {
@@ -1233,7 +1299,30 @@ impl Sidebar {
                 this.focus.focus(window, cx);
                 this.open(&click_row.clone(), false, cx);
             }));
-        Self::drop_target(line, Some(row), theme, cx).into_any_element()
+        let header = Self::drop_target(line, Some(row.clone()), theme, cx);
+        let mut branch = div()
+            .id(("group", index))
+            .flex()
+            .flex_col()
+            .flex_none()
+            .child(header);
+        if !collapsed {
+            branch = branch.children(
+                members
+                    .iter()
+                    .map(|place| self.place_row(place, true, theme, window, cx))
+                    .collect::<Vec<_>>(),
+            );
+        }
+        self.row_semantics(branch, &row, name.to_owned().into(), false, window, cx)
+            .aria_level(1)
+            .aria_expanded(!collapsed)
+            .aria_description(if collapsed {
+                "Collapsed place group. Activate to expand."
+            } else {
+                "Expanded place group. Activate to collapse."
+            })
+            .into_any_element()
     }
 }
 
@@ -1259,16 +1348,12 @@ impl Render for Sidebar {
             lines.push(self.place_row(place, false, theme, window, cx));
         }
         for (index, (group, members)) in layout.groups.iter().enumerate() {
-            let shown: Vec<&&Place> = members
+            let shown: Vec<&Place> = members
                 .iter()
+                .copied()
                 .filter(|place| is_shown(place, self.show_hidden))
                 .collect();
-            lines.push(self.group_row(index, group, shown.len(), theme, window, cx));
-            if !group.collapsed {
-                for place in shown {
-                    lines.push(self.place_row(place, true, theme, window, cx));
-                }
-            }
+            lines.push(self.group_row(index, group, &shown, theme, window, cx));
         }
         if lines.is_empty() {
             lines.push(
@@ -1333,6 +1418,12 @@ impl Render for Sidebar {
             .children(lines);
 
         div()
+            .id("places-panel")
+            .role(Role::Tree)
+            .aria_label("Places and devices")
+            .aria_description(
+                "Add folders with Ctrl+D. Use arrow keys to choose a place and Enter to open it.",
+            )
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus)
             .on_action(cx.listener(|this, _: &FocusPrevious, _, cx| this.move_focus(-1, cx)))

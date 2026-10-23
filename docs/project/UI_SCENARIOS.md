@@ -57,6 +57,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | T4 | Ctrl+T, then Ctrl+W | A third tab opens on the same folder and is closed again |
 | T5 | Ctrl+W until one tab is left | The tab strip disappears; Ctrl+W on the last tab does not close the window |
 | T6 | With two tabs, click the other tab; click its × | The clicked tab becomes active; the × closes that tab |
+| T7 | Drag the active second tab onto the first, using several waypoints paused for about 100 ms | The active folder moves to the first position; selected state, visible underline and saved session order agree |
 | D1 | F3 | Two panes side by side on the same folder, a thin divider between them, an accent line above the pane that has keyboard focus; narrow panes keep the Name and Size columns |
 | D2 | Tab, then Down and Return on a folder | The accent line moves to the other pane; only that pane changes folder |
 | D3 | F3 again | The tab shows one pane, the one that had focus |
@@ -232,3 +233,7 @@ is not proof of a missing toolkit adapter.
 | A5 | F2, inspect, Escape; Ctrl+L, inspect, Escape | Named New name and Folder location fields; cancellation preserves fixtures. Record actual focused states separately from labels; text-input focus and Orca remain open until verified |
 | A6 | Through the file list's AT-SPI Selection interface, select_child(0), select_child(1), then deselect_child(0); repeat in details/icons/compact | The first collection child is a file item, not a sort heading; collection is multiselectable. The first two files are selected together, then only the second remains. Re-check the isolated enable flag after temporary event-listener probes end |
 | A7 | Ctrl+A, plain-click one generated file, Ctrl-click another | Plain pointer selection replaces the selection; Ctrl-click adds another. Accessibility selection toggling must not change ordinary pointer behavior |
+| A8 | Create two generated bookmarks and a Work group containing one; open two distinct folder tabs; inspect names/roles/parents | Named places tree; grouped bookmark's parent is Work; named tabs/selected state and distinct new/close controls. Observe the native expanded flag separately: the pinned adapter currently omits it |
+| A9 | GrabFocus on Work; Left/Right and an AT-SPI click; then focus/activate a generated bookmark | Group focus is exposed, descriptions and children follow collapse; bookmark focus alone does not navigate, activation does. Never send these actions to real device rows |
+| A10 | Click a tab and the named new/close controls through AT-SPI; cycle with Ctrl+Tab; perform T7 | Exactly one correct tab stays selected, position/count metadata follows creation/closure/reorder. Closing an inactive tab does not select its neighbour accidentally |
+| A11 | F2/Escape on a generated bookmark, G to move groups, then drag onto Work with paused waypoints | Named rename field; Escape retains its title. Group membership, accessible parent and private config agree after keyboard and drag changes |
