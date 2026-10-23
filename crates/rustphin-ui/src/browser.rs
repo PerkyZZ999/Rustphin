@@ -2145,6 +2145,24 @@ impl Browser {
         })
     }
 
+    /// The selectable collection excludes sibling controls such as sort headings.
+    fn entry_list(&self, snapshot: &Snapshot, list: impl IntoElement) -> impl IntoElement {
+        div()
+            .id("file-list")
+            .role(Role::ListBox)
+            .aria_size_of_set(snapshot.len())
+            .aria_label(format!(
+                "Files in {}",
+                display_name(snapshot.path().as_os_str().as_bytes())
+            ))
+            .a11y_synthetic_children(|builder| builder.parent_node().set_multiselectable())
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .child(list)
+    }
+
     /// The details view: column headings over a virtualised list of entries.
     fn list(
         &self,
@@ -2313,7 +2331,7 @@ impl Browser {
             .flex_col()
             .min_h_0()
             .child(headings)
-            .child(list)
+            .child(self.entry_list(snapshot, list))
     }
 
     /// The icons and compact views: a virtualised grid, `per_row` entries wide.
@@ -2330,7 +2348,7 @@ impl Browser {
         let cell_width = layout.cell_width.unwrap_or(layout.row_height);
         let stacked = self.mode == ViewMode::Icons;
 
-        uniform_list(
+        let list = uniform_list(
             "entries",
             len.div_ceil(per_row),
             cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
@@ -2408,7 +2426,8 @@ impl Browser {
         )
         .track_scroll(&self.scroll)
         .flex_1()
-        .py(px(space::XS))
+        .py(px(space::XS));
+        self.entry_list(snapshot, list)
     }
 
     /// Shown instead of the list when it has no rows: says why and what to do.
@@ -2906,13 +2925,6 @@ impl Render for Browser {
                 // toolbar and status line, so columns of text stay readable.
                 // Dropping on the view itself puts the entries in this folder.
                 Self::drop_target(div(), None, theme, cx)
-                    .id("file-list")
-                    .role(Role::ListBox)
-                    .aria_size_of_set(snapshot.as_ref().map_or(0, |snapshot| snapshot.len()))
-                    .aria_label(self.location().map_or_else(
-                        || "Files".to_owned(),
-                        |path| format!("Files in {}", display_name(path.as_os_str().as_bytes())),
-                    ))
                     .flex()
                     .flex_1()
                     .flex_col()
@@ -2927,7 +2939,9 @@ impl Render for Browser {
                                 content.child(self.grid(snapshot, layout, per_row, theme, cx))
                             }
                         }
-                        Some(snapshot) => content.child(self.empty_state(snapshot, theme, cx)),
+                        Some(snapshot) => content.child(
+                            self.entry_list(snapshot, self.empty_state(snapshot, theme, cx)),
+                        ),
                         None => content,
                     }),
             )
@@ -3119,6 +3133,7 @@ impl Entry {
         cx: &mut Context<Browser>,
     ) -> gpui_kit::Stateful<gpui_kit::Div> {
         let view = cx.entity().downgrade();
+        let focus_view = view.clone();
         div()
             .id(("file", rows.entry_id(row) as usize))
             .role(Role::ListBoxOption)
@@ -3130,9 +3145,18 @@ impl Entry {
                 entry.aria_active_descendant()
             })
             .on_a11y_action(AccessibleAction::Focus, move |_, window, cx| {
-                let _ = view.update(cx, |this, cx| {
+                let _ = focus_view.update(cx, |this, cx| {
                     this.change_selection(
                         |selection, snapshot| selection.select_only(snapshot, row),
+                        cx,
+                    );
+                    this.focus.focus(window, cx);
+                });
+            })
+            .on_a11y_action(AccessibleAction::Click, move |_, window, cx| {
+                let _ = view.update(cx, |this, cx| {
+                    this.change_selection(
+                        |selection, snapshot| selection.toggle(snapshot, row),
                         cx,
                     );
                     this.focus.focus(window, cx);
