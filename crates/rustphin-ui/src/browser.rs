@@ -10,12 +10,12 @@ use std::{
 };
 
 use gpui_kit::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, Edges, Entity, EventEmitter,
+    AnyElement, App, AppContext as _, AsyncApp, ClickEvent, Context, Edges, Entity, EventEmitter,
     ExternalDragPayload, ExternalPaths, FileDragPaths, FocusHandle, Focusable as _,
     InteractiveElement, IntoElement, KeyBinding, KeyDownEvent, Modifiers, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point, Render,
     ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
-    UniformListScrollHandle, Window, actions, anchored,
+    UniformListScrollHandle, WeakEntity, Window, actions, anchored,
     component::{
         Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -255,6 +255,8 @@ pub struct Browser {
     /// Last successful visit announced to the workspace history.
     visited: Option<PathBuf>,
     selection: Selection,
+    /// Invalidates worker results when input changes the selection.
+    selection_revision: u64,
     /// Row of the selection's focus in the current snapshot, looked up once
     /// per snapshot instead of on every frame.
     focus_row: Option<usize>,
@@ -352,6 +354,7 @@ impl Browser {
             generation: 0,
             visited: None,
             selection: Selection::default(),
+            selection_revision: 0,
             focus_row: None,
             typed: String::new(),
             typed_at: None,
@@ -393,17 +396,8 @@ impl Browser {
                 model.set_options(settings.options());
                 this.model = Some(model);
                 this.load_file_types(cx);
-                cx.spawn(async move |view, cx| {
-                    while let Ok(event) = events.recv_async().await {
-                        if view
-                            .update(cx, |view, cx| view.on_model_event(event, cx))
-                            .is_err()
-                        {
-                            break;
-                        }
-                    }
-                })
-                .detach();
+                cx.spawn(async move |view, cx| Self::receive_events(view, events, cx).await)
+                    .detach();
                 this.open(start);
             }
             Err(error) => {
@@ -418,7 +412,86 @@ impl Browser {
         this
     }
 
-    fn on_model_event(&mut self, event: ModelEvent, cx: &mut Context<Self>) {
+    async fn receive_events(
+        view: WeakEntity<Self>,
+        events: flume::Receiver<ModelEvent>,
+        cx: &mut AsyncApp,
+    ) {
+        'events: while let Ok(event) = events.recv_async().await {
+            loop {
+                let Ok(work) = view.update(cx, |view, _| view.selection_work(&event)) else {
+                    break 'events;
+                };
+                let Some((revision, receive)) = work else {
+                    if view
+                        .update(cx, |view, cx| view.on_model_event(event, None, cx))
+                        .is_err()
+                    {
+                        break 'events;
+                    }
+                    break;
+                };
+                let selection = match receive.recv_async().await {
+                    Ok(selection) => selection,
+                    Err(error) => {
+                        let _ = view.update(cx, |view, cx| {
+                            tracing::error!(%error, "selection worker stopped");
+                            view.failure = view.location().map(|path| Failure {
+                                path,
+                                error: LoadError::Io(
+                                    "Selection update failed; refresh the folder to try again."
+                                        .into(),
+                                ),
+                                moved: false,
+                            });
+                            cx.notify();
+                        });
+                        break;
+                    }
+                };
+                let Ok(applied) = view.update(cx, |view, cx| {
+                    if view.selection_revision != revision {
+                        return false;
+                    }
+                    view.on_model_event(event.clone(), Some(selection), cx);
+                    true
+                }) else {
+                    break 'events;
+                };
+                if applied {
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Keep the old view usable while a replacement's names are matched off-thread.
+    fn selection_work(&self, event: &ModelEvent) -> Option<(u64, flume::Receiver<Selection>)> {
+        let _task = self.frames.task("selection_schedule");
+        let ModelEvent::Snapshot(new) = event else {
+            return None;
+        };
+        let old = self.snapshot.as_ref()?;
+        if new.generation() < self.generation
+            || old.path() != new.path()
+            || old.listing() == new.listing()
+        {
+            return None;
+        }
+        let receive = self.model.as_ref()?.carry_selection(
+            self.selection.clone(),
+            Arc::clone(old),
+            Arc::clone(new),
+        );
+        Some((self.selection_revision, receive))
+    }
+
+    fn on_model_event(
+        &mut self,
+        event: ModelEvent,
+        selection: Option<Selection>,
+        cx: &mut Context<Self>,
+    ) {
         let _task = self.frames.task("model_event");
         match event {
             // Generations above the last one asked for are re-reads the model
@@ -433,10 +506,12 @@ impl Browser {
                 // re-read of the same directory; a new directory starts empty.
                 {
                     let _selection = self.frames.task("selection_snapshot");
-                    match same_place {
-                        Some(shown) => self.selection.carry_over(shown, &snapshot),
-                        None => self.selection.sync(&snapshot),
+                    if let Some(selection) = selection {
+                        self.selection = selection;
+                    } else {
+                        self.selection.sync(&snapshot);
                     }
+                    self.selection_revision += 1;
                 }
                 let arrived = same_place.is_none();
                 if arrived {
@@ -553,6 +628,7 @@ impl Browser {
             return;
         };
         change(&mut self.selection, &snapshot);
+        self.selection_revision += 1;
         self.focus_row = self.selection.focus_row(&snapshot);
         self.reveal_focus();
         cx.notify();
@@ -936,6 +1012,7 @@ impl Browser {
         let layout = self.mode.layout(self.zoom);
         let rows = layout.rows_in(Rect::between(band.start, end), self.per_row, snapshot.len());
         self.selection.select_rows(&snapshot, rows, band.add);
+        self.selection_revision += 1;
         // The view does not scroll to follow a band.
         self.focus_row = self.selection.focus_row(&snapshot);
         cx.notify();
@@ -1337,6 +1414,7 @@ impl Browser {
         if here && ready {
             if let Some(snapshot) = self.current_snapshot().cloned() {
                 select_names(&mut self.selection, &snapshot, &names);
+                self.selection_revision += 1;
                 self.focus_row = self.selection.focus_row(&snapshot);
                 self.reveal_focus();
             }

@@ -16,8 +16,8 @@ use std::{
 use rayon::prelude::*;
 
 use crate::{
-    CHUNK_LEN, Chunk, EntryKind, EntryStore, Fs, Metadata, SortKey, WatchGuard, details::Details,
-    sort,
+    CHUNK_LEN, Chunk, EntryKind, EntryStore, Fs, Metadata, Selection, SortKey, WatchGuard,
+    details::Details, sort,
 };
 
 /// Entries whose details are read at a time, and the count after which the
@@ -385,7 +385,7 @@ impl Shared {
     }
 
     fn fail(&self, request: Request, error: LoadError) {
-        if request.quiet {
+        if request.background {
             // A re-read the user did not ask for. If the directory is gone,
             // move out of it; any other failure leaves the last listing shown.
             if matches!(error, LoadError::NotFound | LoadError::NotADirectory) {
@@ -457,6 +457,7 @@ impl Shared {
             options: *lock(&self.options),
             restore: lock(&self.history).clone(),
             quiet: true,
+            background: true,
         };
         self.list(request);
     }
@@ -493,6 +494,7 @@ impl Shared {
             options: request.options,
             restore,
             quiet: false,
+            background: false,
         });
     }
 
@@ -602,9 +604,11 @@ struct Request {
     options: ViewOptions,
     /// History to put back if the request fails.
     restore: History,
-    /// A re-read after a change: publish only the finished result, so the
-    /// view does not flicker through partial ones.
+    /// Publish only the finished result, retaining the previous complete view.
     quiet: bool,
+    /// Watcher refreshes leave the previous view on failure; explicit requests
+    /// report errors to the user even when publication is quiet.
+    background: bool,
 }
 
 /// Navigation and listing for one view of the filesystem.
@@ -709,10 +713,34 @@ impl DirectoryModel {
             .then(|| self.navigate(|history| history.position += 1))
     }
 
-    /// Lists the current directory again.
+    /// Lists the current directory again, retaining the current view until the
+    /// complete replacement is ready, including during an unfinished first read.
     pub fn reload(&mut self) -> Option<u64> {
         self.location()?;
-        Some(self.navigate(|_| {}))
+        Some(self.navigate_with(|_| {}, true))
+    }
+
+    /// Matches a selection to a replacement snapshot on the core worker pool.
+    /// A different directory clears the selection, even when names match.
+    /// The consumer must discard the result if its selection changed meanwhile.
+    /// Dropping the receiver abandons delivery without blocking the worker.
+    pub fn carry_selection(
+        &self,
+        mut selection: Selection,
+        old: Arc<Snapshot>,
+        new: Arc<Snapshot>,
+    ) -> flume::Receiver<Selection> {
+        let (send, receive) = flume::bounded(1);
+        self.shared.pool.spawn(move || {
+            if old.path() == new.path() {
+                selection.carry_over(&old, &new);
+            } else {
+                selection.sync(&new);
+            }
+            // A closed view or superseded request no longer needs the result.
+            let _ = send.send(selection);
+        });
+        receive
     }
 
     /// Changes the view options and republishes the current directory.
@@ -746,6 +774,7 @@ impl DirectoryModel {
             options,
             restore,
             quiet: false,
+            background: false,
         };
         let shared = Arc::clone(&self.shared);
         self.spawn("rustphin-sort", request, move |request| {
@@ -756,6 +785,10 @@ impl DirectoryModel {
 
     /// Applies `change` to the history and starts listing the resulting location.
     fn navigate(&mut self, change: impl FnOnce(&mut History)) -> u64 {
+        self.navigate_with(change, false)
+    }
+
+    fn navigate_with(&mut self, change: impl FnOnce(&mut History), quiet: bool) -> u64 {
         let (request, generation) = {
             let mut history = lock(&self.shared.history);
             let restore = history.clone();
@@ -768,7 +801,8 @@ impl DirectoryModel {
                     generation,
                     options: self.options,
                     restore,
-                    quiet: false,
+                    quiet,
+                    background: false,
                 },
                 generation,
             )
@@ -798,6 +832,7 @@ impl DirectoryModel {
                     options,
                     restore,
                     quiet: false,
+                    background: false,
                 },
                 error.into(),
             );
@@ -1092,6 +1127,7 @@ mod tests {
             options: ViewOptions::default(),
             restore: History::default(),
             quiet: false,
+            background: false,
         };
         let listing = Listing {
             id: stale,
@@ -1589,6 +1625,7 @@ mod tests {
     #[derive(Default)]
     struct LiveFs {
         entries: std::sync::atomic::AtomicUsize,
+        denied: AtomicBool,
         on_change: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     }
 
@@ -1606,6 +1643,9 @@ mod tests {
             &self,
             _: &Path,
         ) -> io::Result<Box<dyn Iterator<Item = io::Result<RawEntry>> + '_>> {
+            if self.denied.load(Ordering::Acquire) {
+                return Err(io::ErrorKind::PermissionDenied.into());
+            }
             let entries = self.entries.load(Ordering::Acquire);
             Ok(Box::new((0..entries).map(|n| {
                 Ok(RawEntry {
@@ -1634,6 +1674,45 @@ mod tests {
             *lock(&self.on_change) = Some(on_change);
             Ok(Box::new(()))
         }
+    }
+
+    #[test]
+    fn manual_refresh_replaces_a_large_listing_only_when_complete() {
+        let (mut model, events, before) = listed(CHUNK_LEN * 3 + 1);
+        let mut selection = crate::Selection::default();
+        selection.select_all(&before);
+
+        let generation = model.reload().unwrap();
+        let (after, seen) =
+            await_snapshot(&events, |s| s.generation() == generation && !s.is_loading());
+        selection = model
+            .carry_selection(selection, Arc::clone(&before), Arc::clone(&after))
+            .recv_timeout(TIMEOUT)
+            .unwrap();
+
+        assert_eq!(
+            seen.len(),
+            1,
+            "refresh exposed partial replacement listings"
+        );
+        assert_eq!(selection.len(), before.len());
+        assert_eq!(selected_names(&selection, &after), names(&before));
+    }
+
+    #[test]
+    fn manual_refresh_reports_a_read_failure_and_keeps_location() {
+        let fs = Arc::new(LiveFs::default());
+        fs.grow_to(3);
+        let (mut model, events) = DirectoryModel::new(Arc::clone(&fs) as Arc<dyn Fs>).unwrap();
+        snapshot(&events, model.open("/big"));
+        fs.denied.store(true, Ordering::Release);
+
+        let failed = settle(&events, model.reload().unwrap());
+
+        assert!(matches!(failed, ModelEvent::Failed {
+            error: LoadError::PermissionDenied, path, ..
+        } if path == Path::new("/big")));
+        assert_eq!(model.location().as_deref(), Some(Path::new("/big")));
     }
 
     #[test]
@@ -1672,7 +1751,10 @@ mod tests {
         let (after, _) = await_snapshot(&events, |s| {
             s.row_of(b"a-new-file.txt").is_some() && s.row_of(b"Zeta.md").is_none()
         });
-        selection.carry_over(&before, &after);
+        selection = model
+            .carry_selection(selection, before, Arc::clone(&after))
+            .recv_timeout(TIMEOUT)
+            .unwrap();
 
         assert_eq!(
             selected_names(&selection, &after),
@@ -1680,6 +1762,22 @@ mod tests {
         );
         assert_eq!(selection.len(), 2);
         assert_eq!(selection.focus_row(&after), after.row_of(b"file2.txt"));
+    }
+
+    #[test]
+    fn selection_transfer_does_not_select_same_names_in_another_folder() {
+        let (mut model, events, before) = listed(5);
+        let mut selection = crate::Selection::default();
+        selection.select_only(&before, 1);
+        let after = snapshot(&events, model.open("/elsewhere"));
+
+        let carried = model
+            .carry_selection(selection, before, Arc::clone(&after))
+            .recv_timeout(TIMEOUT)
+            .unwrap();
+
+        assert!(carried.is_empty());
+        assert_eq!(carried.focus_row(&after), None);
     }
 
     #[test]
