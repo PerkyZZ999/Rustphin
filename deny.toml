@@ -47,6 +47,9 @@ allow = [
 ]
 unused-allowed-license = "allow"
 confidence-threshold = 0.8
+# LLVM's libFuzzer runtime is used only by the separate fuzz workspace.
+# Its NCSA terms are permissive BSD-style terms compatible with GPLv3.
+exceptions = [{ name = "libfuzzer-sys", allow = ["NCSA"] }]
 
 [bans]
 multiple-versions = "warn"

@@ -1,0 +1,1 @@
+<!DOCTYPE xbel [<!ENTITY a "A">]><xbel xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks"><bookmark href="file:///tmp/a"><title>&a;</title><info><metadata owner="http://www.kde.org"><ID>x</ID></metadata></info></bookmark></xbel>

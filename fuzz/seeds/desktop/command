@@ -1,0 +1,1 @@
+editor "two words" %f %U %% %c ; touch /not-executed

@@ -1,0 +1,5 @@
+# comment
+file:///tmp/a%20b
+file://localhost/tmp/%FF%0A
+file://remote/a
+file:///nul%00

@@ -254,3 +254,15 @@ is not proof of a missing toolkit adapter.
 | A21 | Copy generated a.txt into a second fixture folder already holding a different a.txt; inspect conflict then native Stop | Named focused modal with Existing/Incoming facts and available choices; Stop leaves source/destination bytes unchanged. Do not activate Replace/Merge/Delete/Run for this semantics-only check |
 
 | A22 | Read Folder location, New name in all three views and empty palette search through AT-SPI Text. On a generated `aé🦀é.txt`, set caret 2 and selection 1..3; type x, undo, Escape | Text count uses Unicode characters, selection covers exactly é🦀, typing replaces those characters, undo restores text, cancel preserves filename/bytes. Check EditableText separately; the pinned Unix adapter does not implement it. Native selection writes normalize direction through the public editor setter |
+
+## Untrusted input (S11 / W-075)
+
+Use generated scratch data and the isolated home only. A harmless executable and
+shortcut may write a marker inside the fixture only when explicitly run; never
+confirm execution during these checks.
+
+| # | Steps | Expected / evidence to retain |
+|---|---|---|
+| H2 | Browse generated invalid-UTF-8/newline and 255-byte filenames, malformed desktop/PNG files and harmless executable/shortcut; switch icons/compact/details | Names stay inside rows/cells; broken image keeps a type icon and gets a failure marker. No executable marker appears from browsing or thumbnailing. Opening the malformed shortcut reports an error, without a crash |
+| H3 | Select the generated invalid-byte name, copy it and paste into another generated folder; repeat with the 255-byte name | Destination names and contents exactly match source bytes. Keep source bytes and no-execution marker checks, plus a screenshot of the selected/copied entry |
+| H4 | Add a generated bookmark, corrupt only the isolated home's user-places.xbel, observe, then restore it | Last good bookmark remains; malformed bytes stay untouched; a visible error should explain how to recover. W-075b observed preserved state and a log warning only, so visible-error acceptance remains W-075c |

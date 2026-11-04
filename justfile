@@ -82,7 +82,7 @@ features-deep:
 # it provides the fastest compiler-only feedback path.
 #
 
-doctor: fmt clippy test deps features layers msrv
+doctor: fmt clippy test deps features layers msrv fuzz-check
     @echo
     @echo "Rust-Toolchain: PASS"
 
@@ -132,8 +132,18 @@ miri:
     cargo +nightly miri test
 
 
-fuzz target:
-    cargo +nightly fuzz run "{{target}}"
+# Bounded, repeatable parser campaigns; mutable discoveries stay untracked.
+fuzz target seconds="30":
+    @if ! [[ "{{seconds}}" =~ ^[1-9][0-9]*$ ]]; then echo "seconds must be a positive integer" >&2; exit 2; fi
+    mkdir -p "fuzz/corpus/{{target}}"
+    cp fuzz/seeds/{{target}}/* "fuzz/corpus/{{target}}/"
+    cargo +nightly fuzz run "{{target}}" -- -max_total_time={{seconds}} -max_len=4096 -timeout=5 -rss_limit_mb=2048 -seed=7501
+
+# The harness has its own workspace so libFuzzer never ships in the app.
+fuzz-check:
+    cargo fmt --manifest-path fuzz/Cargo.toml --all -- --check
+    cargo clippy --manifest-path fuzz/Cargo.toml --bins -- -D warnings
+    cargo deny --manifest-path fuzz/Cargo.toml check --config deny.toml
 
 
 deep: features-deep
@@ -142,7 +152,7 @@ deep: features-deep
     @echo "Run mutation, Miri and fuzz checks selectively:"
     @echo "  rust-tc mutants"
     @echo "  rust-tc miri"
-    @echo "  rust-tc fuzz <target>"
+    @echo "  rust-tc fuzz <target> [seconds]"
 
 
 # ---------------------------------------------------------
@@ -212,7 +222,7 @@ toolchain-help:
     @echo "  rust-tc semver PKG    Public API compatibility"
     @echo "  rust-tc mutants       Mutation testing"
     @echo "  rust-tc miri          Undefined-behavior checking"
-    @echo "  rust-tc fuzz TARGET   Targeted fuzzing"
+    @echo "  rust-tc fuzz TARGET [SECONDS]  Bounded parser fuzzing (default 30s)"
     @echo "  rust-tc coverage      Optional local LCOV report"
     @echo
     @echo "Rustphin"

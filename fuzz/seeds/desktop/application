@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Fuzz
+Exec=not-executed %F
+MimeType=text/plain;

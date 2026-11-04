@@ -100,7 +100,8 @@ A cold build of the UI toolkit takes two to three minutes.
 |---|---|---|
 | `rust-tc check` | compiler only | fastest feedback while editing |
 | `rust-tc quick` | format, check, clippy, tests, doctests | after meaningful edits |
-| `rust-tc doctor` | format, clippy, tests, doctests, `cargo-deny`, `cargo-shear`, feature checks, `layers`, `msrv` | after every task, before committing |
+| `rust-tc doctor` | format, clippy, tests, doctests, `cargo-deny`, `cargo-shear`, feature checks, `layers`, `msrv`, fuzz harness checks | after every task, before committing |
+| `rust-tc fuzz <target> [seconds]` | bounded URI, places, desktop or image parser campaign; defaults to 30 seconds | after relevant parser changes; requires nightly and cargo-fuzz; see `fuzz/README.md` |
 | `rust-tc bench-listing` | 500,000-entry listing benchmark; fails if R-101's thresholds are missed | after changing listing, sorting or the model |
 | `rust-tc deep`, `mutants`, `miri` | deeper checks | on demand, not after every edit |
 

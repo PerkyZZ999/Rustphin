@@ -14,9 +14,10 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-04 — W-075a desktop Exec escaped-control regression; 411 tests
+- Latest validation entry: VALIDATION.md, 2026-11-04 — W-075b bounded parser fuzzing and two regressions; 413 tests
 
 ## Open loops
+- Task: W-075b passes four bounded parser campaigns, byte-name/255-byte UI copy and malformed shortcut/image checks. A malformed shared places file keeps the last good bookmark and logs a warning, but has no visible error. W-075c must surface it without overwriting the shared file or dropping groups.
 - Task: W-073b–e fixed measured font/layout and selection-transfer stalls and stale navigation rows. Details first entries observed within 185.7 ms; all 500,000 selections survive refresh. Final three-view max draw 6.67 ms, but p95 intervals 16.72–16.98 ms do not pass strict 60 fps. Wider input/thumbnail task acceptance and physical-display pacing remain open under R-101
 - Task: W-074a verified the pinned Wayland adapter after enabling IsEnabled on the isolated AT-SPI bus. File entries and navigation controls now expose names/selection/focus. W-074b verifies additive selection/deselection through AT-SPI in all three views. W-074c verifies places/group/tab semantics, focus/actions and mouse tab reordering. Native expanded state is not mapped by the pinned adapter; spoken group state is present. W-074d verifies text-input focus in all plain-text fields. W-074e verifies palette dialog/results/selection semantics. W-074f verifies context-menu focus/actions. W-074g verifies properties semantics and permission labels. W-074h verifies operation/launch/batch dialogs and preview/error text. W-074i verifies native Text reads, caret/selection and multibyte positions in all views. EditableText, native expanded/disabled flags, incremental client cache and an Orca pass remain R-107 work; orca is not on PATH.
 - Product: view settings are one global file; a pane's own view settings last for the session only
@@ -38,8 +39,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Continue S11 W-075 parser robustness: W-075a rejects escaped control characters in Exec. Add bounded meaningful parser fuzz targets through rust-tc and verify generated hostile-name/browse/preview fixtures. W-074 remains open alongside this independent S11 work.
-- Continue S11 W-074: complete keyboard/focus coverage and arrange the Orca pass. Native Text ranges now pass through pinned public APIs; native EditableText is absent in the pinned adapter. Named dialogs, operation explanations and preview errors are now exposed and cancellation tested. Actual input focus now passes. Keep the native expanded/disabled-state findings explicit. Multiple-selection exposure is verified; arrange the remaining Orca acceptance without claiming an unrun screen-reader pass. W-073's measured stalls are fixed and final three-view measurements recorded; strict pacing/wider R-101 acceptance remains open for investigation/reconciliation. Full gate/evidence/commit after every coherent task.
+- Continue S11 W-075c: expose shared-places read/parse failures with a useful on-screen message while retaining the last good places/groups and the invalid file. W-075b's bounded campaigns and restored full gate pass; its two parser findings are fixed. Keep W-074 keyboard/focus/Orca and native adapter findings, W-073 strict pacing/wider R-101 and all remaining S11 acceptance visible. No toolkit lock, scope or requirement has changed. Full gate, evidence and commit after every coherent task.
 
 ## Phase checklist
 - [x] 0 Intake

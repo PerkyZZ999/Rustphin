@@ -224,6 +224,9 @@ impl ThumbnailCache {
         reader.limits(limits);
         let image = reader.decode().map_err(unreadable)?;
         let original = (image.width(), image.height());
+        if original.0 == 0 || original.1 == 0 {
+            return Err(ThumbError::Unreadable("the image has no pixels".to_owned()));
+        }
         let edge = size.pixels();
         // Never scaled up: a small image is its own thumbnail.
         let scaled = if original.0 > edge || original.1 > edge {
@@ -577,6 +580,25 @@ mod tests {
         // Once the file changes it deserves another try.
         let mtime = fs::metadata(&text).unwrap().mtime();
         assert!(!f.cache.has_failed(&text, mtime + 1));
+    }
+
+    #[test]
+    fn a_gif_with_an_empty_canvas_is_remembered_as_failed() {
+        let f = fixture();
+        let file = f.dir.join("zero-canvas.gif");
+        let bytes = include_bytes!("../tests/fixtures/zero-canvas.gif");
+        fs::write(&file, bytes).unwrap();
+        let mtime = fs::metadata(&file).unwrap().mtime();
+
+        let error = f
+            .cache
+            .generate(&file, mtime, ThumbSize::Normal)
+            .unwrap_err();
+
+        assert!(matches!(error, ThumbError::Unreadable(_)), "{error:?}");
+        assert!(f.cache.has_failed(&file, mtime));
+        assert_eq!(f.cache.lookup(&file, mtime, ThumbSize::Normal), None);
+        assert_eq!(fs::read(&file).unwrap(), bytes);
     }
 
     #[test]

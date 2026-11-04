@@ -59,6 +59,8 @@ struct Spans {
     title: Option<Range<usize>>,
     /// The text inside `<IsHidden>`, when there is one.
     hidden: Option<Range<usize>>,
+    /// A self-closing `<IsHidden/>`, with no text range to replace.
+    empty_hidden: Option<Range<usize>>,
     /// Just before `</metadata>` of KDE's metadata, when there is one.
     kde_metadata_end: Option<usize>,
     /// Just before `</bookmark>`.
@@ -188,6 +190,9 @@ impl Places {
                 element: bookmark.range(),
                 title: title_node.and_then(inner),
                 hidden: hidden_node.and_then(inner),
+                empty_hidden: hidden_node
+                    .filter(|node| inner(*node).is_none())
+                    .map(|node| node.range()),
                 kde_metadata_end: kde.and_then(close_tag),
                 element_end,
             };
@@ -312,6 +317,16 @@ impl Places {
         }
         if !hidden {
             return Ok(self.text.clone());
+        }
+        if let Some(range) = &spans.empty_hidden {
+            let opening = self.text[range.clone()]
+                .strip_suffix("/>")
+                .ok_or(PlacesError::Unsafe)?;
+            let name = opening
+                .strip_prefix('<')
+                .and_then(|tag| tag.split_ascii_whitespace().next())
+                .ok_or(PlacesError::Unsafe)?;
+            return self.spliced(range.clone(), &format!("{opening}>{value}</{name}>"));
         }
         match spans.kde_metadata_end {
             Some(at) => self.spliced(at..at, &format!(" <IsHidden>{value}</IsHidden>\n   ")),
@@ -443,6 +458,24 @@ mod tests {
 
     fn parsed(text: &str) -> Places {
         Places::parse(text).unwrap()
+    }
+
+    #[test]
+    fn hiding_an_empty_flag_updates_that_element_and_preserves_its_attributes() {
+        let text = "<xbel xmlns:k='urn:fixture'><bookmark href='file:///tmp/a'><info>\
+                    <metadata owner='http://www.kde.org'><ID>x</ID>\
+                    <k:IsHidden keep='yes'/></metadata></info></bookmark></xbel>";
+
+        let hidden = parsed(text).with_hidden("x", true).unwrap();
+
+        assert!(parsed(&hidden).places().next().unwrap().hidden);
+        assert_eq!(
+            hidden,
+            text.replace(
+                "<k:IsHidden keep='yes'/>",
+                "<k:IsHidden keep='yes'>true</k:IsHidden>"
+            )
+        );
     }
 
     fn titles(text: &str) -> Vec<String> {

@@ -1,0 +1,46 @@
+[package]
+name = "rustphin-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rustphin-core = { path = "../crates/rustphin-core" }
+rustphin-platform = { path = "../crates/rustphin-platform" }
+tempfile = "3"
+
+[[bin]]
+name = "uri"
+path = "fuzz_targets/uri.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "places"
+path = "fuzz_targets/places.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "desktop"
+path = "fuzz_targets/desktop.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "images"
+path = "fuzz_targets/images.rs"
+test = false
+doc = false
+bench = false
