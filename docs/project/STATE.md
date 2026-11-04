@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-04 — W-074i native text ranges and multibyte caret/selection; 410 tests
+- Latest validation entry: VALIDATION.md, 2026-11-04 — W-075a desktop Exec escaped-control regression; 411 tests
 
 ## Open loops
 - Task: W-073b–e fixed measured font/layout and selection-transfer stalls and stale navigation rows. Details first entries observed within 185.7 ms; all 500,000 selections survive refresh. Final three-view max draw 6.67 ms, but p95 intervals 16.72–16.98 ms do not pass strict 60 fps. Wider input/thumbnail task acceptance and physical-display pacing remain open under R-101
@@ -38,6 +38,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
+- Continue S11 W-075 parser robustness: W-075a rejects escaped control characters in Exec. Add bounded meaningful parser fuzz targets through rust-tc and verify generated hostile-name/browse/preview fixtures. W-074 remains open alongside this independent S11 work.
 - Continue S11 W-074: complete keyboard/focus coverage and arrange the Orca pass. Native Text ranges now pass through pinned public APIs; native EditableText is absent in the pinned adapter. Named dialogs, operation explanations and preview errors are now exposed and cancellation tested. Actual input focus now passes. Keep the native expanded/disabled-state findings explicit. Multiple-selection exposure is verified; arrange the remaining Orca acceptance without claiming an unrun screen-reader pass. W-073's measured stalls are fixed and final three-view measurements recorded; strict pacing/wider R-101 acceptance remains open for investigation/reconciliation. Full gate/evidence/commit after every coherent task.
 
 ## Phase checklist

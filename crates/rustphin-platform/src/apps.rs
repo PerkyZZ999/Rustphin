@@ -611,7 +611,11 @@ fn split_exec(exec: &str) -> Option<Vec<String>> {
             }
             (Some(opened), char) if char == opened => quote = None,
             (_, '\\') => {
-                current.push(chars.next()?);
+                let escaped = chars.next()?;
+                if escaped.is_control() {
+                    return None;
+                }
+                current.push(escaped);
                 any = true;
             }
             (_, char) if char.is_control() => return None,
@@ -827,6 +831,16 @@ mod tests {
         );
         let index = Associations::load(&[], &[data]);
         assert_eq!(index.for_type("text/plain").len(), 1);
+    }
+
+    #[test]
+    fn escaping_a_control_character_does_not_make_an_exec_line_valid() {
+        assert_eq!(command_lines("editor \\\0", &[], "Editor", None), None);
+        assert_eq!(command_lines("editor \\\n", &[], "Editor", None), None);
+        assert_eq!(
+            command_lines("editor \"\\\u{7f}\"", &[], "Editor", None),
+            None
+        );
     }
 
     #[test]

@@ -15,6 +15,7 @@ S11 — Hardening for daily use (in progress)
 - [ ] W-078 — Reconcile every remaining acceptance checkbox with evidence, replay outstanding interop/device checks where safe, and record unresolved manual checks before proposing the daily-driver trial. No scope cuts or release-readiness claims without the required evidence.
 
 ## Done (recent)
+- [x] W-075a — Reject escaped NUL/newline/DEL in desktop Exec parsing. Regression fails on the original parser; full gate 411 tests. Bounded parser fuzzing and browse/preview acceptance remain W-075.
 - [x] W-074i — Finish inherited native Text runs and Unicode character/byte conversions; caret/selection verified in all views, replacement/undo/cancel verified. Three mutation checks fail; restored full gate 410 tests. EditableText, selection-write direction, cache/state and Orca limits remain explicit.
 - [x] W-074h — Named modal operation/launch/batch dialogs, explanations, conflict facts and rename preview/error text. Native cancellation verified for rename/delete/launch/conflict; fixture names/bytes preserved and executable marker absent. Full gate 407 tests. Remaining native adapter and Orca acceptance stays open.
 - [x] W-074g — Named focused modal properties dialog, readable metadata and grouped, distinct permission names. Native checkbox edit, Escape discard/reopen and native Close verified with unchanged fixture mode/bytes. Full gate 407 tests; loading/error/narrow/Orca acceptance remains open.

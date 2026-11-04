@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-04 — W-075a reject escaped control characters in desktop commands
+- **Phase:** 6 Implement (S11)
+- **Result:** malformed Exec lines can no longer bypass control-character rejection using a backslash.
+- **Red/green:** added a regression using the public command_lines API with escaped NUL, newline and quoted DEL. `rust-tc test` fails on the original parser (410 passed, one regression failed). The escape branch now validates the consumed character before accepting it. Ordinary escaped spaces and quotes retain the existing behavior; existing quoting/field-code/shell-separator tests pass. No launch policy, dependency or toolkit change.
+- **Checks:** first `rust-tc doctor` stopped at formatting of the new assertion; corrected it. Final `rust-tc doctor` PASS (411 passed, zero skipped; doctests, dependency/licence/advisory checks, features, layering and Rust 1.95). `git diff --check` PASS. MemoBase exact lookup and direct source review covered the desktop parser and expansion paths. No UI source changed; no new on-screen execution claim.
+- **Limits/next:** this rejects malformed command data; it is not evidence of arbitrary code execution in the old parser (process spawning still bypassed the shell and NUL arguments would fail). Continue W-075 bounded parser fuzzing, hostile-name operation and browse/preview non-execution checks. Logs copied under ignored target/rust-toolchain/w075a. W-074 adapter/Orca gaps remain open.
+
 ### 2026-11-04 — W-074i finish inherited native text ranges
 - **Phase:** 6 Implement (S11)
 - **Result:** native AT-SPI Text reading, character counts, caret and selection verified; W-074/R-107 remain open for keyboard/focus, Orca and adapter findings.
