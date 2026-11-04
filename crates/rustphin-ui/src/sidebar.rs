@@ -139,6 +139,9 @@ pub struct Sidebar {
     groups_path: Option<PathBuf>,
     /// Every bookmark of the shared file, in its order.
     places: Vec<Place>,
+    places_load: u64,
+    /// The last read warning, to avoid repeating it for unrelated directory events.
+    places_notice: Option<String>,
     groups: Groups,
     show_hidden: bool,
     /// The row the keyboard acts on.
@@ -306,6 +309,8 @@ impl Sidebar {
             places_path,
             groups_path,
             places: Vec::new(),
+            places_load: 0,
+            places_notice: None,
             groups: Groups::default(),
             show_hidden: false,
             focused: None,
@@ -392,29 +397,51 @@ impl Sidebar {
         let Some(path) = self.places_path.clone() else {
             return;
         };
+        self.places_load = self.places_load.wrapping_add(1);
+        let load = self.places_load;
         cx.spawn(async move |panel, cx| {
             let read = cx
                 .background_spawn(async move {
-                    let text = config::read(&path)?.unwrap_or_else(|| EMPTY.to_owned());
-                    Ok::<_, std::io::Error>(Places::parse(&text))
+                    let text = config::read(&path)
+                        .map_err(|error| error.to_string())?
+                        .unwrap_or_else(|| EMPTY.to_owned());
+                    Places::parse(&text).map_err(|error| error.to_string())
                 })
                 .await;
-            let _ = panel.update(cx, |panel, cx| match read {
-                Ok(Ok(places)) => {
-                    let places: Vec<Place> = places.places().cloned().collect();
-                    if places != panel.places {
-                        panel.places = places;
-                        // Only now is it known which places are really gone.
-                        if panel.groups.forget_missing(&panel.places) {
-                            panel.save_groups(cx);
+            let _ = panel.update(cx, |panel, cx| {
+                if panel.places_load != load {
+                    return;
+                }
+                match read {
+                    Ok(places) => {
+                        if let Some(previous) = panel.places_notice.take() {
+                            hub(cx).update(cx, |hub, cx| {
+                                if hub.notice.as_ref().is_some_and(|notice| notice.text == previous) {
+                                    hub.dismiss_notice(cx);
+                                }
+                            });
                         }
-                        cx.notify();
+                        let places: Vec<Place> = places.places().cloned().collect();
+                        if places != panel.places {
+                            panel.places = places;
+                            // Only now is it known which places are really gone.
+                            if panel.groups.forget_missing(&panel.places) {
+                                panel.save_groups(cx);
+                            }
+                            cx.notify();
+                        }
+                    }
+                    Err(error) => {
+                        let message = format!(
+                            "Could not update places: {error}. Your bookmarks have not been changed. Repair or restore user-places.xbel to reload them."
+                        );
+                        if panel.places_notice.as_ref() != Some(&message) {
+                            tracing::warn!(%error, "the places file could not be read");
+                            panel.places_notice = Some(message.clone());
+                            hub(cx).update(cx, |hub, cx| hub.say(message, true, cx));
+                        }
                     }
                 }
-                // Keep showing what was read last; another program may be
-                // in the middle of rewriting the file.
-                Ok(Err(error)) => tracing::warn!(%error, "the places file could not be read"),
-                Err(error) => tracing::warn!(%error, "the places file could not be read"),
             });
         })
         .detach();

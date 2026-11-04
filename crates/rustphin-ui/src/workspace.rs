@@ -1474,7 +1474,20 @@ impl Workspace {
         } else {
             (IconName::Info, theme.text_muted)
         };
+        let live = if notice.is_error {
+            gpui_kit::accesskit::Live::Assertive
+        } else {
+            gpui_kit::accesskit::Live::Polite
+        };
         div()
+            .id("activity-notice")
+            .role(if notice.is_error {
+                Role::Alert
+            } else {
+                Role::Status
+            })
+            .aria_label(notice.text.clone())
+            .a11y_synthetic_children(move |builder| builder.parent_node().set_live(live))
             .flex()
             .items_center()
             .gap(px(space::SM))
