@@ -9,12 +9,13 @@ use std::{
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, FocusHandle, Global,
     InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
-    Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window,
-    actions,
+    Role, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
+    Window, actions,
     component::{
         Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
         checkbox::Checkbox,
+        scroll::{Scrollbar, ScrollbarMode},
     },
     div,
     prelude::FluentBuilder as _,
@@ -177,6 +178,8 @@ pub struct Workspace {
     title: String,
     /// Holds the keyboard focus while a dialog is open.
     dialog_focus: FocusHandle,
+    /// The question and facts scroll independently of their heading/actions.
+    question_scroll: ScrollHandle,
     /// Whether a dialog was open at the last redraw, to move the focus when
     /// one opens or the last one closes.
     dialog_open: bool,
@@ -267,6 +270,7 @@ impl Workspace {
             saved: Session::default(),
             title: String::new(),
             dialog_focus: cx.focus_handle(),
+            question_scroll: ScrollHandle::new(),
             dialog_open: false,
             apply_to_all: false,
             zone: TimeZone::system(),
@@ -579,6 +583,7 @@ impl Workspace {
         &self,
         prompt: &LaunchPrompt,
         theme: Theme,
+        window: &Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let name = prompt.name.clone();
@@ -595,6 +600,7 @@ impl Workspace {
             .flex()
             .items_center()
             .justify_center()
+            .p(px(space::LG))
             .bg(theme.scrim)
             .child(
                 div()
@@ -605,6 +611,7 @@ impl Workspace {
                     .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
                     .key_context(DIALOG_CONTEXT)
                     .track_focus(&self.dialog_focus)
+                    .on_key_down(cx.listener(Self::scroll_question))
                     .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
                         this.answer_launch(true, false, cx);
                     }))
@@ -619,7 +626,9 @@ impl Workspace {
                     .flex()
                     .flex_col()
                     .gap(px(space::MD))
-                    .w(px(size::DIALOG))
+                    .w_full()
+                    .max_w(px(size::DIALOG))
+                    .max_h(px(f32::from(window.viewport_size().height) - space::LG * 2.))
                     .p(px(space::LG))
                     .rounded(px(size::RADIUS))
                     .bg(theme.raised)
@@ -632,14 +641,21 @@ impl Workspace {
                     .line_height(px(text::LINE))
                     .child(
                         div()
+                            .flex_none()
                             .font_family(text::FAMILY_HEADING)
                             .text_size(px(text::HEADING))
-                            .child(format!("Run “{name}”?")),
+                            .child("Run this file?"),
                     )
-                    .child(body)
+                    .child(self.question_body(
+                        format!("Run “{name}”?"),
+                        vec![div().child(body).into_any_element()],
+                        theme,
+                    ))
                     .child(
                         div()
                             .flex()
+                            .flex_none()
+                            .flex_wrap()
                             .justify_end()
                             .gap(px(space::SM))
                             .pt(px(space::SM))
@@ -682,6 +698,7 @@ impl Workspace {
         let Some(prompt) = self.launch.take() else {
             return;
         };
+        self.question_scroll.set_offset(gpui_kit::Point::default());
         if run || open {
             let path = prompt.path;
             let program = prompt.program;
@@ -1286,11 +1303,11 @@ impl Render for Workspace {
         let activity = self.activity(hub.read(cx), theme);
         let question = hub.read(cx).questions.front().cloned();
         let dialog = if let Some(question) = question {
-            Some(self.dialog(&question, theme, cx))
+            Some(self.dialog(&question, theme, window, cx))
         } else {
             self.launch
                 .as_ref()
-                .map(|prompt| self.launch_dialog(prompt, theme, cx))
+                .map(|prompt| self.launch_dialog(prompt, theme, window, cx))
         };
 
         div()
@@ -1541,7 +1558,13 @@ impl Workspace {
     }
 
     /// The dialog for the question at the front of the queue, over a dimmed window.
-    fn dialog(&self, question: &Question, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+    fn dialog(
+        &self,
+        question: &Question,
+        theme: Theme,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let fact = |label: &'static str, value: String| {
             div()
                 .id(label)
@@ -1728,6 +1751,7 @@ impl Workspace {
             .flex()
             .items_center()
             .justify_center()
+            .p(px(space::LG))
             .bg(theme.scrim)
             .child(
                 div()
@@ -1738,6 +1762,7 @@ impl Workspace {
                     .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
                     .key_context(DIALOG_CONTEXT)
                     .track_focus(&self.dialog_focus)
+                    .on_key_down(cx.listener(Self::scroll_question))
                     .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
                         this.answer(Answer::Accept, cx);
                     }))
@@ -1763,7 +1788,9 @@ impl Workspace {
                     .flex()
                     .flex_col()
                     .gap(px(space::MD))
-                    .w(px(size::DIALOG))
+                    .w_full()
+                    .max_w(px(size::DIALOG))
+                    .max_h(px(f32::from(window.viewport_size().height) - space::LG * 2.))
                     .p(px(space::LG))
                     .rounded(px(size::RADIUS))
                     .bg(theme.raised)
@@ -1776,14 +1803,23 @@ impl Workspace {
                     .line_height(px(text::LINE))
                     .child(
                         div()
+                            .flex_none()
                             .font_family(text::FAMILY_HEADING)
                             .text_size(px(text::HEADING))
-                            .child(title),
+                            .child(match question {
+                                Question::Conflict { .. } => "Name conflict",
+                                Question::Failed { .. } => "File operation failed",
+                                Question::Drop { .. } => "Move or copy?",
+                                Question::ConfirmDelete { .. } => "Delete for good?",
+                                Question::ConfirmEmpty { .. } => "Empty the trash?",
+                            }),
                     )
-                    .children(body)
+                    .child(self.question_body(title, body, theme))
                     .child(
                         div()
                             .flex()
+                            .flex_none()
+                            .flex_wrap()
                             .justify_end()
                             .gap(px(space::SM))
                             .pt(px(space::SM))
@@ -1791,6 +1827,71 @@ impl Workspace {
                     ),
             )
             .into_any_element()
+    }
+
+    fn scroll_question(
+        &mut self,
+        event: &gpui_kit::KeyDownEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let modifiers = event.keystroke.modifiers;
+        if modifiers.control || modifiers.alt || modifiers.platform || modifiers.shift {
+            return;
+        }
+        let mut offset = self.question_scroll.offset();
+        if let Some(y) = crate::layout::scroll_offset(
+            &event.keystroke.key,
+            f32::from(offset.y),
+            f32::from(self.question_scroll.max_offset().y),
+            f32::from(self.question_scroll.bounds().size.height),
+        ) {
+            offset.y = px(y);
+            self.question_scroll.set_offset(offset);
+            cx.stop_propagation();
+            cx.notify();
+        }
+    }
+
+    fn question_body(
+        &self,
+        question: String,
+        facts: Vec<AnyElement>,
+        theme: Theme,
+    ) -> impl IntoElement {
+        div()
+            .relative()
+            .flex()
+            .flex_col()
+            .min_h_0()
+            .flex_shrink_1()
+            .child(
+                div()
+                    .id("question-content")
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.question_scroll)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(space::MD))
+                            .pr(px(space::LG))
+                            .child(div().flex_none().child(question))
+                            .children(facts),
+                    ),
+            )
+            .child(
+                Scrollbar::vertical(&self.question_scroll)
+                    .mode(ScrollbarMode::Always)
+                    .styles(|styles| {
+                        styles
+                            .track(|style| style.bg(gpui_kit::transparent_black()))
+                            .thumb(|style| style.bg(theme.text_muted).radius(px(size::RADIUS)))
+                            .thumb_hover(|style| style.bg(theme.accent))
+                            .thumb_active(|style| style.bg(theme.accent))
+                    }),
+            )
     }
 
     /// Applies a dialog button or its key to the question being shown.
@@ -1825,6 +1926,7 @@ impl Workspace {
             _ => {}
         });
         self.apply_to_all = false;
+        self.question_scroll.set_offset(gpui_kit::Point::default());
         cx.notify();
     }
 }
