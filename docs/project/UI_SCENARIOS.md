@@ -58,7 +58,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | T5 | Ctrl+W until one tab is left | The tab strip disappears; Ctrl+W on the last tab does not close the window |
 | T6 | With two tabs, click the other tab; click its × | The clicked tab becomes active; the × closes that tab |
 | T7 | Drag the active second tab onto the first, using several waypoints paused for about 100 ms | The active folder moves to the first position; selected state, visible underline and saved session order agree |
-| D1 | F3 | Two panes side by side on the same folder, a thin divider between them, an accent line above the pane that has keyboard focus; narrow panes keep the Name and Size columns |
+| D1 | F3 | Two panes side by side on the same folder, a thin divider between them, an accent line above the pane that has keyboard focus; narrow panes keep Name; Size appears at 320 px per pane |
 | D2 | Tab, then Down and Return on a folder | The accent line moves to the other pane; only that pane changes folder |
 | D3 | F3 again | The tab shows one pane, the one that had focus |
 | R1 | With two tabs, one of them split, read `<isolated home>/.local/state/rustphin/session.toml`; kill the app and `launch_app` it with no argument | The file lists both tabs and the split tab's two panes; the app reopens with the same tabs, split and locations |
@@ -71,6 +71,9 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | F7 | Select a file, Ctrl+X, enter a folder, Ctrl+V, then Ctrl+Z | The file moves into the folder, and back |
 | F8 | Create a folder of 30,000 empty files from a shell, select it, Ctrl+C, Ctrl+V | A progress line "Copying “many” to “…”" with a moving bar, a count "n of 30,001" and a stop button |
 | F9 | After F3, launch `dolphin trash:/` in the same session | Dolphin's trash lists the file with its original path |
+| F10 | Copy a generated file into a generated mode-0500 folder. Escape; repeat with S; repeat, repair fixture mode to 0700, Enter | Named Permission denied failure; Stop/Skip preserve source and leave no destination, retry publishes exact bytes without a temporary entry |
+| F11 | Copy a generated 100,000-file folder from the private home to an empty disposable project-local destination; observe progress, click Stop | Count, bytes, rate and Stop visible; terminal stopped notice, staged destination cleaned, every source byte preserved. Exclude copies completed before the click |
+| F12 | In a fresh-history private-home fixture, Home/F2/rename/Enter/Ctrl+Z in icons and compact; Home/F2/type/Escape | Stem edit keeps extension; exact name/bytes restored by undo and preserved by cancellation. Explicitly reselect after undo |
 | X1 | After trashing two files (F3), open Actions, search `trash open`, Enter | The window title and tab read "Trash"; a banner "Trash" with Restore (disabled) and "Empty trash…"; the two files are listed |
 | X2 | From a shell in the session: `kioclient move <fixture>/notes.txt trash:/`; look at the trash view | notes.txt is listed too, without a reload |
 | X3 | Click notes.txt, click Restore | "Restored “notes.txt” from the trash." and the file is back in the fixture |
@@ -184,12 +187,12 @@ The test binary comes from `rust-tc test`; its filename contains a build hash.
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.
-- Frame rate. A very narrow split still keeps the size column, so names can clip; that was seen in J5 and is not a separate scenario.
-- Reordering tabs by dragging with the mouse, and dropping entries on a tab.
+- Strict frame pacing and wider R-101 acceptance remain open. W-076a fixes the earlier minimum split-pane filename clipping (J6).
+- Dropping entries on a tab. W-074c verified mouse tab reordering (T7).
 - Dragging to an application that is not a KDE one, and a session without a data-control protocol: neither is available in the test session.
 - The trashes of other volumes: the banner lists the real ones of the machine, which belong to the user and are not opened in tests.
 - Mounting, unmounting and safely removing a volume: the session shares the machine's real device service, so these are only tested against a mock service in unit tests.
-- The failure dialog (it needs an entry that fails mid-operation) and the dialogs' buttons by mouse.
+- Full dialog-button pointer coverage. W-076b verified the failure dialog through keyboard recovery and the progress Stop button by pointer (F10–F12).
 
 ## Performance and memory (S11 / W-073)
 
