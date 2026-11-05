@@ -80,3 +80,37 @@ None known. The three candidates raised before the spike are closed:
 - Frame times for the 500k-row list; cold-cache and Btrfs listing numbers.
 - Whether to depend on `wl-clipboard-rs` or implement data-control directly.
 - GPUI-Kit components (sidebar, virtual list, command, menu) untried.
+
+## 2026-11-05 — W-076e reverse input traversal and native focus
+
+A current S11 input blocker supersedes the historical no-show-stoppers statement
+above for complete keyboard/accessibility acceptance. Named input semantics and
+the actual editor track the same FocusHandle. In pinned gpui-pre 0.3.9,
+elements/div.rs registers each occurrence; tab_stop.rs keeps both ordered nodes
+but maps the shared ID to its final occurrence. Reverse traversal therefore
+returns to the preceding occurrence of the same field. This was observed in
+batch Replace: Tab reaches Replace with, Shift+Tab leaves it there, and subsequent
+typing changes that field instead of Find.
+
+Removing only the semantic wrapper's track_focus temporarily restores reverse
+traversal, but a native AT-SPI assertion then fails because Find is not focused.
+The original code has been restored. Changing only a cloned handle's public
+tab_stop flag has no effect because track_focus clones again; FocusHandle::clone
+rebuilds from shared metadata. No per-occurrence tab-registration override was
+found in the pinned public API. This is a bounded API/source assessment, not a
+proof that every possible application architecture is impossible.
+
+A concrete maintenance candidate is to deduplicate focus IDs in GPUI's
+TabStopMap::insert, retaining one ordered position per FocusHandle. A minimal
+candidate is to return before inserting an ID already present in by_id. It is a
+proposal, not an implemented or verified fix: first-versus-last placement and
+metadata updates need review for shared handles, tab groups, disabled controls
+and partial frame replay. Required proof is a toolkit regression for repeated
+handle registration in both directions, then Rustphin's native focus/Text/range
+checks, complete modal traversal, the full gate and large-directory timing.
+
+D-001 locks the exact toolkit and D-010 forbids a GPUI fork. A patched dependency
+or toolkit upgrade needs the maintainer's approval and the change-impact loop before
+implementation; no registry source, dependency pin, patch section or decision
+has been changed. The current acceptance item remains open. Unrelated S11 layout,
+fallback and privacy/build checks can continue while that decision is pending.

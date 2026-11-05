@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-05 — W-076d minimum-height batch-rename layout and scrolling; 416 tests
+- Latest validation entry: VALIDATION.md, 2026-11-05 — W-076e reverse input traversal investigation; baseline gate 416 tests
 
 ## Open loops
 - Task: W-073b–e fixed measured font/layout and selection-transfer stalls and stale navigation rows. Details first entries observed within 185.7 ms; all 500,000 selections survive refresh. Final three-view max draw 6.67 ms, but p95 intervals 16.72–16.98 ms do not pass strict 60 fps. Wider input/thumbnail task acceptance and physical-display pacing remain open under R-101
@@ -34,10 +34,10 @@
 - Open items carried forward from Discovery are listed in DISCOVERY.md
 
 ## Blockers
-- None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
+- W-076e: complete reverse field traversal and native input focus conflict through duplicate registration in the pinned toolkit. Removing the wrapper tracking restores traversal but loses native focus; original code restored. DISCOVERY.md records a concrete deduplication candidate and required checks. D-001/D-010 approval is required before a toolkit patch or upgrade. This blocks that acceptance item, not unrelated S11 work. The baseline gate passes.
 
 ## Next action
-- Continue S11 W-076 operation/launch minimum-window dialog layouts, keyboard/focus coverage (batch Shift+Tab did not move to the previous field) and optional-service fallbacks in an isolated home. W-076a fixes split-window filename clipping; W-076b verifies operation failure/recovery/Stop and grid rename; W-076c/d fix minimum-height Properties and batch-rename clipping. The broader keyboard checklist remains open. W-075a/b/c complete the bounded parser checks and visible failure handling; reconcile R-104 against this evidence in W-078. Keep W-074 Orca/native-adapter findings, W-073 strict pacing/wider R-101 and real-desktop/hardware acceptance open. No toolkit lock, scope or requirement has changed. Full gate, evidence and commit after every coherent task.
+- Continue S11 W-076 operation/launch minimum-window dialog layouts, remaining keyboard/focus coverage (W-076e toolkit correction needs a decision) and optional-service fallbacks in an isolated home. W-076a fixes split-window filename clipping; W-076b verifies operation failure/recovery/Stop and grid rename; W-076c/d fix minimum-height Properties and batch-rename clipping. The broader keyboard checklist remains open. W-075a/b/c complete the bounded parser checks and visible failure handling; reconcile R-104 against this evidence in W-078. Keep W-074 Orca/native-adapter findings, W-073 strict pacing/wider R-101 and real-desktop/hardware acceptance open. No toolkit lock, scope or requirement has changed. Full gate, evidence and commit after every coherent task.
 
 ## Phase checklist
 - [x] 0 Intake
