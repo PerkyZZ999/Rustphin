@@ -89,6 +89,8 @@ components:
     width: 320px
   toolbar-back-navigation:
     width: 240px
+  details-size-column-min:
+    width: 320px
   rename-dialog:
     width: 640px
     backgroundColor: "{colors.surface-raised}"
@@ -209,7 +211,7 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
 - **Window, top to bottom:** toolbar (44 px), an inline message when something failed, the file area (fills the rest), status line (28 px). Hairline `border` lines separate them.
 - **Toolbar:** navigation buttons on the left, a flexible location field, and labelled Actions on the right. Below 320 px per pane Forward and Up leave the bar; below 240 px Back also leaves. These commands remain in Actions and on their shortcuts.
 - **File area:** one of three views. Details has a 28 px heading row and columns for name (fills), size (88 px, right-aligned), modified (144 px) and type (184 px). Icons and compact are grids whose cells grow with the five zoom levels. Rows and cells have an 8 px side gutter.
-- **Narrow windows:** below 760 px the type column goes, below 560 px the date column; the name always keeps its width. The location collapses leading folders into an ellipsis and shows the last four.
+- **Narrow windows:** below 760 px per pane the type column goes, below 560 px the date column, and below 320 px the size column. The name keeps the remaining width, including at the minimum split-window size. Sorting by hidden columns stays in Actions. The location collapses leading folders into an ellipsis and shows the last four.
 - **Places panel:** 220 px on the left, hidden or shown with F9 or Actions. Split panes share the remaining width. Entry content and the truncated status line stay inside their pane at narrow widths.
 
 ## Elevation & Depth
@@ -282,6 +284,6 @@ error through the existing operation notice, without replacing that entry.
 
 As of 2026-10-18 the application implements the surfaces, text colours, selection, hover, error banner, toolbar (including the 320 px and 240 px navigation breakpoints), tab strip, split panes, dialogs, the batch-rename dialog, activity lines, the rename field, the trash banner, the places panel, the command palette and labelled Actions entry, the three views, the 4-pixel spacing scale, the 2 px radius, and the three font roles (Inter for names and interface text, JetBrains Mono for sizes, dates and the status line, Space Grotesk for state headings). The status line truncates inside its pane.
 
-Floating surfaces (`surface-raised`, `border-accent`, the glow) are used by dialogs, the properties dialog, the palette and the context menu. The cyan signal is used by the progress bar. Not yet applied in code: the emerald signal, `primary-bright` on focused inputs, and the type column, which still uses Inter.
+Floating surfaces (`surface-raised`, `border-accent`, the glow) are used by dialogs, the properties dialog, the palette and the context menu. The cyan signal is used by the progress bar. Focused inputs use `primary-bright` through the component ring token (observed 2026-11-04). Not yet applied in code: the emerald signal and the type column, which still uses Inter. The size-column breakpoint is implemented and verified at the minimum split-window size (S11 W-076a, 2026-11-05).
 
 Changed from the first draft of this document, by the user's decision on 2026-10-12: the accent is royal blue, not indigo; corners are 2 px, not square; monospace is for data only, with Inter for file names. Removed because the toolkit cannot do it: backdrop blur on popovers and panels inside the window. Removed because Rustphin has no such feature planned for its first release: terminal docks, checksum and hex inspectors, tree connectors.

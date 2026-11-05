@@ -41,6 +41,8 @@ pub mod size {
     pub const SELECTION_BAR: f32 = 2.;
     /// Width of the size column.
     pub const COLUMN_SIZE: f32 = 88.;
+    /// Minimum pane width that leaves room for the size column beside names.
+    pub const WIDTH_FOR_SIZE: f32 = 320.;
     /// Width of the modified column.
     pub const COLUMN_MODIFIED: f32 = 144.;
     /// Width of the type column.

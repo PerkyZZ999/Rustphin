@@ -6,7 +6,7 @@
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 in progress
 - **Status:** active — S11 safety hardening
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
-- **Last updated:** 2026-11-04
+- **Last updated:** 2026-11-05
 
 ## Authority boundaries
 - Agent may decide: stack-local, reversible implementation details consistent with locked decisions; document structure; disposable spike code.
@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-04 — W-075c places read/parse error UI and recovery; 413 tests
+- Latest validation entry: VALIDATION.md, 2026-11-05 — W-076a minimum split-window filename layout; 414 tests
 
 ## Open loops
 - Task: W-073b–e fixed measured font/layout and selection-transfer stalls and stale navigation rows. Details first entries observed within 185.7 ms; all 500,000 selections survive refresh. Final three-view max draw 6.67 ms, but p95 intervals 16.72–16.98 ms do not pass strict 60 fps. Wider input/thumbnail task acceptance and physical-display pacing remain open under R-101
@@ -30,7 +30,6 @@
 - Task: not seen on screen in S5: dropping on a tab, drags in the icons and compact views, copy (not cut) between Rustphin and Dolphin, the clipboard fallback notice
 - Manual: mount, unmount and safely remove a real USB drive from the places panel, and unmount one in use to see the reason (R-013); needs the user
 - Task: places panel not yet seen on screen: hiding a place, reordering by keyboard, an edit made in Dolphin other than adding; its width is fixed and its visibility is not remembered
-- Task: in a very narrow split the 88 px size column remains, so entry names can clip away
 - Task: thumbnails not yet observed: reuse of a thumbnail Dolphin made and the reverse on screen (the cache format is unit-tested against the specification's example); JPEG, GIF and WebP files; scrolling a large picture folder
 - Open items carried forward from Discovery are listed in DISCOVERY.md
 
@@ -38,7 +37,7 @@
 - None. The maintainer approved the three individually documented maintenance-notice exceptions on 2026-10-18; the complete baseline gate passes.
 
 ## Next action
-- Continue S11 W-076 keyboard-only/focus and narrow-layout checks, then operation failure/cancel and optional-service fallbacks, in an isolated home. W-075a/b/c complete the bounded parser checks and visible failure handling; reconcile R-104 against this evidence in W-078. Keep W-074 Orca/native-adapter findings, W-073 strict pacing/wider R-101 and real-desktop/hardware acceptance open. No toolkit lock, scope or requirement has changed. Full gate, evidence and commit after every coherent task.
+- Continue S11 W-076 keyboard/focus coverage, dialog layouts and operation failure/cancel paths, then optional-service fallbacks, in an isolated home. W-076a fixes minimum split-window filename clipping; the broader keyboard checklist remains open. W-075a/b/c complete the bounded parser checks and visible failure handling; reconcile R-104 against this evidence in W-078. Keep W-074 Orca/native-adapter findings, W-073 strict pacing/wider R-101 and real-desktop/hardware acceptance open. No toolkit lock, scope or requirement has changed. Full gate, evidence and commit after every coherent task.
 
 ## Phase checklist
 - [x] 0 Intake

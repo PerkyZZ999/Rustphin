@@ -119,6 +119,7 @@ Use an isolated fixture and home as above. These checks never activate a device 
 | J3 | Actions, query `new group`, Enter; name it Work | Places panel receives focus, creates the group and opens its name field; group is saved in place-groups.toml |
 | J4 | Use Actions for view modes, zoom, hidden files, sorting, split view, new file, trash and place controls | Each control is selected after opening Actions once; corresponding existing shortcuts still work; unavailable future features are absent |
 | J5 | Make one pane narrower than 320 px, then narrower than 240 px | Forward and Up leave first; Back leaves under 240 px. Alt+Left, Alt+Right and Alt+Up still navigate. Actions stays. The status line stays inside the pane |
+| J6 | Details view, places visible, F3; resize to the 480 px minimum window width, then enlarge through 320 px per pane | Each narrow pane keeps filename text and only Name; Size returns at 320 px with matching header/cells. Arrow selection and F2/Escape still work. Sorting hidden metadata remains reachable through Actions |
 
 ## Batch rename (S9)
 

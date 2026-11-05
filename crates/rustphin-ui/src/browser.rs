@@ -2197,11 +2197,13 @@ impl Browser {
                     .flex_1()
                     .min_w_0(),
             )
-            .child(
-                self.heading("Size", SortKey::Size, options, theme, cx)
-                    .w(px(size::COLUMN_SIZE))
-                    .justify_end(),
-            )
+            .when(columns.size, |headings| {
+                headings.child(
+                    self.heading("Size", SortKey::Size, options, theme, cx)
+                        .w(px(size::COLUMN_SIZE))
+                        .justify_end(),
+                )
+            })
             .when(columns.modified, |headings| {
                 headings.child(
                     self.heading("Modified", SortKey::Modified, options, theme, cx)
@@ -2272,16 +2274,18 @@ impl Browser {
                                         cx,
                                     )),
                             )
-                            .child(
-                                div()
-                                    .w(px(size::COLUMN_SIZE))
-                                    .flex_none()
-                                    .text_right()
-                                    .font_family(text::FAMILY_DATA)
-                                    .text_size(px(text::DATA))
-                                    .text_color(secondary)
-                                    .when(!size_text.is_empty(), |cell| cell.child(size_text)),
-                            )
+                            .when(columns.size, |line| {
+                                line.child(
+                                    div()
+                                        .w(px(size::COLUMN_SIZE))
+                                        .flex_none()
+                                        .text_right()
+                                        .font_family(text::FAMILY_DATA)
+                                        .text_size(px(text::DATA))
+                                        .text_color(secondary)
+                                        .when(!size_text.is_empty(), |cell| cell.child(size_text)),
+                                )
+                            })
                             .when(columns.modified, |line| {
                                 line.child(
                                     div()
@@ -3365,15 +3369,16 @@ impl Navigation {
 /// Which optional columns fit the view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Columns {
+    size: bool,
     modified: bool,
     kind: bool,
 }
 
 impl Columns {
-    /// Narrow windows drop the type column first, then the date, so the name
-    /// always keeps a usable width.
+    /// Narrow panes drop type, modified and then size to preserve names.
     fn for_width(width: f32) -> Self {
         Self {
+            size: width >= size::WIDTH_FOR_SIZE,
             modified: width >= size::WIDTH_FOR_MODIFIED,
             kind: width >= size::WIDTH_FOR_TYPE,
         }
@@ -3476,6 +3481,12 @@ mod tests {
         assert!(back_only.back && !back_only.forward_and_up);
         let narrow = Navigation::for_width(size::TOOLBAR_BACK_MIN - 1.);
         assert!(!narrow.back && !narrow.forward_and_up);
+    }
+
+    #[test]
+    fn narrow_panes_drop_size_before_names_disappear() {
+        assert!(!Columns::for_width(size::WIDTH_FOR_SIZE - 1.).size);
+        assert!(Columns::for_width(size::WIDTH_FOR_SIZE).size);
     }
 
     #[test]

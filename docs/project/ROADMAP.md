@@ -62,7 +62,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** R-015 and R-106 criteria.
 - **Requirements:** R-015, R-106
 - **Validation:** test, bench, ui-test, manual design checklist
-- **Status:** done 2026-10-18 (see VALIDATION.md). Open: entry names can clip when a split pane is narrow enough that the size column consumes the name.
+- **Status:** done 2026-10-18 (see VALIDATION.md). Narrow split-pane filename clipping was fixed in S11 W-076a (2026-11-05), with a design breakpoint, regression/mutation and isolated keyboard/layout evidence.
 
 ## Slice S9 — Advanced batch rename
 - **Outcome:** Rename many files with patterns, regular expressions and counters, with a live preview and one-step undo.
