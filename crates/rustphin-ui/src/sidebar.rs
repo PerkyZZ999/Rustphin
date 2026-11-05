@@ -131,6 +131,8 @@ impl Render for DraggedPlace {
     }
 }
 
+const DEVICES_UNAVAILABLE: &str = "Devices could not be listed. Open folders by path, or restart Rustphin to reconnect to the device service.";
+
 /// The places panel.
 pub struct Sidebar {
     /// The shared places file; `None` when no data directory is known.
@@ -155,6 +157,8 @@ pub struct Sidebar {
     current: Option<PathBuf>,
     /// Storage volumes, and how full the mounted ones are (size, free).
     devices: Vec<Device>,
+    /// A device-service failure, distinct from a successful empty inventory.
+    devices_unavailable: bool,
     usage: HashMap<String, (u64, u64)>,
     device_service: Arc<dyn Devices>,
     /// The volume being mounted or unmounted, shown as busy.
@@ -319,6 +323,7 @@ impl Sidebar {
             rename_requested: None,
             current: None,
             devices: Vec::new(),
+            devices_unavailable: false,
             usage: HashMap::new(),
             device_service: Arc::new(NoDevices),
             device_busy: None,
@@ -593,6 +598,7 @@ impl Sidebar {
                 }
                 Err(error) => {
                     tracing::warn!(%error, "no device service; volumes are not listed");
+                    let _ = panel.update(cx, |panel, cx| panel.devices_failed(cx));
                     return;
                 }
             }
@@ -632,12 +638,26 @@ impl Sidebar {
                 Ok((devices, usage)) => {
                     panel.devices = devices;
                     panel.usage = usage;
+                    panel.devices_unavailable = false;
                     cx.notify();
                 }
-                Err(error) => tracing::warn!(%error, "the volumes could not be listed"),
+                Err(error) => {
+                    tracing::warn!(%error, "the volumes could not be listed");
+                    panel.devices_failed(cx);
+                }
             });
         })
         .detach();
+    }
+
+    fn devices_failed(&mut self, cx: &mut Context<Self>) {
+        self.devices_unavailable = true;
+        self.devices.clear();
+        self.usage.clear();
+        if matches!(self.focused, Some(Row::Device(_))) {
+            self.focused = None;
+        }
+        cx.notify();
     }
 
     fn device(&self, id: &str) -> Option<&Device> {
@@ -1404,7 +1424,7 @@ impl Render for Sidebar {
             );
         }
         let devices = self.devices.clone();
-        if !devices.is_empty() {
+        if !devices.is_empty() || self.devices_unavailable {
             lines.push(
                 div()
                     .mt(px(space::SM))
@@ -1419,6 +1439,19 @@ impl Render for Sidebar {
                     .child("Devices")
                     .into_any_element(),
             );
+            if self.devices_unavailable {
+                lines.push(
+                    div()
+                        .id("devices-unavailable")
+                        .role(Role::Status)
+                        .aria_label(DEVICES_UNAVAILABLE)
+                        .p(px(space::MD))
+                        .text_size(px(text::SMALL))
+                        .text_color(theme.text_muted)
+                        .child(DEVICES_UNAVAILABLE)
+                        .into_any_element(),
+                );
+            }
             for device in &devices {
                 lines.push(self.device_row(device, theme, window, cx));
             }
