@@ -1381,7 +1381,7 @@ impl Render for Workspace {
                 let element = self
                     .properties
                     .as_ref()
-                    .map(|dialog| dialog.render(&self.dialog_focus, &self.zone, theme, cx));
+                    .map(|dialog| dialog.render(&self.dialog_focus, &self.zone, theme, window, cx));
                 workspace.children(element)
             })
             .children(self.palette.clone())

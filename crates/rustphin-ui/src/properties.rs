@@ -7,11 +7,12 @@ use std::{
 
 use gpui_kit::{
     AnyElement, FocusHandle, InteractiveElement as _, IntoElement, ParentElement as _, Role,
-    StatefulInteractiveElement as _, Styled as _,
+    ScrollHandle, StatefulInteractiveElement as _, Styled as _, Window,
     component::{
         Disableable as _, Sizable as _,
         button::{Button, ButtonVariants as _},
         checkbox::Checkbox,
+        scroll::{Scrollbar, ScrollbarMode},
     },
     div,
     prelude::FluentBuilder as _,
@@ -76,6 +77,7 @@ pub struct PropertiesDialog {
     pub token: u64,
     /// Set when the dialog closes, so a folder walk stops.
     pub cancel: Arc<AtomicBool>,
+    scroll: ScrollHandle,
 }
 
 impl PropertiesDialog {
@@ -97,6 +99,7 @@ impl PropertiesDialog {
             editable: false,
             token,
             cancel: Arc::new(AtomicBool::new(false)),
+            scroll: ScrollHandle::new(),
         }
     }
 
@@ -119,6 +122,7 @@ impl PropertiesDialog {
         focus: &FocusHandle,
         zone: &TimeZone,
         theme: Theme,
+        window: &Window,
         cx: &mut gpui_kit::Context<Workspace>,
     ) -> AnyElement {
         let dirty = self.editable && self.mode != self.original;
@@ -130,6 +134,7 @@ impl PropertiesDialog {
             .flex()
             .items_center()
             .justify_center()
+            .p(px(space::LG))
             .bg(theme.scrim)
             .child(
                 div()
@@ -146,10 +151,37 @@ impl PropertiesDialog {
                     .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
                         this.close_properties(cx);
                     }))
+                    .on_key_down(cx.listener(|this, event: &gpui_kit::KeyDownEvent, _, cx| {
+                        let modifiers = event.keystroke.modifiers;
+                        if modifiers.control
+                            || modifiers.alt
+                            || modifiers.platform
+                            || modifiers.shift
+                        {
+                            return;
+                        }
+                        let Some(dialog) = &this.properties else {
+                            return;
+                        };
+                        let mut offset = dialog.scroll.offset();
+                        if let Some(y) = scroll_offset(
+                            &event.keystroke.key,
+                            f32::from(offset.y),
+                            f32::from(dialog.scroll.max_offset().y),
+                            f32::from(dialog.scroll.bounds().size.height),
+                        ) {
+                            offset.y = px(y);
+                            dialog.scroll.set_offset(offset);
+                            cx.stop_propagation();
+                            cx.notify();
+                        }
+                    }))
                     .flex()
                     .flex_col()
                     .gap(px(space::MD))
-                    .w(px(size::DIALOG))
+                    .w_full()
+                    .max_w(px(size::DIALOG))
+                    .max_h(px(f32::from(window.viewport_size().height) - space::LG * 2.))
                     .p(px(space::LG))
                     .rounded(px(size::RADIUS))
                     .bg(theme.raised)
@@ -162,12 +194,39 @@ impl PropertiesDialog {
                     .line_height(px(text::LINE))
                     .child(
                         div()
+                            .flex_none()
                             .font_family(text::FAMILY_HEADING)
                             .text_size(px(text::HEADING))
                             .truncate()
                             .child(self.title.clone()),
                     )
-                    .child(body)
+                    .child(
+                        div()
+                            .relative()
+                            .flex()
+                            .flex_col()
+                            .min_h_0()
+                            .flex_shrink_1()
+                            .child(
+                                div()
+                                    .id("properties-content")
+                                    .min_h_0()
+                                    .overflow_y_scroll()
+                                    .track_scroll(&self.scroll)
+                                    .child(body),
+                            )
+                            .child(
+                                Scrollbar::vertical(&self.scroll)
+                                    .mode(ScrollbarMode::Always)
+                                    .styles(|styles| {
+                                        styles
+                                            .track(|style| style.bg(gpui_kit::transparent_black()))
+                                            .thumb(|style| style.bg(theme.text_muted).radius(px(size::RADIUS)))
+                                            .thumb_hover(|style| style.bg(theme.accent))
+                                            .thumb_active(|style| style.bg(theme.accent))
+                                    }),
+                            ),
+                    )
                     .child(self.buttons(dirty, theme, cx)),
             )
             .into_any_element()
@@ -341,6 +400,7 @@ impl PropertiesDialog {
         cx: &mut gpui_kit::Context<Workspace>,
     ) -> impl IntoElement {
         div()
+            .flex_none()
             .flex()
             .justify_end()
             .gap(px(space::SM))
@@ -396,4 +456,40 @@ fn time_text(seconds: Option<i64>, zone: &TimeZone) -> String {
         .map(|seconds| format::timestamp(seconds, zone))
         .filter(|text| !text.is_empty())
         .unwrap_or_else(|| "Unknown".to_owned())
+}
+
+fn scroll_offset(key: &str, offset: f32, maximum: f32, page: f32) -> Option<f32> {
+    let next = match key {
+        "up" => offset + text::LINE,
+        "down" => offset - text::LINE,
+        "pageup" => offset + page,
+        "pagedown" => offset - page,
+        "home" => 0.,
+        "end" => -maximum,
+        _ => return None,
+    };
+    Some(next.clamp(-maximum, 0.))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn properties_scroll_keys_reach_and_respect_content_edges() {
+        assert_eq!(scroll_offset("home", -100., 300., 120.), Some(0.));
+        assert_eq!(scroll_offset("end", 0., 300., 120.), Some(-300.));
+        assert_eq!(scroll_offset("up", 0., 300., 120.), Some(0.));
+        assert_eq!(scroll_offset("down", -295., 300., 120.), Some(-300.));
+    }
+
+    #[test]
+    fn properties_scroll_keys_move_by_line_or_visible_page() {
+        assert_eq!(scroll_offset("down", 0., 300., 120.), Some(-20.));
+        assert_eq!(scroll_offset("up", -100., 300., 120.), Some(-80.));
+        assert_eq!(scroll_offset("pagedown", 0., 300., 120.), Some(-120.));
+        assert_eq!(scroll_offset("pageup", -200., 300., 120.), Some(-80.));
+        assert_eq!(scroll_offset("pagedown", 0., 0., 120.), Some(0.));
+        assert_eq!(scroll_offset("enter", -100., 300., 120.), None);
+    }
 }
