@@ -114,3 +114,74 @@ or toolkit upgrade needs the maintainer's approval and the change-impact loop be
 implementation; no registry source, dependency pin, patch section or decision
 has been changed. The current acceptance item remains open. Unrelated S11 layout,
 fallback and privacy/build checks can continue while that decision is pending.
+
+### Isolated experiment authorisation (2026-11-05)
+
+The maintainer approved testing the W-076e correction in an isolated toolkit/application
+build as a bounded D-001/D-010 exception. Production dependency pins must remain
+unchanged, and adopting a patch still requires review. The experiment lives in
+ignored target/rust-toolchain/w076e-experiment: a Git archive of 6b3ae44, a copied
+gpui-pre 0.3.9, separate build output and explicit provenance hashes. Registry
+sources are unchanged. Its application lockfile differs only by replacing that
+registry package with the same-version local path package.
+
+The published toolkit's complete lib-test target fails before any correction:
+two missing font fixtures, an absent test-only util_macros dependency and a
+property-test macro parse failure. This baseline failure is retained rather than
+labelled as a passing suite. An experiment-only feature/adapter and explicit
+integration-test target exercise the real private focus-map implementation
+without building unrelated unavailable unit fixtures; that adapter is not enabled
+in the application build. Original unit tests were not disabled or edited.
+
+### Isolated experiment result (2026-11-05)
+
+The early-return candidate is rejected: it loses cached-child insertion history
+and later metadata/group placement. The tested correction instead removes the
+previous ordered node when by_id is replaced, then inserts the latest node.
+Raw insertion history remains intact. The exact implementation and experiment-only
+test adapter are preserved in [W-076e-toolkit.patch](experiments/W-076e-toolkit.patch).
+This document artifact does not apply a production dependency override.
+
+Seven focused cases pass: distinct stops/wrapping, group ordering, duplicate
+forward/reverse traversal, latest disabled metadata, latest group placement,
+cached-child partial replay and disabling the sole repeated stop. Untouched and
+early-return implementations each fail three of the initial six cases. Deliberate
+stop-filter and group-order mutations fail three and two of the final seven;
+restored focused tests, formatting and warnings-denied Clippy pass. The isolated
+application's full rust-tc doctor passes 416 tests, features, layers, licences,
+Rust 1.95 and fuzz-harness checks. Main's fresh doctor also passes 416 tests.
+
+In an isolated KWin/private home, the diagnostic release moves Replace with back
+to Find on Shift+Tab while native Find FOCUSED/Text reads alpha2. Pattern → Start
+→ Step and reverse reach the expected native-focused fields and retain values.
+Inline rename retains native focus, Unicode Text/count, caret offset 2 and the
+selection [1,3) = é🦀 in details, icons and compact. All edits were cancelled;
+generated names/bytes are preserved. This is field traversal evidence, not a
+complete keyboard/modal or Orca pass.
+
+Initial native probes fail because the isolated accessibility daemon's socket
+collides with the desktop bus path and its dbus-daemon policy rejects the user.
+Successful probes use an experiment-only configuration permitting the current
+UID, a unique private socket, a private registry and AT_SPI_BUS_ADDRESS on the
+test app/client. Host services/configuration and installed tooling are unchanged.
+A Unicode input injection failed; Unicode proof instead reads the generated
+Unicode filename. An initial native Unicode assertion targeted the wrong folder
+after an appended location; that failed attempt is retained and excluded.
+
+All three 500,000-entry views complete 1,200 scroll frames with zero excluded
+gaps. Per-120-frame p95 ranges: details 17.15–21.19 ms, icons 17.19–17.64 ms,
+compact 17.00–17.52 ms. Maximum draws are 21.13/9.63/10.46 ms respectively;
+startup foreground maxima are 132.50/126.89/274.20 ms. These runs do not pass
+R-101; they include startup and enabled accessibility, and no same-environment
+unpatched comparison was run. No regression or performance improvement is
+attributed to the focus change. The full published toolkit test suite remains
+unavailable as described above.
+
+Provenance, failing/passing logs, mutation logs, snapshots and screenshots remain
+under ignored target/rust-toolchain/w076e-experiment. The patch dry-run applies
+to the pristine registry source without changing it. Application Rust files,
+production manifest/lockfile and registry source hashes remain unchanged. The
+virtual session is stopped. Adoption, a maintained dependency-source strategy
+and a superseding D-001/D-010 decision are not authorised; complete modal checks,
+comparative performance assessment and unavailable toolkit suite coverage remain
+review considerations. Continue independent S11 tasks with the pinned toolkit.

@@ -1,0 +1,212 @@
+--- a/src/tab_stop.rs
++++ b/src/tab_stop.rs
+@@ -85,7 +85,9 @@
+             tab_stop: focus_handle.tab_stop,
+             path,
+         };
+-        self.by_id.insert(focus_handle.id, order.clone());
++        if let Some(previous) = self.by_id.insert(focus_handle.id, order.clone()) {
++            self.order.remove(&previous, ());
++        }
+         self.order.insert_or_replace(order, ());
+     }
+
+--- a/src/gpui.rs
++++ b/src/gpui.rs
+@@ -400,3 +400,6 @@
+     /// Further information about the driver, as reported by Vulkan.
+     pub driver_info: String,
+ }
++
++#[cfg(feature = "rustphin-focus-probe")]
++pub mod rustphin_focus_probe;
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -48,6 +48,7 @@
+ zed-rev = "93d745668805029476e6d7fbb19652116fed51de"
+
+ [features]
++rustphin-focus-probe = []
+ bench = ["bench-support"]
+ bench-support = [
+     "profiler",
+@@ -656,3 +657,10 @@
+ [lints.rust.unexpected_cfgs]
+ level = "allow"
+ priority = 0
++
++[workspace]
++
++[[test]]
++name = "rustphin_focus"
++path = "tests/rustphin_focus.rs"
++required-features = ["rustphin-focus-probe"]
+--- /dev/null
++++ b/src/rustphin_focus_probe.rs
+@@ -0,0 +1,129 @@
++//! Approved W-076e experiment adapter; absent from the registry and production build.
++
++use crate::{FocusHandle, FocusMap, tab_stop::TabStopMap};
++use std::sync::Arc;
++
++/// Preserve forward, reverse and wrapping traversal past a non-stop handle.
++pub fn distinct_stops_traverse_and_wrap() {
++    let handles = Arc::new(FocusMap::default());
++    let first = FocusHandle::new(&handles).tab_stop(true);
++    let middle = FocusHandle::new(&handles).tab_stop(false);
++    let last = FocusHandle::new(&handles).tab_stop(true);
++    let mut map = TabStopMap::default();
++    map.insert(&first);
++    map.insert(&middle);
++    map.insert(&last);
++
++    assert_eq!(map.next(Some(&first.id)), Some(last.clone()));
++    assert_eq!(map.prev(Some(&last.id)), Some(first.clone()));
++    assert_eq!(map.next(Some(&last.id)), Some(first.clone()));
++    assert_eq!(map.prev(Some(&first.id)), Some(last.clone()));
++}
++
++/// Preserve declared tab-group order independently of painting order.
++pub fn tab_groups_keep_their_declared_order() {
++    let handles = Arc::new(FocusMap::default());
++    let first = FocusHandle::new(&handles).tab_stop(true);
++    let last = FocusHandle::new(&handles).tab_stop(true);
++    let mut map = TabStopMap::default();
++    map.begin_group(2);
++    map.insert(&last);
++    map.end_group();
++    map.begin_group(1);
++    map.insert(&first);
++    map.end_group();
++
++    assert_eq!(map.next(None), Some(first.clone()));
++    assert_eq!(map.next(Some(&first.id)), Some(last.clone()));
++    assert_eq!(map.prev(Some(&last.id)), Some(first.clone()));
++}
++
++/// Repeated registration must not trap reverse traversal on the same field.
++pub fn repeated_stops_traverse_once_in_both_directions() {
++    let handles = Arc::new(FocusMap::default());
++    let first = FocusHandle::new(&handles).tab_stop(true);
++    let last = FocusHandle::new(&handles).tab_stop(true);
++    let mut map = TabStopMap::default();
++    map.insert(&first);
++    map.insert(&first);
++    map.insert(&last);
++    map.insert(&last);
++
++    assert_eq!(map.prev(Some(&last.id)), Some(first.clone()));
++    assert_eq!(map.next(Some(&first.id)), Some(last.clone()));
++    assert_eq!(map.prev(Some(&first.id)), Some(last.clone()));
++    assert_eq!(map.next(Some(&last.id)), Some(first.clone()));
++}
++
++/// A later non-stop registration must retire the earlier stopping occurrence.
++pub fn latest_registration_can_disable_a_stop() {
++    let handles = Arc::new(FocusMap::default());
++    let first = FocusHandle::new(&handles).tab_stop(true);
++    let last = FocusHandle::new(&handles).tab_stop(true);
++    let mut map = TabStopMap::default();
++    map.insert(&first);
++    map.insert(&last);
++    let disabled = first.clone().tab_stop(false);
++    map.insert(&disabled);
++
++    assert_eq!(map.next(None), Some(last.clone()));
++    assert_eq!(map.prev(Some(&last.id)), Some(last.clone()));
++    assert_eq!(map.next(Some(&disabled.id)), Some(last.clone()));
++}
++
++/// Repeated handles retain the location of their latest declared group.
++pub fn latest_registration_owns_the_group_position() {
++    let handles = Arc::new(FocusMap::default());
++    let first = FocusHandle::new(&handles).tab_stop(true);
++    let second = FocusHandle::new(&handles).tab_stop(true);
++    let third = FocusHandle::new(&handles).tab_stop(true);
++    let mut map = TabStopMap::default();
++    map.begin_group(1);
++    map.insert(&first);
++    map.end_group();
++    map.begin_group(2);
++    map.insert(&second);
++    map.insert(&first);
++    map.end_group();
++    map.begin_group(3);
++    map.insert(&third);
++    map.end_group();
++
++    assert_eq!(map.next(None), Some(second.clone()));
++    assert_eq!(map.next(Some(&second.id)), Some(first.clone()));
++    assert_eq!(map.next(Some(&first.id)), Some(third.clone()));
++    assert_eq!(map.prev(Some(&first.id)), Some(second.clone()));
++}
++
++/// A cached child retains its own registration even if the parent shared it.
++pub fn cached_child_replay_preserves_its_shared_stop() {
++    let handles = Arc::new(FocusMap::default());
++    let first = FocusHandle::new(&handles).tab_stop(true);
++    let last = FocusHandle::new(&handles).tab_stop(true);
++    let mut painted = TabStopMap::default();
++    painted.insert(&first);
++    let child_start = painted.paint_index();
++    painted.insert(&first);
++    painted.insert(&last);
++    let child_history = painted.insertion_history[child_start..].to_vec();
++    let mut replayed = TabStopMap::default();
++    replayed.replay(&child_history);
++
++    assert_eq!(replayed.next(None), Some(first.clone()));
++    assert_eq!(replayed.prev(Some(&last.id)), Some(first.clone()));
++    assert_eq!(replayed.next(Some(&first.id)), Some(last.clone()));
++}
++
++/// Disabling the sole repeated stop leaves no forward or reverse target.
++pub fn disabling_the_only_repeated_stop_leaves_no_target() {
++    let handles = Arc::new(FocusMap::default());
++    let only = FocusHandle::new(&handles).tab_stop(true);
++    let mut map = TabStopMap::default();
++    map.insert(&only);
++    map.insert(&only);
++    let disabled = only.clone().tab_stop(false);
++    map.insert(&disabled);
++
++    assert_eq!(map.next(None), None);
++    assert_eq!(map.prev(None), None);
++}
+--- /dev/null
++++ b/tests/rustphin_focus.rs
+@@ -0,0 +1,34 @@
++#[test]
++fn distinct_stops_traverse_and_wrap() {
++    gpui::rustphin_focus_probe::distinct_stops_traverse_and_wrap();
++}
++
++#[test]
++fn tab_groups_keep_their_declared_order() {
++    gpui::rustphin_focus_probe::tab_groups_keep_their_declared_order();
++}
++
++#[test]
++fn repeated_stops_traverse_once_in_both_directions() {
++    gpui::rustphin_focus_probe::repeated_stops_traverse_once_in_both_directions();
++}
++
++#[test]
++fn latest_registration_can_disable_a_stop() {
++    gpui::rustphin_focus_probe::latest_registration_can_disable_a_stop();
++}
++
++#[test]
++fn latest_registration_owns_the_group_position() {
++    gpui::rustphin_focus_probe::latest_registration_owns_the_group_position();
++}
++
++#[test]
++fn cached_child_replay_preserves_its_shared_stop() {
++    gpui::rustphin_focus_probe::cached_child_replay_preserves_its_shared_stop();
++}
++
++#[test]
++fn disabling_the_only_repeated_stop_leaves_no_target() {
++    gpui::rustphin_focus_probe::disabling_the_only_repeated_stop_leaves_no_target();
++}
