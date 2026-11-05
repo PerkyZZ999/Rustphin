@@ -27,6 +27,7 @@ use rustphin_platform::properties::{Facts, Kind};
 
 use crate::{
     format,
+    layout::scroll_offset,
     theme::{Theme, size, space, text},
     workspace::{DialogAccept, DialogCancel, Workspace},
 };
@@ -456,40 +457,4 @@ fn time_text(seconds: Option<i64>, zone: &TimeZone) -> String {
         .map(|seconds| format::timestamp(seconds, zone))
         .filter(|text| !text.is_empty())
         .unwrap_or_else(|| "Unknown".to_owned())
-}
-
-fn scroll_offset(key: &str, offset: f32, maximum: f32, page: f32) -> Option<f32> {
-    let next = match key {
-        "up" => offset + text::LINE,
-        "down" => offset - text::LINE,
-        "pageup" => offset + page,
-        "pagedown" => offset - page,
-        "home" => 0.,
-        "end" => -maximum,
-        _ => return None,
-    };
-    Some(next.clamp(-maximum, 0.))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn properties_scroll_keys_reach_and_respect_content_edges() {
-        assert_eq!(scroll_offset("home", -100., 300., 120.), Some(0.));
-        assert_eq!(scroll_offset("end", 0., 300., 120.), Some(-300.));
-        assert_eq!(scroll_offset("up", 0., 300., 120.), Some(0.));
-        assert_eq!(scroll_offset("down", -295., 300., 120.), Some(-300.));
-    }
-
-    #[test]
-    fn properties_scroll_keys_move_by_line_or_visible_page() {
-        assert_eq!(scroll_offset("down", 0., 300., 120.), Some(-20.));
-        assert_eq!(scroll_offset("up", -100., 300., 120.), Some(-80.));
-        assert_eq!(scroll_offset("pagedown", 0., 300., 120.), Some(-120.));
-        assert_eq!(scroll_offset("pageup", -200., 300., 120.), Some(-80.));
-        assert_eq!(scroll_offset("pagedown", 0., 0., 120.), Some(0.));
-        assert_eq!(scroll_offset("enter", -100., 300., 120.), None);
-    }
 }

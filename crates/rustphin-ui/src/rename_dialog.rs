@@ -7,14 +7,15 @@ use std::{
 };
 
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, Rgba, Role, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Window,
+    App, AppContext as _, Context, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
+    IntoElement, ParentElement as _, Rgba, Role, ScrollHandle, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Window,
     component::{
         Disableable as _, Sizable as _,
         button::{Button, ButtonVariants as _},
         checkbox::Checkbox,
         input::{Input, InputEvent, InputState},
+        scroll::{Scrollbar, ScrollbarMode},
     },
     div,
     prelude::FluentBuilder as _,
@@ -23,10 +24,16 @@ use gpui_kit::{
 use rustphin_core::{CaseChange, Preview, RenameRules, display_name, ops::Request};
 
 use crate::{
+    layout::scroll_offset,
     operations::hub,
     theme::{Theme, size, space, text},
     workspace::Workspace,
 };
+
+// Rule rows follow the modes row in the scrollable body.
+const FIRST_FIELD_ROW: usize = 1;
+const SECOND_FIELD_ROW: usize = 2;
+const COUNTER_FIELDS_ROW: usize = 3;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -48,6 +55,8 @@ pub struct RenameDialog {
     pattern: Entity<InputState>,
     start: Entity<InputState>,
     step: Entity<InputState>,
+    scroll: ScrollHandle,
+    focus: FocusHandle,
     _inputs: Vec<Subscription>,
 }
 
@@ -78,23 +87,29 @@ impl RenameDialog {
             input.set_value("1", window, cx);
             input
         });
-        let watch = |input: &Entity<InputState>, cx: &mut Context<Workspace>| {
+        let watch = |input: &Entity<InputState>, row: usize, cx: &mut Context<Workspace>| {
             cx.subscribe_in(
                 input,
                 window,
-                |this, _, event: &InputEvent, window, cx| match event {
+                move |this, _, event: &InputEvent, window, cx| match event {
                     InputEvent::PressEnter { .. } => this.apply_rename(window, cx),
                     InputEvent::Change => cx.notify(),
-                    InputEvent::Focus | InputEvent::Blur => {}
+                    InputEvent::Focus => {
+                        if let Some(dialog) = &this.rename {
+                            dialog.scroll.scroll_to_item(row);
+                            cx.notify();
+                        }
+                    }
+                    InputEvent::Blur => {}
                 },
             )
         };
         let _inputs = vec![
-            watch(&find, cx),
-            watch(&replace, cx),
-            watch(&pattern, cx),
-            watch(&start, cx),
-            watch(&step, cx),
+            watch(&find, FIRST_FIELD_ROW, cx),
+            watch(&replace, SECOND_FIELD_ROW, cx),
+            watch(&pattern, FIRST_FIELD_ROW, cx),
+            watch(&start, COUNTER_FIELDS_ROW, cx),
+            watch(&step, COUNTER_FIELDS_ROW, cx),
         ];
         find.read(cx).focus_handle(cx).focus(window, cx);
         Self {
@@ -109,6 +124,8 @@ impl RenameDialog {
             pattern,
             start,
             step,
+            scroll: ScrollHandle::new(),
+            focus: cx.focus_handle(),
             _inputs,
         }
     }
@@ -202,6 +219,7 @@ impl RenameDialog {
                     ))
                     .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
                     .key_context("Dialog")
+                    .track_focus(&self.focus)
                     .on_action(cx.listener(
                         |this, _: &crate::workspace::DialogAccept, window, cx| {
                             this.apply_rename(window, cx);
@@ -212,12 +230,40 @@ impl RenameDialog {
                             this.cancel_rename(window, cx);
                         },
                     ))
+                    .on_key_down(cx.listener(|this, event: &gpui_kit::KeyDownEvent, _, cx| {
+                        let modifiers = event.keystroke.modifiers;
+                        if !modifiers.control
+                            || modifiers.alt
+                            || modifiers.platform
+                            || modifiers.shift
+                        {
+                            return;
+                        }
+                        if !matches!(event.keystroke.key.as_str(), "pageup" | "pagedown") {
+                            return;
+                        }
+                        let Some(dialog) = &this.rename else {
+                            return;
+                        };
+                        let mut offset = dialog.scroll.offset();
+                        if let Some(y) = scroll_offset(
+                            &event.keystroke.key,
+                            f32::from(offset.y),
+                            f32::from(dialog.scroll.max_offset().y),
+                            f32::from(dialog.scroll.bounds().size.height),
+                        ) {
+                            offset.y = px(y);
+                            dialog.scroll.set_offset(offset);
+                            cx.stop_propagation();
+                            cx.notify();
+                        }
+                    }))
                     .flex()
                     .flex_col()
                     .gap(px(space::MD))
                     .w_full()
                     .max_w(px(size::RENAME_DIALOG))
-                    .max_h_full()
+                    .max_h(px(f32::from(window.viewport_size().height) - space::LG * 2.))
                     .p(px(space::LG))
                     .rounded(px(size::RADIUS))
                     .bg(theme.raised)
@@ -230,28 +276,62 @@ impl RenameDialog {
                     .line_height(px(text::LINE))
                     .child(
                         div()
+                            .flex_none()
                             .font_family(text::FAMILY_HEADING)
                             .text_size(px(text::HEADING))
                             .child(format!("Rename {count} items")),
                     )
-                    .child(self.modes(cx))
-                    .child(self.fields(theme, window, cx))
-                    .when_some(plan_problem, |dialog, problem| {
-                        dialog.child(note(theme.danger, problem))
-                    })
-                    .when(
-                        !changed && preview.as_ref().is_some_and(Preview::can_apply),
-                        |dialog| {
-                            dialog.child(note(
-                                theme.text_muted,
-                                "Nothing would change. Edit the rule to give the files new names."
-                                    .to_owned(),
-                            ))
-                        },
-                    )
-                    .child(self.preview(preview.as_ref(), theme))
                     .child(
                         div()
+                            .relative()
+                            .flex()
+                            .flex_col()
+                            .min_h_0()
+                            .flex_shrink_1()
+                            .child(
+                                div()
+                                    .id("rename-content")
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(space::MD))
+                                    .min_h_0()
+                                    .overflow_y_scroll()
+                                    .pr(px(space::LG))
+                                    .track_scroll(&self.scroll)
+                                    .child(self.modes(cx))
+                                    .children(self.fields(theme, window, cx))
+                                    .when_some(plan_problem, |dialog, problem| {
+                                        dialog.child(note(theme.danger, problem))
+                                    })
+                                    .when(
+                                        !changed
+                                            && preview.as_ref().is_some_and(Preview::can_apply),
+                                        |dialog| {
+                                            dialog.child(note(
+                                                theme.text_muted,
+                                                "Nothing would change. Edit the rule to give the files new names.".to_owned(),
+                                            ))
+                                        },
+                                    )
+                                    .child(self.preview(preview.as_ref(), theme)),
+                            )
+                            .child(
+                                Scrollbar::vertical(&self.scroll)
+                                    .mode(ScrollbarMode::Always)
+                                    .styles(|styles| {
+                                        styles
+                                            .track(|style| style.bg(gpui_kit::transparent_black()))
+                                            .thumb(|style| {
+                                                style.bg(theme.text_muted).radius(px(size::RADIUS))
+                                            })
+                                            .thumb_hover(|style| style.bg(theme.accent))
+                                            .thumb_active(|style| style.bg(theme.accent))
+                                    }),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
                             .flex()
                             .justify_end()
                             .gap(px(space::SM))
@@ -278,6 +358,7 @@ impl RenameDialog {
 
     fn modes(&self, cx: &mut Context<Workspace>) -> impl IntoElement {
         div()
+            .flex_none()
             .flex()
             .gap(px(space::SM))
             .child(self.mode_button("mode-replace", "Replace", Mode::Replace, cx))
@@ -298,9 +379,16 @@ impl RenameDialog {
         } else {
             button.outline()
         };
-        button.on_click(cx.listener(move |this, _, _, cx| {
+        button.on_click(cx.listener(move |this, _, window, cx| {
             if let Some(dialog) = &mut this.rename {
                 dialog.mode = mode;
+                dialog.scroll.set_offset(gpui_kit::point(px(0.), px(0.)));
+                let focus = match mode {
+                    Mode::Replace => dialog.find.read(cx).focus_handle(cx),
+                    Mode::Pattern => dialog.pattern.read(cx).focus_handle(cx),
+                    Mode::Case => dialog.focus.clone(),
+                };
+                focus.focus(window, cx);
             }
             cx.notify();
         }))
@@ -311,57 +399,45 @@ impl RenameDialog {
         theme: Theme,
         window: &Window,
         cx: &mut Context<Workspace>,
-    ) -> impl IntoElement {
+    ) -> Vec<gpui_kit::AnyElement> {
         match self.mode {
-            Mode::Replace => div()
-                .flex()
-                .flex_col()
-                .gap(px(space::SM))
-                .child(field(theme, "Find", &self.find, window, cx))
-                .child(field(theme, "Replace with", &self.replace, window, cx))
-                .child(
-                    Checkbox::new("rename-regex")
-                        .label("Regular expression")
-                        .checked(self.regex)
-                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
-                            if let Some(dialog) = &mut this.rename {
-                                dialog.regex = *checked;
-                            }
-                            cx.notify();
-                        })),
-                ),
-            Mode::Pattern => div()
-                .flex()
-                .flex_col()
-                .gap(px(space::SM))
-                .child(field(theme, "Pattern", &self.pattern, window, cx))
-                .child(note(
+            Mode::Replace => vec![
+                field(theme, "Find", &self.find, window, cx).into_any_element(),
+                field(theme, "Replace with", &self.replace, window, cx).into_any_element(),
+                div().flex_none().child(Checkbox::new("rename-regex")
+                    .label("Regular expression")
+                    .checked(self.regex)
+                    .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                        if let Some(dialog) = &mut this.rename {
+                            dialog.regex = *checked;
+                        }
+                        cx.notify();
+                    })))
+                    .into_any_element(),
+            ],
+            Mode::Pattern => vec![
+                field(theme, "Pattern", &self.pattern, window, cx).into_any_element(),
+                note(
                     theme.text_muted,
                     "# is the counter. The number of # signs is how many digits it has. @ is the file's current name.".to_owned(),
-                ))
-                .child(
-                    div()
-                        .flex()
-                        .gap(px(space::SM))
-                        .child(field(theme, "Start", &self.start, window, cx))
-                        .child(field(theme, "Step", &self.step, window, cx)),
-                ),
-            Mode::Case => div().flex().gap(px(space::SM)).child(self.case_button(
-                "case-lower",
-                "Lower case",
-                CaseChange::Lower,
-                cx,
-            )).child(self.case_button(
-                "case-upper",
-                "Upper case",
-                CaseChange::Upper,
-                cx,
-            )).child(self.case_button(
-                "case-words",
-                "Capitalise words",
-                CaseChange::Words,
-                cx,
-            )),
+                ).into_any_element(),
+                div()
+                    .flex_none()
+                    .flex()
+                    .gap(px(space::SM))
+                    .child(div().flex_1().min_w_0().child(field(theme, "Start", &self.start, window, cx)))
+                    .child(div().flex_1().min_w_0().child(field(theme, "Step", &self.step, window, cx)))
+                    .into_any_element(),
+            ],
+            Mode::Case => vec![div()
+                .flex_none()
+                .flex()
+                .flex_wrap()
+                .gap(px(space::SM))
+                .child(self.case_button("case-lower", "Lower case", CaseChange::Lower, cx))
+                .child(self.case_button("case-upper", "Upper case", CaseChange::Upper, cx))
+                .child(self.case_button("case-words", "Capitalise words", CaseChange::Words, cx))
+                .into_any_element()],
         }
     }
 
@@ -439,12 +515,11 @@ impl RenameDialog {
             .flex()
             .flex_col()
             .gap(px(space::XS))
+            .flex_none()
             .id("rename-preview")
             .role(Role::List)
             .aria_label("Rename preview")
             .aria_size_of_set(self.selected.len())
-            .max_h(px(size::RENAME_PREVIEW))
-            .overflow_y_scroll()
             .child(
                 div()
                     .flex()
@@ -469,7 +544,8 @@ fn field(
     div()
         .flex()
         .flex_col()
-        .flex_1()
+        .flex_none()
+        .min_w_0()
         .gap(px(space::XS))
         .child(
             div()
@@ -488,6 +564,7 @@ fn field(
 
 fn note(color: Rgba, message: String) -> impl IntoElement {
     div()
+        .flex_none()
         .id(SharedString::from(message.clone()))
         .role(Role::Label)
         .aria_value(message.clone())

@@ -124,6 +124,7 @@ Use an isolated fixture and home as above. These checks never activate a device 
 | J5 | Make one pane narrower than 320 px, then narrower than 240 px | Forward and Up leave first; Back leaves under 240 px. Alt+Left, Alt+Right and Alt+Up still navigate. Actions stays. The status line stays inside the pane |
 | J6 | Details view, places visible, F3; resize to the 480 px minimum window width, then enlarge through 320 px per pane | Each narrow pane keeps filename text and only Name; Size returns at 320 px with matching header/cells. Arrow selection and F2/Escape still work. Sorting hidden metadata remains reachable through Actions |
 | J7 | Open Properties on a generated private-home file; resize to 480 × 320. End, Page Up/Down, Home, arrows; drag the scrollbar; toggle a permission, Escape/reopen; enlarge | Title and Close/Apply stay visible, facts/permissions scroll to both ends, unapplied permission edits are discarded, normal window shows all facts without a scrollbar. Ctrl+T and palette shortcut do not act behind the modal |
+| J8 | Select generated files, F2; resize to 480 × 320. Pattern, Tab through counter fields; invalid Step then repair; Case/Upper; Replace collision then valid correction. Ctrl+Page Up/Down and scrollbar through a 22-row preview; Escape | Title/Cancel/Rename stay inside the dialog; focused fields are revealed; errors disable Rename, valid changes enable it; keys and scrollbar reach first/last preview rows; cancellation preserves every name/byte. Record reverse traversal separately |
 
 ## Batch rename (S9)
 

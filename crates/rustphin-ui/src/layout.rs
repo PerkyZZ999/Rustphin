@@ -130,6 +130,20 @@ pub fn step_zoom(zoom: usize, delta: isize) -> usize {
     zoom.saturating_add_signed(delta).min(ZOOM_LEVELS - 1)
 }
 
+/// Scroll a content offset by one line, visible page or to an edge; ignore other keys.
+pub fn scroll_offset(key: &str, offset: f32, maximum: f32, page: f32) -> Option<f32> {
+    let next = match key {
+        "up" => offset + crate::theme::text::LINE,
+        "down" => offset - crate::theme::text::LINE,
+        "pageup" => offset + page,
+        "pagedown" => offset - page,
+        "home" => 0.,
+        "end" => -maximum,
+        _ => return None,
+    };
+    Some(next.clamp(-maximum, 0.))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,5 +268,23 @@ mod tests {
             ViewMode::Details.layout(99),
             ViewMode::Details.layout(ZOOM_LEVELS - 1)
         );
+    }
+
+    #[test]
+    fn scroll_keys_reach_and_respect_content_edges() {
+        assert_eq!(scroll_offset("home", -100., 300., 120.), Some(0.));
+        assert_eq!(scroll_offset("end", 0., 300., 120.), Some(-300.));
+        assert_eq!(scroll_offset("up", 0., 300., 120.), Some(0.));
+        assert_eq!(scroll_offset("down", -295., 300., 120.), Some(-300.));
+    }
+
+    #[test]
+    fn scroll_keys_move_by_line_or_visible_page() {
+        assert_eq!(scroll_offset("down", 0., 300., 120.), Some(-20.));
+        assert_eq!(scroll_offset("up", -100., 300., 120.), Some(-80.));
+        assert_eq!(scroll_offset("pagedown", 0., 300., 120.), Some(-120.));
+        assert_eq!(scroll_offset("pageup", -200., 300., 120.), Some(-80.));
+        assert_eq!(scroll_offset("pagedown", 0., 0., 120.), Some(0.));
+        assert_eq!(scroll_offset("enter", -100., 300., 120.), None);
     }
 }

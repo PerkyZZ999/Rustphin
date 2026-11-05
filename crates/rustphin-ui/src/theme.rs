@@ -66,8 +66,6 @@ pub mod size {
     pub const DIALOG: f32 = 440.;
     /// Width of the batch-rename dialog, which has a two-column preview.
     pub const RENAME_DIALOG: f32 = 640.;
-    /// Tallest the rename preview grows before it scrolls.
-    pub const RENAME_PREVIEW: f32 = 240.;
     /// Maximum width of the command palette.
     pub const PALETTE: f32 = 640.;
     /// Height of a command result, including its second line.
