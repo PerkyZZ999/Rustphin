@@ -141,7 +141,7 @@ Stale results are discarded by generation number, so a fast navigation never sho
 - **Logging/metrics:** `tracing` to stderr, filtered by `RUSTPHIN_LOG` (default `info`); no application log file, rotating store or diagnostics view. Opt-in `RUSTPHIN_FRAME_LOG` and the diagnostic build expose timings in stderr. No telemetry collector is configured. Logs can contain paths; see PRIVACY.md.
 - **Migrations:** only Rustphin's own config files; shared files are never migrated.
 - **Rollback sketch:** Rustphin never replaces Dolphin. Reverting means changing the default file manager back; shared data (places, trash, thumbnails) stays valid for Dolphin at all times. Releases are tagged so a previous build can be reinstalled.
-- **Checks:** `rust-tc doctor` runs format, clippy, tests, doctests, `cargo-deny` (advisories, licences, bans, sources), `cargo-shear`, feature checks, the layering check and a compiler check on Rust 1.95 (not a linked clean build). `rust-tc bench-listing` runs the headless benchmark. All local; there is no hosted CI (D-016).
+- **Checks:** `rust-tc doctor` runs format, clippy, tests, doctests, `cargo-deny` (advisories, licences, bans, sources), `cargo-shear`, feature checks, the layering check and a compiler check on Rust 1.95 (not a linked clean build). `rust-tc build` links the locked release application without launching it. `rust-tc validate` runs doctor and both headless listing/palette benchmarks sequentially, propagating failures. All local; there is no hosted CI (D-016).
 
 ## Alignment to locks
 

@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-06 — W-077b build and combined validation commands
+- **Phase:** 6 Implement (S11)
+- **Change:** rust-tc build links the locked release binary without opening a window; RUSTUP_TOOLCHAIN selects an installed compiler. rust-tc validate depends on doctor, bench-listing and bench-palette in that order, with ordinary failure propagation; no bespoke runner or threshold relaxation. README documents native prerequisites, toolchain/offline selection, output and generated fixture. Correct msrv help: it is a compiler check, not a linked build.
+- **Checks:** rust-tc validate PASS: complete doctor with 433 tests, doctests, dependency policy/shear, features, layers, Rust 1.95 check and fuzz harness checks. Reused generated 500,000-file headless fixture: worst of five first entries 4.0 ms, sorted listing 196.6 ms, slowest re-sort 92.7 ms; all below existing limits. Six 10,000-location palette queries pass, worst 2.454 ms (limit 50 ms). rust-tc build PASS on installed stable 1.98.1, producing the release binary without launching it. Dry-run confirms the full sequence. git diff --check passes. Evidence: target/rust-toolchain/w077b/validate.log, build.log, help.txt, validate-plan.txt. No test/application code changed.
+- **Toolchain discovery:** rustup check reports installed stable alias 1.98.1 behind published stable 1.99.1 (58cf8f9c3, 2026-10-13). Version 1.99.1 is already installed and will be selected explicitly for clean-build acceptance; no global toolchain changed. Receipt: target/rust-toolchain/w077a/rustup-check.log.
+- **Acceptance:** R-109 combined-command criterion is satisfied; clean minimum/current linked builds remain W-077c. Headless timings do not close R-101 UI pacing or wider UI acceptance.
+
 ### 2026-11-06 — W-077a privacy and retention source audit
 - **Phase:** 6 Implement (S11)
 - **Scope:** source review at 30cb017, current MemoBase index (73 Rust files, no parse errors), verified against source and active Linux normal/build dependency edges. No application, dependency, lock or requirement change. PRIVACY.md documents XDG files, shared places/cache/trash, recovery material, in-memory data, logging and clear boundaries; README links it. ARCHITECTURE.md corrects debug-only path logging, rotating-log/diagnostics-view, migration/backup, D-Bus placement and linked-MSRV-build claims.

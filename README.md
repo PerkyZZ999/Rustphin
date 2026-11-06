@@ -10,7 +10,31 @@ S11 hardening remains before the daily-driver trial. See
 
 ## Build and run
 
-Requires Rust (stable, 1.95 or later), a Wayland session and a Vulkan driver.
+Requires Rust through rustup (minimum 1.95.0), `rust-tc` and `just`, a C/C++
+toolchain, pkg-config, and the Wayland, xkbcommon and fontconfig development
+libraries. A Wayland session and working Vulkan driver are needed to run the
+application; a display is not needed to build it. Rust-Toolchain setup is
+documented in `../Rust-Toolchain/RUST-TOOLCHAIN.md`.
+
+From the checkout root, build the locked release binary without launching it:
+
+```bash
+rust-tc build
+```
+
+The binary is `target/release/rustphin` (or under `CARGO_TARGET_DIR` if set).
+For a specific installed compiler, the same build command is:
+
+```bash
+RUSTUP_TOOLCHAIN=1.95.0 rust-tc build
+```
+
+Use `RUSTUP_TOOLCHAIN=stable` for the installed stable toolchain. Check
+`rustup check` first: the stable alias can lag the published stable release.
+A build downloads locked crates if they are not cached; `CARGO_NET_OFFLINE=true`
+uses an existing cache. Application runtime connections are documented below.
+
+To build and launch in an actual desktop session:
 
 ```bash
 rust-tc run ~/Documents
@@ -34,7 +58,14 @@ Checks run through the Rust-Toolchain command `rust-tc`:
 ```bash
 rust-tc quick     # format, compile, lint, tests
 rust-tc doctor    # the full gate, run before every commit
+rust-tc validate  # full gate, then both headless performance benchmarks
 ```
+
+`validate` runs the 500,000-entry listing/sort benchmark and the 10,000-location
+palette benchmark sequentially after `doctor`; any failure makes the command
+fail. The listing fixture is generated under `target/bench/listing-500k` and is
+reused on later runs. Run on an otherwise idle machine for useful timings.
+This headless check does not measure UI frame pacing or replace UI acceptance.
 
 Contributor and agent instructions are in `AGENTS.md`.
 

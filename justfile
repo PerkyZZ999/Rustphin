@@ -4,6 +4,12 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 # Fast developer workflow
 # ---------------------------------------------------------
 
+# Build the locked application without opening a window or reading user state.
+# Select an installed compiler with RUSTUP_TOOLCHAIN when validating R-109.
+build:
+    cargo build --locked --release --package rustphin
+
+
 fmt:
     cargo fmt --all -- --check
 
@@ -85,6 +91,11 @@ features-deep:
 doctor: fmt clippy test deps features layers msrv fuzz-check
     @echo
     @echo "Rust-Toolchain: PASS"
+
+
+# R-109: one entry point for the full gate and both headless benchmarks.
+# Keep benchmarks sequential and propagate their performance failures.
+validate: doctor bench-listing bench-palette
 
 
 # Nextest does not currently execute doctests, so this is a
@@ -215,9 +226,11 @@ clean-toolchain:
 toolchain-help:
     @echo "Rust-Toolchain"
     @echo
+    @echo "  rust-tc build         Build the locked release application"
     @echo "  rust-tc check         Fast compiler check"
     @echo "  rust-tc quick         Fast developer quality gate"
     @echo "  rust-tc doctor        Full local Rust-Toolchain validation"
+    @echo "  rust-tc validate      Full gate and both headless benchmarks"
     @echo "  rust-tc features-deep Deeper Cargo feature combinations"
     @echo "  rust-tc semver PKG    Public API compatibility"
     @echo "  rust-tc mutants       Mutation testing"
@@ -231,4 +244,4 @@ toolchain-help:
     @echo "  rust-tc bench-listing 500,000-entry listing benchmark (R-101)"
     @echo "  rust-tc bench-palette 10,000-location palette benchmark (R-015)"
     @echo "  rust-tc layers        Crate layering check (part of doctor)"
-    @echo "  rust-tc msrv          Build on Rust 1.95 (part of doctor)"
+    @echo "  rust-tc msrv          Compiler check on Rust 1.95 (part of doctor)"
