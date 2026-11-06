@@ -152,5 +152,5 @@ Stale results are discarded by generation number, so a fast navigation never sho
 - D-017 (supersedes D-007) → theme tokens in `rustphin-ui` implement `docs/DESIGN.md`; opaque mode driven by the platform blur trait.
 - D-008 → `places` module in the platform layer reads/writes the shared file and a separate groups file keyed by place ID.
 - D-009 → core-owned worker pools, snapshots over channels, no async runtime in the core.
-- D-010 → blur and clipboard traits in `rustphin-platform` with runtime detection and fallbacks.
+- D-010 → blur and clipboard traits in `rustphin-platform` with runtime detection and fallbacks. Startup blur requires an advertised capability, otherwise solid surfaces and a notice are used. An in-process compositor tests the wire contract; its server dependency is test-only. Live capability loss after opening is not yet monitored.
 - D-011 → single operation engine in the core; UI has no filesystem access; `Fs` trait for fault injection.

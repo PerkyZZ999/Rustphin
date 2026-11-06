@@ -6,7 +6,7 @@
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 in progress
 - **Status:** active — S11 safety hardening
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
-- **Last updated:** 2026-11-05
+- **Last updated:** 2026-11-06
 
 ## Authority boundaries
 - Agent may decide: stack-local, reversible implementation details consistent with locked decisions; document structure; disposable spike code.
@@ -14,12 +14,12 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-05 — W-076g visible device-service fallback; full gate 416 tests
+- Latest validation entry: VALIDATION.md, 2026-11-05 — W-076h capability-aware startup blur fallback; full gate 421 tests
 
 ## Open loops
 - Task: W-073b–e fixed measured font/layout and selection-transfer stalls and stale navigation rows. Details first entries observed within 185.7 ms; all 500,000 selections survive refresh. Final three-view max draw 6.67 ms, but p95 intervals 16.72–16.98 ms do not pass strict 60 fps. Wider input/thumbnail task acceptance and physical-display pacing remain open under R-101
 - Task: W-074a verified the pinned Wayland adapter after enabling IsEnabled on the isolated AT-SPI bus. File entries and navigation controls now expose names/selection/focus. W-074b verifies additive selection/deselection through AT-SPI in all three views. W-074c verifies places/group/tab semantics, focus/actions and mouse tab reordering. Native expanded state is not mapped by the pinned adapter; spoken group state is present. W-074d verifies text-input focus in all plain-text fields. W-074e verifies palette dialog/results/selection semantics. W-074f verifies context-menu focus/actions. W-074g verifies properties semantics and permission labels. W-074h verifies operation/launch/batch dialogs and preview/error text. W-074i verifies native Text reads, caret/selection and multibyte positions in all views. EditableText, native expanded/disabled flags, incremental client cache and an Orca pass remain R-107 work; orca is not on PATH.
-- Task: W-076g verifies visible device-service connection/list failure, stale-row removal and private generated-service recovery; final path navigation/copy works with no device bus. Missing data-control/blur notices remain R-109 work
+- Task: W-076g verifies visible device-service connection/list failure, stale-row removal and private generated-service recovery; final path navigation/copy works with no device bus. W-076h verifies startup blur fallback/notice with disabled and enabled private-compositor controls. Missing data-control fallback and live blur capability loss remain R-109 work
 - Product: view settings are one global file; a pane's own view settings last for the session only
 - Task: W-076b verifies failure Stop/Skip/Try again, running counts/rate, progress Stop with staged-copy cleanup, and rename/undo in icons and compact views. Another volume's trash remains unobserved; real volume trashes are not test data
 - Task: properties opened through D-Bus label the type generically as File; folder measurement cancellation and unreadable-folder reporting are not yet observed on screen. W-076c fixes and verifies Properties at the minimum window size; batch rename also stays contained with focus-revealed fields (W-076d). Operation/launch questions are contained with fixed headings/actions and scrolling facts (W-076f); Drop/Empty Trash variants remain unobserved at minimum size
@@ -27,7 +27,7 @@
 - Task: new batch renames and undo have explicit, journal-validated recovery (W-071). A kill can still leave staged names until recovery is requested; older unjournaled temporary files are not guessed at. R-103's literal immediate-after-kill criterion and physical power-loss validation remain open; journal namespace barriers are now in place (W-072c)
 - Product: an operation that replaced or deleted something cannot be undone at all, even its reversible parts
 - Manual: drag a file from Rustphin into an application that is not a KDE one (R-010); needs the user's desktop
-- Task: in isolated test sessions the window was see-through without blur (other windows showed behind it unblurred). To check: whether the compositor accepts the blur request while its blur effect is off, and whether the opaque theme should be used then
+- Task: W-076h fixes see-through startup when the compositor accepts requests but advertises no usable blur. Live capability changes after opening remain unmonitored; real-desktop blur over a white window still needs review
 - Task: not seen on screen in S5: dropping on a tab, drags in the icons and compact views, copy (not cut) between Rustphin and Dolphin, the clipboard fallback notice
 - Manual: mount, unmount and safely remove a real USB drive from the places panel, and unmount one in use to see the reason (R-013); needs the user
 - Task: places panel not yet seen on screen: hiding a place, reordering by keyboard, an edit made in Dolphin other than adding; its width is fixed and its visibility is not remembered
@@ -38,7 +38,7 @@
 - W-076e: complete reverse field traversal and native input focus conflict through duplicate registration in the pinned toolkit. Removing the wrapper tracking restores traversal but loses native focus; original code restored. DISCOVERY.md records a concrete deduplication candidate and required checks. The maintainer approved a bounded isolated experiment on 2026-11-05; its corrected latest-registration candidate passes seven focused tests and native reverse-field/Unicode checks. Production pins remain unchanged. Full published toolkit tests are unavailable; broader modal/performance assessment and adoption still require review. This blocks that acceptance item, not unrelated S11 work. The baseline gate passes.
 
 ## Next action
-- Continue S11 W-076 remaining modal variants, keyboard/focus coverage (W-076e isolated experiment complete; adoption not approved) and remaining data-control/blur fallbacks in an isolated home (W-076g verifies device fallback). W-076a fixes split-window filename clipping; W-076b verifies operation failure/recovery/Stop and grid rename; W-076c/d fix minimum-height Properties and batch-rename clipping; W-076f contains operation/launch questions. The broader keyboard checklist remains open. W-075a/b/c complete the bounded parser checks and visible failure handling; reconcile R-104 against this evidence in W-078. Keep W-074 Orca/native-adapter findings, W-073 strict pacing/wider R-101 and real-desktop/hardware acceptance open. No toolkit lock, scope or requirement has changed. Full gate, evidence and commit after every coherent task.
+- Continue S11 W-076 remaining modal variants, keyboard/focus coverage (W-076e isolated experiment complete; adoption not approved) and remaining data-control fallback and live blur capability changes in an isolated home (W-076g verifies device fallback; W-076h verifies startup blur fallback). W-076a fixes split-window filename clipping; W-076b verifies operation failure/recovery/Stop and grid rename; W-076c/d fix minimum-height Properties and batch-rename clipping; W-076f contains operation/launch questions. The broader keyboard checklist remains open. W-075a/b/c complete the bounded parser checks and visible failure handling; reconcile R-104 against this evidence in W-078. Keep W-074 Orca/native-adapter findings, W-073 strict pacing/wider R-101 and real-desktop/hardware acceptance open. No toolkit lock, scope or requirement has changed. Full gate, evidence and commit after every coherent task.
 
 ## Phase checklist
 - [x] 0 Intake

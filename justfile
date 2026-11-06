@@ -128,8 +128,8 @@ mutants:
     cargo mutants
 
 
-miri:
-    cargo +nightly miri test
+miri *args:
+    cargo +nightly miri test {{args}}
 
 
 # Bounded, repeatable parser campaigns; mutable discoveries stay untracked.

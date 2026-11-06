@@ -14,7 +14,7 @@ use wayland_client::{
     },
 };
 use wayland_protocols::ext::background_effect::v1::client::{
-    ext_background_effect_manager_v1::ExtBackgroundEffectManagerV1,
+    ext_background_effect_manager_v1::{self, ExtBackgroundEffectManagerV1},
     ext_background_effect_surface_v1::ExtBackgroundEffectSurfaceV1,
 };
 
@@ -27,8 +27,8 @@ pub enum BlurError {
     /// The window is not a Wayland surface.
     #[error("background blur needs a Wayland window")]
     NotWayland,
-    /// The compositor does not offer the blur protocol.
-    #[error("the compositor does not support background blur")]
+    /// The compositor does not advertise usable background blur.
+    #[error("the compositor does not currently offer background blur")]
     Unsupported,
     /// The compositor connection failed while asking for blur.
     #[error("asking the compositor for background blur failed: {0}")]
@@ -39,7 +39,7 @@ pub enum BlurError {
 pub trait BackgroundBlur {
     /// Asks the compositor to blur the area behind the whole of `window`.
     ///
-    /// On success the effect stays for the lifetime of the window's surface. On
+    /// On success the request stays attached to the window's surface. On
     /// failure the caller should draw an opaque background instead.
     fn enable(
         &self,
@@ -62,7 +62,10 @@ impl BackgroundBlur for NoBlur {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WaylandBlur;
 
-struct State;
+#[derive(Default)]
+struct State {
+    blur_available: bool,
+}
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
     fn event(
@@ -75,7 +78,21 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
     ) {
     }
 }
-delegate_noop!(State: ignore ExtBackgroundEffectManagerV1);
+impl Dispatch<ExtBackgroundEffectManagerV1, ()> for State {
+    fn event(
+        state: &mut Self,
+        _: &ExtBackgroundEffectManagerV1,
+        event: ext_background_effect_manager_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        if let ext_background_effect_manager_v1::Event::Capabilities { flags } = event {
+            state.blur_available =
+                u32::from(flags) & ext_background_effect_manager_v1::Capability::Blur.bits() != 0;
+        }
+    }
+}
 delegate_noop!(State: ignore ExtBackgroundEffectSurfaceV1);
 delegate_noop!(State: ignore WlCompositor);
 delegate_noop!(State: ignore WlRegion);
@@ -103,17 +120,6 @@ impl BackgroundBlur for WaylandBlur {
         // never closes it.
         let backend = unsafe { Backend::from_foreign_display(display.display.as_ptr().cast()) };
         let connection = Connection::from_backend(backend);
-        let (globals, mut queue) =
-            registry_queue_init::<State>(&connection).map_err(|e| connection_error(&e))?;
-        let handle = queue.handle();
-
-        let manager: ExtBackgroundEffectManagerV1 = globals
-            .bind(&handle, 1..=1, ())
-            .map_err(|_| BlurError::Unsupported)?;
-        let compositor: WlCompositor = globals
-            .bind(&handle, 1..=4, ())
-            .map_err(|e| connection_error(&e))?;
-
         // SAFETY: the pointer is the live `wl_surface` proxy of `window`, borrowed
         // for the duration of this call, and it belongs to the display above.
         let surface_id =
@@ -122,23 +128,52 @@ impl BackgroundBlur for WaylandBlur {
         let surface =
             WlSurface::from_id(&connection, surface_id).map_err(|e| connection_error(&e))?;
 
-        let effect = manager.get_background_effect(&surface, &handle, ());
-        let region = compositor.create_region(&handle, ());
-        // The compositor clips the region to the surface, so this covers it at any size.
-        region.add(0, 0, i32::MAX, i32::MAX);
-        effect.set_blur_region(Some(&region));
-        region.destroy();
-        queue
-            .roundtrip(&mut State)
-            .map_err(|e| connection_error(&e))?;
-
-        // The effect lasts while its protocol object exists. These wrappers refer
-        // to a display the toolkit owns and may close first, so they are leaked
-        // rather than dropped: a few small objects per window, never touched again.
-        std::mem::forget((effect, manager, compositor, queue, connection));
-        Ok(())
+        enable_on(connection, surface)
     }
 }
+
+fn enable_on(connection: Connection, surface: WlSurface) -> Result<(), BlurError> {
+    let connection_error = |error: &dyn std::fmt::Display| BlurError::Connection(error.to_string());
+    let (globals, mut queue) =
+        registry_queue_init::<State>(&connection).map_err(|e| connection_error(&e))?;
+    let handle = queue.handle();
+
+    let manager: ExtBackgroundEffectManagerV1 = globals
+        .bind(&handle, 1..=1, ())
+        .map_err(|_| BlurError::Unsupported)?;
+    let mut state = State::default();
+    queue
+        .roundtrip(&mut state)
+        .map_err(|e| connection_error(&e))?;
+    if !state.blur_available {
+        manager.destroy();
+        connection.flush().map_err(|e| connection_error(&e))?;
+        return Err(BlurError::Unsupported);
+    }
+    let compositor: WlCompositor = globals
+        .bind(&handle, 1..=4, ())
+        .map_err(|e| connection_error(&e))?;
+
+    let effect = manager.get_background_effect(&surface, &handle, ());
+    let region = compositor.create_region(&handle, ());
+    // The compositor clips the region to the surface, so this covers it at any size.
+    region.add(0, 0, i32::MAX, i32::MAX);
+    effect.set_blur_region(Some(&region));
+    region.destroy();
+    queue
+        .roundtrip(&mut state)
+        .map_err(|e| connection_error(&e))?;
+
+    // The request stays attached while its protocol object exists. These wrappers refer
+    // to a display the toolkit owns and may close first, so they are leaked
+    // rather than dropped: a few small objects per window, never touched again.
+    std::mem::forget((effect, manager, compositor, queue, connection));
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "blur_protocol_tests.rs"]
+mod protocol_tests;
 
 #[cfg(test)]
 mod tests {

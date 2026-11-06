@@ -172,6 +172,15 @@ fn open_window(
                 cx,
             )
         });
+        if !options.force_opaque && !translucent {
+            operations::hub(cx).update(cx, |hub, cx| {
+                hub.say(
+                    "Background blur unavailable; using the opaque theme.".to_owned(),
+                    false,
+                    cx,
+                );
+            });
+        }
         // The component library's root paints its own opaque background
         // under the view. Clear it: the browser paints the window
         // background itself, translucent when the compositor blurs.
