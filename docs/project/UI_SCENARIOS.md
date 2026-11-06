@@ -133,6 +133,8 @@ Use an isolated fixture and home as above. These checks never activate a device 
 
 | J14 | Over a generated white window in an isolated compositor/private home, start with blur disabled; enable, disable and re-enable it without restarting Rustphin. Repeat at 480 × 320, including a generated file copy during capability loss. Close normally; replay with explicit opaque mode through the same toggles | Same process switches solid/glass tokens with capability changes; the persistent readable blur status appears only while unavailable and clears on recovery. Copy notice/Undo/Dismiss remain independent and source/destination bytes match. No duplicate-effect protocol errors. Window close removes its monitor worker. Explicit opaque remains solid and quiet with no monitor thread. Protocol fixtures separately cover manager removal, disconnection and silent-compositor cancellation. No real desktop or devices |
 
+| J15 | At 480 × 320 in a private home, drag a long Unicode generated source onto a long destination name with paused waypoints; End, Escape, repeat and C. Trash a separate generated file, use the palette to open the private home trash and request Empty this trash; cancel with Escape and Keep, then restore the generated item | Drop keeps heading/all actions visible and scrolls complete names/instructions. Cancel changes nothing; Copy preserves exact names/bytes. Empty dialog shows count, irreversible warning and both actions completely. Both cancellation paths preserve private content/record; Restore returns matching bytes. Never accept permanent deletion or activate other-volume links. Separately inspect the trash banner for clipping (W-076l) |
+
 ## Batch rename (S9)
 
 Use two or more files in the fixture. Do not activate a device.
