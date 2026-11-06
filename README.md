@@ -48,6 +48,11 @@ See `docs/project/UI_SCENARIOS.md` for the fixture and memory protocol. Logs
 contain local paths and source locations; this is opt-in local diagnosis.
 
 
+## Privacy
+
+[Privacy and local data](docs/project/PRIVACY.md) documents saved paths,
+shared caches, logs and clearing instructions, including the audit limits.
+
 ## Licence
 
 GPL-3.0-or-later. See `LICENSE`.
