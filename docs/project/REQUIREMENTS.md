@@ -230,7 +230,7 @@ Conventions:
 - **Priority:** must
 - **Acceptance:**
   - [ ] The application makes no network connections of its own and collects no telemetry.
-  - [ ] All stored history is local, documented, and clearable.
+  - [x] All stored history is local, documented, and clearable.
 - **Validation:** test (no network crates or sockets in the dependency audit), manual
 
 ### R-109 — Platform and build

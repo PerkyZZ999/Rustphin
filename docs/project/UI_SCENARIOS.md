@@ -112,6 +112,8 @@ Use an isolated fixture and home as above. These checks never activate a device 
 | Q6 | Query `clear recent`, Enter; inspect recent-locations.toml; restart in the same isolated home | Palette stays open with "Recent folders cleared."; saved locations are empty. After restart only newly completed visits can reappear |
 | Q7 | Query `zzzxnoaction`; press Ctrl+T and F3; Escape | Helpful no-match text; no tab or split opens behind the palette; Escape returns focus |
 | Q8 | Select a fixture file, Shift+Delete; Ctrl+Shift+P; Escape | Delete confirmation stays on top, palette does not open, Escape keeps the file |
+| Q9 | Private state only: record a visit, remove write permission from its state directory, select Clear recent folders after results settle; restore permission and retry | Failure message reports save failure, old file bytes remain; retry writes an empty history and reports success. Restore directory permissions before cleanup |
+| Q10 | Quit all private instances. Seed damaged, then newer-version history in separate launches; open palette and select Clear. Finally quit and remove private recent-locations.toml/session.toml, then relaunch with one explicit fixture folder | Damaged/newer reason is visible and original bytes stay intact after Clear. Offline removal forgets both saved stores; only the new explicit folder is saved. Never operate on the real home |
 
 ## Progressive disclosure (S8)
 

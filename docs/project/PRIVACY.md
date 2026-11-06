@@ -1,8 +1,9 @@
 # Privacy and local data
 
-This describes the implementation audited for W-077a on 2026-11-06. R-108
-acceptance remains open; this inventory is not a runtime network trace or a
-secure-erasure guarantee.
+This describes the implementation audited for W-077a–d on 2026-11-06. R-108
+acceptance remains open. W-077d adds bounded live connection and clearing
+evidence in VALIDATION.md; neither the inventory nor that replay guarantees
+secure erasure or absence of network activity on every execution path.
 
 ## Connections and external applications
 
@@ -24,8 +25,13 @@ The active Linux dependency graph contains `async-net` through the pinned
 toolkit's `smol`, and `http`/`http-body` through `gpui-pre-http-client`.
 Consequently R-108's literal validation text, “no network crates or sockets in
 the dependency audit”, is not satisfied. Required local sockets also exist.
-No requirement or locked toolkit decision is changed by this finding. Runtime
-connection observation and reconciliation of this criterion remain open.
+No requirement or locked toolkit decision is changed by this finding. Five
+W-077d application lifetimes were traced from startup through normal exit with
+all threads followed: 60 socket calls, all AF_UNIX, and no observed IPv4/IPv6
+sockets. The private replay covers startup, folder visits, palette clearing,
+write failure/retry and restarts, not external application launches, alternate
+bus transports or every desktop/runtime path. The literal criterion remains
+unsatisfied.
 
 ## Data inventory and clearing
 
@@ -60,11 +66,14 @@ document database or an operation-history database.
 
 ## Remaining verification
 
-- Observe connections in a private generated-data UI session; distinguish local
-  IPC and launched children from application-owned Internet connections.
-- Exercise clear/save failure and restart behavior, including damaged or newer
-  history files and concurrent session saves. Current source refuses writes to
-  damaged/newer history rather than claiming a disk clear.
+- W-077d observes normal clear/restart, permission-failure/retry, damaged/newer
+  history protection, and offline removal of the history/session files in a
+  private generated-data home. After clearing, new successful visits are saved
+  again; old history-only paths do not return. Source and replay agree that
+  damaged/newer files remain protected instead of claiming a disk clear.
+- Concurrent session-save ordering still needs investigation; current saves
+  use independent background tasks. This is separate from the serialized
+  recent-folder writer. Broader connection paths remain outside the replay.
 - W-077c reviews licences/advisory exceptions under the existing policy and
   verifies clean linked builds on Rust 1.95.0 and published stable 1.99.1.
   `rust-tc doctor` passes; this does not make a release attribution bundle or
