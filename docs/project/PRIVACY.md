@@ -65,6 +65,7 @@ document database or an operation-history database.
 - Exercise clear/save failure and restart behavior, including damaged or newer
   history files and concurrent session saves. Current source refuses writes to
   damaged/newer history rather than claiming a disk clear.
-- Review licences/advisory exceptions and clean linked builds under W-077.
-  `rust-tc doctor` checks the reviewed dependency policy; a policy pass does not
-  make a release attribution bundle or accept the remaining privacy criteria.
+- W-077c reviews licences/advisory exceptions under the existing policy and
+  verifies clean linked builds on Rust 1.95.0 and published stable 1.99.1.
+  `rust-tc doctor` passes; this does not make a release attribution bundle or
+  accept the remaining privacy criteria. Dated evidence is in VALIDATION.md.

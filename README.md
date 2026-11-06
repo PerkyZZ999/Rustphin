@@ -86,4 +86,7 @@ shared caches, logs and clearing instructions, including the audit limits.
 
 ## Licence
 
-GPL-3.0-or-later. See `LICENSE`.
+GPL-3.0-or-later. See `LICENSE`. Dependency licences and sources are checked
+against the reviewed `deny.toml` policy by `rust-tc doctor`. The dated build
+and dependency audit is recorded in `docs/project/VALIDATION.md`; distribution
+notices and packaging remain release work.

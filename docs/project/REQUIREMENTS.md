@@ -236,7 +236,7 @@ Conventions:
 ### R-109 — Platform and build
 - **Priority:** must
 - **Acceptance:**
-  - [ ] Builds with Rust 1.95 and current stable from a clean checkout with one documented command.
+  - [x] Builds with Rust 1.95 and current stable from a clean checkout with one documented command.
   - [ ] Runs on Plasma 6 Wayland; missing optional services (UDisks2, data-control, blur) degrade the related feature with a visible notice rather than failing to start.
   - [x] One local command runs formatting, lints, the test suite and the headless benchmarks (the repository is local only; there is no hosted CI).
 - **Validation:** test (local check command)

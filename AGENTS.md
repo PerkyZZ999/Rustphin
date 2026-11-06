@@ -110,7 +110,7 @@ Hard rules:
 - Do not add `cargo-audit` (`cargo-deny` owns advisories). Do not invoke the separate `rust-doctor` binary. Do not add SonarQube.
 - Do not blanket-allow lints. An `allow` needs an understood, intentional reason, the narrowest scope, and a comment when not obvious.
 - Do not invent fuzz targets to satisfy the toolchain.
-- `deny.toml` is reviewed for this project. Its four advisory ignores are "unmaintained" notices for crates that arrive only through the pinned UI toolkit; re-check them at every toolkit upgrade. New licences or ignores need a comment saying why.
+- `deny.toml` is reviewed for this project. Its seven advisory ignores record reviewed "unmaintained" notices for crates retained by the pinned UI toolkit and zbus 5 integration; re-check them at every toolkit upgrade. New licences or ignores need a comment saying why.
 - `rust-tc miri` is expected for changes to the `unsafe` code in `rustphin-platform` where it can run.
 
 ## Development workflow
