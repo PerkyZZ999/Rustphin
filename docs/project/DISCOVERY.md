@@ -185,3 +185,20 @@ virtual session is stopped. Adoption, a maintained dependency-source strategy
 and a superseding D-001/D-010 decision are not authorised; complete modal checks,
 comparative performance assessment and unavailable toolkit suite coverage remain
 review considerations. Continue independent S11 tasks with the pinned toolkit.
+
+## 2026-11-06 — W-076i testing unavailable data-control
+
+A connection-specific capability filter supplies the previously unavailable
+negative environment without changing Rustphin or the compositor implementation.
+The isolated KWin exposes wp_security_context_manager_v1 to the fixture, which
+creates a private listening socket and commits test metadata. KWin then hides
+restricted globals on connections through that socket. Keep the fixture's close
+FD peer alive while using it; no nested context or OS sandbox is created.
+
+Ordinary and restricted wayland-info inventories prove the difference: normal
+windowing remains, while both ext and wlr data-control are absent for Rustphin.
+The real application consequently selects LocalClipboard and its existing
+first-use notice. VALIDATION.md records actual copy/cut/paste/undo/clear and
+minimum-window results, with exact byte receipts. Fixture source and its cached
+offline build remain under ignored target/rust-toolchain/w076i/context-fixture.
+This test context is an acceptance fixture, not a shipping feature.

@@ -104,7 +104,7 @@ Conventions:
   - [x] Copy and cut in Rustphin paste correctly in Dolphin; copy and cut in Dolphin paste correctly in Rustphin, with cut resulting in a move.
   - [x] Cut items are shown dimmed until pasted or the clipboard changes.
   - [x] Names with spaces and non-ASCII characters survive the round trip.
-  - [ ] Where the compositor lacks a data-control protocol, copy and paste still work inside Rustphin and the limitation is reported once. (Implemented and unit-tested; no such compositor was available to try it on.)
+  - [x] Where the compositor lacks a data-control protocol, copy and paste still work inside Rustphin and the limitation is reported once. (W-076i: isolated KWin connection with both data-control interfaces hidden; copy/cut/paste, one-time notice and minimum-window replay verified.)
 - **Validation:** ui-test (with Dolphin), test (URI encoding)
 
 ### R-012 — Places and place groups
