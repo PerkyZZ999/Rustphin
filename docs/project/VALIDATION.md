@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-06 — W-079 intake: post-S11 mockup design request
+- **Phase:** 6 Implement; planning intake only, S11 remains current.
+- **Request/reference:** The maintainer supplied docs/mockup.png and requested a UI/UX/design pass after completing Slice 11, matching the visual reference as closely as possible while adapting to existing features. Inspect the 1672 × 941 RGB image: blue/navy layered surfaces, tab/navigation hierarchy, file rows/selection, places/devices, palette/menu/properties and operation/error/status surfaces. Preserve the supplied image unchanged: SHA-256 9a2c33c9df00282667f924b92765e0a12c1a670384b39427f7cbbf7790f82bfb.
+- **Queue:** ROADMAP.md and WORK_ITEMS.md place W-079 after S11, with design-document/token-first implementation, feature/platform boundaries and screenshot/state/contrast/keyboard/accessibility/fallback verification. No visual values, UI behavior, locked decision or S11 acceptance changed. The image is a visual target, not an instruction to add pictured capabilities such as network browsing. No design implementation has begun.
+- **Checks:** rust-tc doctor PASS, 435 tests and all regular gate components; git diff --check passes. Artifact: target/rust-toolchain/w079-queue/doctor.log and mockup.sha256. No automated tests or application changes; no DESIGN.md edit/lint required for this intake.
+- **Next:** continue W-077 session codec/raw-path/newer-format hardening, finish the remaining S11 work and acceptance, then begin W-079.
+
 ### 2026-11-06 — W-077e ordered session publication
 - **Phase:** 6 Implement (S11)
 - **Finding/red:** source launches each changed session as an independent background atomic write. Atomic replacement does not stop an older task publishing last. Extract pending-session preparation/publication without changing that write behavior; a deterministic regression issues a two-tab snapshot then a closed-tab snapshot, completes the newer one before the older one, and reads the real saved file. It restores the closed tab and fails. A second regression makes the newer path fail with NotADirectory, repairs the fixture parent, then runs the old job; it incorrectly publishes stale state. Baseline quick passes 433 tests; red test run has 433 passes/two failures, both named session regressions. No timing, sleeps, mock executor or production pause hook. Red extraction diff and logs retained.

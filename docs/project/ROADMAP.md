@@ -85,6 +85,15 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Validation:** test, manual
 - **Status:** in progress, 2026-10-20; W-069 assessment and W-070–W-078 queue
 
+## After S11 — Mockup-aligned UI/UX and design (W-079)
+
+- **Requested:** The maintainer, 2026-11-06; start after Slice 11 is complete.
+- **Visual target:** [`../mockup.png`](../mockup.png), the user-provided 1672 × 941 reference. Match its appearance as closely as feasible while adapting to Rustphin's implemented features and supported platform behavior.
+- **Scope:** tabs/navigation/location toolbar, places and device presentation, file rows/selection, actions palette, context menus, properties and operation status/progress; carry the same design through icons/compact views, split panes, dialogs and states absent from the picture.
+- **Workflow:** after the S11 gate, break W-079 into focused steps. Update DESIGN.md first, implement its tokens through theme.rs, then update views. Preserve current features, operation safety, keyboard/accessibility behavior and locked platform/toolkit decisions; the image's Network row does not add network features to scope.
+- **Validation:** compare real application screenshots with the reference, including normal/minimum sizes, split panes, empty/loading/error/disabled/operation states. Re-run affected contrast, native/keyboard, responsiveness and fallback checks; rust-tc doctor, project evidence and one focused commit after every task.
+- **Status:** queued, not started. S11 acceptance and blockers remain in STATE.md/WORK_ITEMS.md.
+
 ## Traceability
 
 | Requirement | Slice(s) | Validation |
