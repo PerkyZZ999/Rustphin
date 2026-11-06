@@ -73,6 +73,12 @@ flowchart LR
 - Configuration, session, shared-place edits and history use `config::write_atomic`. Each writer exclusively creates a private (0600) temporary file, avoiding links and concurrent truncation, syncs file content, atomically renames it, then syncs the containing directory. Missing directories and their parent entries are synced while creating the path.
 - A pre-publication error cleans only the temporary file created by that writer. A post-publication directory-sync error reports that the replacement is already visible; callers cannot assume an error leaves the old contents. Cleanup errors are also reported. Existing UI callers already handle errors. This does not prove physical power-loss safety or serialize competing read/modify/write edits.
 
+### Session publication ordering (W-077e)
+
+- Each workspace issues checked revision tickets before dispatching session snapshots. TOML encoding and configuration I/O stay on the background executor. A worker-only mutex covers the revision check and complete atomic write; preparing a ticket never takes it on the UI thread.
+- A completed or failed newer publication attempt retires older pending tickets. They cannot restore closed tabs after the newer attempt. An earlier in-flight write finishes before a newer one publishes. Errors remain reported; atomic-file durability is still the W-072a contract.
+- This orders one workspace's saves. It is not a cross-process merge, a shutdown flush guarantee or protection against a separate process writing the same file.
+
 ### Font preparation (W-073b)
 
 - Before opening the first window, the UI awaits a background-executor task that calls the pinned text system's `prewarm_fonts`. It prepares the system default and the three design-token families in normal/medium/semibold styles; names remain defined by theme tokens. No fonts are installed, bundled or substituted.

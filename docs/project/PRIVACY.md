@@ -71,9 +71,12 @@ document database or an operation-history database.
   private generated-data home. After clearing, new successful visits are saved
   again; old history-only paths do not return. Source and replay agree that
   damaged/newer files remain protected instead of claiming a disk clear.
-- Concurrent session-save ordering still needs investigation; current saves
-  use independent background tasks. This is separate from the serialized
-  recent-folder writer. Broader connection paths remain outside the replay.
+- W-077e orders session publication within each workspace and retires stale
+  pending snapshots after a newer attempt, including failure. Tab churn and
+  split/single-tab restart are replayed privately. Cross-process merging and
+  immediate-shutdown flushing are not proved. The session codec's treatment
+  of non-UTF-8 paths and newer-format read failures remains W-077 work.
+  Broader connection paths remain outside the connection replay.
 - W-077c reviews licences/advisory exceptions under the existing policy and
   verifies clean linked builds on Rust 1.95.0 and published stable 1.99.1.
   `rust-tc doctor` passes; this does not make a release attribution bundle or

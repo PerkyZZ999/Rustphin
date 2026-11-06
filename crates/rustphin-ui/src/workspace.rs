@@ -35,7 +35,7 @@ use crate::{
     operations::{self, Hub, Notice, Question, Running, hub},
     palette::{Candidate, Palette, PaletteEvent, Target},
     properties::{PropertiesDialog, SizeLine},
-    session::{Session, SessionTab},
+    session::{Session, SessionSaves, SessionTab},
     settings::Settings,
     sidebar::{Sidebar, SidebarEvent},
     tabs::Tabs,
@@ -177,8 +177,9 @@ pub struct Workspace {
     settings_path: Option<PathBuf>,
     /// Where the open tabs are stored; `None` when they must not be written.
     session_path: Option<PathBuf>,
-    /// The session as last written, to skip writes that change nothing.
+    /// The session as last queued, to skip writes that change nothing.
     saved: Session,
+    session_saves: SessionSaves,
     title: String,
     /// Holds the keyboard focus while a dialog is open.
     dialog_focus: FocusHandle,
@@ -273,6 +274,7 @@ impl Workspace {
             settings_path,
             session_path,
             saved: Session::default(),
+            session_saves: SessionSaves::default(),
             title: String::new(),
             dialog_focus: cx.focus_handle(),
             question_scroll: ScrollHandle::new(),
@@ -356,12 +358,17 @@ impl Workspace {
         if session == self.saved || session.tabs.is_empty() {
             return;
         }
-        self.saved = session.clone();
+        let save = match self.session_saves.prepare(session.clone()) {
+            Ok(save) => save,
+            Err(error) => {
+                tracing::warn!(%error, "could not queue the session save");
+                return;
+            }
+        };
+        self.saved = session;
         cx.background_executor()
             .spawn(async move {
-                let text = session.to_toml();
-                if let Err(error) = rustphin_platform::config::write_atomic(&path, text.as_bytes())
-                {
+                if let Err(error) = save.write(&path) {
                     tracing::warn!(%error, path = %path.display(), "could not save the session");
                 }
             })

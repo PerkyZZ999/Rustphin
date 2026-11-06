@@ -3,7 +3,11 @@
 //! Reading never fails: a missing or damaged file yields an empty session,
 //! which the workspace replaces with a single tab.
 
-use std::path::PathBuf;
+use std::{
+    io,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -92,9 +96,97 @@ impl Session {
     }
 }
 
+/// Prepares session snapshots on the UI thread for background publication.
+#[derive(Default)]
+pub(crate) struct SessionSaves {
+    issued: u64,
+    latest_attempt: Arc<Mutex<u64>>,
+}
+
+impl SessionSaves {
+    pub(crate) fn prepare(&mut self, session: Session) -> io::Result<SessionSave> {
+        self.issued = self
+            .issued
+            .checked_add(1)
+            .ok_or_else(|| io::Error::other("session-save sequence exhausted"))?;
+        Ok(SessionSave {
+            session,
+            revision: self.issued,
+            latest_attempt: Arc::clone(&self.latest_attempt),
+        })
+    }
+}
+
+/// One pending background save.
+pub(crate) struct SessionSave {
+    session: Session,
+    revision: u64,
+    latest_attempt: Arc<Mutex<u64>>,
+}
+
+impl SessionSave {
+    pub(crate) fn write(self, path: &Path) -> io::Result<()> {
+        let text = self.session.to_toml();
+        let mut latest = self
+            .latest_attempt
+            .lock()
+            .map_err(|_| io::Error::other("session-save ordering lock was poisoned"))?;
+        if self.revision <= *latest {
+            return Ok(());
+        }
+        // Keep this guard through publication. A failed newer attempt also
+        // retires older requests; it must not silently restore their tabs.
+        *latest = self.revision;
+        rustphin_platform::config::write_atomic(path, text.as_bytes())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn a_late_older_save_cannot_restore_a_closed_tab() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.toml");
+        let mut saves = SessionSaves::default();
+        let older = saves
+            .prepare(Session::folders(vec!["/open".into(), "/closed".into()]))
+            .unwrap();
+        let latest = Session::single("/open".into());
+        let newer = saves.prepare(latest.clone()).unwrap();
+
+        newer.write(&path).unwrap();
+        older.write(&path).unwrap();
+
+        let saved = rustphin_platform::config::read(&path).unwrap().unwrap();
+        assert_eq!(Session::parse(&saved), latest);
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn a_failed_newer_save_does_not_publish_an_older_pending_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let parent = dir.path().join("blocked");
+        std::fs::write(&parent, b"not a directory").unwrap();
+        let path = parent.join("session.toml");
+        let mut saves = SessionSaves::default();
+        let older = saves.prepare(Session::single("/closed".into())).unwrap();
+        let latest = Session::single("/open".into());
+        let newer = saves.prepare(latest.clone()).unwrap();
+
+        let error = newer.write(&path).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::NotADirectory);
+        std::fs::remove_file(&parent).unwrap();
+        std::fs::create_dir(&parent).unwrap();
+        older.write(&path).unwrap();
+        assert_eq!(rustphin_platform::config::read(&path).unwrap(), None);
+
+        saves.prepare(latest.clone()).unwrap().write(&path).unwrap();
+        let saved = rustphin_platform::config::read(&path).unwrap().unwrap();
+        assert_eq!(Session::parse(&saved), latest);
+    }
 
     fn tab(panes: &[&str], active_pane: usize) -> SessionTab {
         SessionTab {
