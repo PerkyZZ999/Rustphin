@@ -18,6 +18,10 @@ use wayland_protocols::ext::background_effect::v1::client::{
     ext_background_effect_surface_v1::ExtBackgroundEffectSurfaceV1,
 };
 
+#[path = "blur_watch.rs"]
+mod watch;
+pub use watch::BlurWatch;
+
 /// Why a window has no background blur.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum BlurError {
@@ -30,6 +34,9 @@ pub enum BlurError {
     /// The compositor does not advertise usable background blur.
     #[error("the compositor does not currently offer background blur")]
     Unsupported,
+    /// The toolkit connection cannot be safely monitored.
+    #[error("background blur cannot be monitored on this display connection")]
+    Unmonitorable,
     /// The compositor connection failed while asking for blur.
     #[error("asking the compositor for background blur failed: {0}")]
     Connection(String),
@@ -46,6 +53,12 @@ pub trait BackgroundBlur {
         window: &dyn HasWindowHandle,
         display: &dyn HasDisplayHandle,
     ) -> Result<(), BlurError>;
+
+    /// Watches the same compositor using an owned connection.
+    ///
+    /// Callers must stay opaque until support is confirmed and fall back on
+    /// errors or channel closure. Dropping the watch stops its worker.
+    fn watch(&self, display: &dyn HasDisplayHandle) -> Result<BlurWatch, BlurError>;
 }
 
 /// The fallback: never blurs, so callers use their opaque appearance.
@@ -54,6 +67,10 @@ pub struct NoBlur;
 
 impl BackgroundBlur for NoBlur {
     fn enable(&self, _: &dyn HasWindowHandle, _: &dyn HasDisplayHandle) -> Result<(), BlurError> {
+        Err(BlurError::Disabled)
+    }
+
+    fn watch(&self, _: &dyn HasDisplayHandle) -> Result<BlurWatch, BlurError> {
         Err(BlurError::Disabled)
     }
 }
@@ -129,6 +146,10 @@ impl BackgroundBlur for WaylandBlur {
             WlSurface::from_id(&connection, surface_id).map_err(|e| connection_error(&e))?;
 
         enable_on(connection, surface)
+    }
+
+    fn watch(&self, display: &dyn HasDisplayHandle) -> Result<BlurWatch, BlurError> {
+        watch::start(display)
     }
 }
 
@@ -207,6 +228,10 @@ mod tests {
             WaylandBlur.enable(&X11Window, &X11Window),
             Err(BlurError::NotWayland)
         );
+        assert!(matches!(
+            WaylandBlur.watch(&X11Window),
+            Err(BlurError::NotWayland)
+        ));
     }
 
     #[test]
@@ -215,5 +240,6 @@ mod tests {
             NoBlur.enable(&X11Window, &X11Window),
             Err(BlurError::Disabled)
         );
+        assert!(matches!(NoBlur.watch(&X11Window), Err(BlurError::Disabled)));
     }
 }

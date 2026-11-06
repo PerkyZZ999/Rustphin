@@ -33,6 +33,7 @@ wayland_client::delegate_noop!(State: ignore wayland_client::protocol::wl_surfac
 struct Compositor {
     flags: u32,
     blur_requests: Arc<AtomicUsize>,
+    managers: Vec<ExtBackgroundEffectManagerV1>,
 }
 
 impl GlobalDispatch<WlCompositor, ()> for Compositor {
@@ -81,6 +82,7 @@ impl GlobalDispatch<ExtBackgroundEffectManagerV1, ()> for Compositor {
     ) {
         let manager = init.init(resource, ());
         manager.capabilities(manager::Capability::from_bits_retain(state.flags));
+        state.managers.push(manager);
     }
 }
 
@@ -156,25 +158,39 @@ impl Dispatch<wl_region::WlRegion, ()> for Compositor {
     }
 }
 
-struct Server {
+pub(super) struct Server {
+    commands: flume::Sender<Command>,
     wake: UnixStream,
     thread: Option<JoinHandle<()>>,
 }
 
+enum Command {
+    Stop,
+    Capabilities(u32),
+    Remove,
+    Add(u32),
+}
+
 impl Server {
-    fn start(socket: UnixStream, flags: Option<u32>, blur_requests: Arc<AtomicUsize>) -> Self {
+    pub(super) fn start(
+        socket: UnixStream,
+        flags: Option<u32>,
+        blur_requests: Arc<AtomicUsize>,
+    ) -> Self {
         let (wake, stop) = UnixStream::pair().unwrap();
+        let (commands, incoming) = flume::unbounded();
         let thread = thread::spawn(move || {
             let mut display = Display::<Compositor>::new().unwrap();
             let mut handle = display.handle();
             handle.create_global::<Compositor, WlCompositor, _>(4, ());
-            if flags.is_some() {
-                handle.create_global::<Compositor, ExtBackgroundEffectManagerV1, _>(1, ());
-            }
+            let mut global = flags.map(|_| {
+                handle.create_global::<Compositor, ExtBackgroundEffectManagerV1, _>(1, ())
+            });
             handle.insert_client(socket, Arc::new(())).unwrap();
             let mut state = Compositor {
                 flags: flags.unwrap_or_default(),
                 blur_requests,
+                managers: Vec::new(),
             };
             loop {
                 let mut fds = [
@@ -183,22 +199,64 @@ impl Server {
                 ];
                 poll(&mut fds, None).unwrap();
                 if fds[1].revents().intersects(PollFlags::IN | PollFlags::HUP) {
-                    break;
+                    use std::io::Read as _;
+                    (&stop).read_exact(&mut [0]).unwrap();
+                    match incoming.recv().unwrap() {
+                        Command::Stop => break,
+                        Command::Capabilities(flags) => {
+                            state.flags = flags;
+                            for manager in &state.managers {
+                                manager.capabilities(manager::Capability::from_bits_retain(flags));
+                            }
+                        }
+                        Command::Remove => {
+                            handle.remove_global::<Compositor>(global.take().unwrap());
+                            state.managers.clear();
+                        }
+                        Command::Add(flags) => {
+                            assert!(global.is_none());
+                            state.flags = flags;
+                            global = Some(
+                                handle
+                                    .create_global::<Compositor, ExtBackgroundEffectManagerV1, _>(
+                                        1,
+                                        (),
+                                    ),
+                            );
+                        }
+                    }
                 }
                 display.dispatch_clients(&mut state).unwrap();
                 display.flush_clients().unwrap();
             }
         });
         Self {
+            commands,
             wake,
             thread: Some(thread),
         }
+    }
+    fn send(&self, command: Command) {
+        self.commands.send(command).unwrap();
+        (&self.wake).write_all(&[1]).unwrap();
+    }
+
+    pub(super) fn capabilities(&self, flags: u32) {
+        self.send(Command::Capabilities(flags));
+    }
+
+    pub(super) fn remove(&self) {
+        self.send(Command::Remove);
+    }
+
+    pub(super) fn add(&self, flags: u32) {
+        self.send(Command::Add(flags));
     }
 }
 
 impl Drop for Server {
     fn drop(&mut self) {
-        self.wake.write_all(&[1]).unwrap();
+        self.send(Command::Stop);
         if let Some(thread) = self.thread.take() {
             thread.join().unwrap();
         }

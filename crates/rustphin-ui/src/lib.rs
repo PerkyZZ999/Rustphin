@@ -32,7 +32,6 @@ use gpui_kit::{
     App, AppContext as _, Bounds, Styled as _, WindowBackgroundAppearance, WindowBounds,
     WindowOptions, px, size,
 };
-use rustphin_platform::blur::{BackgroundBlur, NoBlur, WaylandBlur};
 
 use crate::{session::Session, settings::Settings, theme::Theme, workspace::Workspace};
 
@@ -135,29 +134,13 @@ fn open_window(
     let window_options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         window_min_size: Some(size(px(480.), px(320.))),
-        window_background: if options.force_opaque {
-            WindowBackgroundAppearance::Opaque
-        } else {
-            WindowBackgroundAppearance::Transparent
-        },
+        window_background: WindowBackgroundAppearance::Opaque,
         app_id: Some("rustphin".into()),
         ..Default::default()
     };
     let opened = cx.open_window(window_options, |window, cx| {
-        let blur: &dyn BackgroundBlur = if options.force_opaque {
-            &NoBlur
-        } else {
-            &WaylandBlur
-        };
-        let translucent = match blur.enable(window, window) {
-            Ok(()) => true,
-            Err(reason) => {
-                tracing::info!(%reason, "using the opaque theme");
-                window.set_background_appearance(WindowBackgroundAppearance::Opaque);
-                false
-            }
-        };
-        let theme = Theme::obsidian(translucent);
+        // Glass starts only after the owned capability monitor confirms support.
+        let theme = Theme::obsidian(false);
         theme.apply_to_components(cx);
         cx.set_global(theme);
         window.set_window_title("Rustphin");
@@ -172,14 +155,8 @@ fn open_window(
                 cx,
             )
         });
-        if !options.force_opaque && !translucent {
-            operations::hub(cx).update(cx, |hub, cx| {
-                hub.say(
-                    "Background blur unavailable; using the opaque theme.".to_owned(),
-                    false,
-                    cx,
-                );
-            });
+        if !options.force_opaque {
+            workspace.update(cx, |workspace, cx| workspace.follow_blur(window, cx));
         }
         // The component library's root paints its own opaque background
         // under the view. Clear it: the browser paints the window

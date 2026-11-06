@@ -42,6 +42,9 @@ use crate::{
     theme::{Theme, size, space, text},
 };
 
+#[path = "appearance.rs"]
+mod appearance;
+
 /// Keeps the file-manager service connected for the life of the application.
 pub(crate) struct ShowService(pub(crate) rustphin_platform::file_manager::ServiceHandle);
 impl Global for ShowService {}
@@ -169,6 +172,7 @@ impl Render for DraggedTab {
 
 /// Everything shown in one window.
 pub struct Workspace {
+    appearance: Option<appearance::Appearance>,
     tabs: Tabs<Tab>,
     settings_path: Option<PathBuf>,
     /// Where the open tabs are stored; `None` when they must not be written.
@@ -264,6 +268,7 @@ impl Workspace {
         let sidebar = cx.new(|cx| Sidebar::new(window, cx));
         let sidebar_events = cx.subscribe_in(&sidebar, window, Self::on_sidebar_event);
         let workspace = Self {
+            appearance: None,
             tabs,
             settings_path,
             session_path,
@@ -1385,6 +1390,7 @@ impl Render for Workspace {
                     .when(self.sidebar_visible, |row| row.child(self.sidebar.clone()))
                     .children(panes),
             )
+            .children(self.blur_status(theme))
             .children(activity)
             .children(dialog)
             .when(self.rename.is_some(), |workspace| {
