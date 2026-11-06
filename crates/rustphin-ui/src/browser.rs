@@ -20,6 +20,7 @@ use gpui_kit::{
         Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
         input::{Input, InputEvent, InputState},
+        scroll::{Scrollbar, ScrollbarMode},
     },
     deferred, div, img, point,
     prelude::FluentBuilder as _,
@@ -46,6 +47,8 @@ use crate::{
 const KEY_CONTEXT: &str = "Browser";
 /// The selection's context menu, while it has the keyboard focus.
 const MENU_CONTEXT: &str = "ContextMenu";
+/// The only action inside an empty-folder message.
+const FOLDER_ACTION_CONTEXT: &str = "FolderStateAction";
 /// The browser while no text field inside it has focus.
 const LIST_CONTEXT: &str = "Browser && !Input";
 /// How far the pointer must move with the button down before a rubber band starts.
@@ -90,6 +93,7 @@ actions!(
         GoForward,
         Reload,
         ToggleHidden,
+        ShowHidden,
         EditLocation,
         CancelEdit,
         Rename,
@@ -176,6 +180,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-x", Cut, list),
         KeyBinding::new("ctrl-v", Paste, list),
         KeyBinding::new("shift-f10", OpenContextMenu, list),
+        KeyBinding::new("enter", ShowHidden, Some(FOLDER_ACTION_CONTEXT)),
+        KeyBinding::new("space", ShowHidden, Some(FOLDER_ACTION_CONTEXT)),
     ]);
     let menu = Some(MENU_CONTEXT);
     cx.bind_keys([
@@ -293,6 +299,10 @@ pub struct Browser {
     menu: Option<OpenMenu>,
     /// Holds the keyboard focus while the context menu is open.
     menu_focus: FocusHandle,
+    /// The bounded message shown while a listing has no visible entries.
+    folder_state_scroll: ScrollHandle,
+    /// Contains only the hidden-files action; it is not an extra tab stop.
+    folder_action_focus: FocusHandle,
     /// The system's file-type databases, once loaded in the background.
     types: Option<Arc<Database>>,
     /// Icon and description per MIME type, filled in as rows need them.
@@ -354,6 +364,12 @@ impl Browser {
             }
         }));
 
+        let folder_action_focus = cx.focus_handle().tab_stop(false);
+        subscriptions.push(cx.on_focus_in(&folder_action_focus, window, |this, _, cx| {
+            this.folder_state_scroll.scroll_to_bottom();
+            cx.notify();
+        }));
+
         let mut this = Self {
             model: None,
             snapshot: None,
@@ -380,6 +396,8 @@ impl Browser {
             focus,
             menu: None,
             menu_focus,
+            folder_state_scroll: ScrollHandle::new(),
+            folder_action_focus,
             types: None,
             type_info: HashMap::new(),
             types_pending: HashSet::new(),
@@ -522,6 +540,7 @@ impl Browser {
                 let arrived = same_place.is_none();
                 if arrived {
                     self.dismiss_menu();
+                    self.folder_state_scroll.set_offset(point(px(0.), px(0.)));
                     if self.renaming.take().is_some() {
                         self.refocus = true;
                     }
@@ -603,6 +622,7 @@ impl Browser {
 
     fn open(&mut self, path: PathBuf) {
         self.dismiss_menu();
+        self.folder_state_scroll.set_offset(point(px(0.), px(0.)));
         if let Some(model) = &mut self.model {
             self.generation = model.open(path);
             self.failure = None;
@@ -1302,14 +1322,25 @@ impl Browser {
     }
 
     fn toggle_hidden(&mut self, cx: &mut Context<Self>) {
+        if let Some(model) = &self.model {
+            self.set_hidden(!model.options().show_hidden, cx);
+        }
+    }
+
+    fn show_hidden(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_hidden(true, cx);
+        self.focus.focus(window, cx);
+    }
+
+    fn set_hidden(&mut self, show_hidden: bool, cx: &mut Context<Self>) {
         let Some(model) = &mut self.model else { return };
-        let options = model.options();
         let options = ViewOptions {
-            show_hidden: !options.show_hidden,
-            ..options
+            show_hidden,
+            ..model.options()
         };
         if let Some(generation) = model.set_options(options) {
             self.generation = generation;
+            self.folder_state_scroll.set_offset(point(px(0.), px(0.)));
             self.save_settings(cx);
             cx.notify();
         }
@@ -2504,17 +2535,29 @@ impl Browser {
                 },
             )
         };
-        div()
+        let hidden_message = if hidden > 0 && !snapshot.is_loading() {
+            format!(
+                "{} hidden {} not shown.",
+                count(hidden),
+                plural(hidden, "item is", "items are")
+            )
+        } else {
+            String::new()
+        };
+        let content = div()
             .flex()
-            .flex_1()
             .flex_col()
+            .w_full()
+            .min_h_full()
+            .p(px(space::LG))
             .items_center()
             .justify_center()
             .gap(px(space::MD))
             .text_color(theme.text_muted)
-            .child(Icon::new(icon).size(px(size::ICON_LARGE)))
+            .child(Icon::new(icon).size(px(size::ICON_LARGE)).flex_none())
             .child(
                 div()
+                    .flex_none()
                     .font_family(text::FAMILY_HEADING)
                     .text_size(px(text::HEADING))
                     .text_color(theme.text)
@@ -2522,19 +2565,83 @@ impl Browser {
             )
             .when(hidden > 0 && !snapshot.is_loading(), |state| {
                 state
-                    .child(format!(
-                        "{} hidden {} not shown.",
-                        count(hidden),
-                        plural(hidden, "item is", "items are")
-                    ))
+                    .child(div().flex_none().child(hidden_message.clone()))
                     .child(
-                        Button::new("show-hidden")
-                            .primary()
-                            .small()
-                            .label("Show hidden files")
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_hidden(cx))),
+                        div()
+                            .flex_none()
+                            .max_w_full()
+                            .track_focus(&self.folder_action_focus)
+                            .key_context(FOLDER_ACTION_CONTEXT)
+                            .child(
+                                Button::new("show-hidden")
+                                    .primary()
+                                    .small()
+                                    .max_w_full()
+                                    .px(px(space::XS))
+                                    .label("Show hidden")
+                                    .accessibility_label("Show hidden files")
+                                    .tooltip("Show hidden files (Ctrl+H)")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.show_hidden(window, cx);
+                                    })),
+                            ),
                     )
-            })
+            });
+
+        div()
+            .relative()
+            .size_full()
+            .min_h_0()
+            .child(
+                div()
+                    .id("folder-state")
+                    .role(Role::Status)
+                    .aria_label(heading)
+                    .aria_description(format!("{hidden_message} Use arrows, Page Up/Down or Home/End to scroll this message.").trim().to_owned())
+                    .a11y_synthetic_children(|builder| builder.parent_node().set_live(gpui_kit::accesskit::Live::Polite))
+                    .size_full()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.folder_state_scroll)
+                    .child(content),
+            )
+            .child(
+                Scrollbar::vertical(&self.folder_state_scroll)
+                    .mode(ScrollbarMode::Always)
+                    .styles(|styles| {
+                        styles
+                            .track(|style| style.bg(gpui_kit::transparent_black()))
+                            .thumb(|style| style.bg(theme.text_muted).radius(px(size::RADIUS)))
+                            .thumb_hover(|style| style.bg(theme.accent))
+                            .thumb_active(|style| style.bg(theme.accent))
+                    }),
+            )
+    }
+
+    /// Empty views scroll their explanation instead of moving a file selection.
+    fn scroll_folder_state(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
+        if self.editing_location
+            || self.renaming.is_some()
+            || self.menu.is_some()
+            || !self
+                .current_snapshot()
+                .is_some_and(|snapshot| snapshot.is_empty())
+        {
+            return false;
+        }
+        let mut offset = self.folder_state_scroll.offset();
+        let Some(y) = layout::scroll_offset(
+            key,
+            f32::from(offset.y),
+            f32::from(self.folder_state_scroll.max_offset().y),
+            f32::from(self.folder_state_scroll.bounds().size.height),
+        ) else {
+            return false;
+        };
+        offset.y = px(y);
+        self.folder_state_scroll.set_offset(offset);
+        cx.notify();
+        true
     }
 
     fn status(&self, theme: Theme) -> impl IntoElement {
@@ -2914,22 +3021,34 @@ impl Render for Browser {
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus)
             .on_action(cx.listener(|this, _: &SelectPrevious, _, cx| {
-                this.move_selection(Motion::By(-(this.per_row as isize)), false, cx);
+                if !this.scroll_folder_state("up", cx) {
+                    this.move_selection(Motion::By(-(this.per_row as isize)), false, cx);
+                }
             }))
             .on_action(cx.listener(|this, _: &SelectNext, _, cx| {
-                this.move_selection(Motion::By(this.per_row as isize), false, cx);
+                if !this.scroll_folder_state("down", cx) {
+                    this.move_selection(Motion::By(this.per_row as isize), false, cx);
+                }
             }))
             .on_action(cx.listener(|this, _: &SelectFirst, _, cx| {
-                this.move_selection(Motion::First, false, cx);
+                if !this.scroll_folder_state("home", cx) {
+                    this.move_selection(Motion::First, false, cx);
+                }
             }))
             .on_action(cx.listener(|this, _: &SelectLast, _, cx| {
-                this.move_selection(Motion::Last, false, cx);
+                if !this.scroll_folder_state("end", cx) {
+                    this.move_selection(Motion::Last, false, cx);
+                }
             }))
             .on_action(cx.listener(|this, _: &PageUp, _, cx| {
-                this.move_selection(Motion::By(-PAGE_ROWS * this.per_row as isize), false, cx);
+                if !this.scroll_folder_state("pageup", cx) {
+                    this.move_selection(Motion::By(-PAGE_ROWS * this.per_row as isize), false, cx);
+                }
             }))
             .on_action(cx.listener(|this, _: &PageDown, _, cx| {
-                this.move_selection(Motion::By(PAGE_ROWS * this.per_row as isize), false, cx);
+                if !this.scroll_folder_state("pagedown", cx) {
+                    this.move_selection(Motion::By(PAGE_ROWS * this.per_row as isize), false, cx);
+                }
             }))
             .on_action(cx.listener(|this, _: &ExtendPrevious, _, cx| {
                 this.move_selection(Motion::By(-(this.per_row as isize)), true, cx);
@@ -3004,6 +3123,7 @@ impl Render for Browser {
                 cx.listener(|this, _: &Reload, _, cx| this.navigate(DirectoryModel::reload, cx)),
             )
             .on_action(cx.listener(|this, _: &ToggleHidden, _, cx| this.toggle_hidden(cx)))
+            .on_action(cx.listener(|this, _: &ShowHidden, window, cx| this.show_hidden(window, cx)))
             .on_action(cx.listener(|this, _: &OpenTrash, _, cx| this.open_trash(cx)))
             .on_action(cx.listener(|this, _: &RestoreTrash, _, cx| this.restore_selected(cx)))
             .on_action(cx.listener(|this, _: &TrashActions, window, cx| {
