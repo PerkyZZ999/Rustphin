@@ -79,6 +79,12 @@ flowchart LR
 - A completed or failed newer publication attempt retires older pending tickets. They cannot restore closed tabs after the newer attempt. An earlier in-flight write finishes before a newer one publishes. Errors remain reported; atomic-file durability is still the W-072a contract.
 - This orders one workspace's saves. It is not a cross-process merge, a shutdown flush guarantee or protection against a separate process writing the same file.
 
+### Byte-safe session paths (W-077f)
+
+- Session format 2 stores pane paths as local file URIs through the platform's byte-preserving URI codec. Valid version-1 UTF-8 absolute paths remain readable, with literal percent signs preserved; supported formats normalize to version 2 and upgrade on the next save.
+- Remote URI hosts, relative paths and embedded NUL are rejected before pane/tab clamping. Serialization returns its error rather than an empty document; the background publication job reports InvalidData before replacing any file. Revision retirement covers encoding as well as I/O attempts.
+- Newer-version parsing/write protection remains under W-077 review; this format change does not claim that unknown future schemas or read failures are handled safely yet.
+
 ### Font preparation (W-073b)
 
 - Before opening the first window, the UI awaits a background-executor task that calls the pinned text system's `prewarm_fonts`. It prepares the system default and the three design-token families in normal/medium/semibold styles; names remain defined by theme tokens. No fonts are installed, bundled or substituted.

@@ -1,6 +1,6 @@
 # Privacy and local data
 
-This describes the implementation audited for W-077a–d on 2026-11-06. R-108
+This describes the implementation audited for W-077a–f on 2026-11-06. R-108
 acceptance remains open. W-077d adds bounded live connection and clearing
 evidence in VALIDATION.md; neither the inventory nor that replay guarantees
 secure erasure or absence of network activity on every execution path.
@@ -42,7 +42,7 @@ parent directories follow the process umask. These files are not encrypted.
 | Location | Stored information | Clearing or retention |
 |---|---|---|
 | `$XDG_STATE_HOME/rustphin/recent-locations.toml` (default `.local/state/…`) | At most 10,000 distinct successful folder visits, newest first; byte-safe local file URIs | Ctrl+Shift+P → **History: Clear recent folders**. Wait for **Recent folders cleared.** New visits start recording again. Read/save errors are reported in the palette; do not treat an error as a successful disk clear. |
-| `$XDG_STATE_HOME/rustphin/session.toml` | Open tabs, each pane's current path and active indices | Clearing recent folders does not clear this file. Quit every Rustphin instance, then remove this file to forget saved tabs. Start with explicit folder arguments to choose replacement tabs. |
+| `$XDG_STATE_HOME/rustphin/session.toml` | Open tabs, byte-safe local file URIs for each pane and active indices (format 2; legacy UTF-8 format 1 upgrades on save) | Clearing recent folders does not clear this file. Quit every Rustphin instance, then remove this file to forget saved tabs. Start with explicit folder arguments to choose replacement tabs. |
 | `$XDG_CONFIG_HOME/rustphin/settings.toml` (default `.config/…`) | Global view mode, zoom, sorting and hidden-file preference | Quit all instances, then remove the file to reset preferences. No per-folder view database or configurable key-binding file is implemented. |
 | `$XDG_CONFIG_HOME/rustphin/place-groups.toml` | Group titles, ordering and bookmark identifiers | Remove groups through the places UI; to reset all groups, quit all instances and remove this file. Shared bookmarks remain. |
 | `$XDG_DATA_HOME/user-places.xbel` (default `.local/share/…`) | Shared KDE bookmarks, including paths and metadata | Manage individual places through the UI. This is shared with Dolphin and file dialogs; deleting it also removes their bookmarks. |
@@ -74,9 +74,10 @@ document database or an operation-history database.
 - W-077e orders session publication within each workspace and retires stale
   pending snapshots after a newer attempt, including failure. Tab churn and
   split/single-tab restart are replayed privately. Cross-process merging and
-  immediate-shutdown flushing are not proved. The session codec's treatment
-  of non-UTF-8 paths and newer-format read failures remains W-077 work.
-  Broader connection paths remain outside the connection replay.
+  immediate-shutdown flushing are not proved. W-077f verifies byte-safe
+  session paths, legacy version-1 upgrade and real raw-name split restoration.
+  Newer-format header/read failures and protection with explicit launch folders
+  remain W-077 work. Broader connection paths remain outside the connection replay.
 - W-077c reviews licences/advisory exceptions under the existing policy and
   verifies clean linked builds on Rust 1.95.0 and published stable 1.99.1.
   `rust-tc doctor` passes; this does not make a release attribution bundle or

@@ -12,7 +12,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 /// The format version this build writes.
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 
 /// The tabs that were open, in order.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -30,6 +30,7 @@ pub struct Session {
 #[serde(default)]
 pub struct SessionTab {
     /// One folder, or two when the tab was split.
+    #[serde(with = "pane_paths")]
     pub panes: Vec<PathBuf>,
     /// Index of the pane that had the keyboard focus.
     pub active_pane: usize,
@@ -73,26 +74,58 @@ impl Session {
             Self::default()
         });
         for tab in &mut session.tabs {
-            tab.panes.retain(|path| path.is_absolute());
+            tab.panes.retain(|path| {
+                path.is_absolute() && !path.as_os_str().as_encoded_bytes().contains(&0)
+            });
             tab.panes.truncate(2);
             tab.active_pane = tab.active_pane.min(tab.panes.len().saturating_sub(1));
         }
         session.tabs.retain(|tab| !tab.panes.is_empty());
         session.active = session.active.min(session.tabs.len().saturating_sub(1));
+        if session.version <= VERSION {
+            session.version = VERSION;
+        }
         session
     }
 
-    /// The session as TOML text.
-    pub fn to_toml(&self) -> String {
-        // Serialising paths, integers and lists of them cannot fail for valid
-        // UTF-8 paths; anything else reads back as an empty session.
-        toml::to_string_pretty(self).unwrap_or_default()
+    /// The session as TOML text, with byte-preserving local file URIs.
+    pub fn to_toml(&self) -> Result<String, toml::ser::Error> {
+        toml::to_string_pretty(self)
     }
 
     /// Whether the file was written by a later version of Rustphin and must
     /// not be overwritten.
     pub fn is_from_newer_version(&self) -> bool {
         self.version > VERSION
+    }
+}
+
+// Version 1 stored UTF-8 paths directly. New files use URIs so every valid
+// Linux filename round-trips; a literal percent in an old path stays literal.
+mod pane_paths {
+    use std::path::PathBuf;
+
+    use rustphin_platform::uri::{file_uri, path_from_uri};
+    use serde::{Deserialize as _, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(paths: &[PathBuf], serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(paths.iter().map(|path| file_uri(path)))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Vec<PathBuf>, D::Error> {
+        let paths = Vec::<String>::deserialize(deserializer)?;
+        Ok(paths
+            .into_iter()
+            .filter_map(|value| {
+                if value.starts_with('/') {
+                    Some(PathBuf::from(value))
+                } else {
+                    path_from_uri(value.as_bytes())
+                }
+            })
+            .collect())
     }
 }
 
@@ -126,7 +159,6 @@ pub(crate) struct SessionSave {
 
 impl SessionSave {
     pub(crate) fn write(self, path: &Path) -> io::Result<()> {
-        let text = self.session.to_toml();
         let mut latest = self
             .latest_attempt
             .lock()
@@ -137,6 +169,10 @@ impl SessionSave {
         // Keep this guard through publication. A failed newer attempt also
         // retires older requests; it must not silently restore their tabs.
         *latest = self.revision;
+        let text = self
+            .session
+            .to_toml()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         rustphin_platform::config::write_atomic(path, text.as_bytes())
     }
 }
@@ -188,6 +224,63 @@ mod tests {
         assert_eq!(Session::parse(&saved), latest);
     }
 
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn saved_split_tabs_preserve_non_utf8_folder_names() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt as _};
+
+        let raw = PathBuf::from(OsString::from_vec(b"/data/\xff%20#?\n".to_vec()));
+        let session = Session::new(
+            vec![
+                tab(&["/normal"], 0),
+                SessionTab {
+                    panes: vec!["/Été".into(), raw],
+                    active_pane: 1,
+                },
+            ],
+            1,
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.toml");
+        SessionSaves::default()
+            .prepare(session.clone())
+            .unwrap()
+            .write(&path)
+            .unwrap();
+
+        let saved = rustphin_platform::config::read(&path).unwrap().unwrap();
+        assert_eq!(Session::parse(&saved), session);
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn a_legacy_session_keeps_literal_percent_paths_and_upgrades_when_saved() {
+        let restored = Session::parse(
+            "version = 1\nactive = 0\n[[tabs]]\npanes = ['/data/literal%20', '/data/Été']\nactive_pane = 1\n",
+        );
+        assert_eq!(restored.tabs, [tab(&["/data/literal%20", "/data/Été"], 1)]);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.toml");
+        SessionSaves::default()
+            .prepare(restored.clone())
+            .unwrap()
+            .write(&path)
+            .unwrap();
+
+        let saved = rustphin_platform::config::read(&path).unwrap().unwrap();
+        let document: toml::Value = toml::from_str(&saved).unwrap();
+        assert_eq!(document["version"].as_integer(), Some(2));
+        assert_eq!(Session::parse(&saved), restored);
+    }
+
+    #[test]
+    fn uri_panes_ignore_remote_relative_and_nul_paths_before_clamping() {
+        let restored = Session::parse(
+            "version = 2\n[[tabs]]\npanes = ['file://remote/data', 'file:///bad%00name', 'relative', 'file:///saved%20folder']\n",
+        );
+        assert_eq!(restored, Session::single("/saved folder".into()));
+    }
+
     fn tab(panes: &[&str], active_pane: usize) -> SessionTab {
         SessionTab {
             panes: panes.iter().map(PathBuf::from).collect(),
@@ -196,12 +289,13 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn a_session_survives_being_written_and_read_back() {
         let saved = Session::new(
             vec![tab(&["/home/me"], 0), tab(&["/srv/a", "/srv/b"], 1)],
             1,
         );
-        assert_eq!(Session::parse(&saved.to_toml()), saved);
+        assert_eq!(Session::parse(&saved.to_toml().unwrap()), saved);
     }
 
     #[test]
@@ -238,7 +332,7 @@ mod tests {
 
     #[test]
     fn a_file_from_a_newer_version_is_recognised() {
-        assert!(Session::parse("version = 2").is_from_newer_version());
+        assert!(Session::parse(&format!("version = {}", VERSION + 1)).is_from_newer_version());
         assert!(!Session::single(PathBuf::from("/")).is_from_newer_version());
     }
 }
