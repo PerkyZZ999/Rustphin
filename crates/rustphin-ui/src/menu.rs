@@ -3,6 +3,8 @@
 //! The list is decided here, away from drawing, so a missing operation fails a
 //! test rather than only disappearing on screen.
 
+use std::path::PathBuf;
+
 /// One application that can open the selected file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppChoice {
@@ -35,6 +37,10 @@ pub enum MenuCommand {
     Properties,
     /// Bring the selection back from the trash.
     Restore,
+    /// Ask before emptying the trash being shown.
+    EmptyTrash,
+    /// Browse another known trash's files.
+    OpenTrash(PathBuf),
     /// Create a folder.
     NewFolder,
     /// Create an empty file.
@@ -117,6 +123,26 @@ pub fn context_menu(facts: &MenuFacts) -> Vec<MenuEntry> {
     } else {
         Vec::new()
     }
+}
+
+/// Actions for the current trash and navigation to other known trashes.
+pub fn trash_actions(
+    has_selection: bool,
+    others: impl IntoIterator<Item = (String, PathBuf)>,
+) -> Vec<MenuEntry> {
+    let mut entries = vec![
+        item("Restore", MenuCommand::Restore, has_selection),
+        item("Empty trash…", MenuCommand::EmptyTrash, true),
+    ];
+    let others: Vec<_> = others
+        .into_iter()
+        .map(|(label, files)| item(&label, MenuCommand::OpenTrash(files), true))
+        .collect();
+    if !others.is_empty() {
+        entries.push(MenuEntry::Separator);
+        entries.extend(others);
+    }
+    entries
 }
 
 fn item(label: &str, command: MenuCommand, enabled: bool) -> MenuEntry {
@@ -361,6 +387,59 @@ mod tests {
         };
         change(&mut facts);
         facts
+    }
+
+    #[test]
+    fn trash_without_a_selection_skips_restore_but_keeps_empty_reachable() {
+        let entries = trash_actions(false, []);
+        assert_eq!(labels(&entries), ["Restore", "Empty trash…"]);
+        let mut state = initial(&entries).unwrap();
+        assert_eq!(
+            on_key(&entries, &mut state, MenuKey::Accept),
+            MenuEffect::Run(MenuCommand::EmptyTrash)
+        );
+    }
+
+    #[test]
+    fn trash_selection_can_be_restored_without_offering_permanent_delete() {
+        let entries = trash_actions(true, []);
+        let mut state = initial(&entries).unwrap();
+        assert_eq!(
+            on_key(&entries, &mut state, MenuKey::Accept),
+            MenuEffect::Run(MenuCommand::Restore)
+        );
+        assert_eq!(labels(&entries), ["Restore", "Empty trash…"]);
+    }
+
+    #[test]
+    fn other_trash_choices_keep_their_exact_paths_and_skip_the_separator() {
+        use std::os::unix::ffi::OsStringExt as _;
+        let first = PathBuf::from("/generated/volume A/.Trash-1000/files");
+        let second = PathBuf::from(std::ffi::OsString::from_vec(
+            b"/generated/volume-\xff/.Trash/1000/files".to_vec(),
+        ));
+        let entries = trash_actions(
+            false,
+            [
+                ("Volume A".into(), first.clone()),
+                ("Byte name".into(), second.clone()),
+            ],
+        );
+        let mut state = initial(&entries).unwrap();
+        on_key(&entries, &mut state, MenuKey::Down);
+        assert_eq!(
+            on_key(&entries, &mut state, MenuKey::Accept),
+            MenuEffect::Run(MenuCommand::OpenTrash(first))
+        );
+        on_key(&entries, &mut state, MenuKey::Down);
+        assert_eq!(
+            on_key(&entries, &mut state, MenuKey::Accept),
+            MenuEffect::Run(MenuCommand::OpenTrash(second))
+        );
+        assert_eq!(
+            labels(&entries),
+            ["Restore", "Empty trash…", "", "Volume A", "Byte name"]
+        );
     }
 
     #[test]

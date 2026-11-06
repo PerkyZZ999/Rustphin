@@ -14,14 +14,14 @@ use gpui_kit::{
     Entity, EventEmitter, ExternalDragPayload, ExternalPaths, FileDragPaths, FocusHandle,
     Focusable as _, InteractiveElement, IntoElement, KeyBinding, KeyDownEvent, Modifiers,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point,
-    Render, Role, ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, UniformListScrollHandle, WeakEntity, Window, actions, anchored,
+    Render, Role, ScrollHandle, ScrollStrategy, SharedString, StatefulInteractiveElement as _,
+    Styled as _, Subscription, UniformListScrollHandle, WeakEntity, Window, actions, anchored,
     component::{
         Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
         input::{Input, InputEvent, InputState},
     },
-    div, img, point,
+    deferred, div, img, point,
     prelude::FluentBuilder as _,
     px, uniform_list,
 };
@@ -112,6 +112,7 @@ actions!(
         OpenTrash,
         RestoreTrash,
         EmptyTrash,
+        TrashActions,
         SortName,
         SortSize,
         SortModified,
@@ -335,7 +336,7 @@ impl Browser {
         let location_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Enter a folder path"));
         let rename_input = cx.new(|cx| InputState::new(window, cx));
-        let subscriptions = vec![
+        let mut subscriptions = vec![
             cx.subscribe_in(&location_input, window, Self::on_location_input),
             cx.subscribe_in(&rename_input, window, Self::on_rename_input),
             // Cut entries are drawn dimmed, and the clipboard changes elsewhere.
@@ -347,6 +348,11 @@ impl Browser {
         // a view created for a background tab must not take it.
         let focus = cx.focus_handle();
         let menu_focus = cx.focus_handle();
+        subscriptions.push(cx.on_blur(&menu_focus, window, |this, _, cx| {
+            if this.menu.take().is_some() {
+                cx.notify();
+            }
+        }));
 
         let mut this = Self {
             model: None,
@@ -719,7 +725,13 @@ impl Browser {
         let Some(state) = menu::initial(&entries) else {
             return;
         };
-        self.menu = Some(OpenMenu { at, entries, state });
+        self.menu = Some(OpenMenu {
+            at,
+            entries,
+            state,
+            name: "File actions",
+            scroll: ScrollHandle::new(),
+        });
         self.menu_focus.focus(window, cx);
         cx.notify();
     }
@@ -800,7 +812,14 @@ impl Browser {
             return;
         };
         match effect {
-            MenuEffect::Stay => cx.notify(),
+            MenuEffect::Stay => {
+                if let Some(menu) = &self.menu
+                    && !menu.state.submenu
+                {
+                    menu.scroll.scroll_to_item(menu.state.cursor);
+                }
+                cx.notify();
+            }
             MenuEffect::Close => {
                 self.menu = None;
                 self.focus.focus(window, cx);
@@ -850,6 +869,16 @@ impl Browser {
             }
             MenuCommand::Restore => {
                 self.restore_selected(cx);
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::EmptyTrash => {
+                if let Some(dir) = self.trash_dir.clone() {
+                    hub(cx).update(cx, |hub, cx| hub.empty_trash(dir, cx));
+                }
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::OpenTrash(files) => {
+                self.open(files);
                 self.focus.focus(window, cx);
             }
             MenuCommand::NewFolder => {
@@ -1456,66 +1485,79 @@ impl Browser {
         }
     }
 
-    /// The line that says this folder is the trash and offers what can be
-    /// done with it.
-    fn trash_banner(&self, dir: &Path, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement {
-        let dir = dir.to_owned();
-        let nothing_selected = self.selection.is_empty();
+    fn show_trash_actions(
+        &mut self,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.trash_dir.is_none() {
+            return;
+        }
+        let entries = menu::trash_actions(
+            !self.selection.is_empty(),
+            self.other_trashes
+                .iter()
+                .map(|dir| (trash_label(dir), dir.join("files"))),
+        );
+        let Some(state) = menu::initial(&entries) else {
+            return;
+        };
+        self.menu = Some(OpenMenu {
+            at,
+            entries,
+            state,
+            name: "Trash actions",
+            scroll: ScrollHandle::new(),
+        });
+        self.menu_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    /// Explains this location and keeps its actions in one bounded menu.
+    fn trash_banner(&self, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement {
         div()
+            .id("trash-banner")
+            .role(Role::Group)
+            .aria_label("Trash")
+            .aria_description("Items stay here until the trash is emptied.")
             .flex()
+            .flex_col()
             .flex_none()
-            .items_center()
-            .gap(px(space::SM))
-            .px(px(space::LG))
+            .gap(px(space::XS))
+            .px(px(space::SM))
             .py(px(space::SM))
             .bg(theme.chrome)
             .border_b_1()
             .border_color(theme.border)
             .child(
-                Icon::new(gpui_kit::assets::IconName::Trash)
-                    .size(px(size::ICON))
-                    .flex_none()
-                    .text_color(theme.text_muted),
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(space::SM))
+                    .child(
+                        div().flex().flex_none().items_center().gap(px(space::SM))
+                            .child(Icon::new(gpui_kit::assets::IconName::Trash).size(px(size::ICON)).flex_none())
+                            .child("Trash"),
+                    )
+                    .child(
+                        div().flex_none().child(
+                            Button::new("trash-actions")
+                                .outline()
+                                .small()
+                                .label("Trash actions")
+                                .tooltip("Restore, empty or browse another trash; also available in Actions")
+                                .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                                    this.show_trash_actions(event.position(), window, cx);
+                                })),
+                        ),
+                    ),
             )
             .child(
-                div().flex_1().min_w_0().truncate().child("Trash").child(
-                    div()
-                        .text_size(px(text::SMALL))
-                        .text_color(theme.text_muted)
-                        .child("Items stay here until the trash is emptied."),
-                ),
-            )
-            // Each volume keeps its own trash; these lead to the others.
-            .children(self.other_trashes.iter().enumerate().map(|(index, other)| {
-                let files = other.join("files");
-                Button::new(("other-trash", index))
-                    .ghost()
-                    .small()
-                    .label(trash_label(other))
-                    .tooltip(format!("Show {}", other.display()))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.open(files.clone());
-                        cx.notify();
-                    }))
-            }))
-            .child(
-                Button::new("restore")
-                    .outline()
-                    .small()
-                    .label("Restore")
-                    .tooltip("Put the selected items back where they were")
-                    .disabled(nothing_selected)
-                    .on_click(cx.listener(|this, _, _, cx| this.restore_selected(cx))),
-            )
-            .child(
-                Button::new("empty-trash")
-                    .outline()
-                    .small()
-                    .label("Empty trash\u{2026}")
-                    .on_click(cx.listener(move |_, _, _, cx| {
-                        let dir = dir.clone();
-                        hub(cx).update(cx, |hub, cx| hub.empty_trash(dir, cx));
-                    })),
+                div().text_size(px(text::SMALL)).text_color(theme.text_muted)
+                    .child("Items stay here until the trash is emptied."),
             )
     }
 
@@ -2540,59 +2582,75 @@ impl Browser {
     }
 
     /// The open context menu, in window coordinates, or nothing.
-    fn menu_layer(&self, theme: Theme, cx: &mut Context<Self>) -> Option<gpui_kit::AnyElement> {
+    fn menu_layer(
+        &self,
+        theme: Theme,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui_kit::AnyElement> {
         let menu = self.menu.as_ref()?;
         let at = menu.at;
+        let max_height = px(size::MENU_VISIBLE
+            .min((f32::from(window.viewport_size().height) - space::SM * 2.).max(0.)));
         let entries = menu.entries.clone();
         let state = menu.state;
-        let panel = self.menu_column(&entries, state.cursor, false, "menu-column", theme, cx);
+        let panel = self
+            .menu_column(&entries, state.cursor, false, "menu-column", theme, cx)
+            .track_scroll(&menu.scroll)
+            .max_h(max_height);
         let submenu = state.submenu.then(|| {
             entries.get(state.cursor).and_then(|entry| match entry {
-                menu::MenuEntry::Submenu { items, .. } => {
-                    Some(self.menu_column(items, state.sub_cursor, true, "menu-apps", theme, cx))
-                }
+                menu::MenuEntry::Submenu { items, .. } => Some(
+                    self.menu_column(items, state.sub_cursor, true, "menu-apps", theme, cx)
+                        .max_h(max_height),
+                ),
                 _ => None,
             })
         });
+        // A menu belongs to the window even when its browser pane is narrow.
         Some(
-            anchored()
-                .position(at)
-                .snap_to_window_with_margin(Edges::all(px(space::SM)))
-                .child(
-                    div()
-                        .id("context-menu")
-                        .role(Role::Menu)
-                        .aria_label("File actions")
-                        .aria_description("Up and Down choose an action. Right opens a submenu, Left returns. Enter runs the action; Escape closes.")
-                        .key_context(MENU_CONTEXT)
-                        .track_focus(&self.menu_focus)
-                        .on_action(cx.listener(|this, _: &MenuUp, window, cx| {
-                            this.on_menu_key(MenuKey::Up, window, cx);
-                        }))
-                        .on_action(cx.listener(|this, _: &MenuDown, window, cx| {
-                            this.on_menu_key(MenuKey::Down, window, cx);
-                        }))
-                        .on_action(cx.listener(|this, _: &MenuLeft, window, cx| {
-                            this.on_menu_key(MenuKey::Left, window, cx);
-                        }))
-                        .on_action(cx.listener(|this, _: &MenuRight, window, cx| {
-                            this.on_menu_key(MenuKey::Right, window, cx);
-                        }))
-                        .on_action(cx.listener(|this, _: &MenuAccept, window, cx| {
-                            this.on_menu_key(MenuKey::Accept, window, cx);
-                        }))
-                        .on_action(cx.listener(|this, _: &MenuClose, window, cx| {
-                            this.on_menu_key(MenuKey::Close, window, cx);
-                        }))
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-                        .occlude()
-                        .flex()
-                        .items_start()
-                        .child(panel)
-                        .children(submenu.flatten()),
-                )
-                .into_any_element(),
+            deferred(
+                anchored()
+                    .position(at)
+                    .snap_to_window_with_margin(Edges::all(px(space::SM)))
+                    .child(
+                        div()
+                            .id("context-menu")
+                            .role(Role::Menu)
+                            .aria_label(menu.name)
+                            .aria_description(
+                                "Up and Down choose an action. Enter runs it; Escape closes.",
+                            )
+                            .key_context(MENU_CONTEXT)
+                            .track_focus(&self.menu_focus)
+                            .on_action(cx.listener(|this, _: &MenuUp, window, cx| {
+                                this.on_menu_key(MenuKey::Up, window, cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MenuDown, window, cx| {
+                                this.on_menu_key(MenuKey::Down, window, cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MenuLeft, window, cx| {
+                                this.on_menu_key(MenuKey::Left, window, cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MenuRight, window, cx| {
+                                this.on_menu_key(MenuKey::Right, window, cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MenuAccept, window, cx| {
+                                this.on_menu_key(MenuKey::Accept, window, cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MenuClose, window, cx| {
+                                this.on_menu_key(MenuKey::Close, window, cx);
+                            }))
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                            .occlude()
+                            .flex()
+                            .items_start()
+                            .child(panel)
+                            .children(submenu.flatten()),
+                    ),
+            )
+            .into_any_element(),
         )
     }
 
@@ -2618,7 +2676,6 @@ impl Browser {
             .flex()
             .flex_col()
             .w(px(size::MENU))
-            .max_h(px(size::MENU_VISIBLE))
             .overflow_y_scroll()
             .p(px(space::XS))
             .rounded(px(size::RADIUS))
@@ -2771,6 +2828,7 @@ impl Browser {
                 })
             })
             .flex()
+            .flex_none()
             .items_center()
             .gap(px(space::SM))
             .h(px(size::ROW))
@@ -2804,6 +2862,8 @@ struct OpenMenu {
     at: Point<Pixels>,
     entries: Vec<menu::MenuEntry>,
     state: menu::MenuState,
+    name: &'static str,
+    scroll: ScrollHandle,
 }
 
 impl Render for Browser {
@@ -2946,6 +3006,9 @@ impl Render for Browser {
             .on_action(cx.listener(|this, _: &ToggleHidden, _, cx| this.toggle_hidden(cx)))
             .on_action(cx.listener(|this, _: &OpenTrash, _, cx| this.open_trash(cx)))
             .on_action(cx.listener(|this, _: &RestoreTrash, _, cx| this.restore_selected(cx)))
+            .on_action(cx.listener(|this, _: &TrashActions, window, cx| {
+                this.show_trash_actions(this.menu_anchor(), window, cx);
+            }))
             .on_action(cx.listener(|this, _: &EmptyTrash, _, cx| {
                 if let Some(dir) = this.trash_dir.clone().filter(|_| this.shows_trash()) {
                     hub(cx).update(cx, |hub, cx| hub.empty_trash(dir, cx));
@@ -3000,10 +3063,9 @@ impl Render for Browser {
             .when_some(self.failure.as_ref(), |view, failure| {
                 view.child(self.failure_banner(failure, theme, cx))
             })
-            .when_some(
-                self.trash_dir.clone().filter(|_| snapshot.is_some()),
-                |view, dir| view.child(self.trash_banner(&dir, theme, cx)),
-            )
+            .when(self.trash_dir.is_some() && snapshot.is_some(), |view| {
+                view.child(self.trash_banner(theme, cx))
+            })
             .child(
                 // The file list sits on a more solid surface than the glass
                 // toolbar and status line, so columns of text stay readable.
@@ -3031,7 +3093,7 @@ impl Render for Browser {
             )
             .child(self.status(theme))
             .children(self.band_outline(theme))
-            .children(self.menu_layer(theme, cx));
+            .children(self.menu_layer(theme, window, cx));
         self.frames.end(frame_started);
         view
     }

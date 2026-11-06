@@ -122,6 +122,7 @@ pub fn commands() -> Vec<Command> {
             Browser,
             w::DismissNotice
         ),
+        command!("Trash: Show trash actions", "", Browser, b::TrashActions),
         command!("Trash: Open trash", "", Browser, b::OpenTrash),
         command!("Trash: Restore selection", "", Browser, b::RestoreTrash),
         command!("Trash: Empty this trash…", "", Browser, b::EmptyTrash),
