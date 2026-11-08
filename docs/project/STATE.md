@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-08 — W-076q reopen closed tabs; full gate 458 tests
+- Latest validation entry: VALIDATION.md, 2026-11-08 — W-077i ban the toolkit reqwest fork; full gate 458 tests
 
 ## Open loops
 - Task: W-076o/p/q add docs/project/KEYBOARD.md (Rustphin vs Dolphin defaults) and fix Backspace=Back, Alt+Home, Alt+D, Alt+1…0, Ctrl+P, Ctrl+Q, Shift+F5/F6 copy/move to the other view, Ctrl+Shift+T reopen closed tab. Ctrl+F3 is bound but KWin takes it by default (Dolphin too); Tab works. Not offered yet: duplicate, copy location, redo, Menu key.

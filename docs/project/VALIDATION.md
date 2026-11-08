@@ -1,5 +1,10 @@
 # Validation evidence
 
+### 2026-11-08 — W-077i ban the toolkit's reqwest fork (D-018)
+- **Finding:** the cargo registry holds `gpui-pre-reqwest`; Cargo.lock lists it with `hyper`, `hyper-util`, `h2` and `tokio-rustls`. `cargo tree --target all -i gpui-pre-reqwest` shows it under `gpui-kit-assets`; `cargo tree -e normal -i gpui-pre-reqwest` for the Linux host prints nothing, and cargo-deny's graph (Linux target only) passed the existing `hyper`/`rustls` bans. So the D-018 statement about the Linux build holds, but the fork's own name was not banned.
+- **Change:** deny.toml bans `gpui-pre-reqwest` too, with a comment; D-018 records the non-Linux-only presence.
+- **Proof:** `cargo deny check bans` passes; a probe banning the present `gpui-kit-assets` failed (error[banned], bans FAILED), showing plain bans act on the checked graph; probe removed. rust-tc doctor PASS, 458 tests. Evidence: target/rust-toolchain/w077i/doctor.log.
+
 ### 2026-11-08 — W-076q reopen closed tabs
 - **Phase:** 6 Implement (S11, R-004, R-005)
 - **Reference:** Dolphin keeps up to six recently closed tabs, newest first (`DolphinRecentTabsMenu::rememberClosedTab`), and Ctrl+Shift+T restores the newest as a new active tab with its split state (`restoreClosedTab`).

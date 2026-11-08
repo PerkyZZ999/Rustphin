@@ -72,6 +72,9 @@ deny = [
     { crate = "http-body", wrappers = ["gpui-pre-http-client"] },
     { crate = "gpui-pre-http-client", wrappers = ["gpui-pre", "gpui-pre-linux"] },
     { crate = "reqwest" },
+    # The toolkit's own reqwest fork; Cargo.lock lists it (with hyper, h2 and
+    # rustls) only for non-Linux targets of gpui-kit-assets.
+    { crate = "gpui-pre-reqwest" },
     { crate = "hyper" },
     { crate = "ureq" },
     { crate = "isahc" },
