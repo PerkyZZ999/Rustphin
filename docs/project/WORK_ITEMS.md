@@ -23,6 +23,7 @@ S11 — Hardening for daily use (in progress)
 - [ ] W-079 — Match the user-provided docs/mockup.png as closely as feasible through a UI/UX/design pass, adapting to Rustphin's features. Start only after S11 acceptance is complete; then break the pass into focused design-token/component tasks and verify visual, keyboard, accessibility, responsive and fallback behavior. ROADMAP.md records scope and validation. Requested by the maintainer on 2026-11-06.
 
 ## Done (recent)
+- [x] W-078c — Design-token audit of rustphin-ui: no colour or type-size literals; the rubber band now uses the 2 px radius token (was 4 px), and the dialog fact-label width and menu hairline are size tokens (DESIGN.md first). Replay of band and conflict dialog; R-105 token criterion ticked. Full gate 463 tests.
 - [x] W-081 — Symbolic links as in Dolphin: italic names, the target's type icon (and thumbnail type), "Link to a file/folder" for assistive tech, and 0 B for a broken link. Core records link target names sparsely per chunk. 3 new/extended tests, 3 mutations; replay K16; listing benchmark PASS; full gate 463 tests.
 - [x] W-078b — View: Folders first toggle (palette; saved), palette entries for the new shortcuts, and replays K14/K15/J4 closing eight more criteria. Full gate 461 tests.
 - [x] W-076s — Keyboard-opened context menus appear at the focused entry, as in Dolphin, and open upward when there is no room below. Pure cell-corner, menu-height and flip rules with tests and three mutations; replay K13 (details top/bottom, icon grid); full gate 461 tests.

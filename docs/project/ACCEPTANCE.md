@@ -14,7 +14,6 @@ hardware.
 | Requirement · criterion | Evidence so far | Missing |
 |---|---|---|
 | R-105 · menus, palette, dialogs are opaque | W-057 palette, B1 dialog | Context menus: K12/K13 screenshots show solid menus; record them against this criterion |
-| R-105 · colours, spacing, radii, sizes from one token set | Design statement in W-018 | A code audit for literal colours/sizes outside `theme.rs` |
 | R-106 · secondary controls within two steps | W-059: every action in the open Actions set | Run J4; operation details reachability |
 
 Closed on 2026-11-08 by K14/K15: Dolphin listing comparison, back/forward/up

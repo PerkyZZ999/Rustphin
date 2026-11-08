@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-08 — W-078c design-token audit (R-105)
+- **Method:** searched every rustphin-ui source except theme.rs for colour literals (rgb/rgba/hsl/hsla/hex, named colours), numeric `px(…)` literals, text sizes, radii, font weights, opacity and border widths.
+- **Findings:** no colour, type-size or font-weight literals. Deviations: the rubber band used a 4 px radius (`space::XS`) where DESIGN.md allows only the 2 px radius; the dialog fact-label column was a literal 72 px; the menu separator a literal 1 px. Remaining literals by design: zero scroll offsets, the 960 × 640 default and 480 × 320 minimum window, and the 0.5 opacity DESIGN.md specifies for cut entries and hidden places; borders use GPUI's 1 px border helpers (DESIGN: hairlines).
+- **Change:** rubber band → `size::RADIUS`; new `size::FACT_LABEL` (72) and `size::HAIRLINE` (1), with DESIGN.md's dialog text updated first (lint 0 errors).
+- **Replay:** private KWin/HOME, generated files. A drag drew the band (five rows selected); an enlarged crop of its corner shows the slight 2 px rounding. A paste onto an existing generated name opened the Name conflict dialog with Existing/Incoming facts in their label column; Escape stopped it and the existing file kept its bytes ("older").
+- **Ticked:** R-105 "Colours, spacing, radii and type sizes come from one set of design tokens", with the remaining literals named on the line.
+- **Gate:** rust-tc doctor PASS, 463 tests. Evidence: target/rust-toolchain/w078c/doctor.log.
+
 ### 2026-11-08 — W-081 symbolic links shown as in Dolphin
 - **Phase:** 6 Implement (S11; found by the K15 Dolphin comparison)
 - **Reference:** Dolphin shows a link with its target's type icon, a link emblem and an italic name, and a broken link as 0 B.

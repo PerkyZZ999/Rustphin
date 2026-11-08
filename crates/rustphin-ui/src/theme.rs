@@ -60,6 +60,10 @@ pub mod size {
     pub const SIDEBAR: f32 = 220.;
     /// Width of a context menu and of its application list.
     pub const MENU: f32 = 240.;
+    /// Width of the label column beside a dialog fact.
+    pub const FACT_LABEL: f32 = 72.;
+    /// A hairline divider, such as a menu separator.
+    pub const HAIRLINE: f32 = 1.;
     /// Tallest a context menu grows before it scrolls: twelve rows.
     pub const MENU_VISIBLE: f32 = 336.;
     /// Width of a dialog.

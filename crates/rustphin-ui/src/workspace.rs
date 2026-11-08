@@ -1852,7 +1852,7 @@ impl Workspace {
                 .gap(px(space::SM))
                 .child(
                     div()
-                        .w(px(72.))
+                        .w(px(size::FACT_LABEL))
                         .flex_none()
                         .text_color(theme.text_muted)
                         .child(label),

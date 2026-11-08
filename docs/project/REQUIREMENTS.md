@@ -208,7 +208,7 @@ Conventions:
   - [ ] Floating surfaces inside the window (menus, palette, dialogs) are tinted opaque, since in-window blur is unavailable.
   - [ ] Where the compositor offers no blur protocol, or the user turns transparency off, the window is opaque and every text element still meets WCAG AA contrast (4.5:1).
   - [ ] Text meets WCAG AA contrast over the blurred background in the worst case tested (a white window behind).
-  - [ ] Colours, spacing, radii and type sizes come from one set of design tokens.
+  - [x] Colours, spacing, radii and type sizes come from one set of design tokens. (W-078c: code audit of rustphin-ui; the last radius and two sizes moved to tokens. Window default/minimum sizes and the documented half opacity remain literals.)
 - **Validation:** test (token contrast), manual (visual review on the real desktop)
 
 ### R-106 — Progressive disclosure

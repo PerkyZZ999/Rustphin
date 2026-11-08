@@ -1168,7 +1168,7 @@ impl Browser {
                 .top(top)
                 .w(right - left)
                 .h(bottom - top)
-                .rounded(px(space::XS))
+                .rounded(px(size::RADIUS))
                 .border_1()
                 .border_color(theme.accent)
                 .bg(theme.hover),
@@ -2995,7 +2995,7 @@ impl Browser {
                 .is_some_and(|menu| menu.state.submenu == nested);
         match entry {
             menu::MenuEntry::Separator => div()
-                .h(px(1.))
+                .h(px(size::HAIRLINE))
                 .my(px(space::XS))
                 .bg(theme.border)
                 .into_any_element(),
