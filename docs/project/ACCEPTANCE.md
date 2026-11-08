@@ -11,7 +11,7 @@ hardware.
 
 ## Closed by the agent on 2026-11-08
 
-Replays K14–K17 and J4, the token audit and the floating-surface test closed
+W-085 then closed R-101's 60 fps criterion under D-019 (details 0.25%, icons 0.08%, compact 0% dropped). Replays K14–K17 and J4, the token audit and the floating-surface test closed
 the rest: the Dolphin listing comparison, back/forward/up with per-tab
 history, content changes with selection and scroll kept, per-tab view modes,
 case-insensitive sort with the new folders-first toggle, zoom in all modes,
@@ -23,7 +23,6 @@ from Dolphin, fixed in W-081. Everything below needs the maintainer.
 
 | Requirement · criterion | State | Decision needed |
 |---|---|---|
-| R-101 · 60 fps (D-019: ≤ 5% dropped frames) | Decided 2026-11-08 | Agent: count dropped frames in the frame log and re-measure the three views (W-085) |
 | R-101 · no UI-thread task over 16 ms | Measured paths well under (model callback 0.8 ms) | Window/GPU bootstrap produced a 104 ms foreground poll in one diagnostic run (W-073b); thumbnail paths were not measured. Accept startup as outside "listing, sorting, metadata, thumbnails" and measure thumbnails, or treat startup as a defect to fix |
 | R-101 · first entries within 200 ms, input during loading | 185.6 ms warm-cache details navigation; input observed while loading | Whether one measured mode/warm cache is enough, or every mode and a cold start must be measured |
 | R-004 · every action has a keyboard path; Dolphin defaults | KEYBOARD.md; K8–K18 | Duplicate on Ctrl+D done (D-021, W-084, K18). Still open: W-076e not approved ("Not yet") |

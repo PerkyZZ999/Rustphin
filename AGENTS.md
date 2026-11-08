@@ -88,7 +88,7 @@ rust-tc run                # build and run, opening the home folder
 rust-tc run ~/Documents    # open a specific folder
 ```
 
-Environment variables: `RUSTPHIN_OPAQUE=1` forces the opaque theme; `RUSTPHIN_LOG=debug` sets the log level (logs go to stderr). `RUSTPHIN_FRAME_LOG=1` logs frame timing every 120 frames; `RUSTPHIN_SCROLL_BENCH=1` also makes the list scroll itself for 1,200 frames, which is how frame rate is measured (see W-013 in `docs/project/VALIDATION.md`).
+Environment variables: `RUSTPHIN_OPAQUE=1` forces the opaque theme; `RUSTPHIN_LOG=debug` sets the log level (logs go to stderr). `RUSTPHIN_FRAME_LOG=1` logs frame timing every 120 frames, counting dropped frames (intervals over 1.5 × the refresh period, D-019); `RUSTPHIN_SCROLL_BENCH=1` also makes the list scroll itself for 1,200 frames and ends with a "scroll benchmark result" line saying whether at most 5% were dropped, which is how frame rate is measured (see W-013 and W-085 in `docs/project/VALIDATION.md`).
 
 A cold build of the UI toolkit takes two to three minutes.
 

@@ -9,6 +9,11 @@
 //! With `RUSTPHIN_SCROLL_BENCH` set as well as a folder open, the view scrolls
 //! itself a few rows every frame for a fixed number of frames, so the timing
 //! can be taken without an input device.
+//!
+//! A frame interval longer than 1.5 × the display's refresh period is a
+//! dropped frame (D-019). Each summary counts them, and when the self-driven
+//! scroll ends a verdict for the whole run says whether at most 5% of its
+//! intervals were dropped, as R-101 asks.
 
 use std::time::{Duration, Instant};
 
@@ -20,6 +25,11 @@ const BENCH_STEP: usize = 3;
 const BENCH_FRAMES: usize = WINDOW * 10;
 /// Long gaps are treated as idle only when no scroll benchmark is driving frames.
 const IDLE_GAP: Duration = Duration::from_millis(250);
+/// The refresh period assumed when the platform does not report one (60 Hz).
+const ASSUMED_REFRESH: Duration = Duration::from_nanos(16_666_667);
+/// The share of dropped frames sustained scrolling may have (D-019), as a
+/// fraction: one in twenty.
+const DROPPED_LIMIT_PER_TWENTY: usize = 1;
 
 /// Collects frame timings when enabled.
 #[derive(Default)]
@@ -30,6 +40,11 @@ pub struct FrameLog {
     builds: Vec<Duration>,
     excluded_gaps: usize,
     longest_gap: Duration,
+    /// The display's refresh period, when the platform reports it.
+    refresh: Option<Duration>,
+    /// Intervals and dropped frames over the whole self-driven scroll.
+    bench_intervals: usize,
+    bench_dropped: usize,
     /// Frames left in the self-driven scroll, and the row it has reached.
     bench: Option<(usize, usize)>,
     #[cfg(feature = "diagnostics")]
@@ -54,11 +69,21 @@ impl FrameLog {
         }
     }
 
-    /// Marks the start of building a frame. Pass the result to [`Self::end`].
-    pub fn begin(&mut self) -> Option<Instant> {
+    /// Marks the start of building a frame on a display that refreshes every
+    /// `refresh` (`None` when unknown). Pass the result to [`Self::end`].
+    pub fn begin(&mut self, refresh: Option<Duration>) -> Option<Instant> {
+        if !self.enabled {
+            return None;
+        }
         #[cfg(feature = "diagnostics")]
         self.record_toolkit();
+        self.refresh = refresh.filter(|period| !period.is_zero());
         self.begin_at(Instant::now())
+    }
+
+    /// The refresh period dropped frames are measured against.
+    fn period(&self) -> Duration {
+        self.refresh.unwrap_or(ASSUMED_REFRESH)
     }
 
     fn begin_at(&mut self, now: Instant) -> Option<Instant> {
@@ -70,6 +95,10 @@ impl FrameLog {
             let driving = self
                 .bench
                 .is_some_and(|(left, _)| left < BENCH_FRAMES && left > 0);
+            if driving {
+                self.bench_intervals += 1;
+                self.bench_dropped += usize::from(is_dropped(interval, self.period()));
+            }
             if interval <= IDLE_GAP || driving {
                 self.intervals.push(interval);
             } else {
@@ -93,7 +122,25 @@ impl FrameLog {
         }
         *frames_left -= 1;
         *row = (*row + BENCH_STEP) % rows;
-        Some(*row)
+        let row = *row;
+        if *frames_left == 0 {
+            self.report_bench();
+        }
+        Some(row)
+    }
+
+    /// Logs the dropped-frame verdict for the whole self-driven scroll.
+    fn report_bench(&self) {
+        let (counted, dropped) = (self.bench_intervals, self.bench_dropped);
+        tracing::info!(
+            counted_intervals = counted,
+            dropped_frames = dropped,
+            dropped_percent = percent(dropped, counted),
+            refresh_ms = self.period().as_secs_f64() * 1e3,
+            refresh_reported = self.refresh.is_some(),
+            passes_d019 = within_limit(dropped, counted),
+            "scroll benchmark result"
+        );
     }
 
     /// Marks the end of building a frame and logs a summary when due.
@@ -104,9 +151,19 @@ impl FrameLog {
         self.builds.push(started.elapsed());
         if self.builds.len() >= WINDOW {
             let (intervals, builds) = (summarise(&self.intervals), summarise(&self.builds));
+            let period = self.period();
+            let dropped = self
+                .intervals
+                .iter()
+                .filter(|&&interval| is_dropped(interval, period))
+                .count();
             tracing::info!(
                 frames = self.builds.len(),
                 counted_intervals = self.intervals.len(),
+                dropped_frames = dropped,
+                dropped_percent = percent(dropped, self.intervals.len()),
+                refresh_ms = period.as_secs_f64() * 1e3,
+                refresh_reported = self.refresh.is_some(),
                 excluded_gaps = self.excluded_gaps,
                 longest_gap_ms = self.longest_gap.as_secs_f64() * 1e3,
                 interval_p50_ms = intervals.median,
@@ -198,6 +255,26 @@ impl Drop for TaskTimer {
     }
 }
 
+/// Whether a frame interval means a frame was dropped: longer than 1.5 ×
+/// the refresh period (D-019).
+fn is_dropped(interval: Duration, period: Duration) -> bool {
+    interval.as_nanos() * 2 > period.as_nanos() * 3
+}
+
+/// Whether `dropped` of `counted` intervals is within D-019's 5%. A run with
+/// no intervals measured nothing and does not pass.
+fn within_limit(dropped: usize, counted: usize) -> bool {
+    counted > 0 && dropped * 20 <= counted * DROPPED_LIMIT_PER_TWENTY
+}
+
+/// `part` as a percentage of `whole`; zero when there is no whole.
+fn percent(part: usize, whole: usize) -> f64 {
+    if whole == 0 {
+        return 0.;
+    }
+    part as f64 / whole as f64 * 100.
+}
+
 /// Median, 95th percentile and maximum of a set of durations, in milliseconds.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Summary {
@@ -284,7 +361,7 @@ mod tests {
     #[test]
     fn a_disabled_log_records_nothing() {
         let mut log = FrameLog::default();
-        let started = log.begin();
+        let started = log.begin(None);
         log.end(started);
         assert_eq!(started, None);
         assert!(log.builds.is_empty() && log.intervals.is_empty());
@@ -296,9 +373,9 @@ mod tests {
             enabled: true,
             ..FrameLog::default()
         };
-        let first = log.begin();
+        let first = log.begin(None);
         log.end(first);
-        let second = log.begin();
+        let second = log.begin(None);
         log.end(second);
         assert_eq!(log.builds.len(), 2);
         assert_eq!(log.intervals.len(), 1);
@@ -315,5 +392,58 @@ mod tests {
         log.begin_at(start);
         log.begin_at(start + Duration::from_secs(1));
         assert_eq!(summarise(&log.intervals).max, 1000.);
+    }
+
+    #[test]
+    fn a_frame_is_dropped_only_beyond_one_and_a_half_refresh_periods() {
+        let period = Duration::from_micros(16_667);
+        assert!(!is_dropped(Duration::from_micros(16_980), period), "jitter");
+        let even = Duration::from_millis(16);
+        assert!(
+            !is_dropped(Duration::from_micros(24_000), even),
+            "1.5 x is not"
+        );
+        assert!(is_dropped(Duration::from_micros(24_001), even));
+        assert!(
+            is_dropped(Duration::from_micros(33_333), period),
+            "a missed frame"
+        );
+        let fast = Duration::from_micros(6_944); // 144 Hz
+        assert!(is_dropped(Duration::from_micros(16_667), fast));
+    }
+
+    #[test]
+    fn five_percent_dropped_passes_and_more_or_nothing_measured_fails() {
+        assert!(within_limit(0, 1_199));
+        assert!(within_limit(59, 1_199));
+        assert!(within_limit(60, 1_200));
+        assert!(!within_limit(61, 1_200));
+        assert!(!within_limit(0, 0));
+        assert_eq!(percent(30, 1_200), 2.5);
+        assert_eq!(percent(1, 0), 0.);
+    }
+
+    #[test]
+    fn the_benchmark_counts_dropped_frames_against_the_reported_refresh() {
+        let start = Instant::now();
+        let mut log = FrameLog {
+            enabled: true,
+            bench: Some((BENCH_FRAMES - 1, 0)),
+            refresh: Some(Duration::from_millis(10)),
+            ..FrameLog::default()
+        };
+        let mut at = start;
+        for gap in [10, 10, 16, 14, 30] {
+            log.begin_at(at);
+            at += Duration::from_millis(gap);
+        }
+        log.begin_at(at);
+        assert_eq!((log.bench_intervals, log.bench_dropped), (5, 2));
+        // Unknown refresh: 60 Hz is assumed, so only the 30 ms gap drops.
+        log.refresh = None;
+        log.bench_dropped = 0;
+        log.bench_intervals = 0;
+        log.begin_at(at + Duration::from_millis(30));
+        assert_eq!((log.bench_intervals, log.bench_dropped), (1, 1));
     }
 }

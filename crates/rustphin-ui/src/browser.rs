@@ -3356,7 +3356,7 @@ struct OpenMenu {
 
 impl Render for Browser {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let frame_started = self.frames.begin();
+        let frame_started = self.frames.begin(window.refresh_interval(cx));
         let theme = *cx.global::<Theme>();
         // Opening another folder clears the filter in the model; the bar follows.
         if self.filter_open

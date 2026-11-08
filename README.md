@@ -75,6 +75,8 @@ session, set `RUSTPHIN_FRAME_LOG=1` for view/model/row timing and toolkit
 layout, prepaint, paint, presentation and foreground-task timing.
 `RUSTPHIN_SCROLL_BENCH=1` drives 1,200 frames. Active benchmark stalls are
 counted even above 250 ms; idle exclusions and their longest gap are reported.
+Intervals over 1.5 × the display's refresh period count as dropped frames, and
+the run ends with a "scroll benchmark result" verdict against D-019's 5%.
 See `docs/project/UI_SCENARIOS.md` for the fixture and memory protocol. Logs
 contain local paths and source locations; this is opt-in local diagnosis.
 
