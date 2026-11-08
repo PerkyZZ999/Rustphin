@@ -28,7 +28,7 @@ use rustphin_core::{
 };
 
 use crate::{
-    browser::{Browser, BrowserEvent, DraggedEntries},
+    browser::{Browser, BrowserEvent, DraggedEntries, EditLocation},
     commands::{self, Scope},
     format,
     history::history,
@@ -83,6 +83,9 @@ actions!(
     ]
 );
 
+/// Workspace focus outside the panes: the places panel, the tab strip.
+const OUTSIDE_PANES: &str = "Workspace && !Dialog && !Palette && !Browser && !Input";
+
 /// Registers the tab and split-view shortcuts. They match Dolphin's defaults.
 pub fn bind_keys(cx: &mut App) {
     let context = Some("Workspace && !Dialog && !Palette");
@@ -92,6 +95,10 @@ pub fn bind_keys(cx: &mut App) {
             OpenPalette,
             Some("Workspace && !Dialog && !Palette"),
         ),
+        // Dolphin enters a location from anywhere in the window. Inside a
+        // pane the browser's own binding applies; text fields keep their keys.
+        KeyBinding::new("ctrl-l", EditLocation, Some(OUTSIDE_PANES)),
+        KeyBinding::new("f6", EditLocation, Some(OUTSIDE_PANES)),
         KeyBinding::new("ctrl-t", NewTab, context),
         KeyBinding::new("ctrl-w", CloseTab, context),
         KeyBinding::new("ctrl-tab", NextTab, context),
@@ -1322,6 +1329,12 @@ impl Render for Workspace {
 
         div()
             .key_context(KEY_CONTEXT)
+            .on_action(cx.listener(|this, _: &EditLocation, window, cx| {
+                this.tabs
+                    .active()
+                    .browser()
+                    .update(cx, |browser, cx| browser.edit_location(window, cx));
+            }))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| this.new_tab(window, cx)))
             .on_action(cx.listener(|this, _: &CloseTab, window, cx| {
                 this.close_tab(this.tabs.active_index(), window, cx);

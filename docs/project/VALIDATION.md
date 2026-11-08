@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-08 — W-076n location shortcuts from the places panel
+- **Phase:** 6 Implement (S11, keyboard checklist)
+- **Red:** W-080 replay (same date): with a place row focused, Ctrl+L did nothing and the following text reached the panel's single-letter shortcuts; `h` hid the generated Local bookmark. Dolphin's Ctrl+L/F6 work anywhere in the window (window-level "Replace location" action).
+- **Change:** workspace binds Ctrl+L and F6 to `EditLocation` in `Workspace && !Dialog && !Palette && !Browser && !Input` and handles it by calling the active pane's `edit_location` directly (no re-dispatch, so no action loop). Bindings inside a pane, dialogs, the palette and text fields are unchanged.
+- **Green replay (K8):** private KWin/HOME, generated Local/Other/target folders and places file, nonexistent system bus. From a focused place row: Ctrl+L opened the field, a typed path containing `h` went into it, Return opened Other/target (confirmed with Back/Forward later). F6 from another place row opened the field. In a place's F2 rename field, Ctrl+L left the rename field focused; Escape cancelled. Ctrl+L inside the file view still works. user-places.xbel SHA-256 unchanged (724b36e5…). AT-SPI queries returned nothing in this session; evidence is screenshots.
+- **Tests:** no GPUI key-dispatch harness exists in the workspace; a keymap-only unit test would not cover the forwarding handler, so none was added (same approach as W-076g/l). rust-tc doctor PASS, 451 tests. Evidence: target/rust-toolchain/w076n/doctor.log.
+- **Limits:** the tab strip path is covered by the same context but was not replayed separately. Broader keyboard checklist and W-076e remain open.
+
 ### 2026-11-08 — W-080 remote addresses through kio-fuse
 - **Phase:** 6 Implement; requested addition (the maintainer, 2026-11-08: "Yes, add it"), within D-004 and D-018.
 - **Reference:** kio-fuse source (invent.kde.org/system/kio-fuse, `org.kde.KIOFuse.VFS.mountUrl`/`remoteUrl`, error names SchemeNotSupported/CannotMount, refused schemes http/https/gdrive/mtp/admin) and Dolphin's terminal panel, which uses the same interface. Dolphin shows remote locations by their readable address; Rustphin does the same for folders it mounted.

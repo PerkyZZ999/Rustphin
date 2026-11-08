@@ -1379,7 +1379,8 @@ impl Browser {
         self.model.as_ref().and_then(DirectoryModel::location)
     }
 
-    fn edit_location(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Shows the location as editable text with keyboard focus.
+    pub(crate) fn edit_location(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // A folder opened through kio-fuse is shown by its remote address,
         // as Dolphin shows it, rather than by its local mount path.
         let current = self
