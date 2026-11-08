@@ -1,5 +1,10 @@
 # Validation evidence
 
+### 2026-11-08 — W-078d floating surfaces opaque in the glass theme (R-105)
+- **Check:** the isolated compositor offers no blur, so glass mode cannot be shown there. New unit test: in `Theme::obsidian(true)` the window is translucent while `raised` (the background of menus, the palette, properties, batch rename, operation dialogs and the places menu: browser.rs, palette.rs, properties.rs, rename_dialog.rs, workspace.rs, sidebar.rs) is fully opaque and identical to the opaque theme's. Making `raised` translucent in glass mode fails the test (restored).
+- **Ticked:** R-105 floating surfaces opaque, noting the real-desktop look remains under the first R-105 criterion.
+- **Gate:** rust-tc doctor PASS, 464 tests. Evidence: target/rust-toolchain/w078c/doctor2.log.
+
 ### 2026-11-08 — W-078c design-token audit (R-105)
 - **Method:** searched every rustphin-ui source except theme.rs for colour literals (rgb/rgba/hsl/hsla/hex, named colours), numeric `px(…)` literals, text sizes, radii, font weights, opacity and border widths.
 - **Findings:** no colour, type-size or font-weight literals. Deviations: the rubber band used a 4 px radius (`space::XS`) where DESIGN.md allows only the 2 px radius; the dialog fact-label column was a literal 72 px; the menu separator a literal 1 px. Remaining literals by design: zero scroll offsets, the 960 × 640 default and 480 × 320 minimum window, and the 0.5 opacity DESIGN.md specifies for cut entries and hidden places; borders use GPUI's 1 px border helpers (DESIGN: hairlines).

@@ -13,8 +13,7 @@ hardware.
 
 | Requirement · criterion | Evidence so far | Missing |
 |---|---|---|
-| R-105 · menus, palette, dialogs are opaque | W-057 palette, B1 dialog | Context menus: K12/K13 screenshots show solid menus; record them against this criterion |
-| R-106 · secondary controls within two steps | W-059: every action in the open Actions set | Run J4; operation details reachability |
+| R-106 · secondary controls within two steps | J4 run (W-078b): every control is in Actions; operation progress shows by itself while one runs | "Filters": there is no filter control. Dolphin has a filter bar (Ctrl+I, /); W-082 adds one |
 
 Closed on 2026-11-08 by K14/K15: Dolphin listing comparison, back/forward/up
 with per-tab history, content changes, selection and scroll kept, per-tab
