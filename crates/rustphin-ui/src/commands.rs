@@ -32,9 +32,10 @@ pub fn commands() -> Vec<Command> {
         };
     }
     vec![
-        command!("Navigation: Back", "Alt+Left", Browser, b::GoBack),
+        command!("Navigation: Back", "Backspace", Browser, b::GoBack),
         command!("Navigation: Forward", "Alt+Right", Browser, b::GoForward),
         command!("Navigation: Up one folder", "Alt+Up", Browser, b::GoUp),
+        command!("Navigation: Home folder", "Alt+Home", Browser, b::GoHome),
         command!(
             "Navigation: Enter a location",
             "Ctrl+L",

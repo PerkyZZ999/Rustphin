@@ -92,6 +92,7 @@ actions!(
         ShowDetails,
         Activate,
         GoUp,
+        GoHome,
         GoBack,
         GoForward,
         Reload,
@@ -155,7 +156,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-a", SelectAll, list),
         KeyBinding::new("ctrl-shift-a", InvertSelection, list),
         KeyBinding::new("enter", Activate, list),
-        KeyBinding::new("backspace", GoUp, list),
+        // Dolphin goes back with Backspace (Up is Alt+Up).
+        KeyBinding::new("backspace", GoBack, list),
+        KeyBinding::new("alt-home", GoHome, view),
         KeyBinding::new("alt-up", GoUp, view),
         KeyBinding::new("alt-left", GoBack, view),
         KeyBinding::new("alt-right", GoForward, view),
@@ -164,6 +167,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("alt-.", ToggleHidden, view),
         KeyBinding::new("ctrl-l", EditLocation, view),
         KeyBinding::new("f6", EditLocation, view),
+        KeyBinding::new("alt-d", EditLocation, view),
         KeyBinding::new("ctrl-=", ZoomIn, view),
         KeyBinding::new("ctrl-+", ZoomIn, view),
         KeyBinding::new("ctrl--", ZoomOut, view),
@@ -3170,6 +3174,11 @@ impl Render for Browser {
             }))
             .on_key_down(cx.listener(Self::on_key_down))
             .on_action(cx.listener(|this, _: &GoUp, _, cx| this.go_up(cx)))
+            .on_action(cx.listener(|this, _: &GoHome, _, cx| {
+                if let Some(home) = rustphin_platform::xdg::home() {
+                    this.go_to(home, cx);
+                }
+            }))
             .on_action(
                 cx.listener(|this, _: &GoBack, _, cx| this.navigate(DirectoryModel::back, cx)),
             )

@@ -82,8 +82,29 @@ actions!(
         OpenPalette,
         StopOperations,
         DismissNotice,
+        FocusPlaces,
+        Quit,
+        ActivateTab1,
+        ActivateTab2,
+        ActivateTab3,
+        ActivateTab4,
+        ActivateTab5,
+        ActivateTab6,
+        ActivateTab7,
+        ActivateTab8,
+        ActivateTab9,
+        ActivateLastTab,
     ]
 );
+
+/// The tab Alt+`number` activates, as in Dolphin: Alt+1 to Alt+9 pick that
+/// tab if it exists, Alt+0 the last one.
+fn tab_for_number(number: usize, tabs: usize) -> Option<usize> {
+    match number {
+        0 => tabs.checked_sub(1),
+        n => (n <= tabs).then(|| n - 1),
+    }
+}
 
 /// Workspace focus outside the panes: the places panel, the tab strip.
 const OUTSIDE_PANES: &str = "Workspace && !Dialog && !Palette && !Browser && !Input";
@@ -101,6 +122,20 @@ pub fn bind_keys(cx: &mut App) {
         // pane the browser's own binding applies; text fields keep their keys.
         KeyBinding::new("ctrl-l", EditLocation, Some(OUTSIDE_PANES)),
         KeyBinding::new("f6", EditLocation, Some(OUTSIDE_PANES)),
+        KeyBinding::new("alt-d", EditLocation, Some(OUTSIDE_PANES)),
+        KeyBinding::new("ctrl-q", Quit, context),
+        KeyBinding::new("ctrl-p", FocusPlaces, context),
+        KeyBinding::new("ctrl-f3", OtherPane, context),
+        KeyBinding::new("alt-1", ActivateTab1, context),
+        KeyBinding::new("alt-2", ActivateTab2, context),
+        KeyBinding::new("alt-3", ActivateTab3, context),
+        KeyBinding::new("alt-4", ActivateTab4, context),
+        KeyBinding::new("alt-5", ActivateTab5, context),
+        KeyBinding::new("alt-6", ActivateTab6, context),
+        KeyBinding::new("alt-7", ActivateTab7, context),
+        KeyBinding::new("alt-8", ActivateTab8, context),
+        KeyBinding::new("alt-9", ActivateTab9, context),
+        KeyBinding::new("alt-0", ActivateLastTab, context),
         KeyBinding::new("ctrl-t", NewTab, context),
         KeyBinding::new("ctrl-w", CloseTab, context),
         KeyBinding::new("ctrl-tab", NextTab, context),
@@ -1016,6 +1051,12 @@ impl Workspace {
         cx.notify();
     }
 
+    fn activate_number(&mut self, number: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(index) = tab_for_number(number, self.tabs.len()) {
+            self.activate(index, window, cx);
+        }
+    }
+
     fn activate(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.tabs.activate(index);
         self.focus_active(window, cx);
@@ -1390,6 +1431,28 @@ impl Render for Workspace {
                 cx.listener(|this, _: &ToggleSplit, window, cx| this.toggle_split(window, cx)),
             )
             .on_action(cx.listener(|this, _: &OtherPane, window, cx| this.other_pane(window, cx)))
+            // Quitting is closing the window, with the same session save.
+            .on_action(|_: &Quit, window, _| window.remove_window())
+            .on_action(cx.listener(|this, _: &FocusPlaces, window, cx| {
+                this.sidebar_visible = true;
+                let sidebar = this.sidebar.clone();
+                window.on_next_frame(move |window, cx| {
+                    sidebar.update(cx, |sidebar, cx| sidebar.focus(window, cx));
+                });
+                cx.notify();
+            }))
+            .on_action(cx.listener(|this, _: &ActivateTab1, w, cx| this.activate_number(1, w, cx)))
+            .on_action(cx.listener(|this, _: &ActivateTab2, w, cx| this.activate_number(2, w, cx)))
+            .on_action(cx.listener(|this, _: &ActivateTab3, w, cx| this.activate_number(3, w, cx)))
+            .on_action(cx.listener(|this, _: &ActivateTab4, w, cx| this.activate_number(4, w, cx)))
+            .on_action(cx.listener(|this, _: &ActivateTab5, w, cx| this.activate_number(5, w, cx)))
+            .on_action(cx.listener(|this, _: &ActivateTab6, w, cx| this.activate_number(6, w, cx)))
+            .on_action(cx.listener(|this, _: &ActivateTab7, w, cx| this.activate_number(7, w, cx)))
+            .on_action(cx.listener(|this, _: &ActivateTab8, w, cx| this.activate_number(8, w, cx)))
+            .on_action(cx.listener(|this, _: &ActivateTab9, w, cx| this.activate_number(9, w, cx)))
+            .on_action(
+                cx.listener(|this, _: &ActivateLastTab, w, cx| this.activate_number(0, w, cx)),
+            )
             .on_action(|_: &Undo, _, cx| operations::hub(cx).update(cx, Hub::undo))
             .on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| {
                 this.sidebar_visible = !this.sidebar_visible;
@@ -2056,6 +2119,16 @@ fn folder_label(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn alt_numbers_pick_existing_tabs_and_alt_0_the_last() {
+        assert_eq!(tab_for_number(1, 3), Some(0));
+        assert_eq!(tab_for_number(3, 3), Some(2));
+        assert_eq!(tab_for_number(4, 3), None);
+        assert_eq!(tab_for_number(0, 3), Some(2));
+        assert_eq!(tab_for_number(0, 0), None);
+        assert_eq!(tab_for_number(1, 0), None);
+    }
 
     #[test]
     fn folders_are_labelled_by_their_last_component() {
