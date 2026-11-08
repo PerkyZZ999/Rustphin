@@ -1,7 +1,7 @@
 //! The open tabs and panes, remembered between sessions as TOML.
 //!
-//! Reading never fails: a missing or damaged file yields an empty session,
-//! which the workspace replaces with a single tab.
+//! Missing files allow an initial save. Read, format and version failures keep
+//! the saved file protected while the workspace uses fallback or explicit tabs.
 
 use std::{
     io,
@@ -65,14 +65,19 @@ impl Session {
         )
     }
 
-    /// Reads a session from TOML text. Unreadable text gives an empty session.
-    /// Tabs without a folder are dropped, panes beyond the second ignored and
-    /// relative paths rejected, so what remains can be opened as it is.
-    pub fn parse(text: &str) -> Self {
-        let mut session: Self = toml::from_str(text).unwrap_or_else(|error| {
-            tracing::warn!(%error, "ignoring unreadable session");
-            Self::default()
-        });
+    /// Reads supported TOML formats, rejecting future schemas before decoding tabs.
+    /// Invalid paths are dropped and pane/tab indices are clamped.
+    pub fn parse(text: &str) -> Result<Self, SessionError> {
+        #[derive(Deserialize)]
+        struct Header {
+            #[serde(default)]
+            version: u32,
+        }
+        let header: Header = toml::from_str(text).map_err(SessionError::Damaged)?;
+        if header.version > VERSION {
+            return Err(SessionError::NewerVersion(header.version));
+        }
+        let mut session: Self = toml::from_str(text).map_err(SessionError::Damaged)?;
         for tab in &mut session.tabs {
             tab.panes.retain(|path| {
                 path.is_absolute() && !path.as_os_str().as_encoded_bytes().contains(&0)
@@ -82,22 +87,96 @@ impl Session {
         }
         session.tabs.retain(|tab| !tab.panes.is_empty());
         session.active = session.active.min(session.tabs.len().saturating_sub(1));
-        if session.version <= VERSION {
-            session.version = VERSION;
-        }
-        session
+        session.version = VERSION;
+        Ok(session)
     }
 
     /// The session as TOML text, with byte-preserving local file URIs.
     pub fn to_toml(&self) -> Result<String, toml::ser::Error> {
         toml::to_string_pretty(self)
     }
+}
 
-    /// Whether the file was written by a later version of Rustphin and must
-    /// not be overwritten.
-    pub fn is_from_newer_version(&self) -> bool {
-        self.version > VERSION
+/// Startup tabs and permission to replace the saved session.
+pub(crate) struct RestoredSession {
+    pub session: Session,
+    pub issue: Option<SessionError>,
+}
+
+impl RestoredSession {
+    pub(crate) fn can_save(&self) -> bool {
+        self.issue.is_none()
     }
+}
+
+/// Why a saved session must not be replaced during this run.
+#[derive(Debug)]
+pub enum SessionError {
+    /// The file could not be read.
+    Read(io::Error),
+    /// The TOML document or supported schema is invalid.
+    Damaged(toml::de::Error),
+    /// The file needs a later session-format reader.
+    NewerVersion(u32),
+}
+
+impl std::fmt::Display for SessionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Read(error) => write!(f, "could not read saved tabs: {error}"),
+            Self::Damaged(error) => write!(f, "saved tabs are damaged: {error}"),
+            Self::NewerVersion(version) => write!(
+                f,
+                "session format {version} is newer than supported format {VERSION}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for SessionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Read(error) => Some(error),
+            Self::Damaged(error) => Some(error),
+            Self::NewerVersion(_) => None,
+        }
+    }
+}
+
+impl SessionError {
+    pub(crate) fn notice(&self) -> &'static str {
+        match self {
+            Self::Read(_) => {
+                "Saved tabs could not be read. Tab saving is off; the file was kept. Check session.toml and its permissions, then restart."
+            }
+            Self::Damaged(_) => {
+                "Saved tabs are damaged. Tab saving is off; the file was kept. Quit, repair or move session.toml aside, then restart."
+            }
+            Self::NewerVersion(_) => {
+                "Saved tabs use a newer file format. Tab saving is off; the file was kept. Use a newer Rustphin or quit and move session.toml aside."
+            }
+        }
+    }
+}
+
+/// Chooses startup tabs without accessing the filesystem. Explicit folders
+/// change what is shown, not permission to replace unreadable/unsupported data.
+pub(crate) fn restore(saved: io::Result<Option<String>>, starts: &[PathBuf]) -> RestoredSession {
+    let decoded = match saved {
+        Ok(Some(text)) => Session::parse(&text),
+        Ok(None) => Ok(Session::default()),
+        Err(error) => Err(SessionError::Read(error)),
+    };
+    let (session, issue) = match decoded {
+        Ok(session) => (session, None),
+        Err(issue) => (Session::default(), Some(issue)),
+    };
+    let session = if starts.is_empty() {
+        session
+    } else {
+        Session::folders(starts.to_vec())
+    };
+    RestoredSession { session, issue }
 }
 
 // Version 1 stored UTF-8 paths directly. New files use URIs so every valid
@@ -181,6 +260,11 @@ impl SessionSave {
 mod tests {
     use super::*;
 
+    #[allow(clippy::unwrap_used)]
+    fn parse(text: &str) -> Session {
+        Session::parse(text).unwrap()
+    }
+
     #[test]
     #[allow(clippy::unwrap_used)]
     fn a_late_older_save_cannot_restore_a_closed_tab() {
@@ -197,7 +281,7 @@ mod tests {
         older.write(&path).unwrap();
 
         let saved = rustphin_platform::config::read(&path).unwrap().unwrap();
-        assert_eq!(Session::parse(&saved), latest);
+        assert_eq!(parse(&saved), latest);
     }
 
     #[test]
@@ -221,7 +305,7 @@ mod tests {
 
         saves.prepare(latest.clone()).unwrap().write(&path).unwrap();
         let saved = rustphin_platform::config::read(&path).unwrap().unwrap();
-        assert_eq!(Session::parse(&saved), latest);
+        assert_eq!(parse(&saved), latest);
     }
 
     #[test]
@@ -249,13 +333,13 @@ mod tests {
             .unwrap();
 
         let saved = rustphin_platform::config::read(&path).unwrap().unwrap();
-        assert_eq!(Session::parse(&saved), session);
+        assert_eq!(parse(&saved), session);
     }
 
     #[test]
     #[allow(clippy::unwrap_used)]
     fn a_legacy_session_keeps_literal_percent_paths_and_upgrades_when_saved() {
-        let restored = Session::parse(
+        let restored = parse(
             "version = 1\nactive = 0\n[[tabs]]\npanes = ['/data/literal%20', '/data/Été']\nactive_pane = 1\n",
         );
         assert_eq!(restored.tabs, [tab(&["/data/literal%20", "/data/Été"], 1)]);
@@ -270,15 +354,65 @@ mod tests {
         let saved = rustphin_platform::config::read(&path).unwrap().unwrap();
         let document: toml::Value = toml::from_str(&saved).unwrap();
         assert_eq!(document["version"].as_integer(), Some(2));
-        assert_eq!(Session::parse(&saved), restored);
+        assert_eq!(parse(&saved), restored);
     }
 
     #[test]
     fn uri_panes_ignore_remote_relative_and_nul_paths_before_clamping() {
-        let restored = Session::parse(
+        let restored = parse(
             "version = 2\n[[tabs]]\npanes = ['file://remote/data', 'file:///bad%00name', 'relative', 'file:///saved%20folder']\n",
         );
         assert_eq!(restored, Session::single("/saved folder".into()));
+    }
+
+    #[test]
+    fn an_unknown_newer_schema_is_read_only() {
+        let restored = restore(
+            Ok(Some(format!("version = {}\ntabs = 7\n", VERSION + 1))),
+            &[],
+        );
+        assert!(!restored.can_save());
+        assert!(
+            matches!(restored.issue, Some(SessionError::NewerVersion(version)) if version == VERSION + 1)
+        );
+    }
+
+    #[test]
+    fn explicit_folders_do_not_authorize_replacing_a_newer_session() {
+        let restored = restore(
+            Ok(Some(format!("version = {}\n", VERSION + 1))),
+            &["/requested".into()],
+        );
+        assert_eq!(restored.session, Session::single("/requested".into()));
+        assert!(!restored.can_save());
+    }
+
+    #[test]
+    fn a_read_failure_disables_saving_with_explicit_folders() {
+        let restored = restore(
+            Err(io::ErrorKind::PermissionDenied.into()),
+            &["/requested".into()],
+        );
+        assert_eq!(restored.session, Session::single("/requested".into()));
+        assert!(!restored.can_save());
+        assert!(
+            matches!(restored.issue, Some(SessionError::Read(error)) if error.kind() == io::ErrorKind::PermissionDenied)
+        );
+    }
+
+    #[test]
+    fn damaged_current_data_is_not_replaced_by_fallback_tabs() {
+        let restored = restore(Ok(Some(format!("version = {VERSION}\ntabs = 7\n"))), &[]);
+        assert!(restored.session.tabs.is_empty());
+        assert!(!restored.can_save());
+        assert!(matches!(restored.issue, Some(SessionError::Damaged(_))));
+    }
+
+    #[test]
+    fn a_missing_file_allows_the_first_session_save() {
+        let restored = restore(Ok(None), &["/requested".into()]);
+        assert_eq!(restored.session, Session::single("/requested".into()));
+        assert!(restored.can_save());
     }
 
     fn tab(panes: &[&str], active_pane: usize) -> SessionTab {
@@ -295,7 +429,7 @@ mod tests {
             vec![tab(&["/home/me"], 0), tab(&["/srv/a", "/srv/b"], 1)],
             1,
         );
-        assert_eq!(Session::parse(&saved.to_toml().unwrap()), saved);
+        assert_eq!(parse(&saved.to_toml().unwrap()), saved);
     }
 
     #[test]
@@ -313,10 +447,16 @@ mod tests {
     }
 
     #[test]
-    fn missing_and_damaged_files_give_an_empty_session() {
-        assert!(Session::parse("").tabs.is_empty());
-        assert!(Session::parse("not [ toml").tabs.is_empty());
-        assert!(Session::parse("tabs = \"oops\"").tabs.is_empty());
+    fn empty_documents_load_but_damaged_sessions_report_errors() {
+        assert!(parse("").tabs.is_empty());
+        assert!(matches!(
+            Session::parse("not [ toml"),
+            Err(SessionError::Damaged(_))
+        ));
+        assert!(matches!(
+            Session::parse("tabs = \"oops\""),
+            Err(SessionError::Damaged(_))
+        ));
     }
 
     #[test]
@@ -325,14 +465,15 @@ mod tests {
             [[tabs]]\npanes = []\n\
             [[tabs]]\npanes = [\"relative/path\"]\n\
             [[tabs]]\npanes = [\"/a\", \"/b\", \"/c\"]\nactive_pane = 9\n";
-        let session = Session::parse(text);
+        let session = parse(text);
         assert_eq!(session.tabs, [tab(&["/a", "/b"], 1)]);
         assert_eq!(session.active, 0);
     }
 
     #[test]
-    fn a_file_from_a_newer_version_is_recognised() {
-        assert!(Session::parse(&format!("version = {}", VERSION + 1)).is_from_newer_version());
-        assert!(!Session::single(PathBuf::from("/")).is_from_newer_version());
+    fn a_newer_version_is_rejected_before_decoding_its_schema() {
+        assert!(
+            matches!(Session::parse(&format!("version = {}\ntabs = 7\n", VERSION + 1)), Err(SessionError::NewerVersion(version)) if version == VERSION + 1)
+        );
     }
 }

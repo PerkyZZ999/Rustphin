@@ -65,17 +65,13 @@ pub fn run(options: Options) {
         .map(|text| Settings::parse(&text))
         .unwrap_or_default();
     let session_path = rustphin_platform::config::state_dir().map(|dir| dir.join("session.toml"));
-    // Explicit folders replace the remembered tabs for this run; they are
-    // still overwritten by what is open when the tabs next change.
-    let session = if options.starts.is_empty() {
-        session_path
-            .as_deref()
-            .and_then(|path| rustphin_platform::config::read(path).ok().flatten())
-            .map(|text| Session::parse(&text))
-            .unwrap_or_default()
-    } else {
-        Session::folders(options.starts.clone())
-    };
+    let saved_session = session_path
+        .as_deref()
+        .map_or(Ok(None), rustphin_platform::config::read);
+    let restored = session::restore(saved_session, &options.starts);
+    let session_path = session_path.filter(|_| restored.can_save());
+    let session = restored.session;
+    let session_issue = restored.issue;
     gpui_kit::application()
         // The complete icon set: the default bundle lacks the view-mode icons.
         .with_assets(gpui_kit::assets::AllAssets)
@@ -87,6 +83,12 @@ pub fn run(options: Options) {
                 cx,
             );
             operations::init(cx);
+            if let Some(issue) = session_issue {
+                tracing::warn!(%issue, "saved session is protected for this run");
+                operations::hub(cx).update(cx, |hub, cx| {
+                    hub.set_notice(issue.notice().to_owned(), true, cx);
+                });
+            }
             history::init(cx);
             if let Some(service) = rustphin_platform::file_manager::ServiceHandle::session() {
                 tracing::info!("listening for requests to show files");

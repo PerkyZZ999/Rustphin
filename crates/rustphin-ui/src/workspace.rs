@@ -227,8 +227,6 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        // Never overwrite a file a later version of Rustphin wrote.
-        let session_path = session_path.filter(|_| !session.is_from_newer_version());
         let session = if session.tabs.is_empty() {
             Session::single(fallback.clone())
         } else {

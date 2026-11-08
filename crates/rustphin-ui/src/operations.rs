@@ -523,7 +523,7 @@ impl Hub {
         cx.notify();
     }
 
-    fn set_notice(&mut self, text: String, is_error: bool, cx: &mut Context<Self>) {
+    pub(crate) fn set_notice(&mut self, text: String, is_error: bool, cx: &mut Context<Self>) {
         self.show(text, is_error, false, cx);
     }
 
