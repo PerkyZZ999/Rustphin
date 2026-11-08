@@ -2169,14 +2169,21 @@ impl Browser {
     /// What a row or cell needs to know about the entry it shows.
     fn entry(&mut self, rows: &Snapshot, row: usize, cx: &mut Context<Self>) -> Entry {
         let container = rows.is_container(row);
+        let link = rows.kind(row) == EntryKind::Symlink;
+        // A link looks like what it points to, as in Dolphin.
+        let type_name = rows
+            .link_target_name(row)
+            .unwrap_or(rows.name(row))
+            .to_vec();
         Entry {
             name: display_name(rows.name(row)).into_owned().into(),
             container,
+            link,
             selected: self.selection.contains(rows, row),
             focused: self.focus_row == Some(row),
             renaming: self.renaming.as_deref() == Some(rows.name(row)),
             cut: self.has_cut && hub(cx).read(cx).is_cut(&rows.entry_path(row)),
-            info: self.type_info_for(rows.name(row), container, cx),
+            info: self.type_info_for(&type_name, container, cx),
             thumb: self.thumbnail_for(rows, row, container, cx),
         }
     }
@@ -2195,7 +2202,8 @@ impl Browser {
         if container || edge < MIN_THUMBNAIL_EDGE || self.trash_dir.is_some() {
             return None;
         }
-        let mime = self.types.as_ref()?.mime_type(rows.name(row), false);
+        let type_name = rows.link_target_name(row).unwrap_or(rows.name(row));
+        let mime = self.types.as_ref()?.mime_type(type_name, false);
         if !thumbs::has_thumbnail(mime) {
             return None;
         }
@@ -2224,7 +2232,10 @@ impl Browser {
                     cx,
                 ))
         } else {
-            div().truncate().child(entry.name.clone())
+            div()
+                .truncate()
+                .when(entry.link, |name| name.italic())
+                .child(entry.name.clone())
         }
     }
 
@@ -2606,6 +2617,7 @@ impl Browser {
                                             .w_full()
                                             .text_center()
                                             .line_clamp(2)
+                                            .when(entry.link, |name| name.italic())
                                             .child(entry.name.clone())
                                     })
                             } else {
@@ -3585,6 +3597,8 @@ struct Band {
 struct Entry {
     name: SharedString,
     container: bool,
+    /// A symbolic link: its name is drawn in italics.
+    link: bool,
     selected: bool,
     /// Has the keyboard focus.
     focused: bool,
@@ -3611,7 +3625,12 @@ impl Entry {
             .id(("file", rows.entry_id(row) as usize))
             .role(Role::ListBoxOption)
             .aria_label(self.name.clone())
-            .aria_description(if self.container { "Folder" } else { "File" })
+            .aria_description(match (self.link, self.container) {
+                (true, true) => "Link to a folder",
+                (true, false) => "Link to a file",
+                (false, true) => "Folder",
+                (false, false) => "File",
+            })
             .aria_selected(self.selected)
             .aria_position_in_set(row)
             .when(self.focused && !self.renaming, |entry| {

@@ -192,6 +192,12 @@ impl Snapshot {
         self.store.kind(self.order[row])
     }
 
+    /// For a symbolic link in `row`: the file name it points to, so its
+    /// type can be shown as the target's.
+    pub fn link_target_name(&self, row: usize) -> Option<&[u8]> {
+        self.store.link_target(self.order[row])
+    }
+
     /// Whether the entry shown in `row` can be entered.
     pub fn is_container(&self, row: usize) -> bool {
         self.store.is_container(self.order[row])
@@ -519,14 +525,19 @@ impl Shared {
                 skipped += 1;
                 continue;
             };
+            let entry_path = || request.path.join(OsStr::from_bytes(&entry.name));
             let container = match entry.kind {
                 EntryKind::Directory => true,
-                EntryKind::Symlink => self
-                    .fs
-                    .is_dir(&request.path.join(OsStr::from_bytes(&entry.name))),
+                EntryKind::Symlink => self.fs.is_dir(&entry_path()),
                 EntryKind::File | EntryKind::Other => false,
             };
             chunk.push(&entry.name, entry.kind, container);
+            if entry.kind == EntryKind::Symlink
+                && let Ok(target) = self.fs.read_link(&entry_path())
+                && let Some(target_name) = target.file_name()
+            {
+                chunk.set_link_target(target_name.as_bytes());
+            }
             if chunk.len() == CHUNK_LEN {
                 store.push_chunk(mem::take(&mut chunk));
                 // Publish at doubling sizes so the total sorting work stays linear.
@@ -904,6 +915,8 @@ mod tests {
         );
         assert_eq!(shown.total(), 6);
         assert!(shown.is_container(0) && shown.kind(0) == EntryKind::Symlink);
+        assert_eq!(shown.link_target_name(0), Some(&b"sub"[..]));
+        assert_eq!(shown.link_target_name(1), None);
         assert!(!shown.is_container(2));
         assert_eq!(shown.entry_path(1), dir.path().join("sub"));
         assert_eq!(shown.row_of(b"Zeta.md"), Some(4));

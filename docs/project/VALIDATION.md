@@ -1,5 +1,14 @@
 # Validation evidence
 
+### 2026-11-08 — W-081 symbolic links shown as in Dolphin
+- **Phase:** 6 Implement (S11; found by the K15 Dolphin comparison)
+- **Reference:** Dolphin shows a link with its target's type icon, a link emblem and an italic name, and a broken link as 0 B.
+- **Change:** core `Chunk::set_link_target` / `EntryStore::link_target` keep each symlink's target file name sparsely per 8,192-entry chunk (binary search by position; non-links cost nothing); the listing reads it with the existing `Fs::read_link` right where it already checked whether the link is a folder; `Snapshot::link_target_name` exposes it. `RealFs::metadata` reports 0 B for a link whose target is missing (it reported the link text's length). UI: type icon and thumbnail type come from the target name; link names are italic (DESIGN.md updated first; lint 0 errors); the accessible description says "Link to a file/folder". No link emblem overlay yet.
+- **Tests:** model listing test asserts the folder link's target name and none for a plain entry; a new store test covers links in the first and second chunk; a new RealFs test covers target size, broken-link 0 B and a missing path. Mutations caught and restored: lookup always None (model test), broken link sized by lstat (fs test), global instead of per-chunk position (store test).
+- **Replay (K16):** private KWin/HOME. link-to-dir, broken-link, link-to-pic and link-to-plain in italics; link-to-plain shows the text icon and 2 B, link-to-pic the image icon and 8 B, broken-link the unknown icon and 0 B.
+- **Benchmark (listing changed):** `rust-tc bench-listing` PASS: worst first entries 3.1 ms, sorted listing 167.0 ms, slowest re-sort 71.0 ms (fixture has no links).
+- **Gate:** rust-tc doctor PASS, 463 tests. Evidence: target/rust-toolchain/w081/{doctor.log,bench-listing.log}.
+
 ### 2026-11-08 — W-078b agent-closable acceptance replays
 - **Phase:** 6 Implement (S11)
 - **Change:** `View: Folders first` toggles the existing, already saved `folders_first` option from the palette (Dolphin's Sort menu "Folders First"), with a notice. The palette also lists Reopen closed tab, Focus the other view, Focus the places panel, Quit, Copy location and Copy/Move selection to the other view with their shortcuts.

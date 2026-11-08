@@ -224,10 +224,22 @@ impl Fs for RealFs {
     }
 
     fn metadata(&self, path: &Path) -> io::Result<Metadata> {
-        let metadata = fs::metadata(path).or_else(|_| fs::symlink_metadata(path))?;
+        if let Ok(metadata) = fs::metadata(path) {
+            return Ok(Metadata {
+                size: metadata.len(),
+                modified: metadata.mtime(),
+            });
+        }
+        // A link whose target is missing has no size of its own to show;
+        // Dolphin shows 0 B rather than the length of the link text.
+        let link = fs::symlink_metadata(path)?;
         Ok(Metadata {
-            size: metadata.len(),
-            modified: metadata.mtime(),
+            size: if link.file_type().is_symlink() {
+                0
+            } else {
+                link.len()
+            },
+            modified: link.mtime(),
         })
     }
 
@@ -492,5 +504,23 @@ fn copy_contents(
         };
         target.write_all(&buffer[..bytes])?;
         report(bytes as u64)?;
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_link_shows_its_target_size_and_a_broken_link_none() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("plain.txt"), b"twelve bytes").unwrap();
+        std::os::unix::fs::symlink("plain.txt", dir.path().join("link")).unwrap();
+        std::os::unix::fs::symlink("missing-target", dir.path().join("broken")).unwrap();
+
+        assert_eq!(RealFs.metadata(&dir.path().join("link")).unwrap().size, 12);
+        assert_eq!(RealFs.metadata(&dir.path().join("broken")).unwrap().size, 0);
+        assert!(RealFs.metadata(&dir.path().join("absent")).is_err());
     }
 }

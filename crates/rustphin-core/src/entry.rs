@@ -25,9 +25,21 @@ pub struct Chunk {
     ends: Vec<u32>,
     kinds: Vec<EntryKind>,
     containers: Vec<bool>,
+    /// The file name each symbolic link points to, by position in the
+    /// chunk, in increasing order. Only links have one, so this stays small.
+    link_targets: Vec<(u32, Box<[u8]>)>,
 }
 
 impl Chunk {
+    /// Records the file name the entry pushed last points to, when it is a
+    /// symbolic link; its type is shown as the target's, as Dolphin does.
+    pub fn set_link_target(&mut self, target_name: &[u8]) {
+        if let Some(last) = self.ends.len().checked_sub(1) {
+            self.link_targets
+                .push((last as u32, target_name.to_vec().into_boxed_slice()));
+        }
+    }
+
     /// Appends an entry. `container` says whether it can be entered like a
     /// directory, which is also true for a symbolic link to a directory.
     pub fn push(&mut self, name: &[u8], kind: EntryKind, container: bool) {
@@ -94,6 +106,18 @@ impl EntryStore {
         self.chunks[index / CHUNK_LEN].name(index % CHUNK_LEN)
     }
 
+    /// The file name a symbolic link entry points to, if it was read.
+    pub fn link_target(&self, index: u32) -> Option<&[u8]> {
+        let index = index as usize;
+        let chunk = &self.chunks[index / CHUNK_LEN];
+        let local = (index % CHUNK_LEN) as u32;
+        chunk
+            .link_targets
+            .binary_search_by_key(&local, |(position, _)| *position)
+            .ok()
+            .map(|found| &*chunk.link_targets[found].1)
+    }
+
     /// The entry's kind.
     pub fn kind(&self, index: u32) -> EntryKind {
         let index = index as usize;
@@ -136,6 +160,34 @@ pub fn display_name(name: &[u8]) -> Cow<'_, str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn link_targets_are_found_in_any_chunk_and_only_for_links() {
+        let mut store = EntryStore::default();
+        let mut chunk = Chunk::default();
+        for index in 0..CHUNK_LEN + 3 {
+            let name = format!("entry-{index}");
+            if index == 5 || index == CHUNK_LEN + 1 {
+                chunk.push(name.as_bytes(), EntryKind::Symlink, false);
+                chunk.set_link_target(format!("target-{index}").as_bytes());
+            } else {
+                chunk.push(name.as_bytes(), EntryKind::File, false);
+            }
+            if chunk.len() == CHUNK_LEN {
+                store.push_chunk(std::mem::take(&mut chunk));
+            }
+        }
+        store.push_chunk(chunk);
+
+        assert_eq!(store.link_target(5), Some(&b"target-5"[..]));
+        let second = (CHUNK_LEN + 1) as u32;
+        assert_eq!(
+            store.link_target(second),
+            Some(format!("target-{second}").as_bytes())
+        );
+        assert_eq!(store.link_target(1), None);
+        assert_eq!(store.link_target(second - CHUNK_LEN as u32), None);
+    }
 
     #[test]
     fn store_spans_chunks() {

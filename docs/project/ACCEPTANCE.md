@@ -22,7 +22,7 @@ with per-tab history, content changes, selection and scroll kept, per-tab
 modes, case-insensitive sort with the new folders-first toggle, zoom in all
 modes and the Page keys. J4 also ran: every listed control is in Actions
 (R-106 still lacks an operation-details check). K15 found two display
-differences from Dolphin (symlink type icons, broken-link size); see W-081.
+differences from Dolphin (symlink type icons, broken-link size), fixed in W-081.
 
 ## Needs the maintainer: decisions
 
