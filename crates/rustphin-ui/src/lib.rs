@@ -17,6 +17,7 @@ mod menu;
 mod operations;
 mod palette;
 mod properties;
+mod remote;
 mod rename_dialog;
 mod session;
 mod settings;
@@ -86,10 +87,11 @@ pub fn run(options: Options) {
             if let Some(issue) = session_issue {
                 tracing::warn!(%issue, "saved session is protected for this run");
                 operations::hub(cx).update(cx, |hub, cx| {
-                    hub.set_notice(issue.notice().to_owned(), true, cx);
+                    hub.say(issue.notice().to_owned(), true, cx);
                 });
             }
             history::init(cx);
+            remote::init(cx);
             if let Some(service) = rustphin_platform::file_manager::ServiceHandle::session() {
                 tracing::info!("listening for requests to show files");
                 cx.set_global(workspace::ShowService(service));

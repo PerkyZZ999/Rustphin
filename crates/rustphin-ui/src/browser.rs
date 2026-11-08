@@ -31,6 +31,7 @@ use rustphin_core::{
     DirectoryModel, EntryKind, LoadError, ModelEvent, RealFs, Selection, Snapshot, SortKey,
     ViewOptions, display_name, ops::Request,
 };
+use rustphin_platform::{remote::RemoteAddress, uri::path_from_uri};
 
 use crate::{
     diagnostics::FrameLog,
@@ -39,6 +40,7 @@ use crate::{
     layout::{self, Layout, Rect, ViewMode},
     menu::{self, MenuCommand, MenuEffect, MenuKey},
     operations::{self, hub},
+    remote,
     settings::Settings,
     theme::{Theme, size, space, text},
     thumbs::{self, thumbs},
@@ -1378,9 +1380,11 @@ impl Browser {
     }
 
     fn edit_location(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // A folder opened through kio-fuse is shown by its remote address,
+        // as Dolphin shows it, rather than by its local mount path.
         let current = self
             .location()
-            .map(|p| p.to_string_lossy().into_owned())
+            .map(|p| remote::address_of(&p, cx).unwrap_or_else(|| p.to_string_lossy().into_owned()))
             .unwrap_or_default();
         self.editing_location = true;
         self.location_input.update(cx, |input, cx| {
@@ -1408,7 +1412,19 @@ impl Browser {
         match event {
             InputEvent::PressEnter { .. } => {
                 let typed = input.read(cx).value();
-                if let Some(path) = expand_path(typed.trim(), self.location().as_deref()) {
+                let typed = typed.trim();
+                if let Some(address) = RemoteAddress::parse(typed) {
+                    // Opens when mounted, unless the user has gone elsewhere.
+                    let from = self.location();
+                    remote::open(address, cx, move |view: &mut Self, path, cx| {
+                        if view.location() == from {
+                            view.open(path);
+                            cx.notify();
+                        }
+                    });
+                } else if let Some(path) = path_from_uri(typed.as_bytes())
+                    .or_else(|| expand_path(typed, self.location().as_deref()))
+                {
                     self.open(path);
                 }
                 self.stop_editing(window, cx);

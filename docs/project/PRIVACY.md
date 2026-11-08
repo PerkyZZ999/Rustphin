@@ -40,6 +40,15 @@ fails `rust-tc doctor`, and `async-net`, `http`, `http-body` and
 bring them in now. Remote folders stay available as mounted paths (kio-fuse,
 sshfs, SMB/NFS), where another process or the kernel makes the connection.
 
+Since W-080 Rustphin asks kio-fuse to mount an address typed in the location
+bar or a network bookmark (`org.kde.KIOFuse.VFS.mountUrl` on the session bus).
+The session bus is only contacted when a remote folder is opened. kio-fuse and
+its KIO worker make the connection and show any password prompt. A password
+typed inside an address is passed to kio-fuse only; Rustphin never shows, logs
+or saves it. The local mount folder and its remote address are remembered in
+memory for the run. Saved tabs and recent folders keep the local mount path,
+which stops working once kio-fuse ends; this is not a remote-address history.
+
 ## Data inventory and clearing
 
 Absolute XDG overrides take precedence. Defaults below are relative to `HOME`.

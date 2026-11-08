@@ -289,3 +289,18 @@ confirm execution during these checks.
 | H2 | Browse generated invalid-UTF-8/newline and 255-byte filenames, malformed desktop/PNG files and harmless executable/shortcut; switch icons/compact/details | Names stay inside rows/cells; broken image keeps a type icon and gets a failure marker. No executable marker appears from browsing or thumbnailing. Opening the malformed shortcut reports an error, without a crash |
 | H3 | Select the generated invalid-byte name, copy it and paste into another generated folder; repeat with the 255-byte name | Destination names and contents exactly match source bytes. Keep source bytes and no-execution marker checks, plus a screenshot of the selected/copied entry |
 | H4 | Add a generated bookmark, corrupt only the isolated home's user-places.xbel, observe, then restore it | Last good bookmark/group remains; malformed bytes stay untouched; named error explains repair/restore. Dismiss, touch an unrelated sibling: no repeated alert. Change the parse error: new warning. Restore valid data: only its own warning clears, preserving a newer unrelated operation error. Repeat with private file mode 000, then restore 0600: Permission denied warning clears automatically |
+
+## Remote folders (W-080)
+
+Private session bus only. Use a generated stand-in for `org.kde.KIOFuse` (target/rust-toolchain/w080/mock-kiofuse.py maps `sftp://fixture-host/<p>` and a 5-second `slow-host` to generated folders, refuses `http`, fails `fail-host`) for the sftp rows, and the real kio-fuse with a generated `tar:` archive for the last rows. Never type a real host: kio-fuse would connect to it. Focus the file view before Ctrl+L.
+
+| # | Steps | Expected / evidence to retain |
+|---|---|---|
+| W1 | Places file with a `file://` bookmark, an `sftp://me@fixture-host/projects` bookmark and `remote:/`; launch | The sftp bookmark is listed with the server icon; `remote:/` is not |
+| W2 | Click the sftp bookmark; open `sub dir`; Ctrl+L | Fixture rows appear; the service log shows the bookmark address; the location field reads `sftp://me@fixture-host/projects/sub dir` |
+| W3 | Ctrl+L, type `sftp://me:hunter2@slow-host/data`, Return; screenshot at once and after 6 s | "Connecting to sftp://me@slow-host/data…" without the password, then the folder opens and the notice is gone; `hunter2` does not appear in Rustphin's log |
+| W4 | Type `sftp://slow-host/data`, Return, then click another place within 5 s | The view stays on the other place after the reply arrives |
+| W5 | Type `sftp://fail-host/x`, then `http://example.org/` | Error notices name the address, the reason and what to do; the view does not change |
+| W6 | Type a `file://` URI of a generated folder with `%20` | Opens that local folder |
+| W7 | Stop the stand-in; type `tar:<generated archive>/`; open its folder; Ctrl+L; hash a file through the mount | kio-fuse starts on the private bus and mounts it; rows listed; the field shows the `tar:` address; bytes match the source |
+| W8 | Type `tar:<missing archive>/`; close the window and stop the session | Error "… could not be opened. No such file or directory. …"; afterwards no kio-fuse mount or process remains |

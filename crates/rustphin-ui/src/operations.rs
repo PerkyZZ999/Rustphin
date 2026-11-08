@@ -227,7 +227,7 @@ impl Hub {
     /// Reverts the latest operation, or says that there is none.
     pub fn undo(&mut self, cx: &mut Context<Self>) {
         if self.ops.undo().is_none() {
-            self.set_notice("There is nothing to undo.".to_owned(), false, cx);
+            self.say("There is nothing to undo.".to_owned(), false, cx);
         }
     }
 
@@ -295,7 +295,7 @@ impl Hub {
             let _ = hub.update(cx, |hub, cx| match found {
                 Ok((items, without_record)) => {
                     if without_record > 0 {
-                        hub.set_notice(
+                        hub.say(
                             format!(
                                 "{} {} no record of where it came from and cannot be restored. Move it out by hand.",
                                 count(without_record),
@@ -309,7 +309,7 @@ impl Hub {
                         hub.start(Request::Restore { items });
                     }
                 }
-                Err(error) => hub.set_notice(format!("The trash could not be read: {error}."), true, cx),
+                Err(error) => hub.say(format!("The trash could not be read: {error}."), true, cx),
             });
         })
         .detach();
@@ -327,16 +327,14 @@ impl Hub {
                 .await;
             let _ = hub.update(cx, |hub, cx| match found {
                 Ok((_, paths)) if paths.is_empty() => {
-                    hub.set_notice("The trash is already empty.".to_owned(), false, cx);
+                    hub.say("The trash is already empty.".to_owned(), false, cx);
                 }
                 Ok((entries, paths)) => {
                     hub.questions
                         .push_back(Question::ConfirmEmpty { entries, paths });
                     cx.notify();
                 }
-                Err(error) => {
-                    hub.set_notice(format!("The trash could not be read: {error}."), true, cx)
-                }
+                Err(error) => hub.say(format!("The trash could not be read: {error}."), true, cx),
             });
         })
         .detach();
@@ -447,10 +445,10 @@ impl Hub {
                     let text = pick_up_notice(&clip, hub.clipboard.is_shared(), hub.told_unshared);
                     hub.told_unshared = true;
                     hub.clip = Some(clip);
-                    hub.set_notice(text, false, cx);
+                    hub.say(text, false, cx);
                 }
                 Err(error) => {
-                    hub.set_notice(
+                    hub.say(
                         format!("The clipboard could not be written: {error}."),
                         true,
                         cx,
@@ -473,13 +471,13 @@ impl Hub {
                 Ok(Some(clip)) => clip,
                 Ok(None) => {
                     let _ = hub.update(cx, |hub, cx| {
-                        hub.set_notice("The clipboard holds no files.".to_owned(), false, cx);
+                        hub.say("The clipboard holds no files.".to_owned(), false, cx);
                     });
                     return;
                 }
                 Err(error) => {
                     let _ = hub.update(cx, |hub, cx| {
-                        hub.set_notice(
+                        hub.say(
                             format!("The clipboard could not be read: {error}."),
                             true,
                             cx,
@@ -514,7 +512,21 @@ impl Hub {
 
     /// Shows `text` as the latest message.
     pub fn say(&mut self, text: String, is_error: bool, cx: &mut Context<Self>) {
-        self.set_notice(text, is_error, cx);
+        self.show(text, is_error, false, cx);
+    }
+
+    /// Shows `text`, which does not report an error, until [`Hub::withdraw`]
+    /// is called with the returned ticket or a later message replaces it.
+    pub fn say_until_withdrawn(&mut self, text: String, cx: &mut Context<Self>) -> u64 {
+        self.present(text, false, false, false, cx)
+    }
+
+    /// Removes the message shown under `ticket`, unless a later one replaced it.
+    pub fn withdraw(&mut self, ticket: u64, cx: &mut Context<Self>) {
+        if self.notice_serial == ticket && self.notice.is_some() {
+            self.notice = None;
+            cx.notify();
+        }
     }
 
     /// Dismisses the message being shown.
@@ -523,11 +535,19 @@ impl Hub {
         cx.notify();
     }
 
-    pub(crate) fn set_notice(&mut self, text: String, is_error: bool, cx: &mut Context<Self>) {
-        self.show(text, is_error, false, cx);
+    fn show(&mut self, text: String, is_error: bool, offers_undo: bool, cx: &mut Context<Self>) {
+        self.present(text, is_error, offers_undo, !is_error, cx);
     }
 
-    fn show(&mut self, text: String, is_error: bool, offers_undo: bool, cx: &mut Context<Self>) {
+    /// Shows a message; `expires` hides it after [`NOTICE_TIME`]. Returns its ticket.
+    fn present(
+        &mut self,
+        text: String,
+        is_error: bool,
+        offers_undo: bool,
+        expires: bool,
+        cx: &mut Context<Self>,
+    ) -> u64 {
         self.notice_serial += 1;
         let serial = self.notice_serial;
         self.notice = Some(Notice {
@@ -535,7 +555,7 @@ impl Hub {
             is_error,
             offers_undo,
         });
-        if !is_error {
+        if expires {
             cx.spawn(async move |hub, cx| {
                 cx.background_executor().timer(NOTICE_TIME).await;
                 let _ = hub.update(cx, |hub, cx| {
@@ -548,6 +568,7 @@ impl Hub {
             .detach();
         }
         cx.notify();
+        serial
     }
 
     fn on_event(&mut self, event: OpEvent, cx: &mut Context<Self>) {

@@ -30,6 +30,7 @@ use rustphin_platform::{
     config,
     devices::{self, Device, Devices, NoDevices, UDisks2},
     places::{EMPTY, Place, Places, PlacesError},
+    remote::RemoteAddress,
 };
 
 use crate::{
@@ -37,6 +38,7 @@ use crate::{
     format,
     groups::Groups,
     operations::hub,
+    remote,
     theme::{Theme, size, space, text},
 };
 
@@ -170,10 +172,18 @@ pub struct Sidebar {
 
 impl EventEmitter<SidebarEvent> for Sidebar {}
 
-/// Whether the panel shows `place`: local folders and the trash, unless
-/// another application keeps the bookmark to itself.
+/// The address of a network bookmark (`sftp://…`, `smb://…`), opened
+/// through kio-fuse.
+fn network_address(place: &Place) -> Option<RemoteAddress> {
+    RemoteAddress::parse(&place.href).filter(RemoteAddress::is_network_folder)
+}
+
+/// Whether the panel shows `place`: local folders, network folders and the
+/// trash, unless another application keeps the bookmark to itself.
 fn is_shown(place: &Place, show_hidden: bool) -> bool {
-    let reachable = place.path.is_some() || place.href.starts_with("trash:");
+    let reachable = place.path.is_some()
+        || place.href.starts_with("trash:")
+        || network_address(place).is_some();
     let ours = place
         .only_in_app
         .as_deref()
@@ -212,6 +222,8 @@ fn icon_for(place: &Place) -> gpui_kit::assets::IconName {
     let has = |part: &str| name.contains(part);
     if place.href.starts_with("trash:") || has("trash") {
         I::Trash
+    } else if network_address(place).is_some() {
+        I::Server
     } else if has("home") {
         I::House
     } else if has("desktop") {
@@ -565,6 +577,14 @@ impl Sidebar {
                     });
                 } else if place.href.starts_with("trash:") {
                     cx.emit(SidebarEvent::OpenTrash);
+                } else if let Some(address) = network_address(place) {
+                    remote::open(address, cx, move |_, path, cx| {
+                        cx.emit(if new_tab {
+                            SidebarEvent::OpenInNewTab(path)
+                        } else {
+                            SidebarEvent::Open(path)
+                        });
+                    });
                 }
             }
             Row::Group(index) => {
@@ -1572,7 +1592,7 @@ mod tests {
     }
 
     #[test]
-    fn local_folders_and_the_trash_are_shown_and_other_places_are_not() {
+    fn local_and_network_folders_and_the_trash_are_shown_and_other_places_are_not() {
         let mut restricted = place("r", "file:///x");
         restricted.only_in_app = Some("dolphin".into());
         let mut ours = place("o", "file:///x");
@@ -1583,8 +1603,11 @@ mod tests {
         assert!(is_shown(&place("a", "file:///home/u"), false));
         assert!(is_shown(&place("t", "trash:/"), false));
         assert!(is_shown(&ours, false));
+        assert!(is_shown(&place("ssh", "sftp://me@host/srv"), false));
+        assert!(is_shown(&place("nas", "smb://nas/share"), false));
         assert!(!is_shown(&place("n", "remote:/"), false));
         assert!(!is_shown(&place("s", "recentlyused:/files"), false));
+        assert!(!is_shown(&place("web", "https://example.org/"), false));
         assert!(!is_shown(&restricted, false));
         assert!(!is_shown(&hidden, false));
         assert!(is_shown(&hidden, true));
@@ -1692,5 +1715,9 @@ mod tests {
         assert_eq!(with_icon("applications-games-symbolic"), I::Gamepad2);
         assert_eq!(with_icon("something-else"), I::Folder);
         assert_eq!(icon_for(&place("t", "trash:/")), I::Trash);
+        // Dolphin shows network bookmarks with a server icon whatever their theme icon.
+        let mut network = place("n", "sftp://host/");
+        network.icon = Some("folder-documents".into());
+        assert_eq!(icon_for(&network), I::Server);
     }
 }
