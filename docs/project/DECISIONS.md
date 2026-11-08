@@ -172,3 +172,16 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Reopen criteria:** The user wants a different accent, radius or type system; a light theme is added; a toolkit upgrade makes in-window blur possible.
 - **Confirmed by / date:** The maintainer, 2026-10-12
 - **Supersedes / superseded by:** supersedes D-007
+
+## D-018 — Network crates retained by the locked toolkit
+- **Status:** locked
+- **Date:** 2026-11-08
+- **Context:** R-108's validation text asked for "no network crates or sockets in the dependency audit". The locked toolkit (D-001, `gpui-kit` =0.7.3 / `gpui-pre` =0.3.9) pulls in `async-net` through `smol` and the `http`/`http-body` types through `gpui-pre-http-client`. Removing them means forking or patching the toolkit, which D-001 and D-010 rule out. Local sockets (Wayland, D-Bus) are required by design. W-077a found no HTTP client, remote service, updater or telemetry in Rustphin's source, and the Linux build leaves GPUI's `NullHttpClient` installed. W-077d traced five complete application lifetimes on all threads: 60 socket calls, all AF_UNIX.
+- **Decision:** Accept those toolkit crates as a documented exception. R-108 means no application-owned network connections and no telemetry, checked by (1) source review, (2) traced runs showing only local sockets and (3) `deny.toml` bans that fail the gate if an HTTP client, TLS stack or telemetry crate is added, or if `async-net`, `http`, `http-body` or `gpui-pre-http-client` become reachable other than through the toolkit crates that bring them in now.
+- **Rationale:** The criterion's intent is privacy, not the absence of unused types; the bans keep the exception from growing silently.
+- **Evidence:** VALIDATION.md entries W-077a, W-077d and W-077h; `docs/project/PRIVACY.md`.
+- **Consequences:** R-108's first criterion is accepted on that evidence. A toolkit upgrade must re-check the dependency graph and the wrapper lists in `deny.toml`. The traced runs do not cover external applications Rustphin launches, alternate bus transports or already mounted remote filesystems; those stay outside the application-owned contract described in PRIVACY.md. Remote folders are unaffected: under D-004 they are reached as mounted paths (kio-fuse, sshfs, SMB/NFS mounts), where a separate process or the kernel makes the connection and Rustphin reads ordinary files. Asking kio-fuse to mount an `sftp://` or `smb://` address is a local D-Bus call and is also compatible. Native protocol code inside Rustphin (L-008) would reopen this decision.
+- **Alternatives:** Keep the literal criterion open into the daily-driver trial (rejected by the user); patch the toolkit to drop the crates (rejected: D-001/D-010).
+- **Reopen criteria:** A toolkit upgrade adds a network client, TLS or telemetry crate; a Rustphin feature needs network access; the traces observe a non-local socket.
+- **Confirmed by / date:** The maintainer, 2026-11-08 ("Accept documented exception")
+- **Supersedes / superseded by:** amends R-108 validation; supersedes nothing

@@ -62,6 +62,27 @@ external-default-features = "allow"
 # Layering (decision D-002): only the UI crate may depend on the UI toolkit.
 deny = [
     { crate = "gpui-kit", wrappers = ["rustphin-ui"] },
+    # Privacy (R-108, decision D-018): Rustphin makes no network connections
+    # of its own. The locked toolkit keeps a socket wrapper and HTTP types it
+    # never uses here; they stay reachable only through the toolkit crates that
+    # bring them in today. Any HTTP client, TLS stack or telemetry crate fails
+    # the gate and needs a new decision.
+    { crate = "async-net", wrappers = ["smol"] },
+    { crate = "http", wrappers = ["gpui-pre-http-client", "http-body"] },
+    { crate = "http-body", wrappers = ["gpui-pre-http-client"] },
+    { crate = "gpui-pre-http-client", wrappers = ["gpui-pre", "gpui-pre-linux"] },
+    { crate = "reqwest" },
+    { crate = "hyper" },
+    { crate = "ureq" },
+    { crate = "isahc" },
+    { crate = "curl" },
+    { crate = "surf" },
+    { crate = "attohttpc" },
+    { crate = "rustls" },
+    { crate = "native-tls" },
+    { crate = "openssl" },
+    { crate = "sentry" },
+    { crate = "opentelemetry" },
 ]
 skip = []
 skip-tree = []

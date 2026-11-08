@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-08 — W-077h R-108 toolkit network-crate exception (D-018)
+- **Phase:** 6 Implement (S11)
+- **Decision:** The maintainer chose "Accept documented exception" for R-108's literal "no network crates" validation text, which the locked toolkit cannot meet. Recorded as D-018; R-108 validation and the S11 acceptance line amended to cite it.
+- **Enforcement:** `deny.toml` now bans reqwest, hyper, ureq, isahc, curl, surf, attohttpc, rustls, native-tls, openssl, sentry and opentelemetry, and allows async-net only through smol, http only through gpui-pre-http-client/http-body, http-body only through gpui-pre-http-client and gpui-pre-http-client only through gpui-pre/gpui-pre-linux. `cargo tree` confirms none of the banned crates is in the graph and lists exactly those dependents today.
+- **Proof:** `cargo deny check bans` passes. Two deliberate violations fail it and were restored: a wrong wrapper for async-net (error[banned], bans FAILED) and an outright ban of the present http-body (same). Final rust-tc doctor PASS (443 tests and every gate component). Evidence: target/rust-toolchain/w077h/doctor.log.
+- **R-108 first criterion:** accepted on W-077a source review (no application HTTP client/remote service/telemetry; NullHttpClient left installed) and W-077d traces (five complete lifetimes, 60 socket calls, all AF_UNIX), now guarded by the bans. Limits from those entries are unchanged: launched applications, alternate bus transports and mounted remote filesystems are outside the traced contract.
+- **Remote folders:** unaffected. D-004 reaches them as mounted paths (kio-fuse, sshfs, SMB/NFS); a kio-fuse mount request is local D-Bus. Native protocol code (L-008) would reopen D-018. No application code changed.
+
 ### 2026-11-08 — W-077g protect unreadable, damaged and newer session files
 - **Phase:** 6 Implement (S11)
 - **Finding:** before this change a newer-format file decoded its tabs before the version check, so a schema change could fail as "damaged" and lose the version; any parse failure fell back to an empty session that the next tab change overwrote. An explicit launch folder skipped reading entirely and replaced whatever was saved, including newer or unreadable files.

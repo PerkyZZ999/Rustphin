@@ -229,9 +229,9 @@ Conventions:
 ### R-108 — Privacy
 - **Priority:** must
 - **Acceptance:**
-  - [ ] The application makes no network connections of its own and collects no telemetry.
+  - [x] The application makes no network connections of its own and collects no telemetry.
   - [x] All stored history is local, documented, and clearable.
-- **Validation:** test (no network crates or sockets in the dependency audit), manual
+- **Validation:** test (`deny.toml` bans HTTP clients, TLS and telemetry crates, and confines the locked toolkit's retained network crates to their current wrappers; D-018), source review and traced runs showing only local sockets, manual. Amended 2026-11-08 by D-018: previously "no network crates or sockets in the dependency audit", which the locked toolkit cannot meet.
 
 ### R-109 — Platform and build
 - **Priority:** must

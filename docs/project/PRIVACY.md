@@ -1,7 +1,7 @@
 # Privacy and local data
 
-This describes the implementation audited for W-077a–f on 2026-11-06. R-108
-acceptance remains open. W-077d adds bounded live connection and clearing
+This describes the implementation audited for W-077a–h (2026-11-06 to
+2026-11-08). R-108 is accepted under decision D-018. W-077d adds bounded live connection and clearing
 evidence in VALIDATION.md; neither the inventory nor that replay guarantees
 secure erasure or absence of network activity on every execution path.
 
@@ -25,13 +25,20 @@ The active Linux dependency graph contains `async-net` through the pinned
 toolkit's `smol`, and `http`/`http-body` through `gpui-pre-http-client`.
 Consequently R-108's literal validation text, “no network crates or sockets in
 the dependency audit”, is not satisfied. Required local sockets also exist.
-No requirement or locked toolkit decision is changed by this finding. Five
+Five
 W-077d application lifetimes were traced from startup through normal exit with
 all threads followed: 60 socket calls, all AF_UNIX, and no observed IPv4/IPv6
 sockets. The private replay covers startup, folder visits, palette clearing,
 write failure/retry and restarts, not external application launches, alternate
-bus transports or every desktop/runtime path. The literal criterion remains
-unsatisfied.
+bus transports or every desktop/runtime path.
+
+Decision D-018 (the maintainer, 2026-11-08) accepts the toolkit's retained crates as a
+documented exception: R-108 means no application-owned connections and no
+telemetry. `deny.toml` enforces it. Any HTTP client, TLS or telemetry crate
+fails `rust-tc doctor`, and `async-net`, `http`, `http-body` and
+`gpui-pre-http-client` may only be reached through the toolkit crates that
+bring them in now. Remote folders stay available as mounted paths (kio-fuse,
+sshfs, SMB/NFS), where another process or the kernel makes the connection.
 
 ## Data inventory and clearing
 
