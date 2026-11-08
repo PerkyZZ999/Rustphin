@@ -148,6 +148,25 @@ pub fn trash_actions(
     entries
 }
 
+/// The height of a menu column: `row` for each item or submenu row,
+/// `separator` for each separator, plus `chrome` for padding and borders.
+pub fn column_height(entries: &[MenuEntry], row: f32, separator: f32, chrome: f32) -> f32 {
+    entries
+        .iter()
+        .map(|entry| match entry {
+            MenuEntry::Separator => separator,
+            _ => row,
+        })
+        .sum::<f32>()
+        + chrome
+}
+
+/// Whether a menu opened at an entry goes above it: it does not fit below,
+/// and there is more room above, as Qt places menus.
+pub fn opens_upward(height: f32, room_below: f32, room_above: f32) -> bool {
+    height > room_below && room_above > room_below
+}
+
 fn item(label: &str, command: MenuCommand, enabled: bool) -> MenuEntry {
     MenuEntry::Item {
         label: label.to_owned(),
@@ -391,6 +410,20 @@ mod tests {
         };
         change(&mut facts);
         facts
+    }
+
+    #[test]
+    fn a_menu_height_counts_rows_separators_and_chrome() {
+        let entries = trash_actions(true, [("Other".into(), PathBuf::from("/t"))]);
+        assert_eq!(labels(&entries), ["Restore", "Empty trash…", "", "Other"]);
+        assert_eq!(column_height(&entries, 28., 9., 10.), 3. * 28. + 9. + 10.);
+    }
+
+    #[test]
+    fn a_menu_opens_upward_only_when_below_is_too_small_and_above_is_larger() {
+        assert!(!opens_upward(300., 400., 100.));
+        assert!(opens_upward(300., 120., 500.));
+        assert!(!opens_upward(300., 120., 100.));
     }
 
     #[test]

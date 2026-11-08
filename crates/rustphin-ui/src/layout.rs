@@ -66,6 +66,16 @@ impl ViewMode {
 }
 
 impl Layout {
+    /// The bottom-left corner of entry `index`'s row or cell, in list
+    /// coordinates. A keyboard-opened context menu appears there, at the
+    /// entry, as Dolphin places it.
+    pub fn cell_bottom_left(&self, index: usize, per_row: usize) -> (f32, f32) {
+        let per_row = per_row.max(1);
+        let (line, column) = (index / per_row, index % per_row);
+        let left = self.cell_width.map_or(0., |width| column as f32 * width);
+        (left, (line + 1) as f32 * self.row_height)
+    }
+
     /// How many entries fit side by side in `width` pixels; at least one.
     pub fn columns(&self, width: f32) -> usize {
         match self.cell_width {
@@ -156,6 +166,25 @@ mod tests {
         let largest = ViewMode::Details.layout(ZOOM_LEVELS - 1);
         assert_eq!((largest.icon, largest.row_height), (48., 56.));
         assert_eq!(default.columns(2000.), 1);
+    }
+
+    #[test]
+    fn a_cell_corner_follows_its_line_and_column() {
+        let list = Layout {
+            icon: 16.,
+            row_height: 28.,
+            cell_width: None,
+        };
+        assert_eq!(list.cell_bottom_left(0, 1), (0., 28.));
+        assert_eq!(list.cell_bottom_left(3, 1), (0., 112.));
+        let grid = Layout {
+            icon: 64.,
+            row_height: 100.,
+            cell_width: Some(90.),
+        };
+        assert_eq!(grid.cell_bottom_left(0, 4), (0., 100.));
+        assert_eq!(grid.cell_bottom_left(6, 4), (180., 200.));
+        assert_eq!(grid.cell_bottom_left(6, 0), (0., 700.));
     }
 
     #[test]

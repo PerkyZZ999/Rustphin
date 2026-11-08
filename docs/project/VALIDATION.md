@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-08 — W-076s keyboard menus at the focused entry
+- **Phase:** 6 Implement (S11, R-004, R-107)
+- **Finding (K12 replay):** Shift+F10/Menu opened the context menu at the list's top-left corner whatever entry was focused. Dolphin places it at the item (`KItemListController::contextMenuEvent`: `itemContextRect(index).bottomRight()`).
+- **Change:** `Layout::cell_bottom_left` gives an entry's corner in list coordinates; the browser converts it to window coordinates (the inverse of `list_point`) after revealing the entry, so the menu opens under it. `menu::column_height` estimates the menu from its rows and separators, and `menu::opens_upward` opens it upward from the entry's top when it does not fit below and there is more room above (GPUI's own flip keeps the same anchor point, which would cover the entry). The empty-area and trash menus keep the corner anchor.
+- **Tests:** cell corner (list and grid, `per_row` 0 guarded), menu height and flip rule; mutations (row top instead of bottom, flip without the room-above check, separators as rows) each fail and were restored.
+- **Replay (K13):** private KWin/HOME, 61 generated files. Details: `file-08` + Menu opened under file-08.txt; End + Menu (list scrolled) opened upward, ending just above the visible, selected middle-entry.txt; icons view, third cell + Menu opened under file-03.txt. A first build without the flip snapped the bottom menu over the selected row (screenshot) and prompted the flip.
+- **Gate:** rust-tc doctor PASS, 461 tests. Evidence: target/rust-toolchain/w076s/doctor.log.
+
 ### 2026-11-08 — W-076r copy location and the Menu key
 - **Phase:** 6 Implement (S11, R-004)
 - **Reference:** Dolphin's `copy_location` (Ctrl+Alt+C) copies the path of the first selected item; the Menu key opens context menus (Qt default); KDE's Back/Forward include the dedicated keys.

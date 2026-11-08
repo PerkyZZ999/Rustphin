@@ -23,6 +23,7 @@ S11 — Hardening for daily use (in progress)
 - [ ] W-079 — Match the user-provided docs/mockup.png as closely as feasible through a UI/UX/design pass, adapting to Rustphin's features. Start only after S11 acceptance is complete; then break the pass into focused design-token/component tasks and verify visual, keyboard, accessibility, responsive and fallback behavior. ROADMAP.md records scope and validation. Requested by the maintainer on 2026-11-06.
 
 ## Done (recent)
+- [x] W-076s — Keyboard-opened context menus appear at the focused entry, as in Dolphin, and open upward when there is no room below. Pure cell-corner, menu-height and flip rules with tests and three mutations; replay K13 (details top/bottom, icon grid); full gate 461 tests.
 - [x] W-076r — Copy location (Ctrl+Alt+C and context menu; remote folders give their address), Menu key opens the context menu, Back/Forward keys bound. Menu test + mutation; replay K12 with the session clipboard; full gate 458 tests.
 - [x] W-076q — Ctrl+Shift+T reopens the most recently closed tab (up to 6, as Dolphin), split panes and remote folders included; a notice when none is left. Test + 2 mutations; replay K11; full gate 458 tests.
 - [x] W-076p — Shift+F5/Shift+F6 copy/move the selection to the other view through the operation engine, with reasons when not split, nothing selected or same folder; Ctrl+F3 toggles the two views. Corrects W-076o: KWin takes Ctrl+F3, so it was never proved. Test + 2 mutations; replay K10 (copy, move, undo, type-to-jump); full gate 457 tests.

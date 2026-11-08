@@ -765,6 +765,7 @@ impl Browser {
         };
         self.menu = Some(OpenMenu {
             at,
+            above: None,
             entries,
             state,
             name: "File actions",
@@ -814,16 +815,38 @@ impl Browser {
         }
     }
 
-    fn menu_anchor(&self) -> Point<Pixels> {
-        let bounds = self.scroll.0.borrow().base_handle.bounds();
-        if bounds.size.height > px(0.) {
-            point(
-                bounds.origin.x + px(space::LG),
-                bounds.origin.y + px(space::LG),
-            )
-        } else {
-            point(px(space::LG), px(size::TOOLBAR + space::LG))
+    /// Where a keyboard-opened menu appears: under the focused entry, kept
+    /// inside the list, or at the list's corner without one.
+    fn menu_anchor(&self, row: Option<usize>) -> Point<Pixels> {
+        self.menu_anchors(row).0
+    }
+
+    /// Where a keyboard-opened menu starts below the focused entry, and the
+    /// entry's top for opening upward; the list's corner without an entry.
+    fn menu_anchors(&self, row: Option<usize>) -> (Point<Pixels>, Option<Point<Pixels>>) {
+        let state = self.scroll.0.borrow();
+        let bounds = state.base_handle.bounds();
+        if bounds.size.height <= px(0.) {
+            return (point(px(space::LG), px(size::TOOLBAR + space::LG)), None);
         }
+        let corner = point(
+            bounds.origin.x + px(space::LG),
+            bounds.origin.y + px(space::LG),
+        );
+        let Some(row) = row else {
+            return (corner, None);
+        };
+        // The inverse of `list_point`.
+        let layout = self.mode.layout(self.zoom);
+        let (x, y) = layout.cell_bottom_left(row, self.per_row);
+        let offset = state.base_handle.offset();
+        let top = bounds.origin.y;
+        let bottom = bounds.origin.y + bounds.size.height;
+        let clamp = |value: Pixels| value.clamp(top, bottom.max(top));
+        let left = bounds.origin.x + px(x + space::SM + space::LG);
+        let below = clamp(bounds.origin.y + offset.y + px(y + space::XS));
+        let above = clamp(bounds.origin.y + offset.y + px(y - layout.row_height + space::XS));
+        (point(left, below), Some(point(left, above)))
     }
 
     fn open_selection_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -833,11 +856,16 @@ impl Browser {
             cx.notify();
             return;
         }
-        let at = self.menu_anchor();
         if self.selection.is_empty() {
+            let at = self.menu_anchor(None);
             self.show_menu(None, at, window, cx);
         } else if let Some(row) = self.focus_row {
+            self.reveal_focus();
+            let (at, above) = self.menu_anchors(Some(row));
             self.show_menu(Some(row), at, window, cx);
+            if let Some(menu) = &mut self.menu {
+                menu.above = above;
+            }
         }
     }
 
@@ -1632,6 +1660,7 @@ impl Browser {
         };
         self.menu = Some(OpenMenu {
             at,
+            above: None,
             entries,
             state,
             name: "Trash actions",
@@ -2812,10 +2841,32 @@ impl Browser {
                 _ => None,
             })
         });
+        // Open upward from the entry when the menu does not fit below it.
+        let viewport = f32::from(window.viewport_size().height);
+        let height = menu::column_height(
+            &entries,
+            size::ROW,
+            1. + 2. * space::XS,
+            2. * space::XS + 2.,
+        )
+        .min(f32::from(max_height));
+        let (corner, at) = match menu.above {
+            Some(above)
+                if menu::opens_upward(
+                    height,
+                    viewport - space::SM - f32::from(at.y),
+                    f32::from(above.y) - space::SM,
+                ) =>
+            {
+                (gpui_kit::Anchor::BottomLeft, above)
+            }
+            _ => (gpui_kit::Anchor::TopLeft, at),
+        };
         // A menu belongs to the window even when its browser pane is narrow.
         Some(
             deferred(
                 anchored()
+                    .anchor(corner)
                     .position(at)
                     .snap_to_window_with_margin(Edges::all(px(space::SM)))
                     .child(
@@ -3065,6 +3116,9 @@ impl Browser {
 /// The menu opened for a selection or for empty space.
 struct OpenMenu {
     at: Point<Pixels>,
+    /// For a menu opened at an entry by keyboard: the entry's top-left,
+    /// where the menu ends when it opens upward.
+    above: Option<Point<Pixels>>,
     entries: Vec<menu::MenuEntry>,
     state: menu::MenuState,
     name: &'static str,
@@ -3231,7 +3285,7 @@ impl Render for Browser {
             .on_action(cx.listener(|this, _: &OpenTrash, _, cx| this.open_trash(cx)))
             .on_action(cx.listener(|this, _: &RestoreTrash, _, cx| this.restore_selected(cx)))
             .on_action(cx.listener(|this, _: &TrashActions, window, cx| {
-                this.show_trash_actions(this.menu_anchor(), window, cx);
+                this.show_trash_actions(this.menu_anchor(None), window, cx);
             }))
             .on_action(cx.listener(|this, _: &EmptyTrash, _, cx| {
                 if let Some(dir) = this.trash_dir.clone().filter(|_| this.shows_trash()) {
