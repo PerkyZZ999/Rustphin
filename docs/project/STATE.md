@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-08 — W-085 dropped-frame count; R-101 60 fps criterion met in all three views (D-019); full gate 481 tests
+- Latest validation entry: VALIDATION.md, 2026-11-08 — W-073f thumbnails measured (no task over 16 ms besides window startup); W-085 R-101 60 fps met in all three views (D-019); full gate 481 tests
 
 ## Open loops
 - Task: W-078: 23 criteria ticked on evidence; 11 open in docs/project/ACCEPTANCE.md. Decided by the maintainer on 2026-11-08: D-019 (60 fps = ≤5% dropped frames, met in W-085), D-020 (startup batch recovery, done W-083), D-021 (Ctrl+D duplicate, done W-084); W-076e not approved. Still open for the maintainer: R-101 startup/first-entries scope and the 7 real-desktop/hardware checks (non-KDE drop, USB mount/busy, blur look and white-window contrast, Orca).
