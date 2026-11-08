@@ -15,9 +15,9 @@ Conventions:
 - **Acceptance:**
   - [ ] Opening a directory lists every entry Dolphin lists for it, with hidden files off by default and a toggle to show them.
   - [ ] Back, forward and up work with mouse and keyboard; history is kept per tab.
-  - [ ] A breadcrumb location bar switches to an editable path field; an invalid path shows an inline error and keeps the current view.
+  - [x] A breadcrumb location bar switches to an editable path field; an invalid path shows an inline error and keeps the current view. (W-078: Slice S1 checks, N5/K8.)
   - [x] Activating a file opens it with the system default application; executables and `.desktop` files ask before running.
-  - [ ] An unreadable directory shows an inline error state, not a crash or an empty view.
+  - [x] An unreadable directory shows an inline error state, not a crash or an empty view. (W-078: Slice S1 checks, N4.)
 - **Validation:** test (model), ui-test (navigation), manual (open-with)
 
 ### R-002 — Live updates
@@ -33,17 +33,17 @@ Conventions:
 - **Description:** Icons, compact and details views, with sorting and zoom.
 - **Acceptance:**
   - [ ] Three view modes are selectable per tab: icons, compact, details.
-  - [ ] Details view has name, size, modified and type columns; clicking a header sorts by it and toggles direction.
+  - [x] Details view has name, size, modified and type columns; clicking a header sorts by it and toggles direction. (W-078: W-018, W-022 O1–O3.)
   - [ ] Sorting is natural and case-insensitive by default ("file2" before "file10"), with folders first as an option, on by default.
   - [ ] Zoom changes icon size in all three modes.
-  - [ ] View mode, sort and zoom are remembered between sessions.
+  - [x] View mode, sort and zoom are remembered between sessions. (W-078: W-021, W-022 P1/P2.)
 - **Validation:** test (sort order), ui-test (modes)
 
 ### R-004 — Selection and keyboard operation
 - **Priority:** must
 - **Description:** Every MVP function is reachable without a mouse.
 - **Acceptance:**
-  - [ ] Click, Ctrl+click, Shift+click, rubber-band, select all and invert selection work.
+  - [x] Click, Ctrl+click, Shift+click, rubber-band, select all and invert selection work. (W-078: W-020, W-022 S2/S3, W-024, W-073e.)
   - [ ] Arrow keys, Home/End, Page Up/Down move focus; typing letters jumps to the next matching name.
   - [ ] Every action in R-001 to R-016 has a keyboard path, and the default shortcuts match Dolphin's where an equivalent exists.
 - **Validation:** ui-test, manual (keyboard-only checklist)
@@ -174,7 +174,7 @@ Conventions:
 - **Priority:** must
 - **Acceptance:** on the reference machine, in a directory of 500,000 entries on a local filesystem:
   - [ ] First entries are visible within 200 ms of opening (warm cache) and the UI accepts input throughout loading.
-  - [ ] Re-sorting by any column completes within 500 ms once the sizes and dates it needs have been read. The first read has no fixed limit, but the list is shown in name order with a loading indicator while it runs, and details appear from the top of the list first. (Reworded 2026-10-12 with the user's agreement: on a cold disk cache the read is bounded by the disk, 5.3 s for 500,000 files.)
+  - [x] Re-sorting by any column completes within 500 ms once the sizes and dates it needs have been read. The first read has no fixed limit, but the list is shown in name order with a loading indicator while it runs, and details appear from the top of the list first. (Reworded 2026-10-12 with the user's agreement: on a cold disk cache the read is bounded by the disk, 5.3 s for 500,000 files.) (W-078: rust-tc bench-listing, slowest re-sort 92.7 ms in W-077b; name order with loading indicator and details from the top in W-023/W-073c.)
   - [ ] Scrolling holds 60 frames per second at the 95th percentile.
   - [ ] No UI-thread task exceeds 16 ms in listing, sorting, metadata or thumbnail code paths.
 - **Validation:** bench (headless core), ui-test with frame timing
@@ -196,9 +196,9 @@ Conventions:
 ### R-104 — Robustness with untrusted input
 - **Priority:** must
 - **Acceptance:**
-  - [ ] Names with control characters, invalid UTF-8, or 255-byte length are displayed safely and are operable.
-  - [ ] Malformed images, places files and `.desktop` files produce an error state, never a crash.
-  - [ ] Nothing is executed by browsing, previewing or thumbnailing.
+  - [x] Names with control characters, invalid UTF-8, or 255-byte length are displayed safely and are operable. (W-078: W-075b H2/H3.)
+  - [x] Malformed images, places files and `.desktop` files produce an error state, never a crash. (W-078: H1, W-075b, W-075c H4; bounded fuzzing, not exhaustive.)
+  - [x] Nothing is executed by browsing, previewing or thumbnailing. (W-078: W-075b H2.)
 - **Validation:** test (fixtures and fuzzing of parsers)
 
 ### R-105 — Visual design
@@ -237,7 +237,7 @@ Conventions:
 - **Priority:** must
 - **Acceptance:**
   - [x] Builds with Rust 1.95 and current stable from a clean checkout with one documented command.
-  - [ ] Runs on Plasma 6 Wayland; missing optional services (UDisks2, data-control, blur) degrade the related feature with a visible notice rather than failing to start.
+  - [x] Runs on Plasma 6 Wayland; missing optional services (UDisks2, data-control, blur) degrade the related feature with a visible notice rather than failing to start. (W-078: W-076g/h/i/j notices for UDisks2, blur and data-control in an isolated Plasma 6 KWin session; real-desktop blur review stays under R-105.)
   - [x] One local command runs formatting, lints, the test suite and the headless benchmarks (the repository is local only; there is no hosted CI).
 - **Validation:** test (local check command)
 

@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-08 — W-078 acceptance reconciliation, first pass
+- **Phase:** 6 Implement (S11)
+- **Method:** a read-only search mapped each of the 34 open criteria in REQUIREMENTS.md to VALIDATION.md entries and UI_SCENARIOS rows with quotes and stated limits. Every criterion proposed as covered was re-read against its cited entry before ticking; one cited figure (274 ms startup) turned out to come from the W-076e experimental toolkit build and was not used.
+- **Ticked (10):** R-001 editable location with inline error (S1 checks, N5/K8); R-001 unreadable folder error (S1 checks, N4); R-003 four columns and sortable headers (W-018, W-022 O1–O3); R-003 settings remembered (W-021, W-022 P1/P2); R-004 click/Ctrl/Shift/rubber-band/select all/invert (W-020, W-022 S2/S3, W-024, W-073e); R-101 re-sort within 500 ms with name order and loading indicator (W-077b bench, W-023/W-073c); R-104 hostile names (W-075b H2/H3), malformed files (H1, W-075b, W-075c H4) and nothing executed (W-075b); R-109 optional-service notices (W-076g/h/i/j, isolated Plasma 6 KWin). Each ticked line names its evidence.
+- **Open (24):** listed in docs/project/ACCEPTANCE.md as 11 agent-closable replays, 6 decisions and 7 real-desktop/hardware checks for the maintainer. No criterion was reworded or waived.
+- **No code change;** no gate change. Next: run the agent-closable replays.
+
 ### 2026-11-08 — W-076s keyboard menus at the focused entry
 - **Phase:** 6 Implement (S11, R-004, R-107)
 - **Finding (K12 replay):** Shift+F10/Menu opened the context menu at the list's top-left corner whatever entry was focused. Dolphin places it at the item (`KItemListController::contextMenuEvent`: `itemContextRect(index).bottomRight()`).
