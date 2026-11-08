@@ -108,6 +108,7 @@ actions!(
         ShowProperties,
         RecoverRenames,
         Copy,
+        CopyLocation,
         Cut,
         Paste,
         OpenContextMenu,
@@ -161,6 +162,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("alt-home", GoHome, view),
         KeyBinding::new("alt-up", GoUp, view),
         KeyBinding::new("alt-left", GoBack, view),
+        // The Back and Forward keys of some keyboards and mice.
+        KeyBinding::new("back", GoBack, view),
+        KeyBinding::new("forward", GoForward, view),
         KeyBinding::new("alt-right", GoForward, view),
         KeyBinding::new("f5", Reload, view),
         KeyBinding::new("ctrl-h", ToggleHidden, view),
@@ -187,6 +191,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-x", Cut, list),
         KeyBinding::new("ctrl-v", Paste, list),
         KeyBinding::new("shift-f10", OpenContextMenu, list),
+        KeyBinding::new("menu", OpenContextMenu, list),
+        KeyBinding::new("ctrl-alt-c", CopyLocation, list),
         KeyBinding::new("enter", ShowHidden, Some(FOLDER_ACTION_CONTEXT)),
         KeyBinding::new("space", ShowHidden, Some(FOLDER_ACTION_CONTEXT)),
     ]);
@@ -890,6 +896,10 @@ impl Browser {
                 self.paste(cx);
                 self.focus.focus(window, cx);
             }
+            MenuCommand::CopyLocation => {
+                self.copy_location(cx);
+                self.focus.focus(window, cx);
+            }
             MenuCommand::Rename => self.rename_focused(window, cx),
             MenuCommand::MoveToTrash => {
                 self.trash_selected(cx);
@@ -921,6 +931,31 @@ impl Browser {
             MenuCommand::Properties => self.open_properties(window, cx),
         }
         cx.notify();
+    }
+
+    /// Puts the location of the first selected entry on the clipboard as
+    /// text: its path, or its remote address inside a remote folder.
+    fn copy_location(&mut self, cx: &mut Context<Self>) {
+        let Some(path) = self.selected_paths().into_iter().next() else {
+            hub(cx).update(cx, |hub, cx| {
+                hub.say("Select an item to copy its location.".to_owned(), false, cx);
+            });
+            return;
+        };
+        let text =
+            remote::address_of(&path, cx).unwrap_or_else(|| path.to_string_lossy().into_owned());
+        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text));
+        let name = path
+            .file_name()
+            .map(|name| display_name(name.as_encoded_bytes()).into_owned())
+            .unwrap_or_default();
+        hub(cx).update(cx, |hub, cx| {
+            hub.say(
+                format!("Copied the location of \u{201c}{name}\u{201d}."),
+                false,
+                cx,
+            );
+        });
     }
 
     /// Asks for the properties of the one selected entry.
@@ -3174,6 +3209,7 @@ impl Render for Browser {
             }))
             .on_key_down(cx.listener(Self::on_key_down))
             .on_action(cx.listener(|this, _: &GoUp, _, cx| this.go_up(cx)))
+            .on_action(cx.listener(|this, _: &CopyLocation, _, cx| this.copy_location(cx)))
             .on_action(cx.listener(|this, _: &GoHome, _, cx| {
                 if let Some(home) = rustphin_platform::xdg::home() {
                     this.go_to(home, cx);

@@ -7,14 +7,14 @@ Rustphin's binding. Rustphin follows Dolphin wherever it has the same
 action. "Replayed" names the scenario in UI_SCENARIOS.md that exercised it
 by keyboard in an isolated session; "—" means bound but not replayed yet.
 
-Last reviewed: 2026-11-08 (W-076o, W-076p, W-076q), Dolphin source at `master`.
+Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 
 ## Navigation
 
 | Action | Dolphin | Rustphin | Replayed |
 |---|---|---|---|
-| Back | Backspace, Alt+Left | Backspace, Alt+Left | K9 |
-| Forward | Alt+Right | Alt+Right | — |
+| Back | Backspace, Alt+Left, Back key | Backspace, Alt+Left, Back key | K9 (Back key not replayed) |
+| Forward | Alt+Right, Forward key | Alt+Right, Forward key | — |
 | Up one folder | Alt+Up | Alt+Up | K9 |
 | Home folder | Alt+Home | Alt+Home | K9 |
 | Reload | F5 | F5 | — |
@@ -33,7 +33,7 @@ Last reviewed: 2026-11-08 (W-076o, W-076p, W-076q), Dolphin source at `master`.
 | Columns view | Ctrl+4 | not offered (no columns view) | — |
 | Zoom in / out / reset | Ctrl++ / Ctrl+- / Ctrl+0 | same (Ctrl+= too) | V3 |
 | Show hidden files | Ctrl+H, Alt+. | Ctrl+H, Alt+. | — |
-| Context menu | Menu key, Shift+F10 | Shift+F10 | J16 |
+| Context menu | Menu key, Shift+F10 | Menu key, Shift+F10 | J16, K12 |
 
 ## Files
 
@@ -49,7 +49,7 @@ Last reviewed: 2026-11-08 (W-076o, W-076p, W-076q), Dolphin source at `master`.
 | Redo | Ctrl+Shift+Z | not offered (no redo) | — |
 | Properties | Alt+Enter | Alt+Enter | I5 |
 | Duplicate here | Ctrl+D | not offered; Ctrl+D adds the folder to Places instead (Dolphin has no default for that) | — |
-| Copy location | Ctrl+Alt+C | not offered | — |
+| Copy location | Ctrl+Alt+C | Ctrl+Alt+C, context menu (remote folders give their address) | K12 |
 
 ## Tabs, split view and panels
 
@@ -79,7 +79,7 @@ focus and no text field is being edited (K7, K8).
 
 ## Not offered yet
 
-Duplicate (Ctrl+D), copy location (Ctrl+Alt+C), reopen closed tab (Ctrl+Shift+T), redo, the Menu key and
-Dolphin's search/filter bar (Ctrl+F, Ctrl+I) have no Rustphin equivalent.
-Search is L-001; the others are candidates for later work and are not part
-of R-001–R-016 as written.
+Duplicate (Dolphin's Ctrl+D; Rustphin uses Ctrl+D for Add to Places, which
+Dolphin leaves unbound), redo and Dolphin's search/filter bar (Ctrl+F,
+Ctrl+I) have no Rustphin equivalent. Search is L-001; the others are
+candidates for later work and are not part of R-001–R-016 as written.

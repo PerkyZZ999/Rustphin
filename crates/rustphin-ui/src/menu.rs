@@ -27,6 +27,9 @@ pub enum MenuCommand {
     Cut,
     /// Paste the clipboard into the folder being shown.
     Paste,
+    /// Put the path (or remote address) of the first selected entry on the
+    /// clipboard as text, as Dolphin's "Copy Location".
+    CopyLocation,
     /// Rename the selection.
     Rename,
     /// Move the selection to the trash.
@@ -167,6 +170,7 @@ fn selection_menu(facts: &MenuFacts) -> Vec<MenuEntry> {
         MenuCommand::Paste,
         facts.can_paste && !facts.in_trash,
     ));
+    entries.push(item("Copy location", MenuCommand::CopyLocation, true));
     entries.push(MenuEntry::Separator);
     entries.push(item("Rename", MenuCommand::Rename, one && !facts.in_trash));
     if facts.in_trash {
@@ -454,6 +458,7 @@ mod tests {
                 "Cut",
                 "Copy",
                 "Paste",
+                "Copy location",
                 "",
                 "Rename",
                 "Move to trash",

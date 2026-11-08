@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-08 — W-076r copy location and the Menu key
+- **Phase:** 6 Implement (S11, R-004)
+- **Reference:** Dolphin's `copy_location` (Ctrl+Alt+C) copies the path of the first selected item; the Menu key opens context menus (Qt default); KDE's Back/Forward include the dedicated keys.
+- **Change:** `CopyLocation` action (Ctrl+Alt+C in the file list) and a "Copy location" context-menu item after Paste put the first selected entry's path on the text clipboard (GPUI text clipboard), or its remote address inside a folder mounted through kio-fuse; a notice names it, or asks for a selection. GPUI names the Menu keysym `menu` and XF86Back/Forward `back`/`forward`; they now open the context menu and go back/forward. Non-UTF-8 path bytes are replaced in this text form (the file clipboard keeps exact bytes).
+- **Tests:** context-menu label test includes Copy location; removing the item fails it (restored).
+- **Replay (K12):** private KWin/HOME with the session clipboard enabled. Ctrl+Alt+C with no selection: "Select an item to copy its location."; `r`, Ctrl+Alt+C: clipboard read back `/tmp/kwin-mcp-home-dc_d4jvw/Docs dir/report final.txt`, notice "Copied the location of “report final.txt”."; the Menu key opened the context menu; Escape, `z`, Menu, Down ×4 skipped the disabled Paste to Copy location, Enter: clipboard held the zeta.txt path. Back/Forward keys were not replayed.
+- **Gate:** rust-tc doctor PASS, 458 tests. Evidence: target/rust-toolchain/w076r/doctor.log.
+
 ### 2026-11-08 — W-077i ban the toolkit's reqwest fork (D-018)
 - **Finding:** the cargo registry holds `gpui-pre-reqwest`; Cargo.lock lists it with `hyper`, `hyper-util`, `h2` and `tokio-rustls`. `cargo tree --target all -i gpui-pre-reqwest` shows it under `gpui-kit-assets`; `cargo tree -e normal -i gpui-pre-reqwest` for the Linux host prints nothing, and cargo-deny's graph (Linux target only) passed the existing `hyper`/`rustls` bans. So the D-018 statement about the Linux build holds, but the fork's own name was not banned.
 - **Change:** deny.toml bans `gpui-pre-reqwest` too, with a comment; D-018 records the non-Linux-only presence.
