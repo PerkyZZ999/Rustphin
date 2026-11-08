@@ -18,6 +18,7 @@ mod menu;
 mod operations;
 mod palette;
 mod properties;
+mod recovery;
 mod remote;
 mod rename_dialog;
 mod session;
@@ -93,6 +94,8 @@ pub fn run(options: Options) {
             }
             history::init(cx);
             remote::init(cx);
+            // D-020: restore batch renames an earlier run left half done.
+            recovery::start(&session, cx);
             if let Some(service) = rustphin_platform::file_manager::ServiceHandle::session() {
                 tracing::info!("listening for requests to show files");
                 cx.set_global(workspace::ShowService(service));

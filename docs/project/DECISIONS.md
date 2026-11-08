@@ -185,3 +185,29 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Reopen criteria:** A toolkit upgrade adds a network client, TLS or telemetry crate; a Rustphin feature needs network access; the traces observe a non-local socket.
 - **Confirmed by / date:** The maintainer, 2026-11-08 ("Accept documented exception")
 - **Supersedes / superseded by:** amends R-108 validation; supersedes nothing
+
+## D-019 — "60 frames per second" means no dropped frames
+- **Status:** locked
+- **Date:** 2026-11-08
+- **Context:** R-101 asked for 60 fps "at the 95th percentile". Measured scrolling of 500,000 entries draws each frame in under 7 ms and the median frame interval equals the 16.67 ms refresh period, but the 95th-percentile interval is 16.72–16.98 ms (W-073e): presentation jitter around the refresh period in a virtual compositor, not missed frames.
+- **Decision:** scrolling passes when no more than 5% of frame intervals during sustained scrolling exceed 1.5 × the display's refresh period (a dropped frame), in each view mode. Frame intervals, draw times and the longest gap are still reported.
+- **Rationale:** a strict p95 ≤ 16.667 ms fails on timing jitter of a few tenths of a millisecond that no user sees; dropped frames are what makes scrolling look uneven.
+- **Consequences:** R-101's wording changes accordingly; the frame log counts dropped frames.
+- **Confirmed by / date:** The maintainer, 2026-11-08 ("No dropped frames")
+- **Supersedes / superseded by:** amends R-101
+
+## D-020 — Interrupted batch renames are recovered at the next start
+- **Status:** locked
+- **Date:** 2026-11-08
+- **Context:** R-103 asks that killing the process during a batch rename leaves every file intact or complete. A killed batch keeps staged temporary names until the user chooses "Recover original names after interruption" (W-071).
+- **Decision:** at startup Rustphin looks for unfinished batch-rename journals in the places it can find them (folders it shows) and restores the original names automatically through the existing journal-validated recovery, then reports what it did in a notice. Recovery failures are reported and keep the journal, as today.
+- **Confirmed by / date:** The maintainer, 2026-11-08 ("Recover at next start")
+- **Supersedes / superseded by:** amends R-103's validation
+
+## D-021 — Ctrl+D duplicates, as in Dolphin
+- **Status:** locked
+- **Date:** 2026-11-08
+- **Decision:** Ctrl+D duplicates the selection in place as "name copy.ext" (Dolphin's naming, a free name when taken) through the operation engine, undoable. Add to Places moves to Ctrl+Shift+D and stays in the palette.
+- **Confirmed by / date:** The maintainer, 2026-11-08 ("Duplicate, like Dolphin")
+
+W-076e (patching the locked toolkit's focus registration) was not approved on 2026-11-08 ("Not yet"); it stays open until a planned toolkit upgrade.

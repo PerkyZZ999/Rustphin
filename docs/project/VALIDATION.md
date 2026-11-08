@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-08 — W-083 recover interrupted batch renames at startup (D-020, R-103)
+- **Decisions recorded:** D-019 (60 fps = at most 5% dropped frames; R-101 reworded), D-020 (startup recovery), D-021 (Ctrl+D duplicates); W-076e not approved ("Not yet"). All from the maintainer's answers on 2026-11-08.
+- **Change:** core `ops::has_rename_journal`; platform `process::others_running` reads `/proc/<pid>/stat`, ignoring this process and zombie/dead ones; UI `recovery` checks the saved tabs' local folders and up to 200 recent local folders (deduplicated, tabs first) in the background and starts `RecoverRenameBatch` for each folder with a journal, labelled "Restoring original names in … after an interrupted rename"; nothing runs while another live Rustphin exists. `Hub::start_lasting` keeps the final notice until dismissed (a debug build's window can appear after a 6 s notice has gone).
+- **Tests:** journal detection (present, absent, missing folder); `/proc` stat parsing with odd names and states; other-instance rule (own pid, other pid, zombie, other names); candidate order and deduplication with a remote pane skipped. Mutations caught and restored: no dedupe, own pid counted, zombies counted.
+- **Replay (BR0):** private KWin/HOME. Two generated folders (a = A, b = B) were interrupted by the existing `ops::tests::batch_kill_child` (exit 137) leaving `.rustphin-part-rename-0/1` and the journal. Launching on Batch restored a = A, b = B with no journal (log "recovering an interrupted batch rename"). With that instance still running, a second instance on Batch2 left the journal and staged entries untouched ("another Rustphin is running"). After both were closed (still zombies), a relaunch on Batch2 restored it and showed "Restored the original names in “Batch2” after an interrupted rename." 14 s later. A third folder, visited and left (only in recent history), was interrupted while Rustphin was closed; a launch with no argument restored it.
+- **Ticked:** R-103 kill criterion, noting what "intact" means between the kill and the next start.
+- **Gate:** rust-tc doctor PASS (exit 0), 474 tests. Evidence: target/rust-toolchain/w083/doctor.log.
+
 ### 2026-11-08 — W-082 filter bar (R-106)
 - **Phase:** 6 Implement (S11; R-106 lists "filters" among the secondary controls and Rustphin had none)
 - **Reference:** Dolphin's filter bar (Ctrl+I and /), `KFileItemModelFilter` in its default glob mode: case-insensitive, unanchored wildcard matching; the filter clears when the folder changes.

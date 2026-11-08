@@ -6,7 +6,7 @@
 //! core's operation engine on its own threads.
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
@@ -134,6 +134,9 @@ pub struct Hub {
     /// Wording for operations whose request does not describe them well:
     /// what it is doing, and what it will have done.
     labels: HashMap<OpId, (String, String)>,
+    /// Operations whose final notice stays until dismissed, such as a
+    /// recovery at startup that the user may not be watching for.
+    lasting: HashSet<OpId>,
     /// Operations in progress, oldest first.
     pub running: Vec<Running>,
     /// Open questions; the first is the one shown.
@@ -200,6 +203,7 @@ pub fn init(cx: &mut App) {
             ops,
             trash,
             labels: HashMap::new(),
+            lasting: HashSet::new(),
             running: Vec::new(),
             questions: VecDeque::new(),
             notice: None,
@@ -222,6 +226,15 @@ impl Hub {
     /// Starts a file operation in the background.
     pub fn start(&mut self, request: Request) {
         self.ops.start(request);
+    }
+
+    /// Starts a file operation that the progress line and the final notice
+    /// describe with `label` and, in lower case, `done`; that notice stays
+    /// until dismissed.
+    pub fn start_lasting(&mut self, request: Request, label: String, done: String) {
+        let id = self.ops.start(request);
+        self.labels.insert(id, (label, done));
+        self.lasting.insert(id);
     }
 
     /// Reverts the latest operation, or says that there is none.
@@ -624,8 +637,16 @@ impl Hub {
                 let (done, undo) = finished
                     .as_ref()
                     .map_or(("", false), |running| (running.done.as_str(), running.undo));
+                let lasting = self.lasting.remove(&id);
                 if let Some(notice) = result_notice(done, undo, &result) {
-                    self.show(notice.text, notice.is_error, notice.offers_undo, cx);
+                    let expires = !notice.is_error && !lasting;
+                    self.present(
+                        notice.text,
+                        notice.is_error,
+                        notice.offers_undo,
+                        expires,
+                        cx,
+                    );
                 }
             }
         }
@@ -663,7 +684,7 @@ fn quoted(name: &std::ffi::OsStr) -> String {
     format!("“{}”", display_name(name.as_encoded_bytes()))
 }
 
-fn folder_name(path: &Path) -> String {
+pub(crate) fn folder_name(path: &Path) -> String {
     match path.file_name() {
         Some(name) => quoted(name),
         None => "“/”".to_owned(),

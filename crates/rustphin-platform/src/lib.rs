@@ -13,6 +13,7 @@ pub mod file_manager;
 pub mod icons;
 pub mod mime;
 pub mod places;
+pub mod process;
 pub mod properties;
 pub mod remote;
 pub mod thumbnails;

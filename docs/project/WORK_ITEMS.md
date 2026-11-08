@@ -18,11 +18,15 @@ S11 — Hardening for daily use (in progress)
 
 - [x] W-080 — Open remote addresses through kio-fuse (D-004, D-018; requested by the maintainer 2026-11-08). Typing `sftp://`, `smb://` or another KIO address in the location bar asks kio-fuse (`org.kde.KIOFuse.VFS.mountUrl`, the interface Dolphin's terminal panel uses) to mount it and opens the returned folder; `file://` URIs open locally. Network bookmarks in user-places.xbel (sftp, fish, smb, ftp, ftps, webdav, webdavs, nfs) appear in Places and open the same way. A "Connecting…" notice shows while waiting; a missing kio-fuse, refused scheme or failed mount gives a readable error saying what to do. Passwords typed in an address are never shown or logged. Editing the location inside a folder Rustphin mounted shows its remote address. Rustphin itself makes no network connection. Out of scope here: remote-address breadcrumbs/history (follow-up), native protocols (L-008), Network browsing (`remote:/`).
 
+- [ ] W-084 — Duplicate on Ctrl+D as in Dolphin (D-021): copy the selection in place as "name copy.ext", a free name when taken, through the operation engine, undoable; Add to Places moves to Ctrl+Shift+D.
+- [ ] W-085 — Count dropped frames (interval > 1.5 × refresh period) in the frame log and re-measure the three views of 500,000 entries against D-019 (≤ 5%).
+
 ## Deferred until S11 is complete
 
 - [ ] W-079 — Match the user-provided docs/mockup.png as closely as feasible through a UI/UX/design pass, adapting to Rustphin's features. Start only after S11 acceptance is complete; then break the pass into focused design-token/component tasks and verify visual, keyboard, accessibility, responsive and fallback behavior. ROADMAP.md records scope and validation. Requested by the maintainer on 2026-11-06.
 
 ## Done (recent)
+- [x] W-083 — Interrupted batch renames recovered at startup (D-020): saved-tab and recent local folders (200) checked for a rename journal in the background, recovered through the journal-checked engine path with a notice that stays; skipped while another live Rustphin runs (zombies ignored). Core journal check, platform /proc reader, candidates and lasting notices tested; 4 mutations; replay BR0 with genuine SIGKILLed batches (launch folder, second instance, recent history). R-103 ticked. Full gate 474 tests.
 - [x] W-082 — Filter bar as in Dolphin: Ctrl+I (toggle) or /, case-insensitive unanchored glob (`*`, `?`), live narrowing, Enter back to the list, Escape clears and closes, cleared by navigation, kept by reload and live updates; status "N of M items match"; filtered empty state with Clear filter; palette entry. Core NameFilter + model filter with tests and 5 mutations; replay K17; full gate 469 tests. Closes R-106.
 - [x] W-078d — Unit test pins floating surfaces opaque in the glass theme; R-105 criterion ticked with source citations.
 - [x] W-078c — Design-token audit of rustphin-ui: no colour or type-size literals; the rubber band now uses the 2 px radius token (was 4 px), and the dialog fact-label width and menu hairline are size tokens (DESIGN.md first). Replay of band and conflict dialog; R-105 token criterion ticked. Full gate 463 tests.

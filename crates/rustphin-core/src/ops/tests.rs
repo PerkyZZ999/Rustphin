@@ -2024,3 +2024,12 @@ fn recovery_never_removes_a_record_changed_by_another_program() {
     assert_eq!(read(d.src.join("a")), "A");
     assert_eq!(read(d.src.join("b")), "B");
 }
+
+#[test]
+fn a_rename_journal_is_found_only_where_one_was_left() {
+    let dir = tempfile::tempdir().unwrap();
+    assert!(!has_rename_journal(&RealFs, dir.path()));
+    std::fs::write(dir.path().join(RENAME_JOURNAL), b"").unwrap();
+    assert!(has_rename_journal(&RealFs, dir.path()));
+    assert!(!has_rename_journal(&RealFs, &dir.path().join("absent")));
+}

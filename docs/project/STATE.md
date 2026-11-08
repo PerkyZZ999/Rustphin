@@ -14,10 +14,10 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-08 — W-082 filter bar; full gate 469 tests
+- Latest validation entry: VALIDATION.md, 2026-11-08 — W-083 startup recovery of interrupted batch renames; full gate 474 tests
 
 ## Open loops
-- Task: W-078: 21 criteria ticked on evidence so far; 13 open in docs/project/ACCEPTANCE.md, none closable by the agent: 6 decisions for the maintainer (R-101 pacing/startup/first-entries scope, R-103 batch-rename wording, Ctrl+D duplicate, W-076e adoption) and 7 real-desktop/hardware checks (non-KDE drop, USB mount/busy, blur look and white-window contrast, Orca). W-081 symlinks and W-082 filter bar done.
+- Task: W-078: 22 criteria ticked on evidence; 12 open in docs/project/ACCEPTANCE.md. Decided by the maintainer on 2026-11-08: D-019 (60 fps = ≤5% dropped frames, W-085 to measure), D-020 (startup batch recovery, done W-083), D-021 (Ctrl+D duplicate, W-084); W-076e not approved. Still open for the maintainer: R-101 startup/first-entries scope and the 7 real-desktop/hardware checks (non-KDE drop, USB mount/busy, blur look and white-window contrast, Orca).
 - Task: W-076o–r add docs/project/KEYBOARD.md (Rustphin vs Dolphin defaults) and fix Backspace=Back, Alt+Home, Alt+D, Alt+1…0, Ctrl+P, Ctrl+Q, Shift+F5/F6 copy/move to the other view, Ctrl+Shift+T reopen closed tab, Ctrl+Alt+C copy location, Menu key. Ctrl+F3 is bound but KWin takes it by default (Dolphin too); Tab works. Not offered yet: duplicate, redo.
 - Task: W-080/W-080b/W-080c (requested addition) open typed remote addresses and network bookmarks through kio-fuse, save remote tabs by address and reconnect them on restart, and show remote breadcrumbs; verified with a private-bus stand-in and the real kio-fuse on a generated tar archive, no real host. Recent folders and the palette also keep remote folders by address. Not yet tried against a real sftp/smb server. The Ctrl+L gap W-080 found is fixed in W-076n.
 - Queued after S11: the maintainer requests a UI/UX/design pass matching docs/mockup.png as closely as feasible, adapted to current features (2026-11-06). The reference is preserved; W-079/ROADMAP.md record the deferred work. Begin implementation only after S11 is complete; update DESIGN.md before tokens/views.

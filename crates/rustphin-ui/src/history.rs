@@ -49,6 +49,17 @@ fn encode(history: &Recent) -> Result<String, toml::ser::Error> {
     })
 }
 
+/// The saved recent folders, newest first, at most `limit`, read directly
+/// from disk (call off the UI thread). Damaged or missing history gives none.
+pub fn saved_locations(limit: usize) -> Vec<Location> {
+    config::state_dir()
+        .map(|dir| dir.join("recent-locations.toml"))
+        .and_then(|path| config::read(&path).ok().flatten())
+        .and_then(|text| decode(&text).ok())
+        .map(|recent| recent.paths().iter().take(limit).cloned().collect())
+        .unwrap_or_default()
+}
+
 enum Command {
     Visit(Location),
     Clear,

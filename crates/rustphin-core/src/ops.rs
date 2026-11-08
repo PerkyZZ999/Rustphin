@@ -522,6 +522,12 @@ pub fn recover_rename_batch(fs: &dyn Fs, directory: &Path) -> Result<usize, OpEr
     batch::recover(fs, directory)
 }
 
+/// Whether `directory` holds the record of an unfinished batch rename, which
+/// [`recover_rename_batch`] can restore (D-020: checked at startup).
+pub fn has_rename_journal(fs: &dyn Fs, directory: &Path) -> bool {
+    fs.info(&directory.join(RENAME_JOURNAL)).is_ok()
+}
+
 /// The operation was cancelled; unwind to the top.
 struct Stop;
 

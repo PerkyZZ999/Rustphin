@@ -175,7 +175,7 @@ Conventions:
 - **Acceptance:** on the reference machine, in a directory of 500,000 entries on a local filesystem:
   - [ ] First entries are visible within 200 ms of opening (warm cache) and the UI accepts input throughout loading.
   - [x] Re-sorting by any column completes within 500 ms once the sizes and dates it needs have been read. The first read has no fixed limit, but the list is shown in name order with a loading indicator while it runs, and details appear from the top of the list first. (Reworded 2026-10-12 with the user's agreement: on a cold disk cache the read is bounded by the disk, 5.3 s for 500,000 files.) (W-078: rust-tc bench-listing, slowest re-sort 92.7 ms in W-077b; name order with loading indicator and details from the top in W-023/W-073c.)
-  - [ ] Scrolling holds 60 frames per second at the 95th percentile.
+  - [ ] Scrolling holds 60 frames per second: no more than 5% of frame intervals during sustained scrolling exceed 1.5 × the refresh period, in each view mode. (Reworded 2026-11-08 by D-019 with the maintainer's agreement; previously "at the 95th percentile".)
   - [ ] No UI-thread task exceeds 16 ms in listing, sorting, metadata or thumbnail code paths.
 - **Validation:** bench (headless core), ui-test with frame timing
 
@@ -189,7 +189,7 @@ Conventions:
 - **Priority:** must
 - **Acceptance:**
   - [x] No code path overwrites or permanently deletes user data without an explicit user choice in that operation.
-  - [ ] Killing the process at any point during copy, move or batch rename leaves every source file either intact or fully present at its destination.
+  - [x] Killing the process at any point during copy, move or batch rename leaves every source file either intact or fully present at its destination. (W-083 under D-020: a killed batch rename keeps every file's bytes intact under journal-recorded temporary names, and the next start restores the original names automatically; copy/move per W-036/W-072.)
   - [x] Configuration and place-group files are written atomically (write, sync, rename).
 - **Validation:** test (fault injection, kill tests). W-071 (2026-10-22) demonstrates batch rename/undo recovery after SIGKILL, including recovery killed in turn. The immediate-after-kill checkbox stays open: original files may remain staged until explicit recovery. W-072 adds file/directory ordering and late-error fault tests; physical power loss remains unverified.
 

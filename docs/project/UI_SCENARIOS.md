@@ -208,7 +208,8 @@ The test binary comes from `rust-tc test`; its filename contains a build hash.
 
 | # | Steps | Expected |
 |---|---|---|
-| BR1 | Open that fixture in an isolated session/home; Ctrl+Shift+P, query `recover original`, inspect the result, Enter | Browsing initially leaves the journal/staged entries alone. The named recovery command restores `a` = `A`, `b` = `B`; the list updates and journal/staging files are gone |
+| BR0 | (D-020) Launch Rustphin on that fixture, or with no argument when the fixture is in the saved tabs or recent folders, with no other Rustphin running; then repeat with another Rustphin already running | The original names come back at startup and a notice "Restored the original names in “…” after an interrupted rename." stays until dismissed. With another Rustphin running, the journal and staged entries are left alone and the log says so |
+| BR1 | Start Rustphin in another folder first, then interrupt a batch in the fixture and open it; Ctrl+Shift+P, query `recover original`, inspect the result, Enter | Browsing leaves the journal/staged entries alone. The named recovery command restores `a` = `A`, `b` = `B`; the list updates and journal/staging files are gone |
 | BR2 | Add a generated `.rustphin-rename-journal` containing invalid text, repeat the command | Visible error explaining that recovery could not finish and the record/temporary entries must be kept; the invalid record and both files are unchanged. Remove only this generated invalid record before BR3 |
 | BR3 | Select both files, F2; find `a`, replace with `b`; then change replacement to `c`, Enter; Ctrl+Z | Conflict text blocks Rename for `b`; `c` enables it. Applying leaves `b` = `B`, `c` = `A`, with no journal. Undo restores `a` = `A`, `b` = `B`, with no journal |
 | BR4 | Restart in the same fixture with no journal; run the recovery command again | Neutral "Checked rename recovery" completion notice; both files stay unchanged and no journal is created |

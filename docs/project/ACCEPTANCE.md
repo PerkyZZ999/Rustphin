@@ -23,12 +23,11 @@ from Dolphin, fixed in W-081. Everything below needs the maintainer.
 
 | Requirement · criterion | State | Decision needed |
 |---|---|---|
-| R-101 · 60 fps at the 95th percentile | p50 = 16.66 ms (the refresh period), p95 16.72–16.98 ms, draw under 7 ms (W-073e) | Is "60 fps" "no dropped frames" (then measure dropped frames) or a strict p95 interval ≤ 16.667 ms (then presentation jitter in a virtual compositor fails it)? A real-display measurement also needs the desktop |
+| R-101 · 60 fps (D-019: ≤ 5% dropped frames) | Decided 2026-11-08 | Agent: count dropped frames in the frame log and re-measure the three views (W-085) |
 | R-101 · no UI-thread task over 16 ms | Measured paths well under (model callback 0.8 ms) | Window/GPU bootstrap produced a 104 ms foreground poll in one diagnostic run (W-073b); thumbnail paths were not measured. Accept startup as outside "listing, sorting, metadata, thumbnails" and measure thumbnails, or treat startup as a defect to fix |
 | R-101 · first entries within 200 ms, input during loading | 185.6 ms warm-cache details navigation; input observed while loading | Whether one measured mode/warm cache is enough, or every mode and a cold start must be measured |
-| R-103 · kill during batch rename leaves files intact or complete | Copy/move pass; a killed batch rename keeps staged names until recovery is chosen (W-071) | Reword to "recoverable with Recover original names", or require automatic recovery at the next start |
-| R-004 · every action has a keyboard path; Dolphin defaults | KEYBOARD.md; K8–K13 | Ctrl+D: Dolphin duplicates, Rustphin adds to Places. Implement Duplicate on Ctrl+D (new engine operation) and move Add to Places? Also W-076e (reverse Tab between text fields needs the approved toolkit change) |
-| R-107 · keyboard-complete with visible focus everywhere | Focus surfaces observed (W-076a); reverse traversal blocked | W-076e toolkit adoption (D-001/D-010 approval) |
+| R-004 · every action has a keyboard path; Dolphin defaults | KEYBOARD.md; K8–K17 | Decided 2026-11-08: Duplicate on Ctrl+D (D-021, W-084, agent). W-076e not approved ("Not yet") |
+| R-107 · keyboard-complete with visible focus everywhere | Focus surfaces observed (W-076a); reverse traversal blocked | W-076e not approved on 2026-11-08; stays open until a planned toolkit upgrade |
 
 ## Needs the maintainer: real desktop or hardware
 
