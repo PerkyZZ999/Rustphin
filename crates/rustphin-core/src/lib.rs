@@ -23,7 +23,7 @@ pub use mode::{
     write_bit,
 };
 pub use model::{DirectoryModel, LoadError, ModelEvent, Snapshot, ViewOptions};
-pub use recent::{RECENT_LOCATION_LIMIT, RecentLocations};
+pub use recent::{RECENT_LOCATION_LIMIT, RecentKey, RecentLocations};
 pub use rename::{CaseChange, NameProblem, Preview, PreviewRow, RenameRules};
 pub use search::{MatchScore, SearchQuery};
 pub use selection::Selection;

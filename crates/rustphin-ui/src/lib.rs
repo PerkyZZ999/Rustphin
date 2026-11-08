@@ -13,6 +13,7 @@ mod history;
 mod input;
 mod launch;
 mod layout;
+mod location;
 mod menu;
 mod operations;
 mod palette;

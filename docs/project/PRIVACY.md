@@ -48,8 +48,8 @@ typed inside an address is passed to kio-fuse only; Rustphin never shows, logs
 or saves it. The local mount folder and its remote address are remembered in
 memory for the run. Saved tabs (session.toml) store a remote folder by its
 address without password and reconnect it through kio-fuse at the next start.
-Recent folders still keep the local mount path, which stops working once
-kio-fuse ends (W-080c).
+Recent folders (recent-locations.toml) also store remote folders by address
+without password; History: Clear recent folders clears them with the rest.
 
 ## Data inventory and clearing
 
@@ -59,7 +59,7 @@ parent directories follow the process umask. These files are not encrypted.
 
 | Location | Stored information | Clearing or retention |
 |---|---|---|
-| `$XDG_STATE_HOME/rustphin/recent-locations.toml` (default `.local/state/…`) | At most 10,000 distinct successful folder visits, newest first; byte-safe local file URIs | Ctrl+Shift+P → **History: Clear recent folders**. Wait for **Recent folders cleared.** New visits start recording again. Read/save errors are reported in the palette; do not treat an error as a successful disk clear. |
+| `$XDG_STATE_HOME/rustphin/recent-locations.toml` (default `.local/state/…`) | At most 10,000 distinct successful folder visits, newest first; byte-safe local file URIs, and remote folders by address without password | Ctrl+Shift+P → **History: Clear recent folders**. Wait for **Recent folders cleared.** New visits start recording again. Read/save errors are reported in the palette; do not treat an error as a successful disk clear. |
 | `$XDG_STATE_HOME/rustphin/session.toml` | Open tabs, byte-safe local file URIs for each pane and active indices (format 2; legacy UTF-8 format 1 upgrades on save) | Clearing recent folders does not clear this file. Quit every Rustphin instance, then remove this file to forget saved tabs. Start with explicit folder arguments to choose replacement tabs. If the file is unreadable, damaged or from a newer format, Rustphin keeps it unchanged, turns tab saving off for that run (explicit folders included) and shows why. |
 | `$XDG_CONFIG_HOME/rustphin/settings.toml` (default `.config/…`) | Global view mode, zoom, sorting and hidden-file preference | Quit all instances, then remove the file to reset preferences. No per-folder view database or configurable key-binding file is implemented. |
 | `$XDG_CONFIG_HOME/rustphin/place-groups.toml` | Group titles, ordering and bookmark identifiers | Remove groups through the places UI; to reset all groups, quit all instances and remove this file. Shared bookmarks remain. |

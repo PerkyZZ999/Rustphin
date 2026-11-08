@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-08 — W-080c remote folders in recent history
+- **Phase:** 6 Implement; follow-up to W-080/W-080b (recent folders recorded kio-fuse mount paths that stop opening after a restart).
+- **Change:** core `RecentLocations<T = PathBuf>` with a `RecentKey` trait (PathBuf keeps its absolute/no-NUL rule); core still has no platform or UI dependency. New UI `location::Location` (folder or remote address) with one saved-text codec shared by session.toml and recent-locations.toml (format versions unchanged; older readers skip remote entries). Visits are recorded through `remote::location_of`; the palette lists remote recents as "Recent: <last folder>" with the address as detail and reopens them through `open_remote`. History still accepts only URIs (never bare paths).
+- **Tests/proof:** new location codec test, history round-trip with a remote folder, history decode test now keeps an sftp entry and rejects bare/other-host/relative/NUL/duplicate entries, short-name test. Mutations caught and restored: bare paths accepted, remote not usable, remote not read back, short name returning the whole address.
+- **Isolated replay (W11):** private KWin/HOME/session bus and the generated stand-in. recent-locations.toml held `sftp://me@fixture-host/projects/sub dir` and `sftp://me@fixture-host/projects`; after a relaunch the palette offered "Recent: sub dir / sftp://me@fixture-host/projects/sub dir", and Return mounted it (stand-in log) and listed deep.txt under the remote crumb.
+- **Gate:** rust-tc doctor PASS, 455 tests. Evidence: target/rust-toolchain/w080c/doctor.log.
+- **Limits:** no real server. Palette benchmark not re-run: candidate generation is unchanged for local folders and remote entries are few.
+
 ### 2026-11-08 — W-080b remote tabs and breadcrumbs by address
 - **Phase:** 6 Implement; follow-up to W-080 (a saved remote tab pointed at a kio-fuse mount path that does not survive a restart).
 - **Reference:** Dolphin saves remote tab URLs and reconnects them when a session is restored, and shows remote locations by URL in its navigator.

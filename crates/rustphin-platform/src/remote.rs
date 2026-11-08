@@ -39,7 +39,7 @@ const NETWORK_SCHEMES: &[&str] = &[
 ///
 /// It may carry a password (`sftp://me:secret@host/`); [`fmt::Display`] and
 /// [`fmt::Debug`] leave it out, so the address can be shown and logged.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RemoteAddress {
     text: String,
     scheme_len: usize,

@@ -32,10 +32,12 @@ use crate::{
     commands::{self, Scope},
     format,
     history::history,
+    location::Location,
     operations::{self, Hub, Notice, Question, Running, hub},
     palette::{Candidate, Palette, PaletteEvent, Target},
     properties::{PropertiesDialog, SizeLine},
-    session::{PaneLocation, Session, SessionSaves, SessionTab},
+    remote,
+    session::{Session, SessionSaves, SessionTab},
     settings::Settings,
     sidebar::{Sidebar, SidebarEvent},
     tabs::Tabs,
@@ -248,10 +250,10 @@ impl Workspace {
                     .iter()
                     .map(|location| {
                         let (path, remote) = match location {
-                            PaneLocation::Folder(path) => (path.clone(), None),
+                            Location::Folder(path) => (path.clone(), None),
                             // Shown on the fallback folder until kio-fuse has
                             // mounted it again, as Dolphin reconnects its tabs.
-                            PaneLocation::Remote(address) => (fallback.clone(), Some(address)),
+                            Location::Remote(address) => (fallback.clone(), Some(address)),
                         };
                         let pane =
                             Self::pane(path, settings.clone(), settings_path.clone(), window, cx);
@@ -415,7 +417,10 @@ impl Workspace {
     ) {
         match event {
             BrowserEvent::OpenInNewTab(path) => self.open_tab(path.clone(), false, window, cx),
-            BrowserEvent::Visited(path) => history(cx).read(cx).visit(path.clone()),
+            BrowserEvent::Visited(path) => {
+                let location = remote::location_of(path.clone(), cx);
+                history(cx).read(cx).visit(location);
+            }
             BrowserEvent::Activate(path) => self.consider_launch(path.clone(), cx),
             BrowserEvent::Properties { path, type_label } => {
                 self.open_properties(path.clone(), type_label.clone(), cx);
@@ -786,13 +791,24 @@ impl Workspace {
                 ));
             }
         }
-        for path in history(cx).read(cx).locations.paths() {
-            candidates.push(Candidate::new(
-                format!("Recent: {}", folder_label(path)),
-                display_name(path.as_os_str().as_encoded_bytes()).into_owned(),
-                String::new(),
-                Target::Folder(path.clone()),
-            ));
+        for location in history(cx).read(cx).locations.paths() {
+            candidates.push(match location {
+                Location::Folder(path) => Candidate::new(
+                    format!("Recent: {}", folder_label(path)),
+                    display_name(path.as_os_str().as_encoded_bytes()).into_owned(),
+                    String::new(),
+                    Target::Folder(path.clone()),
+                ),
+                Location::Remote(address) => {
+                    let shown = address.to_string();
+                    Candidate::new(
+                        format!("Recent: {}", remote::short_name(&shown)),
+                        shown,
+                        String::new(),
+                        Target::Remote(address.clone()),
+                    )
+                }
+            });
         }
         candidates.push(Candidate::new(
             "History: Clear recent folders".to_owned(),
@@ -857,6 +873,12 @@ impl Workspace {
                     .active()
                     .browser()
                     .update(cx, |browser, cx| browser.go_to(path.clone(), cx));
+                self.focus_active(window, cx);
+            }
+            PaletteEvent::Chosen(Target::Remote(address)) => {
+                self.tabs.active().browser().update(cx, |browser, cx| {
+                    browser.open_remote(address.clone(), false, cx)
+                });
                 self.focus_active(window, cx);
             }
             PaletteEvent::Chosen(Target::Tab(index)) => self.activate(*index, window, cx),

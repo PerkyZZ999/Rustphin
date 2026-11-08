@@ -38,10 +38,10 @@ use crate::{
     filetypes::{Database, TypeInfo},
     format::{self, count, plural},
     layout::{self, Layout, Rect, ViewMode},
+    location::Location,
     menu::{self, MenuCommand, MenuEffect, MenuKey},
     operations::{self, hub},
     remote,
-    session::PaneLocation,
     settings::Settings,
     theme::{Theme, size, space, text},
     thumbs::{self, thumbs},
@@ -1419,17 +1419,11 @@ impl Browser {
 
     /// Where this pane is, for the saved session: a remote folder by its
     /// address, since kio-fuse mount paths do not outlive the run.
-    pub(crate) fn saved_location(&self, cx: &App) -> Option<PaneLocation> {
+    pub(crate) fn saved_location(&self, cx: &App) -> Option<Location> {
         if let Some(address) = self.pending_remote() {
-            return Some(PaneLocation::Remote(address.clone()));
+            return Some(Location::Remote(address.clone()));
         }
-        let location = self.location()?;
-        Some(
-            match remote::address_of(&location, cx).and_then(|text| RemoteAddress::parse(&text)) {
-                Some(address) => PaneLocation::Remote(address),
-                None => PaneLocation::Folder(location),
-            },
-        )
+        Some(remote::location_of(self.location()?, cx))
     }
 
     /// Shows the location as editable text with keyboard focus.

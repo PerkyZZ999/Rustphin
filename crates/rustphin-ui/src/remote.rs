@@ -10,7 +10,7 @@ use std::{
 use gpui_kit::{App, AppContext as _, Context, Global};
 use rustphin_platform::remote::{KioFuse, MOUNT_TIMEOUT, RemoteAddress, RemoteError};
 
-use crate::operations::hub;
+use crate::{location::Location, operations::hub};
 
 /// The process-wide kio-fuse client, which remembers what it mounted.
 struct Folders(Arc<KioFuse>);
@@ -33,6 +33,15 @@ fn folders(cx: &App) -> Arc<KioFuse> {
 /// [`open`] during this run.
 pub fn address_of(path: &Path, cx: &App) -> Option<String> {
     folders(cx).remote_address_of(path)
+}
+
+/// How saved tabs and recent folders remember `path`: by its remote
+/// address when it lies in a folder opened through kio-fuse.
+pub fn location_of(path: PathBuf, cx: &App) -> Location {
+    match address_of(&path, cx).and_then(|text| RemoteAddress::parse(&text)) {
+        Some(address) => Location::Remote(address),
+        None => Location::Folder(path),
+    }
 }
 
 /// The local root and remote address of the opened remote folder holding `path`.
@@ -72,6 +81,19 @@ pub fn open<V: 'static>(
     .detach();
 }
 
+/// The last folder name in a remote address, or its host at the top:
+/// `sftp://me@host/srv/data` gives `data`, `sftp://me@host/` gives `me@host`.
+pub fn short_name(shown: &str) -> &str {
+    let trimmed = shown.trim_end_matches('/');
+    let after_scheme = trimmed.split_once(":").map_or(trimmed, |(_, rest)| rest);
+    after_scheme
+        .trim_start_matches('/')
+        .rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or(shown)
+}
+
 /// What went wrong and what to do about it, as one notice.
 fn failure(shown: &str, error: &RemoteError) -> String {
     let advice = match error {
@@ -103,6 +125,15 @@ fn capitalized(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_remote_folder_is_named_by_its_last_folder_or_host() {
+        assert_eq!(short_name("sftp://me@host/srv/data"), "data");
+        assert_eq!(short_name("sftp://me@host/srv/data/"), "data");
+        assert_eq!(short_name("sftp://me@host/"), "me@host");
+        assert_eq!(short_name("smb://nas"), "nas");
+        assert_eq!(short_name("tar:/tmp/a.tar/"), "a.tar");
+    }
 
     #[test]
     fn each_failure_names_the_address_and_what_to_do() {

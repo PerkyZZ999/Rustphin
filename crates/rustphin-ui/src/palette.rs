@@ -35,6 +35,8 @@ pub enum Target {
     ClearHistory,
     Command(usize),
     Folder(PathBuf),
+    /// A remote folder, opened again through kio-fuse.
+    Remote(rustphin_platform::remote::RemoteAddress),
     Tab(usize),
 }
 

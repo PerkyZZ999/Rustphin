@@ -1,14 +1,16 @@
 //! Palette history, with loading and serialised writes off the UI thread.
 
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use gpui_kit::{App, AppContext as _, Context, Entity, Global};
 use rustphin_core::RecentLocations;
-use rustphin_platform::{
-    config,
-    uri::{file_uri, path_from_uri},
-};
+use rustphin_platform::config;
 use serde::{Deserialize, Serialize};
+
+use crate::location::Location;
+
+/// Recent folders: local ones by path, remote ones by address.
+pub type Recent = RecentLocations<Location>;
 
 const VERSION: u32 = 1;
 
@@ -24,7 +26,8 @@ enum ReadError {
     NewerVersion,
 }
 
-fn decode(text: &str) -> Result<RecentLocations, ReadError> {
+// Version 1 readers before W-080c skip remote addresses as unknown entries.
+fn decode(text: &str) -> Result<Recent, ReadError> {
     let saved: SavedHistory = toml::from_str(text).map_err(|_| ReadError::Damaged)?;
     if saved.version > VERSION {
         return Err(ReadError::NewerVersion);
@@ -33,30 +36,32 @@ fn decode(text: &str) -> Result<RecentLocations, ReadError> {
         saved
             .locations
             .iter()
-            .filter_map(|uri| path_from_uri(uri.as_bytes())),
+            // Only URIs: this file never held bare paths.
+            .filter(|value| !value.starts_with('/'))
+            .filter_map(|value| Location::from_saved(value)),
     ))
 }
 
-fn encode(history: &RecentLocations) -> Result<String, toml::ser::Error> {
+fn encode(history: &Recent) -> Result<String, toml::ser::Error> {
     toml::to_string(&SavedHistory {
         version: VERSION,
-        locations: history.paths().iter().map(|path| file_uri(path)).collect(),
+        locations: history.paths().iter().map(Location::to_saved).collect(),
     })
 }
 
 enum Command {
-    Visit(PathBuf),
+    Visit(Location),
     Clear,
 }
 
 struct Update {
-    locations: Arc<RecentLocations>,
+    locations: Arc<Recent>,
     status: Option<String>,
 }
 
 /// Latest snapshot and the channel to the single history writer.
 pub struct History {
-    pub locations: Arc<RecentLocations>,
+    pub locations: Arc<Recent>,
     pub status: Option<String>,
     commands: flume::Sender<Command>,
 }
@@ -72,7 +77,7 @@ pub fn init(cx: &mut App) {
     let (commands, receiver) = flume::unbounded();
     let (updates, received) = flume::unbounded();
     cx.background_executor().spawn(async move {
-        let mut history = RecentLocations::default();
+        let mut history = Recent::default();
         let mut status = None;
         let mut writable = path.is_some();
         if let Some(path) = &path {
@@ -153,8 +158,8 @@ pub fn history(cx: &App) -> Entity<History> {
 }
 
 impl History {
-    pub fn visit(&self, path: PathBuf) {
-        if let Err(error) = self.commands.send(Command::Visit(path)) {
+    pub fn visit(&self, location: Location) {
+        if let Err(error) = self.commands.send(Command::Visit(location)) {
             tracing::error!(%error, "recent-folder worker stopped");
         }
     }
@@ -171,19 +176,31 @@ impl History {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use std::{ffi::OsString, os::unix::ffi::OsStringExt as _};
+    use rustphin_platform::remote::RemoteAddress;
+    use std::{ffi::OsString, os::unix::ffi::OsStringExt as _, path::PathBuf};
+
+    fn folder(path: &str) -> Location {
+        Location::Folder(PathBuf::from(path))
+    }
 
     #[test]
-    fn saved_history_round_trips_raw_names_and_visit_order() {
+    fn saved_history_round_trips_raw_names_remote_folders_and_visit_order() {
         let bad = PathBuf::from(OsString::from_vec(b"/data/\xff\n%".to_vec()));
-        let history = RecentLocations::from_paths([bad, "/data/Été".into()]);
+        let remote = Location::Remote(RemoteAddress::parse("sftp://me@host/srv/sub dir").unwrap());
+        let history = Recent::from_paths([bad.into(), remote, folder("/data/Été")]);
         assert_eq!(decode(&encode(&history).unwrap()), Ok(history));
     }
 
     #[test]
-    fn saved_history_rejects_remote_relative_nul_and_duplicate_locations() {
-        let text = "version = 1\nlocations = ['https://example.com', 'file://remote/a', 'relative', 'file:///a', 'file:///a', 'file:///b%00c']";
-        assert_eq!(decode(text).unwrap().paths(), [PathBuf::from("/a")]);
+    fn saved_history_rejects_other_hosts_relative_nul_bare_and_duplicate_locations() {
+        let text = "version = 1\nlocations = ['sftp://host/x', 'file://remote/a', 'relative', '/bare', 'file:///a', 'file:///a', 'file:///b%00c']";
+        assert_eq!(
+            decode(text).unwrap().paths(),
+            [
+                Location::Remote(RemoteAddress::parse("sftp://host/x").unwrap()),
+                folder("/a")
+            ]
+        );
     }
 
     #[test]
@@ -201,7 +218,7 @@ mod tests {
 
     #[test]
     fn clearing_removes_every_path_from_the_saved_file() {
-        let mut history = RecentLocations::from_paths(["/private/folder".into()]);
+        let mut history = Recent::from_paths([folder("/private/folder")]);
         history.clear();
         let saved = encode(&history).unwrap();
         assert!(!saved.contains("private"));
