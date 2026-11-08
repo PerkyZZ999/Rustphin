@@ -58,6 +58,7 @@ pub fn commands() -> Vec<Command> {
             Browser,
             b::ToggleHidden
         ),
+        command!("View: Folders first", "", Browser, b::ToggleFoldersFirst),
         command!("View: Zoom in", "Ctrl+=", Browser, b::ZoomIn),
         command!("View: Zoom out", "Ctrl+-", Browser, b::ZoomOut),
         command!("View: Reset zoom", "Ctrl+0", Browser, b::ZoomReset),
@@ -98,6 +99,24 @@ pub fn commands() -> Vec<Command> {
         command!("Files: Copy selection", "Ctrl+C", Browser, b::Copy),
         command!("Files: Cut selection", "Ctrl+X", Browser, b::Cut),
         command!("Files: Paste into this folder", "Ctrl+V", Browser, b::Paste),
+        command!(
+            "Files: Copy location",
+            "Ctrl+Alt+C",
+            Browser,
+            b::CopyLocation
+        ),
+        command!(
+            "Files: Copy selection to the other view",
+            "Shift+F5",
+            Browser,
+            w::CopyToOtherView
+        ),
+        command!(
+            "Files: Move selection to the other view",
+            "Shift+F6",
+            Browser,
+            w::MoveToOtherView
+        ),
         command!(
             "Files: Move selection to trash",
             "Delete",
@@ -192,6 +211,25 @@ pub fn commands() -> Vec<Command> {
             b::ExtendRight
         ),
         command!("Workspace: New tab", "Ctrl+T", Browser, w::NewTab),
+        command!(
+            "Workspace: Reopen closed tab",
+            "Ctrl+Shift+T",
+            Browser,
+            w::ReopenClosedTab
+        ),
+        command!(
+            "Workspace: Focus the other view",
+            "Ctrl+F3",
+            Browser,
+            w::FocusOtherView
+        ),
+        command!(
+            "Workspace: Focus the places panel",
+            "Ctrl+P",
+            Browser,
+            w::FocusPlaces
+        ),
+        command!("Workspace: Quit", "Ctrl+Q", Browser, w::Quit),
         command!(
             "Workspace: Close tab or window",
             "Ctrl+W",

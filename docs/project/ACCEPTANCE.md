@@ -13,17 +13,16 @@ hardware.
 
 | Requirement · criterion | Evidence so far | Missing |
 |---|---|---|
-| R-001 · lists every entry Dolphin lists; hidden off by default, toggle | S1 checks: Ctrl+H shows `.config` and `.hidden-file` ("11 items, 2 hidden" → "13 items") | A side-by-side listing of one generated folder in Rustphin and in Dolphin (isolated home) |
-| R-001 · back, forward, up with mouse and keyboard; history per tab | K9 Backspace/Alt+Up; J5 Alt+Left | Toolbar clicks for back/forward/up; Alt+Right; separate history in two tabs |
-| R-002 · outside changes appear within 1 s | W-025: created, deleted and renamed files shown within a second (U1/U2) | A file whose content changes (size/date update) |
-| R-002 · selection and scroll survive an update | W-025: selection kept, no scroll on a 17-entry fixture | Scroll kept in a long list; a renamed selected file loses its selection (Dolphin keeps it; decide whether to match) |
-| R-003 · three view modes selectable per tab | W-019, V4 | Two tabs (or panes) in different modes at once; settings are global with per-pane overrides for the session |
-| R-003 · natural, case-insensitive sort, folders first on by default | S1: folders first, `file2` before `file10` | Case-insensitive order on screen; turning folders-first off |
-| R-003 · zoom in all three modes | W-019: compact zoom in; V3 icons | Zoom in details; zoom out and reset |
-| R-004 · arrows, Home/End, Page Up/Down; type-ahead | W-020 type-ahead; L1 End; K10 type-to-jump | Page Up/Down and Shift+Page keys in the file list |
 | R-105 · menus, palette, dialogs are opaque | W-057 palette, B1 dialog | Context menus: K12/K13 screenshots show solid menus; record them against this criterion |
 | R-105 · colours, spacing, radii, sizes from one token set | Design statement in W-018 | A code audit for literal colours/sizes outside `theme.rs` |
 | R-106 · secondary controls within two steps | W-059: every action in the open Actions set | Run J4; operation details reachability |
+
+Closed on 2026-11-08 by K14/K15: Dolphin listing comparison, back/forward/up
+with per-tab history, content changes, selection and scroll kept, per-tab
+modes, case-insensitive sort with the new folders-first toggle, zoom in all
+modes and the Page keys. J4 also ran: every listed control is in Actions
+(R-106 still lacks an operation-details check). K15 found two display
+differences from Dolphin (symlink type icons, broken-link size); see W-081.
 
 ## Needs the maintainer: decisions
 

@@ -18,11 +18,14 @@ S11 — Hardening for daily use (in progress)
 
 - [x] W-080 — Open remote addresses through kio-fuse (D-004, D-018; requested by the maintainer 2026-11-08). Typing `sftp://`, `smb://` or another KIO address in the location bar asks kio-fuse (`org.kde.KIOFuse.VFS.mountUrl`, the interface Dolphin's terminal panel uses) to mount it and opens the returned folder; `file://` URIs open locally. Network bookmarks in user-places.xbel (sftp, fish, smb, ftp, ftps, webdav, webdavs, nfs) appear in Places and open the same way. A "Connecting…" notice shows while waiting; a missing kio-fuse, refused scheme or failed mount gives a readable error saying what to do. Passwords typed in an address are never shown or logged. Editing the location inside a folder Rustphin mounted shows its remote address. Rustphin itself makes no network connection. Out of scope here: remote-address breadcrumbs/history (follow-up), native protocols (L-008), Network browsing (`remote:/`).
 
+- [ ] W-081 — Show symbolic links as Dolphin does: a link to a file or folder takes its target's type and icon with a link indicator, and a broken link shows no size (K15: Rustphin shows an unknown-type icon for a file link and 7 B for a broken link; Dolphin shows the text icon with a link emblem and 0 B).
+
 ## Deferred until S11 is complete
 
 - [ ] W-079 — Match the user-provided docs/mockup.png as closely as feasible through a UI/UX/design pass, adapting to Rustphin's features. Start only after S11 acceptance is complete; then break the pass into focused design-token/component tasks and verify visual, keyboard, accessibility, responsive and fallback behavior. ROADMAP.md records scope and validation. Requested by the maintainer on 2026-11-06.
 
 ## Done (recent)
+- [x] W-078b — View: Folders first toggle (palette; saved), palette entries for the new shortcuts, and replays K14/K15/J4 closing eight more criteria. Full gate 461 tests.
 - [x] W-076s — Keyboard-opened context menus appear at the focused entry, as in Dolphin, and open upward when there is no room below. Pure cell-corner, menu-height and flip rules with tests and three mutations; replay K13 (details top/bottom, icon grid); full gate 461 tests.
 - [x] W-076r — Copy location (Ctrl+Alt+C and context menu; remote folders give their address), Menu key opens the context menu, Back/Forward keys bound. Menu test + mutation; replay K12 with the session clipboard; full gate 458 tests.
 - [x] W-076q — Ctrl+Shift+T reopens the most recently closed tab (up to 6, as Dolphin), split panes and remote folders included; a notice when none is left. Test + 2 mutations; replay K11; full gate 458 tests.

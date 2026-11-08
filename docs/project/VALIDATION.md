@@ -1,5 +1,14 @@
 # Validation evidence
 
+### 2026-11-08 — W-078b agent-closable acceptance replays
+- **Phase:** 6 Implement (S11)
+- **Change:** `View: Folders first` toggles the existing, already saved `folders_first` option from the palette (Dolphin's Sort menu "Folders First"), with a notice. The palette also lists Reopen closed tab, Focus the other view, Focus the places panel, Quit, Copy location and Copy/Move selection to the other view with their shortcuts.
+- **K14 (private KWin/HOME, generated data):** Sort listed Alpha-dir, beta-dir, apple, Banana, cherry, file2, file10; palette `folders first` mixed them (Alpha-dir, apple, Banana, beta-dir, …), settings.toml `folders_first = false`, and back. Details zoom: Ctrl+= ×2 enlarged icons/rows (zoom 3), Ctrl+- zoom 2, Ctrl+0 zoom 1 with default rows. Ctrl+T, Ctrl+1: tab 1 details and tab 2 icons at the same time. Tab 2: to Long by Ctrl+L, toolbar Back returned to Sort with Forward enabled, Forward to Long, Up to HOME, Alt+Left to Long, Alt+Right to HOME; tab 1 still had Back/Forward disabled. Long in details: Home, Page Down focused file-16, Shift+Page Down selected 16 (file-16…31) and scrolled. A shell appended 100 bytes to file-20 and created zz-new.txt; one second later file-20 showed 108 B and 14:58, the status read 16 of 81 selected and the top row was still file-14.
+- **K15:** the generated Cmp folder (plain, .hidden, spaces, Unicode, UPPER/lower, file and folder symlinks, broken symlink, FIFO) in Rustphin: 10 items, 1 hidden; `dolphin --new-window` in the same isolated home, Ctrl+3: "2 folders, 8 files", same names and order. Differences (W-081): Dolphin shows the file link with a text icon, link emblem and italic name and the broken link as 0 B; Rustphin shows an unknown-type icon and 7 B. Dolphin's first start added Home/Trash to the private user-places.xbel (known; Rustphin then listed them).
+- **J4:** Actions opens the palette; `split` found Toggle split view first and Enter split the view; the command list contains view modes, zoom, hidden files, folders first, sorting, split, new folder/file, trash and place controls.
+- **Ticked (8):** R-001 Dolphin listing and history; R-002 both; R-003 per-tab modes, sort, zoom; R-004 movement keys. Notes on each line.
+- **Gate:** rust-tc doctor PASS, 461 tests. Evidence: target/rust-toolchain/w078b/doctor.log. Screenshots were removed with the session.
+
 ### 2026-11-08 — W-078 acceptance reconciliation, first pass
 - **Phase:** 6 Implement (S11)
 - **Method:** a read-only search mapped each of the 34 open criteria in REQUIREMENTS.md to VALIDATION.md entries and UI_SCENARIOS rows with quotes and stated limits. Every criterion proposed as covered was re-read against its cited entry before ticking; one cited figure (274 ms startup) turned out to come from the W-076e experimental toolkit build and was not used.

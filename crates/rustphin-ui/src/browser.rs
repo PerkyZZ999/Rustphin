@@ -97,6 +97,7 @@ actions!(
         GoForward,
         Reload,
         ToggleHidden,
+        ToggleFoldersFirst,
         ShowHidden,
         EditLocation,
         CancelEdit,
@@ -1399,6 +1400,27 @@ impl Browser {
     fn toggle_hidden(&mut self, cx: &mut Context<Self>) {
         if let Some(model) = &self.model {
             self.set_hidden(!model.options().show_hidden, cx);
+        }
+    }
+
+    /// Dolphin's "Folders First": folders above files, or mixed in.
+    fn toggle_folders_first(&mut self, cx: &mut Context<Self>) {
+        let Some(model) = &mut self.model else { return };
+        let options = model.options();
+        let folders_first = !options.folders_first;
+        if let Some(generation) = model.set_options(ViewOptions {
+            folders_first,
+            ..options
+        }) {
+            self.generation = generation;
+            self.save_settings(cx);
+            let text = if folders_first {
+                "Folders are listed before files."
+            } else {
+                "Folders are sorted together with files."
+            };
+            hub(cx).update(cx, |hub, cx| hub.say(text.to_owned(), false, cx));
+            cx.notify();
         }
     }
 
@@ -3281,6 +3303,9 @@ impl Render for Browser {
                 cx.listener(|this, _: &Reload, _, cx| this.navigate(DirectoryModel::reload, cx)),
             )
             .on_action(cx.listener(|this, _: &ToggleHidden, _, cx| this.toggle_hidden(cx)))
+            .on_action(cx.listener(|this, _: &ToggleFoldersFirst, _, cx| {
+                this.toggle_folders_first(cx);
+            }))
             .on_action(cx.listener(|this, _: &ShowHidden, window, cx| this.show_hidden(window, cx)))
             .on_action(cx.listener(|this, _: &OpenTrash, _, cx| this.open_trash(cx)))
             .on_action(cx.listener(|this, _: &RestoreTrash, _, cx| this.restore_selected(cx)))

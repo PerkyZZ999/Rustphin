@@ -13,8 +13,8 @@ Conventions:
 - **Priority:** must
 - **Description:** Open a local directory, show its entries, navigate into folders, back, forward, up, and to a typed path.
 - **Acceptance:**
-  - [ ] Opening a directory lists every entry Dolphin lists for it, with hidden files off by default and a toggle to show them.
-  - [ ] Back, forward and up work with mouse and keyboard; history is kept per tab.
+  - [x] Opening a directory lists every entry Dolphin lists for it, with hidden files off by default and a toggle to show them. (W-078: K15 side-by-side with Dolphin, same 10 entries and order; S1 checks for Ctrl+H.)
+  - [x] Back, forward and up work with mouse and keyboard; history is kept per tab. (W-078: K14 toolbar clicks, Alt+Left/Right, Alt+Up, Backspace; separate history per tab.)
   - [x] A breadcrumb location bar switches to an editable path field; an invalid path shows an inline error and keeps the current view. (W-078: Slice S1 checks, N5/K8.)
   - [x] Activating a file opens it with the system default application; executables and `.desktop` files ask before running.
   - [x] An unreadable directory shows an inline error state, not a crash or an empty view. (W-078: Slice S1 checks, N4.)
@@ -24,18 +24,18 @@ Conventions:
 - **Priority:** must
 - **Description:** The view reflects changes made by other programs.
 - **Acceptance:**
-  - [ ] Files created, renamed, changed or deleted outside Rustphin appear in the open view within 1 second without a manual refresh.
-  - [ ] Selection and scroll position survive an update unless the selected entry was removed.
+  - [x] Files created, renamed, changed or deleted outside Rustphin appear in the open view within 1 second without a manual refresh. (W-078: W-025 U1/U2; K14 content change shown within 1 s.)
+  - [x] Selection and scroll position survive an update unless the selected entry was removed. (W-078: W-025; K14 in an 81-entry scrolled list. A renamed entry counts as removed.)
 - **Validation:** test
 
 ### R-003 — View modes, sorting and zoom
 - **Priority:** must
 - **Description:** Icons, compact and details views, with sorting and zoom.
 - **Acceptance:**
-  - [ ] Three view modes are selectable per tab: icons, compact, details.
+  - [x] Three view modes are selectable per tab: icons, compact, details. (W-078: K14 icons and details tabs side by side; W-019.)
   - [x] Details view has name, size, modified and type columns; clicking a header sorts by it and toggles direction. (W-078: W-018, W-022 O1–O3.)
-  - [ ] Sorting is natural and case-insensitive by default ("file2" before "file10"), with folders first as an option, on by default.
-  - [ ] Zoom changes icon size in all three modes.
+  - [x] Sorting is natural and case-insensitive by default ("file2" before "file10"), with folders first as an option, on by default. (W-078: K14 incl. the new View: Folders first toggle.)
+  - [x] Zoom changes icon size in all three modes. (W-078: W-019, V3; K14 details zoom in/out/reset.)
   - [x] View mode, sort and zoom are remembered between sessions. (W-078: W-021, W-022 P1/P2.)
 - **Validation:** test (sort order), ui-test (modes)
 
@@ -44,7 +44,7 @@ Conventions:
 - **Description:** Every MVP function is reachable without a mouse.
 - **Acceptance:**
   - [x] Click, Ctrl+click, Shift+click, rubber-band, select all and invert selection work. (W-078: W-020, W-022 S2/S3, W-024, W-073e.)
-  - [ ] Arrow keys, Home/End, Page Up/Down move focus; typing letters jumps to the next matching name.
+  - [x] Arrow keys, Home/End, Page Up/Down move focus; typing letters jumps to the next matching name. (W-078: W-020, K10, K14 Page Down/Shift+Page Down.)
   - [ ] Every action in R-001 to R-016 has a keyboard path, and the default shortcuts match Dolphin's where an equivalent exists.
 - **Validation:** ui-test, manual (keyboard-only checklist)
 
