@@ -83,6 +83,9 @@ actions!(
         StopOperations,
         DismissNotice,
         FocusPlaces,
+        FocusOtherView,
+        CopyToOtherView,
+        MoveToOtherView,
         Quit,
         ActivateTab1,
         ActivateTab2,
@@ -97,6 +100,46 @@ actions!(
     ]
 );
 
+/// Whether Shift+F5 copies or Shift+F6 moves to the other view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Transfer {
+    Copy,
+    Move,
+}
+
+/// The operation that sends the active view's selection into the other
+/// view's folder, as Dolphin's "Copy/Move to Other View", or why there is
+/// nothing to do.
+fn transfer_to_other_view(
+    transfer: Transfer,
+    selected: Vec<PathBuf>,
+    from: Option<&Path>,
+    to: Option<&Path>,
+) -> Result<Request, &'static str> {
+    let Some(into) = to else {
+        return Err("Split the view with F3 to copy or move to the other side.");
+    };
+    if selected.is_empty() {
+        return Err("Select what to copy or move first.");
+    }
+    if from == Some(into) {
+        return Err(
+            "Both views show the same folder. Open another folder in the other view first.",
+        );
+    }
+    let into = into.to_path_buf();
+    Ok(match transfer {
+        Transfer::Copy => Request::Copy {
+            sources: selected,
+            into,
+        },
+        Transfer::Move => Request::Move {
+            sources: selected,
+            into,
+        },
+    })
+}
+
 /// The tab Alt+`number` activates, as in Dolphin: Alt+1 to Alt+9 pick that
 /// tab if it exists, Alt+0 the last one.
 fn tab_for_number(number: usize, tabs: usize) -> Option<usize> {
@@ -105,6 +148,11 @@ fn tab_for_number(number: usize, tabs: usize) -> Option<usize> {
         n => (n <= tabs).then(|| n - 1),
     }
 }
+
+/// A pane's file list, not a text field. Its actions bubble up to the
+/// workspace. (An identifier matches one element's context, so
+/// `Workspace && Browser` would never match.)
+const LIST_IN_WORKSPACE: &str = "Browser && !Input && !Dialog && !Palette";
 
 /// Workspace focus outside the panes: the places panel, the tab strip.
 const OUTSIDE_PANES: &str = "Workspace && !Dialog && !Palette && !Browser && !Input";
@@ -125,7 +173,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("alt-d", EditLocation, Some(OUTSIDE_PANES)),
         KeyBinding::new("ctrl-q", Quit, context),
         KeyBinding::new("ctrl-p", FocusPlaces, context),
-        KeyBinding::new("ctrl-f3", OtherPane, context),
+        KeyBinding::new("ctrl-f3", FocusOtherView, context),
+        KeyBinding::new("shift-f5", CopyToOtherView, Some(LIST_IN_WORKSPACE)),
+        KeyBinding::new("shift-f6", MoveToOtherView, Some(LIST_IN_WORKSPACE)),
         KeyBinding::new("alt-1", ActivateTab1, context),
         KeyBinding::new("alt-2", ActivateTab2, context),
         KeyBinding::new("alt-3", ActivateTab3, context),
@@ -1051,6 +1101,21 @@ impl Workspace {
         cx.notify();
     }
 
+    fn transfer_to_other_view(&mut self, transfer: Transfer, cx: &mut Context<Self>) {
+        let tab = self.tabs.active();
+        let active = tab.active.min(tab.panes.len().saturating_sub(1));
+        let from = tab.panes[active].browser.read(cx);
+        let (selected, here) = (from.selected_paths(), from.location());
+        let there = (tab.panes.len() == 2)
+            .then(|| tab.panes[1 - active].browser.read(cx).location())
+            .flatten();
+        let outcome = transfer_to_other_view(transfer, selected, here.as_deref(), there.as_deref());
+        hub(cx).update(cx, |hub, cx| match outcome {
+            Ok(request) => hub.start(request),
+            Err(reason) => hub.say(reason.to_owned(), false, cx),
+        });
+    }
+
     fn activate_number(&mut self, number: usize, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(index) = tab_for_number(number, self.tabs.len()) {
             self.activate(index, window, cx);
@@ -1431,6 +1496,20 @@ impl Render for Workspace {
                 cx.listener(|this, _: &ToggleSplit, window, cx| this.toggle_split(window, cx)),
             )
             .on_action(cx.listener(|this, _: &OtherPane, window, cx| this.other_pane(window, cx)))
+            .on_action(cx.listener(|this, _: &FocusOtherView, window, cx| {
+                let index = this.tabs.active_index();
+                if this.tabs.active().panes.len() == 2 {
+                    this.edit_tab(index, |tab| tab.active = 1 - tab.active.min(1));
+                    this.focus_active(window, cx);
+                    cx.notify();
+                }
+            }))
+            .on_action(cx.listener(|this, _: &CopyToOtherView, _, cx| {
+                this.transfer_to_other_view(Transfer::Copy, cx);
+            }))
+            .on_action(cx.listener(|this, _: &MoveToOtherView, _, cx| {
+                this.transfer_to_other_view(Transfer::Move, cx);
+            }))
             // Quitting is closing the window, with the same session save.
             .on_action(|_: &Quit, window, _| window.remove_window())
             .on_action(cx.listener(|this, _: &FocusPlaces, window, cx| {
@@ -2119,6 +2198,33 @@ fn folder_label(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_other_view_receives_the_selection_or_a_reason() {
+        let a = vec![PathBuf::from("/left/a"), PathBuf::from("/left/b")];
+        let left = Some(Path::new("/left"));
+        let right = Some(Path::new("/right"));
+        assert!(matches!(
+            transfer_to_other_view(Transfer::Copy, a.clone(), left, right),
+            Ok(Request::Copy { sources, into }) if sources == a && into == Path::new("/right")
+        ));
+        assert!(matches!(
+            transfer_to_other_view(Transfer::Move, a.clone(), left, right),
+            Ok(Request::Move { sources, into }) if sources == a && into == Path::new("/right")
+        ));
+        assert!(
+            transfer_to_other_view(Transfer::Copy, a.clone(), left, None)
+                .is_err_and(|reason| reason.contains("F3"))
+        );
+        assert!(
+            transfer_to_other_view(Transfer::Copy, Vec::new(), left, right)
+                .is_err_and(|reason| reason.contains("Select"))
+        );
+        assert!(
+            transfer_to_other_view(Transfer::Move, a, left, left)
+                .is_err_and(|reason| reason.contains("same folder"))
+        );
+    }
 
     #[test]
     fn alt_numbers_pick_existing_tabs_and_alt_0_the_last() {

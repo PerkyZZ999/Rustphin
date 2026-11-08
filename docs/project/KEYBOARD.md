@@ -7,7 +7,7 @@ Rustphin's binding. Rustphin follows Dolphin wherever it has the same
 action. "Replayed" names the scenario in UI_SCENARIOS.md that exercised it
 by keyboard in an isolated session; "—" means bound but not replayed yet.
 
-Last reviewed: 2026-11-08 (W-076o), Dolphin source at `master`.
+Last reviewed: 2026-11-08 (W-076o, W-076p), Dolphin source at `master`.
 
 ## Navigation
 
@@ -21,7 +21,7 @@ Last reviewed: 2026-11-08 (W-076o), Dolphin source at `master`.
 | Edit location | Ctrl+L, Alt+D, F6 | Ctrl+L, Alt+D, F6 (also from the places panel) | K8, K9 |
 | Open selected | Enter | Enter | N2 |
 | Move selection, first/last, page | arrows, Home/End, Page Up/Down | same, with Shift to extend | S6, F12, L1 |
-| Type to jump to a name | letters | letters | — (core unit tests only) |
+| Type to jump to a name | letters | letters | K10 |
 
 ## Selection and view
 
@@ -61,9 +61,9 @@ Last reviewed: 2026-11-08 (W-076o), Dolphin source at `master`.
 | Activate tab 1–9 / last | Alt+1…Alt+9 / Alt+0 | same | K9 |
 | Move tab left / right | (none) | Ctrl+Shift+Page Up / Down | — |
 | Reopen closed tab | Ctrl+Shift+T | not offered | — |
-| Split view | F3 | F3 | D1, K9 |
-| Focus other view | Ctrl+F3 | Ctrl+F3, Tab | K9 |
-| Copy / move to other view | Shift+F5 / Shift+F6 | not offered | — |
+| Split view | F3 | F3 | D1, K9, K10 |
+| Focus other view | Ctrl+F3 | Ctrl+F3 (toggles the two views), Tab (also visits the places panel) | Tab: K10. Ctrl+F3 is taken by KWin's default desktop switch, so it never reaches Dolphin or Rustphin on a default Plasma desktop |
+| Copy / move to other view | Shift+F5 / Shift+F6 | Shift+F5 / Shift+F6 | K10 |
 | Places panel shown | F9 | F9 | — |
 | Focus places panel | Ctrl+P | Ctrl+P | K9 |
 | Quit | Ctrl+Q | Ctrl+Q (same as closing the window) | K9 |
@@ -79,8 +79,7 @@ focus and no text field is being edited (K7, K8).
 
 ## Not offered yet
 
-Duplicate (Ctrl+D), copy location (Ctrl+Alt+C), copy/move to the other view
-(Shift+F5/F6), reopen closed tab (Ctrl+Shift+T), redo, the Menu key and
+Duplicate (Ctrl+D), copy location (Ctrl+Alt+C), reopen closed tab (Ctrl+Shift+T), redo, the Menu key and
 Dolphin's search/filter bar (Ctrl+F, Ctrl+I) have no Rustphin equivalent.
 Search is L-001; the others are candidates for later work and are not part
 of R-001–R-016 as written.

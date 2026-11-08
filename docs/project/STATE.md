@@ -14,10 +14,10 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-08 — W-076o keyboard checklist and Dolphin shortcut parity; full gate 456 tests
+- Latest validation entry: VALIDATION.md, 2026-11-08 — W-076p copy/move to the other view; Ctrl+F3 correction; full gate 457 tests
 
 ## Open loops
-- Task: W-076o adds docs/project/KEYBOARD.md (Rustphin vs Dolphin defaults) and fixes Backspace=Back, Alt+Home, Alt+D, Alt+1…0, Ctrl+F3, Ctrl+P, Ctrl+Q. Not offered yet: duplicate, copy location, copy/move to other view, reopen closed tab, redo, Menu key. Type-to-jump has no UI replay yet.
+- Task: W-076o/p add docs/project/KEYBOARD.md (Rustphin vs Dolphin defaults) and fix Backspace=Back, Alt+Home, Alt+D, Alt+1…0, Ctrl+P, Ctrl+Q, Shift+F5/F6 copy/move to the other view. Ctrl+F3 is bound but KWin takes it by default (Dolphin too); Tab works. Not offered yet: duplicate, copy location, reopen closed tab, redo, Menu key.
 - Task: W-080/W-080b/W-080c (requested addition) open typed remote addresses and network bookmarks through kio-fuse, save remote tabs by address and reconnect them on restart, and show remote breadcrumbs; verified with a private-bus stand-in and the real kio-fuse on a generated tar archive, no real host. Recent folders and the palette also keep remote folders by address. Not yet tried against a real sftp/smb server. The Ctrl+L gap W-080 found is fixed in W-076n.
 - Queued after S11: the maintainer requests a UI/UX/design pass matching docs/mockup.png as closely as feasible, adapted to current features (2026-11-06). The reference is preserved; W-079/ROADMAP.md record the deferred work. Begin implementation only after S11 is complete; update DESIGN.md before tokens/views.
 - Task: W-077 complete. W-077a–d inventory local data/connections, add rust-tc build/validate, verify clean 1.95.0/1.99.1 builds and live clear/restart with only Unix sockets traced. W-077e/f order and byte-safely encode session saves. W-077g keeps unreadable, damaged and newer session files unchanged for the run (explicit launches included) with a visible reason. W-077h: the maintainer accepted the locked toolkit's async-net/http crates as a documented exception (D-018, 2026-11-08); deny.toml bans HTTP clients, TLS and telemetry crates and confines the retained ones, and R-108 is accepted. Remote folders remain mounted paths under D-004. Cross-process session merging and immediate-quit flushing remain unproved. Published stable is 1.99.1; select it explicitly.

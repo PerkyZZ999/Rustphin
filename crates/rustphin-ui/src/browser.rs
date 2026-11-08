@@ -1654,7 +1654,7 @@ impl Browser {
     }
 
     /// The selected entries, as full paths.
-    fn selected_paths(&self) -> Vec<PathBuf> {
+    pub(crate) fn selected_paths(&self) -> Vec<PathBuf> {
         self.current_snapshot().map_or_else(Vec::new, |snapshot| {
             self.selection
                 .rows(snapshot)
