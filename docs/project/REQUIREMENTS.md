@@ -215,7 +215,7 @@ Conventions:
 - **Priority:** must
 - **Acceptance:**
   - [x] The default window shows only: places panel, tab strip, location bar, the view, and a minimal status line.
-  - [ ] Secondary controls (view options, filters, split, operation details, properties) appear on hover, selection, shortcut or through the palette, and each is reachable in at most two steps.
+  - [x] Secondary controls (view options, filters, split, operation details, properties) appear on hover, selection, shortcut or through the palette, and each is reachable in at most two steps. (W-082: filter bar on Ctrl+I, / and the palette, replay K17; J4 for the others; operation progress shows by itself while one runs.)
   - [x] Nothing available only through hover lacks a keyboard or palette path.
 - **Validation:** manual (design checklist), ui-test (reachability)
 

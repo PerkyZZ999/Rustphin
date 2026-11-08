@@ -58,6 +58,7 @@ pub fn commands() -> Vec<Command> {
             Browser,
             b::ToggleHidden
         ),
+        command!("View: Filter by name", "Ctrl+I", Browser, b::ShowFilter),
         command!("View: Folders first", "", Browser, b::ToggleFoldersFirst),
         command!("View: Zoom in", "Ctrl+=", Browser, b::ZoomIn),
         command!("View: Zoom out", "Ctrl+-", Browser, b::ZoomOut),

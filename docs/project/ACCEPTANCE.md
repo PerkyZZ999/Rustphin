@@ -9,11 +9,15 @@ their cited entries first. Nothing here is ticked without a recorded check.
 can show it. **Needs the maintainer** means a decision, the real desktop or real
 hardware.
 
-## Closable by the agent (replays still to run)
+## Closable by the agent
+
+None left after W-082 (2026-11-08). The rows below the first table record
+what remains for the maintainer.
+
+## Closable by the agent (closed)
 
 | Requirement · criterion | Evidence so far | Missing |
 |---|---|---|
-| R-106 · secondary controls within two steps | J4 run (W-078b): every control is in Actions; operation progress shows by itself while one runs | "Filters": there is no filter control. Dolphin has a filter bar (Ctrl+I, /); W-082 adds one |
 
 Closed on 2026-11-08 by K14/K15: Dolphin listing comparison, back/forward/up
 with per-tab history, content changes, selection and scroll kept, per-tab

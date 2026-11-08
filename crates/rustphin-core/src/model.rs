@@ -16,8 +16,8 @@ use std::{
 use rayon::prelude::*;
 
 use crate::{
-    CHUNK_LEN, Chunk, EntryKind, EntryStore, Fs, Metadata, Selection, SortKey, WatchGuard,
-    details::Details, sort,
+    CHUNK_LEN, Chunk, EntryKind, EntryStore, Fs, Metadata, NameFilter, Selection, SortKey,
+    WatchGuard, details::Details, sort,
 };
 
 /// Entries whose details are read at a time, and the count after which the
@@ -106,9 +106,23 @@ pub struct Snapshot {
     store: EntryStore,
     details: Option<Arc<Details>>,
     order: Vec<u32>,
+    /// The name filter applied, and how many rows there were before it.
+    filter: Option<Arc<NameFilter>>,
+    unfiltered: usize,
 }
 
 impl Snapshot {
+    /// The filter-bar filter applied to these rows, if any.
+    pub fn filter(&self) -> Option<&NameFilter> {
+        self.filter.as_deref()
+    }
+
+    /// Rows there would be without the name filter (hidden entries still
+    /// count as the options decide).
+    pub fn unfiltered_len(&self) -> usize {
+        self.unfiltered
+    }
+
     /// Identifies the listing this snapshot was built from. It stays the same
     /// while only the options change, and changes when the directory is read
     /// again; [`Self::entry_id`] values are comparable only within one listing.
@@ -276,6 +290,8 @@ struct Shared {
     complete: Mutex<Option<Complete>>,
     /// The options of the latest request, for re-reads the model starts itself.
     options: Mutex<ViewOptions>,
+    /// The name filter of the latest request, for re-reads.
+    filter: Mutex<Option<Arc<NameFilter>>>,
     /// The directory being watched for changes, and what keeps the watch alive.
     watch: Mutex<Option<(PathBuf, WatchGuard)>>,
     /// Wakes the thread that re-reads the directory after a change.
@@ -303,9 +319,24 @@ impl Shared {
 
     /// Publishes a snapshot showing `order`, which may differ from what the
     /// requested options would give while details are still arriving.
-    fn publish_rows(&self, request: &Request, listing: &Listing, loading: bool, order: Vec<u32>) {
+    fn publish_rows(
+        &self,
+        request: &Request,
+        listing: &Listing,
+        loading: bool,
+        mut order: Vec<u32>,
+    ) {
         if !self.is_current(request.generation) {
             return;
+        }
+        let unfiltered = order.len();
+        if let Some(filter) = &request.filter {
+            order = self.pool.install(|| {
+                order
+                    .into_par_iter()
+                    .filter(|&index| filter.matches(listing.store.name(index)))
+                    .collect()
+            });
         }
         let snapshot = Snapshot {
             path: request.path.clone(),
@@ -316,6 +347,8 @@ impl Shared {
             store: listing.store.clone(),
             details: listing.details.clone(),
             order,
+            filter: request.filter.clone(),
+            unfiltered,
         };
         // The consumer having gone away is not an error for a worker.
         let _ = self.events.send(ModelEvent::Snapshot(Arc::new(snapshot)));
@@ -461,6 +494,7 @@ impl Shared {
             path,
             generation,
             options: *lock(&self.options),
+            filter: lock(&self.filter).clone(),
             restore: lock(&self.history).clone(),
             quiet: true,
             background: true,
@@ -498,6 +532,7 @@ impl Shared {
             path: ancestor,
             generation: request.generation,
             options: request.options,
+            filter: request.filter,
             restore,
             quiet: false,
             background: false,
@@ -613,6 +648,8 @@ struct Request {
     path: PathBuf,
     generation: u64,
     options: ViewOptions,
+    /// The name filter to apply to the published rows.
+    filter: Option<Arc<NameFilter>>,
     /// History to put back if the request fails.
     restore: History,
     /// Publish only the finished result, retaining the previous complete view.
@@ -631,6 +668,7 @@ struct Request {
 pub struct DirectoryModel {
     shared: Arc<Shared>,
     options: ViewOptions,
+    filter: Option<Arc<NameFilter>>,
 }
 
 impl DirectoryModel {
@@ -650,6 +688,7 @@ impl DirectoryModel {
             history: Mutex::default(),
             complete: Mutex::default(),
             options: Mutex::new(ViewOptions::default()),
+            filter: Mutex::new(None),
             watch: Mutex::default(),
             changed,
             dirty: AtomicBool::new(false),
@@ -665,6 +704,7 @@ impl DirectoryModel {
             Self {
                 shared,
                 options: ViewOptions::default(),
+                filter: None,
             },
             receiver,
         ))
@@ -761,6 +801,30 @@ impl DirectoryModel {
         }
         self.options = options;
         *lock(&self.shared.options) = options;
+        self.republish()
+    }
+
+    /// The filter-bar filter now applied, if any.
+    pub fn filter(&self) -> Option<&NameFilter> {
+        self.filter.as_deref()
+    }
+
+    /// Shows only entries whose name matches `filter`, or every entry with
+    /// `None`, and republishes the current directory. Navigating to another
+    /// folder clears it; reloading keeps it.
+    pub fn set_filter(&mut self, filter: Option<NameFilter>) -> Option<u64> {
+        if filter.as_ref() == self.filter.as_deref() {
+            return None;
+        }
+        self.filter = filter.map(Arc::new);
+        *lock(&self.shared.filter) = self.filter.clone();
+        self.republish()
+    }
+
+    /// Republishes the complete listing with the current options and filter
+    /// without reading the directory again, or reloads it when incomplete.
+    fn republish(&mut self) -> Option<u64> {
+        let options = self.options;
         let current = self.shared.generation.load(Ordering::Acquire);
         let listed = lock(&self.shared.complete)
             .as_ref()
@@ -783,6 +847,7 @@ impl DirectoryModel {
             path,
             generation,
             options,
+            filter: self.filter.clone(),
             restore,
             quiet: false,
             background: false,
@@ -800,6 +865,12 @@ impl DirectoryModel {
     }
 
     fn navigate_with(&mut self, change: impl FnOnce(&mut History), quiet: bool) -> u64 {
+        // Going to another folder clears the name filter, as in Dolphin; a
+        // reload (quiet) keeps it.
+        if !quiet {
+            self.filter = None;
+            *lock(&self.shared.filter) = None;
+        }
         let (request, generation) = {
             let mut history = lock(&self.shared.history);
             let restore = history.clone();
@@ -811,6 +882,7 @@ impl DirectoryModel {
                     path,
                     generation,
                     options: self.options,
+                    filter: self.filter.clone(),
                     restore,
                     quiet,
                     background: false,
@@ -841,6 +913,7 @@ impl DirectoryModel {
                     path,
                     generation,
                     options,
+                    filter: None,
                     restore,
                     quiet: false,
                     background: false,
@@ -1138,6 +1211,7 @@ mod tests {
             path: PathBuf::from("/first"),
             generation: stale,
             options: ViewOptions::default(),
+            filter: None,
             restore: History::default(),
             quiet: false,
             background: false,
@@ -1581,6 +1655,36 @@ mod tests {
             .iter()
             .any(|event| matches!(event, ModelEvent::Snapshot(s) if s.is_loading()));
         assert!(!flickered);
+    }
+
+    #[test]
+    fn the_name_filter_narrows_rows_survives_reloads_and_updates_and_clears_on_navigation() {
+        let dir = tree();
+        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
+        snapshot(&events, model.open(dir.path()));
+
+        let generation = model.set_filter(NameFilter::new("FILE")).unwrap();
+        let filtered = snapshot(&events, generation);
+        assert_eq!(names(&filtered), ["file2.txt", "file10.txt"]);
+        assert_eq!(filtered.unfiltered_len(), 5);
+        assert_eq!(filtered.filter().map(NameFilter::text), Some("FILE"));
+        assert_eq!(model.set_filter(NameFilter::new("FILE")), None);
+
+        let reloaded = snapshot(&events, model.reload().unwrap());
+        assert_eq!(names(&reloaded), ["file2.txt", "file10.txt"]);
+
+        fs::write(dir.path().join("file3.txt"), b"").unwrap();
+        fs::write(dir.path().join("other.md"), b"").unwrap();
+        let (updated, _) = await_snapshot(&events, |s| s.row_of(b"file3.txt").is_some());
+        assert_eq!(names(&updated), ["file2.txt", "file3.txt", "file10.txt"]);
+
+        let elsewhere = snapshot(&events, model.open(dir.path().join("sub")));
+        assert!(elsewhere.filter().is_none());
+        assert!(model.filter().is_none());
+        assert_eq!(names(&elsewhere), ["inner.txt"]);
+
+        let back = snapshot(&events, model.back().unwrap());
+        assert_eq!(back.len(), back.unfiltered_len());
     }
 
     #[test]

@@ -6,6 +6,7 @@
 
 mod details;
 mod entry;
+mod filter;
 mod fs;
 mod mode;
 mod model;
@@ -17,6 +18,7 @@ mod selection;
 mod sort;
 
 pub use entry::{CHUNK_LEN, Chunk, EntryKind, EntryStore, display_name};
+pub use filter::NameFilter;
 pub use fs::{COPY_STEP, FileInfo, Fs, Metadata, RawEntry, RealFs, WatchGuard};
 pub use mode::{
     combine_mode, execute_bit, has_bit, has_special, octal_mode, read_bit, symbolic_mode, with_bit,

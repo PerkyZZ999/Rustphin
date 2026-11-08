@@ -31,6 +31,8 @@ pub mod size {
     pub const TOOLBAR_BACK_MIN: f32 = 240.;
     /// Height of the status line.
     pub const STATUS: f32 = 28.;
+    /// Height of the filter bar above the status line.
+    pub const FILTER_BAR: f32 = 36.;
     /// Height of the tab strip.
     pub const TABS: f32 = 32.;
     /// Icons in toolbars and banners.

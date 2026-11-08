@@ -33,6 +33,7 @@ Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 | Columns view | Ctrl+4 | not offered (no columns view) | — |
 | Zoom in / out / reset | Ctrl++ / Ctrl+- / Ctrl+0 | same (Ctrl+= too) | V3 |
 | Show hidden files | Ctrl+H, Alt+. | Ctrl+H, Alt+. | — |
+| Filter by name | Ctrl+I, / | Ctrl+I (toggles), / | K17 |
 | Context menu | Menu key, Shift+F10 | Menu key, Shift+F10 | J16, K12 |
 
 ## Files
@@ -80,6 +81,6 @@ focus and no text field is being edited (K7, K8).
 ## Not offered yet
 
 Duplicate (Dolphin's Ctrl+D; Rustphin uses Ctrl+D for Add to Places, which
-Dolphin leaves unbound), redo and Dolphin's search/filter bar (Ctrl+F,
-Ctrl+I) have no Rustphin equivalent. Search is L-001; the others are
+Dolphin leaves unbound), redo and Dolphin's search (Ctrl+F) have no Rustphin
+equivalent. Search is L-001; the others are
 candidates for later work and are not part of R-001–R-016 as written.

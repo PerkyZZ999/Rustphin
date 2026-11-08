@@ -28,8 +28,8 @@ use gpui_kit::{
 };
 use jiff::tz::TimeZone;
 use rustphin_core::{
-    DirectoryModel, EntryKind, LoadError, ModelEvent, RealFs, Selection, Snapshot, SortKey,
-    ViewOptions, display_name, ops::Request,
+    DirectoryModel, EntryKind, LoadError, ModelEvent, NameFilter, RealFs, Selection, Snapshot,
+    SortKey, ViewOptions, display_name, ops::Request,
 };
 use rustphin_platform::{remote::RemoteAddress, uri::path_from_uri};
 
@@ -98,6 +98,7 @@ actions!(
         Reload,
         ToggleHidden,
         ToggleFoldersFirst,
+        ShowFilter,
         ShowHidden,
         EditLocation,
         CancelEdit,
@@ -171,6 +172,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-h", ToggleHidden, view),
         KeyBinding::new("alt-.", ToggleHidden, view),
         KeyBinding::new("ctrl-l", EditLocation, view),
+        // Dolphin's filter bar: Ctrl+I toggles it, / opens it from the list.
+        KeyBinding::new("ctrl-i", ShowFilter, view),
+        KeyBinding::new("/", ShowFilter, list),
         KeyBinding::new("f6", EditLocation, view),
         KeyBinding::new("alt-d", EditLocation, view),
         KeyBinding::new("ctrl-=", ZoomIn, view),
@@ -293,6 +297,9 @@ pub struct Browser {
     /// when it was asked for. It counts only while the pane is still there.
     pending_remote: Option<(RemoteAddress, Option<PathBuf>)>,
     location_input: Entity<InputState>,
+    /// The filter bar's field, and whether the bar is shown.
+    filter_input: Entity<InputState>,
+    filter_open: bool,
     /// The entry being renamed in place, by its current name.
     renaming: Option<Vec<u8>>,
     rename_input: Entity<InputState>,
@@ -363,8 +370,10 @@ impl Browser {
         let location_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Enter a folder path"));
         let rename_input = cx.new(|cx| InputState::new(window, cx));
+        let filter_input = cx.new(|cx| InputState::new(window, cx).placeholder("Filter by name"));
         let mut subscriptions = vec![
             cx.subscribe_in(&location_input, window, Self::on_location_input),
+            cx.subscribe_in(&filter_input, window, Self::on_filter_input),
             cx.subscribe_in(&rename_input, window, Self::on_rename_input),
             // Cut entries are drawn dimmed, and the clipboard changes elsewhere.
             cx.observe(&hub(cx), |_, _, cx| cx.notify()),
@@ -402,6 +411,8 @@ impl Browser {
             editing_location: false,
             pending_remote: None,
             location_input,
+            filter_input,
+            filter_open: false,
             renaming: None,
             rename_input,
             select_when_seen: None,
@@ -1536,6 +1547,64 @@ impl Browser {
             self.editing_location = false;
             self.focus.focus(window, cx);
             cx.notify();
+        }
+    }
+
+    /// Opens the filter bar and puts the keyboard in it; with the bar
+    /// already focused, closes it and shows everything again (Ctrl+I toggles).
+    fn show_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let focused = self
+            .filter_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window);
+        if self.filter_open && focused {
+            self.close_filter(window, cx);
+            return;
+        }
+        self.filter_open = true;
+        self.filter_input
+            .update(cx, |input, cx| input.focus(window, cx));
+        cx.notify();
+    }
+
+    /// Clears the filter, hides the bar and returns to the list.
+    fn close_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.filter_open = false;
+        self.filter_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.apply_filter("", cx);
+        self.focus.focus(window, cx);
+        cx.notify();
+    }
+
+    fn apply_filter(&mut self, text: &str, cx: &mut Context<Self>) {
+        if let Some(model) = &mut self.model
+            && let Some(generation) = model.set_filter(NameFilter::new(text))
+        {
+            self.generation = generation;
+            cx.notify();
+        }
+    }
+
+    fn on_filter_input(
+        &mut self,
+        input: &Entity<InputState>,
+        event: &InputEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            InputEvent::Change => {
+                let text = input.read(cx).value().to_string();
+                self.apply_filter(&text, cx);
+            }
+            // Back to the list, keeping the filter.
+            InputEvent::PressEnter { .. } => {
+                self.focus.focus(window, cx);
+                cx.notify();
+            }
+            InputEvent::Blur | InputEvent::Focus => {}
         }
     }
 
@@ -2677,12 +2746,14 @@ impl Browser {
     }
 
     /// Shown instead of the list when it has no rows: says why and what to do.
-    fn empty_state(
-        &self,
-        snapshot: &Snapshot,
-        theme: Theme,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn empty_state(&self, snapshot: &Snapshot, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+        if let Some(filter) = snapshot.filter()
+            && !snapshot.is_loading()
+        {
+            return self
+                .filter_empty_state(filter.text(), snapshot, theme, cx)
+                .into_any_element();
+        }
         let hidden = snapshot.total();
         let (icon, heading) = if snapshot.is_loading() {
             (IconName::Loader, "Loading\u{2026}")
@@ -2777,6 +2848,58 @@ impl Browser {
                             .thumb_active(|style| style.bg(theme.accent))
                     }),
             )
+            .into_any_element()
+    }
+
+    /// What an empty view says when the filter hides everything.
+    fn filter_empty_state(
+        &self,
+        text: &str,
+        snapshot: &Snapshot,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
+        let heading = format!("Nothing matches \u{201c}{text}\u{201d}");
+        let all = snapshot.unfiltered_len();
+        let advice = format!(
+            "Change the filter, or clear it to see all {} {}.",
+            count(all),
+            plural(all, "item", "items")
+        );
+        div()
+            .id("folder-state")
+            .role(Role::Status)
+            .aria_label(heading.clone())
+            .size_full()
+            .flex()
+            .flex_col()
+            .p(px(space::LG))
+            .items_center()
+            .justify_center()
+            .gap(px(space::MD))
+            .text_color(theme.text_muted)
+            .child(
+                Icon::new(gpui_kit::assets::IconName::ListFilter)
+                    .size(px(size::ICON_LARGE))
+                    .flex_none(),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .font_family(text::FAMILY_HEADING)
+                    .text_size(px(text::HEADING))
+                    .text_color(theme.text)
+                    .child(heading),
+            )
+            .child(div().flex_none().child(advice))
+            .child(
+                Button::new("clear-filter")
+                    .primary()
+                    .small()
+                    .label("Clear filter")
+                    .tooltip("Clear the filter (Esc in the filter bar)")
+                    .on_click(cx.listener(|this, _, window, cx| this.close_filter(window, cx))),
+            )
     }
 
     /// Empty views scroll their explanation instead of moving a file selection.
@@ -2808,28 +2931,14 @@ impl Browser {
     fn status(&self, theme: Theme) -> impl IntoElement {
         let message = match self.current_snapshot() {
             None => "Loading\u{2026}".to_owned(),
-            Some(snapshot) => {
-                let shown = snapshot.len();
-                let hidden = snapshot.total() - shown;
-                let selected = self.selection.len();
-                let mut message = if selected > 0 {
-                    format!(
-                        "{} of {} {} selected",
-                        count(selected),
-                        count(shown),
-                        plural(shown, "item", "items")
-                    )
-                } else {
-                    format!("{} {}", count(shown), plural(shown, "item", "items"))
-                };
-                if hidden > 0 {
-                    message.push_str(&format!(", {} hidden", count(hidden)));
-                }
-                if snapshot.is_loading() {
-                    message.push_str(" \u{2014} loading\u{2026}");
-                }
-                message
-            }
+            Some(snapshot) => status_message(&StatusFacts {
+                shown: snapshot.len(),
+                unfiltered: snapshot.unfiltered_len(),
+                total: snapshot.total(),
+                selected: self.selection.len(),
+                filter: snapshot.filter().map(NameFilter::text),
+                loading: snapshot.is_loading(),
+            }),
         };
         div()
             .id("file-status")
@@ -2847,6 +2956,46 @@ impl Browser {
             .text_size(px(text::SMALL))
             .text_color(theme.text_muted)
             .child(div().flex_1().min_w_0().truncate().child(message))
+    }
+
+    /// The filter bar: an icon, the field and a close button.
+    fn filter_bar(&self, theme: Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .id("filter-bar")
+            .role(Role::Search)
+            .aria_label("Filter by name")
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(space::SM))
+            .h(px(size::FILTER_BAR))
+            .px(px(space::LG))
+            .bg(theme.chrome)
+            .border_t_1()
+            .border_color(theme.border)
+            .child(
+                Icon::new(gpui_kit::assets::IconName::ListFilter)
+                    .size(px(size::ICON))
+                    .flex_none()
+                    .text_color(theme.text_muted),
+            )
+            .child(div().flex_1().min_w_0().child(crate::input::named(
+                Input::new(&self.filter_input).small(),
+                &self.filter_input,
+                "Filter by name",
+                window,
+                cx,
+            )))
+            .child(
+                Button::new("close-filter")
+                    .ghost()
+                    .small()
+                    .icon(IconName::Close)
+                    .accessibility_label("Close the filter")
+                    .tooltip("Close the filter (Esc)")
+                    .on_click(cx.listener(|this, _, window, cx| this.close_filter(window, cx))),
+            )
+            .into_any_element()
     }
 
     /// The open context menu, in window coordinates, or nothing.
@@ -3163,6 +3312,18 @@ impl Render for Browser {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let frame_started = self.frames.begin();
         let theme = *cx.global::<Theme>();
+        // Opening another folder clears the filter in the model; the bar follows.
+        if self.filter_open
+            && self
+                .model
+                .as_ref()
+                .is_some_and(|model| model.filter().is_none())
+            && !self.filter_input.read(cx).value().is_empty()
+        {
+            self.filter_open = false;
+            self.filter_input
+                .update(cx, |input, cx| input.set_value("", window, cx));
+        }
         let snapshot = self.current_snapshot().cloned();
         // A pane in a split is narrower than the window; whatever contains
         // this view says how wide it is.
@@ -3357,11 +3518,21 @@ impl Render for Browser {
             .on_action(cx.listener(|this, _: &OpenContextMenu, window, cx| {
                 this.open_selection_menu(window, cx);
             }))
+            .on_action(cx.listener(|this, _: &ShowFilter, window, cx| {
+                this.show_filter(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &CancelEdit, window, cx| {
+                let in_filter = this
+                    .filter_input
+                    .read(cx)
+                    .focus_handle(cx)
+                    .is_focused(window);
                 if this.renaming.is_some() {
                     this.finish_rename(false, window, cx);
                 } else if this.editing_location {
                     this.stop_editing(window, cx);
+                } else if this.filter_open && in_filter {
+                    this.close_filter(window, cx);
                 } else {
                     this.change_selection(|selection, _| selection.clear(), cx);
                 }
@@ -3406,6 +3577,9 @@ impl Render for Browser {
                         None => content,
                     }),
             )
+            .when(self.filter_open, |view| {
+                view.child(self.filter_bar(theme, window, cx))
+            })
             .child(self.status(theme))
             .children(self.band_outline(theme))
             .children(self.menu_layer(theme, window, cx));
@@ -3577,6 +3751,53 @@ fn crumb_trail(path: &Path, remote: Option<(&Path, &str)>) -> Vec<(PathBuf, Stri
         }
     }
     trail
+}
+
+/// What the status line counts.
+struct StatusFacts<'a> {
+    /// Rows shown.
+    shown: usize,
+    /// Rows there would be without the name filter.
+    unfiltered: usize,
+    /// Entries listed, including hidden ones.
+    total: usize,
+    selected: usize,
+    filter: Option<&'a str>,
+    loading: bool,
+}
+
+/// The status line: how many entries are shown, selected, hidden and, with
+/// the filter bar in use, how many match.
+fn status_message(facts: &StatusFacts<'_>) -> String {
+    let items = |n: usize| plural(n, "item", "items");
+    let mut message = match (facts.filter, facts.selected) {
+        (Some(text), 0) => format!(
+            "{} of {} {} match \u{201c}{text}\u{201d}",
+            count(facts.shown),
+            count(facts.unfiltered),
+            items(facts.unfiltered)
+        ),
+        (Some(text), selected) => format!(
+            "{} of {} matching \u{201c}{text}\u{201d} selected",
+            count(selected),
+            count(facts.shown)
+        ),
+        (None, 0) => format!("{} {}", count(facts.shown), items(facts.shown)),
+        (None, selected) => format!(
+            "{} of {} {} selected",
+            count(selected),
+            count(facts.shown),
+            items(facts.shown)
+        ),
+    };
+    let hidden = facts.total.saturating_sub(facts.unfiltered);
+    if hidden > 0 {
+        message.push_str(&format!(", {} hidden", count(hidden)));
+    }
+    if facts.loading {
+        message.push_str(" \u{2014} loading\u{2026}");
+    }
+    message
 }
 
 /// A rubber-band selection in progress.
@@ -3925,6 +4146,36 @@ mod tests {
             trash_label(Path::new("/home/u/.local/share/Trash")),
             "Home trash"
         );
+    }
+
+    #[test]
+    fn the_status_counts_matches_hidden_and_selected_entries() {
+        let facts = |shown, unfiltered, total, selected, filter| StatusFacts {
+            shown,
+            unfiltered,
+            total,
+            selected,
+            filter,
+            loading: false,
+        };
+        assert_eq!(status_message(&facts(7, 7, 7, 0, None)), "7 items");
+        assert_eq!(
+            status_message(&facts(7, 7, 9, 2, None)),
+            "2 of 7 items selected, 2 hidden"
+        );
+        assert_eq!(
+            status_message(&facts(2, 7, 9, 0, Some("txt"))),
+            "2 of 7 items match \u{201c}txt\u{201d}, 2 hidden"
+        );
+        assert_eq!(
+            status_message(&facts(2, 7, 7, 1, Some("txt"))),
+            "1 of 2 matching \u{201c}txt\u{201d} selected"
+        );
+        let loading = StatusFacts {
+            loading: true,
+            ..facts(1, 1, 1, 0, None)
+        };
+        assert_eq!(status_message(&loading), "1 item \u{2014} loading\u{2026}");
     }
 
     #[test]
