@@ -667,6 +667,7 @@ impl Browser {
     }
 
     fn open(&mut self, path: PathBuf) {
+        self.frames.opening(Some(&path));
         self.pending_remote = None;
         self.dismiss_menu();
         self.folder_state_scroll.set_offset(point(px(0.), px(0.)));
@@ -1281,6 +1282,7 @@ impl Browser {
                 .map(|name| name.as_encoded_bytes().to_vec())
         });
         if let Some(generation) = model.up() {
+            self.frames.opening(model.location().as_deref());
             self.dismiss_menu();
             self.generation = generation;
             self.failure = None;
@@ -1294,7 +1296,13 @@ impl Browser {
         step: impl FnOnce(&mut DirectoryModel) -> Option<u64>,
         cx: &mut Context<Self>,
     ) {
+        let before = self.location();
         if let Some(generation) = self.model.as_mut().and_then(step) {
+            // Back and Forward open a folder; Reload keeps the one shown.
+            let after = self.location();
+            if after != before {
+                self.frames.opening(after.as_deref());
+            }
             self.dismiss_menu();
             self.generation = generation;
             self.failure = None;
@@ -1549,6 +1557,16 @@ impl Browser {
 
     /// Shows the location as editable text with keyboard focus.
     pub(crate) fn edit_location(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // As Dolphin's Ctrl+L: pressed again while the whole location is
+        // selected in the focused field, it goes back to the list.
+        let input = self.location_input.read(cx);
+        if self.editing_location
+            && input.focus_handle(cx).is_focused(window)
+            && selects_everything(&input.selected_range(), input.value().len())
+        {
+            self.stop_editing(window, cx);
+            return;
+        }
         // A folder opened through kio-fuse is shown by its remote address,
         // as Dolphin shows it, rather than by its local mount path.
         let current = self
@@ -1558,6 +1576,8 @@ impl Browser {
         self.editing_location = true;
         self.location_input.update(cx, |input, cx| {
             input.set_value(current, window, cx);
+            // Selected, so typing a new location replaces it (Dolphin).
+            input.select_all(window, cx);
             input.focus(window, cx);
         });
         cx.notify();
@@ -3371,6 +3391,9 @@ impl Render for Browser {
                 .update(cx, |input, cx| input.set_value("", window, cx));
         }
         let snapshot = self.current_snapshot().cloned();
+        if let Some(snapshot) = snapshot.as_ref().filter(|snapshot| !snapshot.is_empty()) {
+            self.frames.entries_shown(snapshot.path());
+        }
         // A pane in a split is narrower than the window; whatever contains
         // this view says how wide it is.
         if self.width <= 0. {
@@ -4002,6 +4025,11 @@ fn select_names(selection: &mut Selection, snapshot: &Snapshot, names: &[Vec<u8>
     }
 }
 
+/// Whether `selection` covers all `len` bytes of a field's text.
+fn selects_everything(selection: &std::ops::Range<usize>, len: usize) -> bool {
+    selection.start == 0 && selection.end == len
+}
+
 /// The size to ask the icon theme for, given the size drawn. Themes ship a
 /// fixed set of sizes; asking for one of them avoids scaling a neighbour.
 fn theme_icon_size(drawn: f32) -> u32 {
@@ -4064,6 +4092,14 @@ impl Columns {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_field_is_wholly_selected_only_from_its_start_to_its_end() {
+        assert!(selects_everything(&(0..5), 5));
+        assert!(selects_everything(&(0..0), 0));
+        assert!(!selects_everything(&(0..4), 5));
+        assert!(!selects_everything(&(1..5), 5));
+    }
 
     #[test]
     fn messages_say_what_happened_to_which_folder() {

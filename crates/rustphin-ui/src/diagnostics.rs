@@ -11,11 +11,19 @@
 //! can be taken without an input device.
 //!
 //! A frame interval longer than 1.5 × the display's refresh period is a
-//! dropped frame (D-019). Each summary counts them, and when the self-driven
+//! dropped frame (D-019).
+//!
+//! After a folder is opened, one "first entries" line says how long it took
+//! until a frame described its entries, and until the next frame began: that
+//! one starts only after the first was painted and presented, so it bounds
+//! when the entries were on screen (R-101's 200 ms). Each summary counts them, and when the self-driven
 //! scroll ends a verdict for the whole run says whether at most 5% of its
 //! intervals were dropped, as R-101 asks.
 
-use std::time::{Duration, Instant};
+use std::{
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 
 /// Frames per logged summary.
 const WINDOW: usize = 120;
@@ -45,6 +53,15 @@ pub struct FrameLog {
     /// Intervals and dropped frames over the whole self-driven scroll.
     bench_intervals: usize,
     bench_dropped: usize,
+    /// When a folder was asked for and which, and when the first frame
+    /// describing its entries ended; `entries_in_frame` marks that frame while
+    /// it is built.
+    opened_at: Option<Instant>,
+    opened: Option<PathBuf>,
+    /// The last first-entries time reported, and for which folder.
+    last_first_entries: Option<(PathBuf, FirstEntries)>,
+    described_at: Option<Instant>,
+    entries_in_frame: bool,
     /// Frames left in the self-driven scroll, and the row it has reached.
     bench: Option<(usize, usize)>,
     #[cfg(feature = "diagnostics")]
@@ -81,6 +98,48 @@ impl FrameLog {
         self.begin_at(Instant::now())
     }
 
+    /// Marks that `folder` was asked for: the start of a "first entries" time.
+    pub fn opening(&mut self, folder: Option<&Path>) {
+        if self.enabled {
+            let now = Instant::now();
+            // The previous folder's entries were drawn, but no frame followed.
+            self.report_first_entries(None);
+            self.opened_at = Some(now);
+            self.opened = folder.map(Path::to_owned);
+            self.described_at = None;
+            self.entries_in_frame = false;
+        }
+    }
+
+    /// Marks the frame being built as one that lists entries of `folder`.
+    /// Only the first such frame for the folder asked for in
+    /// [`Self::opening`] counts: a failed opening that falls back to the
+    /// previous folder is not timed.
+    pub fn entries_shown(&mut self, folder: &Path) {
+        self.entries_in_frame = self.opened_at.is_some()
+            && self.described_at.is_none()
+            && self.opened.as_deref() == Some(folder);
+    }
+
+    /// Logs the opened folder's first-entries time once its entries were
+    /// described, bounded by a frame beginning at `now` if that came soon.
+    fn report_first_entries(&mut self, next_frame: Option<Instant>) {
+        let Some((opened, described)) = self.opened_at.zip(self.described_at) else {
+            return;
+        };
+        self.opened_at = None;
+        self.described_at = None;
+        let timing = first_entries(opened, described, next_frame);
+        let folder = self.opened.take().unwrap_or_default();
+        tracing::info!(
+            folder = %folder.display(),
+            described_ms = timing.described_ms,
+            shown_by_ms = timing.shown_by_ms,
+            "first entries"
+        );
+        self.last_first_entries = Some((folder, timing));
+    }
+
     /// The refresh period dropped frames are measured against.
     fn period(&self) -> Duration {
         self.refresh.unwrap_or(ASSUMED_REFRESH)
@@ -90,6 +149,7 @@ impl FrameLog {
         if !self.enabled {
             return None;
         }
+        self.report_first_entries(Some(now));
         if let Some(interval) = self.last_frame.map(|last| now.duration_since(last)) {
             self.longest_gap = self.longest_gap.max(interval);
             let driving = self
@@ -148,6 +208,10 @@ impl FrameLog {
         let Some(started) = started else {
             return;
         };
+        if self.entries_in_frame {
+            self.entries_in_frame = false;
+            self.described_at = Some(Instant::now());
+        }
         self.builds.push(started.elapsed());
         if self.builds.len() >= WINDOW {
             let (intervals, builds) = (summarise(&self.intervals), summarise(&self.builds));
@@ -252,6 +316,26 @@ impl Drop for TaskTimer {
             elapsed_ms = self.started.elapsed().as_secs_f64() * 1e3,
             "UI task timing"
         );
+    }
+}
+
+/// How long the first entries of an opened folder took, in milliseconds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct FirstEntries {
+    /// Until the frame describing them was built.
+    described_ms: f64,
+    /// Until the next frame began, after that one was presented. Absent when
+    /// the next frame came after an idle gap, so it bounds nothing.
+    shown_by_ms: Option<f64>,
+}
+
+fn first_entries(opened: Instant, described: Instant, next_frame: Option<Instant>) -> FirstEntries {
+    let ms = |from: Instant, to: Instant| to.saturating_duration_since(from).as_secs_f64() * 1e3;
+    FirstEntries {
+        described_ms: ms(opened, described),
+        shown_by_ms: next_frame
+            .filter(|next| next.saturating_duration_since(described) <= IDLE_GAP)
+            .map(|next| ms(opened, next)),
     }
 }
 
@@ -445,5 +529,74 @@ mod tests {
         log.bench_intervals = 0;
         log.begin_at(at + Duration::from_millis(30));
         assert_eq!((log.bench_intervals, log.bench_dropped), (1, 1));
+    }
+
+    #[test]
+    fn first_entries_are_bounded_by_the_next_frame_unless_it_came_idle() {
+        let opened = Instant::now();
+        let described = opened + Duration::from_millis(120);
+        let soon = first_entries(
+            opened,
+            described,
+            Some(described + Duration::from_millis(17)),
+        );
+        assert_eq!(soon.described_ms, 120.);
+        assert_eq!(soon.shown_by_ms, Some(137.));
+        let idle = first_entries(opened, described, Some(described + Duration::from_secs(1)));
+        assert_eq!(idle.shown_by_ms, None);
+        assert_eq!(first_entries(opened, described, None).shown_by_ms, None);
+    }
+
+    #[test]
+    fn only_the_first_frame_with_entries_after_opening_is_timed() {
+        let mut log = FrameLog {
+            enabled: true,
+            ..FrameLog::default()
+        };
+        let (asked, previous) = (Path::new("/big"), Path::new("/small"));
+        log.entries_shown(asked);
+        assert!(!log.entries_in_frame, "nothing was opened");
+        log.opening(Some(asked));
+        let frame = log.begin(None);
+        log.entries_shown(previous);
+        log.end(frame);
+        assert!(log.described_at.is_none(), "the previous folder's entries");
+        let frame = log.begin(None);
+        log.entries_shown(asked);
+        log.end(frame);
+        let described = log.described_at;
+        assert!(described.is_some());
+        log.entries_shown(asked);
+        assert!(!log.entries_in_frame, "already described");
+        let frame = log.begin(None);
+        log.end(frame);
+        assert!(
+            log.opened_at.is_none() && log.described_at.is_none(),
+            "reported once"
+        );
+    }
+
+    #[test]
+    fn a_new_opening_reports_the_last_one_instead_of_dropping_it() {
+        let mut log = FrameLog {
+            enabled: true,
+            ..FrameLog::default()
+        };
+        let small = Path::new("/small");
+        log.opening(Some(small));
+        let frame = log.begin(None);
+        log.entries_shown(small);
+        log.end(frame);
+        assert!(log.last_first_entries.is_none());
+        // No frame follows; the next opening reports the small folder,
+        // without an on-screen bound.
+        log.opening(Some(Path::new("/big")));
+        let Some((folder, timing)) = log.last_first_entries.clone() else {
+            panic!("the small folder was not reported");
+        };
+        assert_eq!(folder, small);
+        assert_eq!(timing.shown_by_ms, None);
+        assert_eq!(log.opened.as_deref(), Some(Path::new("/big")));
+        assert!(log.described_at.is_none());
     }
 }

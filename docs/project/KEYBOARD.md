@@ -18,7 +18,7 @@ Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 | Up one folder | Alt+Up | Alt+Up | K9 |
 | Home folder | Alt+Home | Alt+Home | K9 |
 | Reload | F5 | F5 | — |
-| Edit location | Ctrl+L, Alt+D, F6 | Ctrl+L, Alt+D, F6 (also from the places panel) | K8, K9 |
+| Edit location | Ctrl+L, Alt+D, F6 (selects the location; again returns to the view) | same (also from the places panel) | K8, K9, K19 |
 | Open selected | Enter | Enter | N2 |
 | Move selection, first/last, page | arrows, Home/End, Page Up/Down | same, with Shift to extend | S6, F12, L1 |
 | Type to jump to a name | letters | letters | K10 |
