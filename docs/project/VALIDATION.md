@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-08 — W-076q reopen closed tabs
+- **Phase:** 6 Implement (S11, R-004, R-005)
+- **Reference:** Dolphin keeps up to six recently closed tabs, newest first (`DolphinRecentTabsMenu::rememberClosedTab`), and Ctrl+Shift+T restores the newest as a new active tab with its split state (`restoreClosedTab`).
+- **Change:** closing a tab (not the last, which closes the window) records it as the session would (`saved_tab`: each pane's location, remote ones by address, and the active pane). Ctrl+Shift+T reopens the newest; remote panes reconnect through kio-fuse like restored tabs (shared `pane_at`). With none left, a notice says "There are no closed tabs to reopen." Back/Forward history is not restored.
+- **Tests:** `remember_closed_tab` keeps newest first, at most six, and skips empty tabs; mutations "no limit" and "append instead of prepend" each fail it and were restored.
+- **Replay (K11):** private KWin/HOME, generated Start and Split/Deeper. Ctrl+T, Ctrl+L to Split, F3, `D` Enter in the right pane: Split | Deeper. Ctrl+W closed it; Ctrl+Shift+T brought back the tab with both panes and the right pane active; a second Ctrl+Shift+T showed the notice (first wording "No tab has been closed in this window." was misleading after a reopen and was changed; the new text was not re-shown on screen).
+- **Gate:** rust-tc doctor PASS, 458 tests. Evidence: target/rust-toolchain/w076q/doctor.log.
+
 ### 2026-11-08 — W-076p copy/move to the other view; Ctrl+F3 correction
 - **Phase:** 6 Implement (S11, R-004, R-006, R-007)
 - **Change:** Dolphin's Shift+F5 / Shift+F6 copy or move the active view's selection into the other view's folder through the existing operation engine (`Request::Copy`/`Request::Move`, so conflicts, progress and undo behave as for paste). A pure `transfer_to_other_view` gives the request or a reason: not split ("Split the view with F3…"), nothing selected, or both views on the same folder (Dolphin disables the action then). Ctrl+F3 now toggles between the two views only (Dolphin's "Focus other view"); Tab keeps cycling through the places panel. Shift+F5/F6 are bound in the file-list context: in this GPUI an identifier matches one element's context, so `Workspace && Browser` would never match.

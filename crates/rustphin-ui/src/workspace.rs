@@ -83,6 +83,7 @@ actions!(
         StopOperations,
         DismissNotice,
         FocusPlaces,
+        ReopenClosedTab,
         FocusOtherView,
         CopyToOtherView,
         MoveToOtherView,
@@ -140,6 +141,19 @@ fn transfer_to_other_view(
     })
 }
 
+/// How many closed tabs Ctrl+Shift+T can bring back, as in Dolphin.
+const CLOSED_TAB_LIMIT: usize = 6;
+
+/// Records a closed tab, newest first, forgetting the oldest past the limit.
+/// A tab with no saved location cannot be reopened and is not kept.
+fn remember_closed_tab(closed: &mut Vec<SessionTab>, tab: SessionTab) {
+    if tab.panes.is_empty() {
+        return;
+    }
+    closed.insert(0, tab);
+    closed.truncate(CLOSED_TAB_LIMIT);
+}
+
 /// The tab Alt+`number` activates, as in Dolphin: Alt+1 to Alt+9 pick that
 /// tab if it exists, Alt+0 the last one.
 fn tab_for_number(number: usize, tabs: usize) -> Option<usize> {
@@ -172,6 +186,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("f6", EditLocation, Some(OUTSIDE_PANES)),
         KeyBinding::new("alt-d", EditLocation, Some(OUTSIDE_PANES)),
         KeyBinding::new("ctrl-q", Quit, context),
+        KeyBinding::new("ctrl-shift-t", ReopenClosedTab, context),
         KeyBinding::new("ctrl-p", FocusPlaces, context),
         KeyBinding::new("ctrl-f3", FocusOtherView, context),
         KeyBinding::new("shift-f5", CopyToOtherView, Some(LIST_IN_WORKSPACE)),
@@ -268,6 +283,8 @@ impl Render for DraggedTab {
 pub struct Workspace {
     appearance: Option<appearance::Appearance>,
     tabs: Tabs<Tab>,
+    /// Recently closed tabs, newest first, for Ctrl+Shift+T.
+    closed_tabs: Vec<SessionTab>,
     settings_path: Option<PathBuf>,
     /// Where the open tabs are stored; `None` when they must not be written.
     session_path: Option<PathBuf>,
@@ -334,20 +351,14 @@ impl Workspace {
                     .panes
                     .iter()
                     .map(|location| {
-                        let (path, remote) = match location {
-                            Location::Folder(path) => (path.clone(), None),
-                            // Shown on the fallback folder until kio-fuse has
-                            // mounted it again, as Dolphin reconnects its tabs.
-                            Location::Remote(address) => (fallback.clone(), Some(address)),
-                        };
-                        let pane =
-                            Self::pane(path, settings.clone(), settings_path.clone(), window, cx);
-                        if let Some(address) = remote {
-                            pane.browser.update(cx, |browser, cx| {
-                                browser.open_remote(address.clone(), true, cx);
-                            });
-                        }
-                        pane
+                        Self::pane_at(
+                            location,
+                            &fallback,
+                            settings.clone(),
+                            settings_path.clone(),
+                            window,
+                            cx,
+                        )
                     })
                     .collect(),
                 active: tab.active_pane,
@@ -370,6 +381,7 @@ impl Workspace {
         let workspace = Self {
             appearance: None,
             tabs,
+            closed_tabs: Vec::new(),
             settings_path,
             session_path,
             saved: Session::default(),
@@ -430,19 +442,24 @@ impl Workspace {
         workspace
     }
 
+    /// One tab as the session and the closed-tab list keep it.
+    fn saved_tab(tab: &Tab, cx: &App) -> SessionTab {
+        SessionTab {
+            panes: tab
+                .panes
+                .iter()
+                .filter_map(|pane| pane.browser.read(cx).saved_location(cx))
+                .collect(),
+            active_pane: tab.active,
+        }
+    }
+
     /// The open tabs and panes as a session.
     fn session(&self, cx: &App) -> Session {
         let tabs = self
             .tabs
             .iter()
-            .map(|tab| SessionTab {
-                panes: tab
-                    .panes
-                    .iter()
-                    .filter_map(|pane| pane.browser.read(cx).saved_location(cx))
-                    .collect(),
-                active_pane: tab.active,
-            })
+            .map(|tab| Self::saved_tab(tab, cx))
             .filter(|tab| !tab.panes.is_empty())
             .collect();
         Session::new(tabs, self.tabs.active_index())
@@ -472,6 +489,29 @@ impl Workspace {
                 }
             })
             .detach();
+    }
+
+    /// A pane showing a saved location. A remote one shows `fallback` until
+    /// kio-fuse has mounted it again, as Dolphin reconnects its tabs.
+    fn pane_at(
+        location: &Location,
+        fallback: &Path,
+        settings: Settings,
+        settings_path: Option<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Pane {
+        let (path, remote) = match location {
+            Location::Folder(path) => (path.clone(), None),
+            Location::Remote(address) => (fallback.to_path_buf(), Some(address)),
+        };
+        let pane = Self::pane(path, settings, settings_path, window, cx);
+        if let Some(address) = remote {
+            pane.browser.update(cx, |browser, cx| {
+                browser.open_remote(address.clone(), true, cx);
+            });
+        }
+        pane
     }
 
     fn pane(
@@ -1096,7 +1136,47 @@ impl Workspace {
             window.remove_window();
             return;
         }
-        self.tabs.close(index);
+        if let Some(closed) = self.tabs.close(index) {
+            let saved = Self::saved_tab(&closed, cx);
+            remember_closed_tab(&mut self.closed_tabs, saved);
+        }
+        self.focus_active(window, cx);
+        cx.notify();
+    }
+
+    /// Opens the most recently closed tab again, split panes included.
+    fn reopen_closed_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(saved) = self.closed_tabs.first().cloned() else {
+            hub(cx).update(cx, |hub, cx| {
+                hub.say("There are no closed tabs to reopen.".to_owned(), false, cx);
+            });
+            return;
+        };
+        self.closed_tabs.remove(0);
+        let current = self.tabs.active().browser().read(cx);
+        let settings = current.settings();
+        let fallback = current
+            .location()
+            .or_else(rustphin_platform::xdg::home)
+            .unwrap_or_else(|| PathBuf::from("/"));
+        let panes = saved
+            .panes
+            .iter()
+            .map(|location| {
+                Self::pane_at(
+                    location,
+                    &fallback,
+                    settings.clone(),
+                    self.settings_path.clone(),
+                    window,
+                    cx,
+                )
+            })
+            .collect::<Vec<_>>();
+        self.tabs.open(Tab {
+            active: saved.active_pane.min(panes.len().saturating_sub(1)),
+            panes,
+        });
         self.focus_active(window, cx);
         cx.notify();
     }
@@ -1496,6 +1576,9 @@ impl Render for Workspace {
                 cx.listener(|this, _: &ToggleSplit, window, cx| this.toggle_split(window, cx)),
             )
             .on_action(cx.listener(|this, _: &OtherPane, window, cx| this.other_pane(window, cx)))
+            .on_action(cx.listener(|this, _: &ReopenClosedTab, window, cx| {
+                this.reopen_closed_tab(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &FocusOtherView, window, cx| {
                 let index = this.tabs.active_index();
                 if this.tabs.active().panes.len() == 2 {
@@ -2224,6 +2307,22 @@ mod tests {
             transfer_to_other_view(Transfer::Move, a, left, left)
                 .is_err_and(|reason| reason.contains("same folder"))
         );
+    }
+
+    #[test]
+    fn closed_tabs_are_kept_newest_first_up_to_the_limit() {
+        let tab = |path: &str| SessionTab {
+            panes: vec![Location::Folder(PathBuf::from(path))],
+            active_pane: 0,
+        };
+        let mut closed = Vec::new();
+        for index in 0..CLOSED_TAB_LIMIT + 2 {
+            remember_closed_tab(&mut closed, tab(&format!("/{index}")));
+        }
+        remember_closed_tab(&mut closed, SessionTab::default());
+        assert_eq!(closed.len(), CLOSED_TAB_LIMIT);
+        assert_eq!(closed[0], tab(&format!("/{}", CLOSED_TAB_LIMIT + 1)));
+        assert_eq!(closed[CLOSED_TAB_LIMIT - 1], tab("/2"));
     }
 
     #[test]

@@ -7,7 +7,7 @@ Rustphin's binding. Rustphin follows Dolphin wherever it has the same
 action. "Replayed" names the scenario in UI_SCENARIOS.md that exercised it
 by keyboard in an isolated session; "—" means bound but not replayed yet.
 
-Last reviewed: 2026-11-08 (W-076o, W-076p), Dolphin source at `master`.
+Last reviewed: 2026-11-08 (W-076o, W-076p, W-076q), Dolphin source at `master`.
 
 ## Navigation
 
@@ -60,7 +60,7 @@ Last reviewed: 2026-11-08 (W-076o, W-076p), Dolphin source at `master`.
 | Next / previous tab | Ctrl+Tab, Ctrl+Page Down / Ctrl+Shift+Tab, Ctrl+Page Up | same | T2, J8 |
 | Activate tab 1–9 / last | Alt+1…Alt+9 / Alt+0 | same | K9 |
 | Move tab left / right | (none) | Ctrl+Shift+Page Up / Down | — |
-| Reopen closed tab | Ctrl+Shift+T | not offered | — |
+| Reopen closed tab | Ctrl+Shift+T (last 6) | Ctrl+Shift+T (last 6, split panes included) | K11 |
 | Split view | F3 | F3 | D1, K9, K10 |
 | Focus other view | Ctrl+F3 | Ctrl+F3 (toggles the two views), Tab (also visits the places panel) | Tab: K10. Ctrl+F3 is taken by KWin's default desktop switch, so it never reaches Dolphin or Rustphin on a default Plasma desktop |
 | Copy / move to other view | Shift+F5 / Shift+F6 | Shift+F5 / Shift+F6 | K10 |
