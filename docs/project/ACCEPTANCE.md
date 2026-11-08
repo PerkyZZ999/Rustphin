@@ -11,7 +11,7 @@ hardware.
 
 ## Closed by the agent on 2026-11-08
 
-W-085 then closed R-101's 60 fps criterion under D-019 (details 0.25%, icons 0.08%, compact 0% dropped). Replays K14–K17 and J4, the token audit and the floating-surface test closed
+W-085 then closed R-101's 60 fps criterion under D-019 (details 0.25%, icons 0.08%, compact 0% dropped), and D-022 (startup outside R-101) let W-073f/g close its first-entries and 16 ms criteria. Replays K14–K17 and J4, the token audit and the floating-surface test closed
 the rest: the Dolphin listing comparison, back/forward/up with per-tab
 history, content changes with selection and scroll kept, per-tab view modes,
 case-insensitive sort with the new folders-first toggle, zoom in all modes,
@@ -23,8 +23,6 @@ from Dolphin, fixed in W-081. Everything below needs the maintainer.
 
 | Requirement · criterion | State | Decision needed |
 |---|---|---|
-| R-101 · no UI-thread task over 16 ms | Measured paths well under (model callback 0.8 ms) | Window/GPU bootstrap produced a 104 ms foreground poll in one diagnostic run (W-073b) and 93 ms in W-073f. Thumbnails measured in W-073f: batch updates ≤ 0.56 ms, draws ≤ 9.3 ms while 2,000 were made cold. One isolated 16.2 ms details draw in W-085 did not recur. Accept startup as outside "listing, sorting, metadata, thumbnails", or treat it as a defect to fix |
-| R-101 · first entries within 200 ms, input during loading | W-073g: every mode on screen within 59–78 ms of opening the 500,000-entry folder (warm cache, as the criterion says); input observed while loading (W-073e) | Whether opening at application launch counts, which adds window/GPU bootstrap (the same startup question as the row above) |
 | R-004 · every action has a keyboard path; Dolphin defaults | KEYBOARD.md; K8–K18 | Duplicate on Ctrl+D done (D-021, W-084, K18). Still open: W-076e not approved ("Not yet") |
 | R-107 · keyboard-complete with visible focus everywhere | Focus surfaces observed (W-076a); reverse traversal blocked | W-076e not approved on 2026-11-08; stays open until a planned toolkit upgrade |
 

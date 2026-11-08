@@ -173,10 +173,10 @@ Conventions:
 ### R-101 — Responsiveness at scale
 - **Priority:** must
 - **Acceptance:** on the reference machine, in a directory of 500,000 entries on a local filesystem:
-  - [ ] First entries are visible within 200 ms of opening (warm cache) and the UI accepts input throughout loading.
+  - [x] First entries are visible within 200 ms of opening (warm cache) and the UI accepts input throughout loading. (D-022: opening a folder in a running window; application startup is outside this. W-073g: 59–78 ms in every view mode; input during loading W-073e.)
   - [x] Re-sorting by any column completes within 500 ms once the sizes and dates it needs have been read. The first read has no fixed limit, but the list is shown in name order with a loading indicator while it runs, and details appear from the top of the list first. (Reworded 2026-10-12 with the user's agreement: on a cold disk cache the read is bounded by the disk, 5.3 s for 500,000 files.) (W-078: rust-tc bench-listing, slowest re-sort 92.7 ms in W-077b; name order with loading indicator and details from the top in W-023/W-073c.)
   - [x] Scrolling holds 60 frames per second: no more than 5% of frame intervals during sustained scrolling exceed 1.5 × the refresh period, in each view mode. (Reworded 2026-11-08 by D-019 with the maintainer's agreement; previously "at the 95th percentile".) (W-085: release diagnostics build, isolated KWin reporting 60 Hz, 1,199 self-driven scroll intervals per mode: details 3 dropped (0.25%), icons 1 (0.08%), compact 0. Not measured on a physical display.)
-  - [ ] No UI-thread task exceeds 16 ms in listing, sorting, metadata or thumbnail code paths.
+  - [x] No UI-thread task exceeds 16 ms in listing, sorting, metadata or thumbnail code paths. (D-022: application startup is outside this. Model callback 0.8 ms (W-073e), thumbnail updates 0.56 ms and draws 9.3 ms while 2,000 were made (W-073f). One 16.2 ms toolkit draw in one of five large scroll runs (W-085) did not recur in a repeat.)
 - **Validation:** bench (headless core), ui-test with frame timing
 
 ### R-102 — Memory

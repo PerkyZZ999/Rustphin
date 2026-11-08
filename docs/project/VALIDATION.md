@@ -1,5 +1,10 @@
 # Validation evidence
 
+### 2026-11-08 — D-022 startup outside R-101; R-101 first-entries and 16 ms criteria ticked
+- **Decision:** The maintainer chose "Exclude startup": R-101 measures opening folders and work in a running window; the window/GPU bootstrap (93–104 ms UI-thread poll) and the off-thread font warm-up before it are recorded, not targets. Recorded as D-022.
+- **Ticked on existing evidence:** first entries within 200 ms with input during loading (W-073g 59–78 ms in every mode; W-073e input), and no UI-thread task over 16 ms in listing, sorting, metadata or thumbnail paths (W-073e model callback 0.8 ms; W-073f thumbnails 0.56 ms, draws 9.3 ms), each line noting the scope and the single non-recurring 16.2 ms draw from W-085. All four R-101 criteria are now ticked; 25 ticked, 9 open overall.
+- **No code change; no new check run** beyond the gate of the previous entry.
+
 ### 2026-11-08 — W-073g first entries timed in every mode; W-076s Ctrl+L selects the location (R-101, R-004)
 - **Found while measuring:** after Ctrl+L, typing an absolute path appended it to the current one (`…/Small` + `/mnt/…` opened `…/Small/mnt/…`, "this location does not exist"): the field was filled but not selected. Dolphin's `replaceLocation` selects the whole location, and pressing it again with everything selected returns to the breadcrumbs and the view. Rustphin now does both (`edit_location`: `select_all`; `selects_everything` for the toggle). Replayed (K19): Ctrl+L showed the path highlighted; Ctrl+L again showed the breadcrumbs; Ctrl+L and typing a full path opened it.
 - **Measurement change (diagnostics only):** `FrameLog::opening(folder)` from `open`, Back/Forward (not Reload) and Up; `entries_shown(folder)` when a frame lists that folder's entries, so a failed opening that falls back to the previous folder is not timed. A "first entries" line gives the folder, `described_ms` (until that frame was built) and `shown_by_ms` (until the next frame began, which follows its presentation; omitted when no frame followed soon). A pending time is reported at the next opening without an on-screen bound.

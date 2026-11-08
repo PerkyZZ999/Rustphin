@@ -210,4 +210,12 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Decision:** Ctrl+D duplicates the selection in place as "name copy.ext" (Dolphin's naming, a free name when taken) through the operation engine, undoable. Add to Places moves to Ctrl+Shift+D and stays in the palette.
 - **Confirmed by / date:** The maintainer, 2026-11-08 ("Duplicate, like Dolphin")
 
+## D-022 — R-101 measures a running window; application startup is outside it
+- **Status:** locked
+- **Date:** 2026-11-08
+- **Context:** everything after the window exists meets R-101: first entries of a 500,000-entry folder on screen within 59–78 ms in every view (W-073g), thumbnail work under 1 ms (W-073f), scrolling within D-019 (W-085). Application startup is not: the toolkit's window/GPU bootstrap blocks the UI thread for 93–104 ms, after about 0.4 s of off-thread font loading.
+- **Decision:** R-101's "opening" means opening a folder in a running window, and its 16 ms criterion covers the listing, sorting, metadata and thumbnail code paths it names, not application startup. Startup timing stays recorded in VALIDATION.md and is not an acceptance target.
+- **Confirmed by / date:** The maintainer, 2026-11-08 ("Exclude startup")
+- **Supersedes / superseded by:** clarifies R-101
+
 W-076e (patching the locked toolkit's focus registration) was not approved on 2026-11-08 ("Not yet"); it stays open until a planned toolkit upgrade.
