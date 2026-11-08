@@ -49,7 +49,7 @@ Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 | Undo | Ctrl+Z | Ctrl+Z | — |
 | Redo | Ctrl+Shift+Z | not offered (no redo) | — |
 | Properties | Alt+Enter | Alt+Enter | I5 |
-| Duplicate here | Ctrl+D | not offered; Ctrl+D adds the folder to Places instead (Dolphin has no default for that) | — |
+| Duplicate here | Ctrl+D | Ctrl+D, context menu, palette: "name copy.ext", then "name copy (1).ext"; the copies are selected (D-021) | K18 |
 | Copy location | Ctrl+Alt+C | Ctrl+Alt+C, context menu (remote folders give their address) | K12 |
 
 ## Tabs, split view and panels
@@ -66,6 +66,7 @@ Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 | Focus other view | Ctrl+F3 | Ctrl+F3 (toggles the two views), Tab (also visits the places panel) | Tab: K10. Ctrl+F3 is taken by KWin's default desktop switch, so it never reaches Dolphin or Rustphin on a default Plasma desktop |
 | Copy / move to other view | Shift+F5 / Shift+F6 | Shift+F5 / Shift+F6 | K10 |
 | Places panel shown | F9 | F9 | — |
+| Add folder to Places | (none) | Ctrl+Shift+D (Ctrl+D until D-021), button, drag | K2, K18 |
 | Focus places panel | Ctrl+P | Ctrl+P | K9 |
 | Quit | Ctrl+Q | Ctrl+Q (same as closing the window) | K9 |
 | New window | Ctrl+N | not offered (one window) | — |
@@ -80,7 +81,6 @@ focus and no text field is being edited (K7, K8).
 
 ## Not offered yet
 
-Duplicate (Dolphin's Ctrl+D; Rustphin uses Ctrl+D for Add to Places, which
-Dolphin leaves unbound), redo and Dolphin's search (Ctrl+F) have no Rustphin
-equivalent. Search is L-001; the others are
-candidates for later work and are not part of R-001–R-016 as written.
+Redo and Dolphin's search (Ctrl+F) have no Rustphin equivalent. Search is
+L-001; redo is a candidate for later work and is not part of R-001–R-016 as
+written.

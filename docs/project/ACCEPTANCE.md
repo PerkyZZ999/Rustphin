@@ -26,7 +26,7 @@ from Dolphin, fixed in W-081. Everything below needs the maintainer.
 | R-101 · 60 fps (D-019: ≤ 5% dropped frames) | Decided 2026-11-08 | Agent: count dropped frames in the frame log and re-measure the three views (W-085) |
 | R-101 · no UI-thread task over 16 ms | Measured paths well under (model callback 0.8 ms) | Window/GPU bootstrap produced a 104 ms foreground poll in one diagnostic run (W-073b); thumbnail paths were not measured. Accept startup as outside "listing, sorting, metadata, thumbnails" and measure thumbnails, or treat startup as a defect to fix |
 | R-101 · first entries within 200 ms, input during loading | 185.6 ms warm-cache details navigation; input observed while loading | Whether one measured mode/warm cache is enough, or every mode and a cold start must be measured |
-| R-004 · every action has a keyboard path; Dolphin defaults | KEYBOARD.md; K8–K17 | Decided 2026-11-08: Duplicate on Ctrl+D (D-021, W-084, agent). W-076e not approved ("Not yet") |
+| R-004 · every action has a keyboard path; Dolphin defaults | KEYBOARD.md; K8–K18 | Duplicate on Ctrl+D done (D-021, W-084, K18). Still open: W-076e not approved ("Not yet") |
 | R-107 · keyboard-complete with visible focus everywhere | Focus surfaces observed (W-076a); reverse traversal blocked | W-076e not approved on 2026-11-08; stays open until a planned toolkit upgrade |
 
 ## Needs the maintainer: real desktop or hardware

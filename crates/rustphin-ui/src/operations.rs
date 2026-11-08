@@ -7,6 +7,8 @@
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    ffi::OsStr,
+    os::unix::ffi::{OsStrExt as _, OsStringExt as _},
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
@@ -733,6 +735,7 @@ pub fn activity(request: &Request, undo: bool) -> String {
         Request::Move { sources, into } => {
             format!("Moving {} to {}", what(sources), folder_name(into))
         }
+        Request::Duplicate { sources } => format!("Duplicating {}", what(sources)),
         Request::Trash { paths } => format!("Moving {} to the trash", what(paths)),
         Request::Restore { items } => format!("Restoring {}", what(&originals(items))),
         Request::Delete { paths } => format!("Deleting {}", what(paths)),
@@ -762,6 +765,7 @@ pub fn past(request: &Request) -> String {
         Request::Move { sources, into } => {
             format!("moved {} to {}", what(sources), folder_name(into))
         }
+        Request::Duplicate { sources } => format!("duplicated {}", what(sources)),
         Request::Trash { paths } => format!("moved {} to the trash", what(paths)),
         Request::Restore { items } => {
             format!("restored {} from the trash", what(&originals(items)))
@@ -888,6 +892,22 @@ pub fn free_name(base: &str, is_taken: impl Fn(&str) -> bool) -> String {
         .map(|n| format!("{base} {n}"))
         .find(|name| !is_taken(name))
         .unwrap_or_else(|| base.to_owned())
+}
+
+/// The names that duplicating `names` side by side creates, in order, given
+/// which names `exists` in the folder: what the engine will choose, so the
+/// view can select the copies once they appear, as Dolphin does.
+pub fn duplicate_names(names: &[Vec<u8>], exists: impl Fn(&[u8]) -> bool) -> Vec<Vec<u8>> {
+    let mut made: Vec<Vec<u8>> = Vec::with_capacity(names.len());
+    for name in names {
+        let target =
+            rustphin_core::ops::free_duplicate_name(OsStr::from_bytes(name), |candidate| {
+                let candidate = candidate.as_bytes();
+                exists(candidate) || made.iter().any(|done| done == candidate)
+            });
+        made.push(target.into_vec());
+    }
+    made
 }
 
 /// The part of a file name to select when renaming starts: everything before
@@ -1135,5 +1155,25 @@ mod tests {
         assert_eq!(stem_len(".bashrc", false), ".bashrc".len());
         assert_eq!(stem_len("README", false), "README".len());
         assert_eq!(stem_len("photos.2024", true), "photos.2024".len());
+    }
+
+    #[test]
+    fn duplicate_names_follow_the_engine_and_avoid_each_other() {
+        let listed: [&[u8]; 3] = [b"a.txt", b"a copy.txt", b"notes"];
+        let made = duplicate_names(
+            &[b"a.txt".to_vec(), b"notes".to_vec(), b"\xff".to_vec()],
+            |name| listed.contains(&name),
+        );
+        assert_eq!(
+            made,
+            [
+                b"a copy (1).txt".to_vec(),
+                b"notes copy".to_vec(),
+                b"\xff copy".to_vec()
+            ]
+        );
+        // Two sources whose copies would collide get different names.
+        let made = duplicate_names(&[b"x.txt".to_vec(), b"x.txt".to_vec()], |_| false);
+        assert_eq!(made, [b"x copy.txt".to_vec(), b"x copy (1).txt".to_vec()]);
     }
 }

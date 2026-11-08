@@ -2033,3 +2033,71 @@ fn a_rename_journal_is_found_only_where_one_was_left() {
     assert!(has_rename_journal(&RealFs, dir.path()));
     assert!(!has_rename_journal(&RealFs, &dir.path().join("absent")));
 }
+
+#[test]
+fn duplicates_are_named_as_dolphin_names_them() {
+    let name = |text: &str| duplicate_name(std::ffi::OsStr::new(text));
+    assert_eq!(name("a.txt"), "a copy.txt");
+    assert_eq!(name("b.tar.gz"), "b copy.tar.gz");
+    assert_eq!(name("notes"), "notes copy");
+    assert_eq!(name(".bashrc"), ".bashrc copy");
+    assert_eq!(name("v1.2.final.pdf"), "v1.2.final copy.pdf");
+    let raw = duplicate_name(std::ffi::OsStr::from_bytes(b"\xff.bin"));
+    assert_eq!(raw.as_bytes(), b"\xff copy.bin");
+}
+
+#[test]
+fn a_taken_duplicate_name_is_numbered_after_copy() {
+    let free = |text: &str, taken: &[&str]| {
+        free_duplicate_name(std::ffi::OsStr::new(text), |name| {
+            taken.iter().any(|t| std::ffi::OsStr::new(t) == name)
+        })
+    };
+    assert_eq!(free("a.txt", &[]), "a copy.txt");
+    assert_eq!(free("a.txt", &["a copy.txt"]), "a copy (1).txt");
+    assert_eq!(
+        free("a.txt", &["a copy.txt", "a copy (1).txt"]),
+        "a copy (2).txt"
+    );
+    assert_eq!(free("b.tar.gz", &["b copy.tar.gz"]), "b copy (1).tar.gz");
+    assert_eq!(free("notes", &["notes copy"]), "notes copy (1)");
+}
+
+#[test]
+fn duplicating_copies_beside_the_original_numbers_repeats_and_undoes() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("report.txt");
+    let folder = dir.path().join("photos");
+    fs::write(&file, b"twelve bytes").unwrap();
+    fs::create_dir(&folder).unwrap();
+    fs::write(folder.join("inner.png"), b"png").unwrap();
+
+    let request = Request::Duplicate {
+        sources: vec![file.clone(), folder.clone()],
+    };
+    let first = go(&request, &mut Script::default());
+    let second = go(&request, &mut Script::default());
+
+    assert!(first.completed && second.completed);
+    assert_eq!(
+        fs::read(dir.path().join("report copy.txt")).unwrap(),
+        b"twelve bytes"
+    );
+    assert_eq!(
+        fs::read(dir.path().join("report copy (1).txt")).unwrap(),
+        b"twelve bytes"
+    );
+    assert_eq!(
+        fs::read(dir.path().join("photos copy/inner.png")).unwrap(),
+        b"png"
+    );
+    assert!(dir.path().join("photos copy (1)/inner.png").exists());
+    assert_eq!(fs::read(&file).unwrap(), b"twelve bytes");
+
+    let bin = tempfile::tempdir().unwrap();
+    let trash = FolderTrash::new(bin.path());
+    super::undo::undo(&RealFs, &trash, &second.changes, &mut Script::default()).unwrap();
+    assert!(!dir.path().join("report copy (1).txt").exists());
+    assert!(!dir.path().join("photos copy (1)").exists());
+    assert!(dir.path().join("report copy.txt").exists());
+}

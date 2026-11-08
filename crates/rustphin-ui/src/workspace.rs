@@ -211,8 +211,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-pagedown", MoveTabRight, context),
         KeyBinding::new("f3", ToggleSplit, context),
         KeyBinding::new("f9", ToggleSidebar, context),
+        // Ctrl+D is Duplicate, as in Dolphin (D-021).
         KeyBinding::new(
-            "ctrl-d",
+            "ctrl-shift-d",
             AddPlace,
             Some("Workspace && !Input && !Dialog && !Palette"),
         ),

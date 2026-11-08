@@ -1440,7 +1440,7 @@ impl Render for Sidebar {
                     .text_size(px(text::SMALL))
                     .text_color(theme.text_muted)
                     .child(
-                        "No places yet. Add the folder shown with Ctrl+D, or drag a folder here.",
+                        "No places yet. Add the folder shown with Ctrl+Shift+D, or drag a folder here.",
                     )
                     .into_any_element(),
             );
@@ -1513,7 +1513,7 @@ impl Render for Sidebar {
             .role(Role::Tree)
             .aria_label("Places and devices")
             .aria_description(
-                "Add folders with Ctrl+D. Use arrow keys to choose a place and Enter to open it.",
+                "Add folders with Ctrl+Shift+D. Use arrow keys to choose a place and Enter to open it.",
             )
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus)

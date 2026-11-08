@@ -111,6 +111,7 @@ actions!(
         RecoverRenames,
         Copy,
         CopyLocation,
+        Duplicate,
         Cut,
         Paste,
         OpenContextMenu,
@@ -198,6 +199,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("shift-f10", OpenContextMenu, list),
         KeyBinding::new("menu", OpenContextMenu, list),
         KeyBinding::new("ctrl-alt-c", CopyLocation, list),
+        KeyBinding::new("ctrl-d", Duplicate, list),
         KeyBinding::new("enter", ShowHidden, Some(FOLDER_ACTION_CONTEXT)),
         KeyBinding::new("space", ShowHidden, Some(FOLDER_ACTION_CONTEXT)),
     ]);
@@ -306,6 +308,9 @@ pub struct Browser {
     /// An entry to select as soon as it shows up in the list, and whether to
     /// start renaming it: the result of a create or rename this view asked for.
     select_when_seen: Option<(Vec<u8>, bool)>,
+    /// The copies a duplicate this view asked for will create: selected
+    /// together once all of them show up, as Dolphin does.
+    select_all_when_seen: Vec<Vec<u8>>,
     /// An entry whose renaming starts at the next redraw, when a window is at hand.
     rename_requested: Option<Vec<u8>>,
     /// Take the keyboard focus back at the next redraw.
@@ -416,6 +421,7 @@ impl Browser {
             renaming: None,
             rename_input,
             select_when_seen: None,
+            select_all_when_seen: Vec::new(),
             rename_requested: None,
             refocus: false,
             trash_dir: None,
@@ -575,6 +581,7 @@ impl Browser {
                     }
                     self.rename_requested = None;
                     self.select_when_seen = None;
+                    self.select_all_when_seen.clear();
                     self.detect_trash(snapshot.path().to_owned(), cx);
                     // What the previous folder was waiting for is not wanted now.
                     thumbs(cx).update(cx, |thumbs, _| thumbs.drop_waiting());
@@ -598,6 +605,16 @@ impl Browser {
                     if let Some((name, true)) = self.select_when_seen.take() {
                         self.rename_requested = Some(name);
                     }
+                }
+                // Every copy of a duplicate has shown up.
+                if !self.select_all_when_seen.is_empty()
+                    && self
+                        .select_all_when_seen
+                        .iter()
+                        .all(|name| snapshot.row_of(name).is_some())
+                {
+                    let names = std::mem::take(&mut self.select_all_when_seen);
+                    select_names(&mut self.selection, &snapshot, &names);
                 }
                 // A rename in progress ends if its entry is gone.
                 if let Some(name) = &self.renaming
@@ -938,6 +955,10 @@ impl Browser {
             }
             MenuCommand::CopyLocation => {
                 self.copy_location(cx);
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::Duplicate => {
+                self.duplicate_selected(cx);
                 self.focus.focus(window, cx);
             }
             MenuCommand::Rename => self.rename_focused(window, cx),
@@ -1975,6 +1996,31 @@ impl Browser {
     fn pick_up_selected(&mut self, cut: bool, cx: &mut Context<Self>) {
         let paths = self.selected_paths();
         hub(cx).update(cx, |hub, cx| hub.pick_up(paths, cut, cx));
+    }
+
+    /// Copies the selection beside itself as "name copy.ext" (Ctrl+D,
+    /// Dolphin's "Duplicate Here", D-021) and selects the copies once listed.
+    fn duplicate_selected(&mut self, cx: &mut Context<Self>) {
+        if self.trash_dir.is_some() {
+            return;
+        }
+        let Some(snapshot) = self.current_snapshot() else {
+            return;
+        };
+        let rows = self.selection.rows(snapshot);
+        if rows.is_empty() {
+            return;
+        }
+        let names: Vec<Vec<u8>> = rows
+            .iter()
+            .map(|&row| snapshot.name(row).to_vec())
+            .collect();
+        let sources = rows.iter().map(|&row| snapshot.entry_path(row)).collect();
+        // Hidden or filtered entries still take a name: ask the snapshot's
+        // full listing, not the rows on screen.
+        self.select_all_when_seen =
+            operations::duplicate_names(&names, |name| snapshot.is_listed(name));
+        hub(cx).update(cx, |hub, _| hub.start(Request::Duplicate { sources }));
     }
 
     fn paste(&mut self, cx: &mut Context<Self>) {
@@ -3459,6 +3505,7 @@ impl Render for Browser {
             .on_key_down(cx.listener(Self::on_key_down))
             .on_action(cx.listener(|this, _: &GoUp, _, cx| this.go_up(cx)))
             .on_action(cx.listener(|this, _: &CopyLocation, _, cx| this.copy_location(cx)))
+            .on_action(cx.listener(|this, _: &Duplicate, _, cx| this.duplicate_selected(cx)))
             .on_action(cx.listener(|this, _: &GoHome, _, cx| {
                 if let Some(home) = rustphin_platform::xdg::home() {
                     this.go_to(home, cx);

@@ -106,6 +106,7 @@ pub fn commands() -> Vec<Command> {
             Browser,
             b::CopyLocation
         ),
+        command!("Files: Duplicate here", "Ctrl+D", Browser, b::Duplicate),
         command!(
             "Files: Copy selection to the other view",
             "Shift+F5",
@@ -274,7 +275,12 @@ pub fn commands() -> Vec<Command> {
             Browser,
             w::ToggleSidebar
         ),
-        command!("Places: Add current folder", "Ctrl+D", Browser, w::AddPlace),
+        command!(
+            "Places: Add current folder",
+            "Ctrl+Shift+D",
+            Browser,
+            w::AddPlace
+        ),
         command!("Places: New group", "Ctrl+Shift+G", Sidebar, s::NewGroup),
         command!(
             "Places: Rename selected place or group",

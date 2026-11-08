@@ -30,6 +30,9 @@ pub enum MenuCommand {
     /// Put the path (or remote address) of the first selected entry on the
     /// clipboard as text, as Dolphin's "Copy Location".
     CopyLocation,
+    /// Copy the selection beside itself as "name copy.ext" (Dolphin's
+    /// "Duplicate Here", D-021).
+    Duplicate,
     /// Rename the selection.
     Rename,
     /// Move the selection to the trash.
@@ -190,6 +193,11 @@ fn selection_menu(facts: &MenuFacts) -> Vec<MenuEntry> {
         facts.can_paste && !facts.in_trash,
     ));
     entries.push(item("Copy location", MenuCommand::CopyLocation, true));
+    entries.push(item(
+        "Duplicate here",
+        MenuCommand::Duplicate,
+        !facts.in_trash,
+    ));
     entries.push(MenuEntry::Separator);
     entries.push(item("Rename", MenuCommand::Rename, one && !facts.in_trash));
     if facts.in_trash {
@@ -492,6 +500,7 @@ mod tests {
                 "Copy",
                 "Paste",
                 "Copy location",
+                "Duplicate here",
                 "",
                 "Rename",
                 "Move to trash",
@@ -575,7 +584,10 @@ mod tests {
         assert!(entries.iter().all(|entry| !matches!(
             entry,
             MenuEntry::Item {
-                command: MenuCommand::MoveToTrash | MenuCommand::Cut | MenuCommand::Rename,
+                command: MenuCommand::MoveToTrash
+                    | MenuCommand::Cut
+                    | MenuCommand::Rename
+                    | MenuCommand::Duplicate,
                 enabled: true,
                 ..
             }

@@ -74,6 +74,12 @@ pub enum Request {
         /// Existing directory to copy into.
         into: PathBuf,
     },
+    /// Copy each of `sources` beside itself as "name copy.ext", or the
+    /// first free "name copy (n).ext" (D-021, Dolphin's Duplicate).
+    Duplicate {
+        /// Entries to duplicate, each in its own folder.
+        sources: Vec<PathBuf>,
+    },
     /// Move each of `sources` into the directory `into`.
     Move {
         /// Entries to move.
@@ -449,6 +455,17 @@ pub fn run(
             engine.controller.progress(&engine.progress);
             engine.transfer(plan, into, false).is_ok()
         }
+        Request::Duplicate { sources } => {
+            let mut plans = Vec::new();
+            for source in sources {
+                let parent = source
+                    .parent()
+                    .ok_or_else(|| OpError::NotADirectory(source.clone()))?;
+                plans.push(engine.plan_transfer(std::slice::from_ref(source), parent, false)?);
+            }
+            engine.controller.progress(&engine.progress);
+            engine.duplicate(plans.into_iter().flatten()).is_ok()
+        }
         Request::Move { sources, into } => {
             let plan = engine.plan_transfer(sources, into, true)?;
             engine.controller.progress(&engine.progress);
@@ -592,6 +609,47 @@ fn temp_name() -> String {
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
     )
+}
+
+/// The name of a duplicate, as Dolphin gives it: " copy" before the
+/// extension, keeping a compound `.tar.*` extension whole. `a.txt` becomes
+/// `a copy.txt`, `b.tar.gz` `b copy.tar.gz`, `.bashrc` and `notes` gain
+/// " copy" at the end.
+pub fn duplicate_name(name: &OsStr) -> OsString {
+    with_suffix(name.as_bytes(), b" copy")
+}
+
+/// The name a duplicate of `name` is given beside it: [`duplicate_name`],
+/// or when `is_taken` says that exists, the first free `a copy (1).txt`,
+/// `a copy (2).txt`… The operation engine names duplicates with this, so a
+/// view can tell which entries a duplicate will create.
+pub fn free_duplicate_name(name: &OsStr, is_taken: impl Fn(&OsStr) -> bool) -> OsString {
+    let first = duplicate_name(name);
+    if !is_taken(&first) {
+        return first;
+    }
+    (1..=u32::MAX)
+        .map(|n| with_suffix(name.as_bytes(), format!(" copy ({n})").as_bytes()))
+        .find(|candidate| !is_taken(candidate))
+        .unwrap_or(first)
+}
+
+/// `name` with `suffix` inserted before its extension; a compound `.tar.*`
+/// extension stays whole and a leading dot is not an extension.
+fn with_suffix(bytes: &[u8], suffix: &[u8]) -> OsString {
+    let last_dot = bytes
+        .iter()
+        .rposition(|&byte| byte == b'.')
+        .filter(|&dot| dot > 0);
+    let split = match last_dot {
+        Some(dot) if bytes[..dot].ends_with(b".tar") && dot > 4 => dot - 4,
+        Some(dot) => dot,
+        None => bytes.len(),
+    };
+    let mut out = bytes[..split].to_vec();
+    out.extend_from_slice(suffix);
+    out.extend_from_slice(&bytes[split..]);
+    OsString::from_vec(out)
 }
 
 /// `name` with ` (n)` before its extension: `a.txt` becomes `a (1).txt`.
@@ -841,6 +899,25 @@ impl Engine<'_> {
         }
         self.finished(1);
         Ok(removed.is_ok())
+    }
+
+    /// Copies each planned entry beside itself under its duplicate name,
+    /// or the first free numbered form of it.
+    fn duplicate(&mut self, plan: impl Iterator<Item = Node>) -> Result<(), Stop> {
+        for node in plan {
+            let (Some(parent), Some(name)) = (node.path.parent(), node.path.file_name()) else {
+                continue;
+            };
+            // Anything but "not found" counts as taken: never risk a clash.
+            let target = parent.join(free_duplicate_name(name, |candidate| {
+                !matches!(
+                    self.fs.info(&parent.join(candidate)),
+                    Err(error) if error.kind() == io::ErrorKind::NotFound
+                )
+            }));
+            self.place(node, target, false)?;
+        }
+        Ok(())
     }
 
     fn transfer(&mut self, plan: Vec<Node>, into: &Path, moving: bool) -> Result<(), Stop> {

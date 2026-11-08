@@ -228,6 +228,13 @@ impl Snapshot {
             .iter()
             .position(|&index| self.store.name(index) == name)
     }
+
+    /// Whether an entry called `name` was listed, shown or not: hidden
+    /// files and entries the name filter leaves out still take their name.
+    pub fn is_listed(&self, name: &[u8]) -> bool {
+        (0..self.store.len())
+            .any(|index| u32::try_from(index).is_ok_and(|index| self.store.name(index) == name))
+    }
 }
 
 /// What the model publishes to its consumer.
@@ -1667,6 +1674,9 @@ mod tests {
         let filtered = snapshot(&events, generation);
         assert_eq!(names(&filtered), ["file2.txt", "file10.txt"]);
         assert_eq!(filtered.unfiltered_len(), 5);
+        assert!(filtered.row_of(b"Zeta.md").is_none());
+        assert!(filtered.is_listed(b"Zeta.md") && filtered.is_listed(b".hidden"));
+        assert!(!filtered.is_listed(b"Zeta"));
         assert_eq!(filtered.filter().map(NameFilter::text), Some("FILE"));
         assert_eq!(model.set_filter(NameFilter::new("FILE")), None);
 

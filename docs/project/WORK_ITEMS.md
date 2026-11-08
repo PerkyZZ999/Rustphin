@@ -18,7 +18,7 @@ S11 — Hardening for daily use (in progress)
 
 - [x] W-080 — Open remote addresses through kio-fuse (D-004, D-018; requested by the maintainer 2026-11-08). Typing `sftp://`, `smb://` or another KIO address in the location bar asks kio-fuse (`org.kde.KIOFuse.VFS.mountUrl`, the interface Dolphin's terminal panel uses) to mount it and opens the returned folder; `file://` URIs open locally. Network bookmarks in user-places.xbel (sftp, fish, smb, ftp, ftps, webdav, webdavs, nfs) appear in Places and open the same way. A "Connecting…" notice shows while waiting; a missing kio-fuse, refused scheme or failed mount gives a readable error saying what to do. Passwords typed in an address are never shown or logged. Editing the location inside a folder Rustphin mounted shows its remote address. Rustphin itself makes no network connection. Out of scope here: remote-address breadcrumbs/history (follow-up), native protocols (L-008), Network browsing (`remote:/`).
 
-- [ ] W-084 — Duplicate on Ctrl+D as in Dolphin (D-021): copy the selection in place as "name copy.ext", a free name when taken, through the operation engine, undoable; Add to Places moves to Ctrl+Shift+D.
+- [x] W-084 — Duplicate on Ctrl+D as in Dolphin (D-021): copy the selection in place as "name copy.ext", a free name when taken, through the operation engine, undoable; Add to Places moves to Ctrl+Shift+D. Copies are selected once listed; context menu and palette entries; scenario K18.
 - [ ] W-085 — Count dropped frames (interval > 1.5 × refresh period) in the frame log and re-measure the three views of 500,000 entries against D-019 (≤ 5%).
 
 ## Deferred until S11 is complete
