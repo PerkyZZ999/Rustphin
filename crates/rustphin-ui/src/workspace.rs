@@ -35,7 +35,7 @@ use crate::{
     operations::{self, Hub, Notice, Question, Running, hub},
     palette::{Candidate, Palette, PaletteEvent, Target},
     properties::{PropertiesDialog, SizeLine},
-    session::{Session, SessionSaves, SessionTab},
+    session::{PaneLocation, Session, SessionSaves, SessionTab},
     settings::Settings,
     sidebar::{Sidebar, SidebarEvent},
     tabs::Tabs,
@@ -246,14 +246,21 @@ impl Workspace {
                 panes: tab
                     .panes
                     .iter()
-                    .map(|path| {
-                        Self::pane(
-                            path.clone(),
-                            settings.clone(),
-                            settings_path.clone(),
-                            window,
-                            cx,
-                        )
+                    .map(|location| {
+                        let (path, remote) = match location {
+                            PaneLocation::Folder(path) => (path.clone(), None),
+                            // Shown on the fallback folder until kio-fuse has
+                            // mounted it again, as Dolphin reconnects its tabs.
+                            PaneLocation::Remote(address) => (fallback.clone(), Some(address)),
+                        };
+                        let pane =
+                            Self::pane(path, settings.clone(), settings_path.clone(), window, cx);
+                        if let Some(address) = remote {
+                            pane.browser.update(cx, |browser, cx| {
+                                browser.open_remote(address.clone(), true, cx);
+                            });
+                        }
+                        pane
                     })
                     .collect(),
                 active: tab.active_pane,
@@ -345,7 +352,7 @@ impl Workspace {
                 panes: tab
                     .panes
                     .iter()
-                    .filter_map(|pane| pane.browser.read(cx).location())
+                    .filter_map(|pane| pane.browser.read(cx).saved_location(cx))
                     .collect(),
                 active_pane: tab.active,
             })

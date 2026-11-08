@@ -46,8 +46,10 @@ The session bus is only contacted when a remote folder is opened. kio-fuse and
 its KIO worker make the connection and show any password prompt. A password
 typed inside an address is passed to kio-fuse only; Rustphin never shows, logs
 or saves it. The local mount folder and its remote address are remembered in
-memory for the run. Saved tabs and recent folders keep the local mount path,
-which stops working once kio-fuse ends; this is not a remote-address history.
+memory for the run. Saved tabs (session.toml) store a remote folder by its
+address without password and reconnect it through kio-fuse at the next start.
+Recent folders still keep the local mount path, which stops working once
+kio-fuse ends (W-080c).
 
 ## Data inventory and clearing
 

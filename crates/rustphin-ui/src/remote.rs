@@ -35,12 +35,17 @@ pub fn address_of(path: &Path, cx: &App) -> Option<String> {
     folders(cx).remote_address_of(path)
 }
 
-/// Mounts `address` in the background and hands the local folder to `then`.
-/// Failures are reported as error notices.
+/// The local root and remote address of the opened remote folder holding `path`.
+pub fn root_of(path: &Path, cx: &App) -> Option<(PathBuf, String)> {
+    folders(cx).mount_root_of(path)
+}
+
+/// Mounts `address` in the background and hands the local folder to `then`,
+/// or `None` after reporting a failure as an error notice.
 pub fn open<V: 'static>(
     address: RemoteAddress,
     cx: &mut Context<V>,
-    then: impl FnOnce(&mut V, PathBuf, &mut Context<V>) + 'static,
+    then: impl FnOnce(&mut V, Option<PathBuf>, &mut Context<V>) + 'static,
 ) {
     let shown = address.to_string();
     let ticket = hub(cx).update(cx, |hub, cx| {
@@ -54,11 +59,12 @@ pub fn open<V: 'static>(
         let _ = view.update(cx, |view, cx| {
             hub(cx).update(cx, |hub, cx| hub.withdraw(ticket, cx));
             match mounted {
-                Ok(path) => then(view, path, cx),
+                Ok(path) => then(view, Some(path), cx),
                 Err(error) => {
                     tracing::warn!(address = %shown, %error, "remote folder not opened");
                     let text = failure(&shown, &error);
                     hub(cx).update(cx, |hub, cx| hub.say(text, true, cx));
+                    then(view, None, cx);
                 }
             }
         });

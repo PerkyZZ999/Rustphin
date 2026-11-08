@@ -578,12 +578,14 @@ impl Sidebar {
                 } else if place.href.starts_with("trash:") {
                     cx.emit(SidebarEvent::OpenTrash);
                 } else if let Some(address) = network_address(place) {
-                    remote::open(address, cx, move |_, path, cx| {
-                        cx.emit(if new_tab {
-                            SidebarEvent::OpenInNewTab(path)
-                        } else {
-                            SidebarEvent::Open(path)
-                        });
+                    remote::open(address, cx, move |_, mounted, cx| {
+                        if let Some(path) = mounted {
+                            cx.emit(if new_tab {
+                                SidebarEvent::OpenInNewTab(path)
+                            } else {
+                                SidebarEvent::Open(path)
+                            });
+                        }
                     });
                 }
             }

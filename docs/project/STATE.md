@@ -14,10 +14,10 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-08 — W-076n Ctrl+L/F6 from the places panel; full gate 451 tests
+- Latest validation entry: VALIDATION.md, 2026-11-08 — W-080b remote tabs and breadcrumbs by address; full gate 453 tests
 
 ## Open loops
-- Task: W-080 (requested addition) opens typed remote addresses and network bookmarks through kio-fuse; verified with a private-bus stand-in and the real kio-fuse on a generated tar archive, no real host. Follow-ups: remote-address breadcrumbs, and saved tabs/recent folders that keep kio-fuse mount paths. The Ctrl+L gap it found is fixed in W-076n.
+- Task: W-080/W-080b (requested addition) open typed remote addresses and network bookmarks through kio-fuse, save remote tabs by address and reconnect them on restart, and show remote breadcrumbs; verified with a private-bus stand-in and the real kio-fuse on a generated tar archive, no real host. Open: W-080c recent-folder history by address. The Ctrl+L gap W-080 found is fixed in W-076n.
 - Queued after S11: the maintainer requests a UI/UX/design pass matching docs/mockup.png as closely as feasible, adapted to current features (2026-11-06). The reference is preserved; W-079/ROADMAP.md record the deferred work. Begin implementation only after S11 is complete; update DESIGN.md before tokens/views.
 - Task: W-077 complete. W-077a–d inventory local data/connections, add rust-tc build/validate, verify clean 1.95.0/1.99.1 builds and live clear/restart with only Unix sockets traced. W-077e/f order and byte-safely encode session saves. W-077g keeps unreadable, damaged and newer session files unchanged for the run (explicit launches included) with a visible reason. W-077h: the maintainer accepted the locked toolkit's async-net/http crates as a documented exception (D-018, 2026-11-08); deny.toml bans HTTP clients, TLS and telemetry crates and confines the retained ones, and R-108 is accepted. Remote folders remain mounted paths under D-004. Cross-process session merging and immediate-quit flushing remain unproved. Published stable is 1.99.1; select it explicitly.
 - Task: W-073b–e fixed measured font/layout and selection-transfer stalls and stale navigation rows. Details first entries observed within 185.7 ms; all 500,000 selections survive refresh. Final three-view max draw 6.67 ms, but p95 intervals 16.72–16.98 ms do not pass strict 60 fps. Wider input/thumbnail task acceptance and physical-display pacing remain open under R-101

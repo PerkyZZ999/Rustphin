@@ -9,6 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use rustphin_platform::remote::RemoteAddress;
 use serde::{Deserialize, Serialize};
 
 /// The format version this build writes.
@@ -25,13 +26,29 @@ pub struct Session {
     pub tabs: Vec<SessionTab>,
 }
 
+/// Where a pane was.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PaneLocation {
+    /// A folder on this machine.
+    Folder(PathBuf),
+    /// A remote folder, opened again through kio-fuse. Stored without any
+    /// password: kio-fuse's mount paths change between runs.
+    Remote(RemoteAddress),
+}
+
+impl From<PathBuf> for PaneLocation {
+    fn from(path: PathBuf) -> Self {
+        Self::Folder(path)
+    }
+}
+
 /// One tab: the folder of each of its panes.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SessionTab {
     /// One folder, or two when the tab was split.
     #[serde(with = "pane_paths")]
-    pub panes: Vec<PathBuf>,
+    pub panes: Vec<PaneLocation>,
     /// Index of the pane that had the keyboard focus.
     pub active_pane: usize,
 }
@@ -57,7 +74,7 @@ impl Session {
             paths
                 .into_iter()
                 .map(|folder| SessionTab {
-                    panes: vec![folder],
+                    panes: vec![PaneLocation::Folder(folder)],
                     active_pane: 0,
                 })
                 .collect(),
@@ -79,8 +96,11 @@ impl Session {
         }
         let mut session: Self = toml::from_str(text).map_err(SessionError::Damaged)?;
         for tab in &mut session.tabs {
-            tab.panes.retain(|path| {
-                path.is_absolute() && !path.as_os_str().as_encoded_bytes().contains(&0)
+            tab.panes.retain(|pane| match pane {
+                PaneLocation::Folder(path) => {
+                    path.is_absolute() && !path.as_os_str().as_encoded_bytes().contains(&0)
+                }
+                PaneLocation::Remote(_) => true,
             });
             tab.panes.truncate(2);
             tab.active_pane = tab.active_pane.min(tab.panes.len().saturating_sub(1));
@@ -181,27 +201,42 @@ pub(crate) fn restore(saved: io::Result<Option<String>>, starts: &[PathBuf]) -> 
 
 // Version 1 stored UTF-8 paths directly. New files use URIs so every valid
 // Linux filename round-trips; a literal percent in an old path stays literal.
+// Remote panes are stored as their password-free address; readers before
+// W-080b drop them as unknown entries.
 mod pane_paths {
     use std::path::PathBuf;
 
-    use rustphin_platform::uri::{file_uri, path_from_uri};
+    use rustphin_platform::{
+        remote::RemoteAddress,
+        uri::{file_uri, path_from_uri},
+    };
     use serde::{Deserialize as _, Deserializer, Serializer};
 
-    pub fn serialize<S: Serializer>(paths: &[PathBuf], serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.collect_seq(paths.iter().map(|path| file_uri(path)))
+    use super::PaneLocation;
+
+    pub fn serialize<S: Serializer>(
+        panes: &[PaneLocation],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(panes.iter().map(|pane| match pane {
+            PaneLocation::Folder(path) => file_uri(path),
+            PaneLocation::Remote(address) => address.to_string(),
+        }))
     }
 
     pub fn deserialize<'de, D: Deserializer<'de>>(
         deserializer: D,
-    ) -> Result<Vec<PathBuf>, D::Error> {
-        let paths = Vec::<String>::deserialize(deserializer)?;
-        Ok(paths
+    ) -> Result<Vec<PaneLocation>, D::Error> {
+        let values = Vec::<String>::deserialize(deserializer)?;
+        Ok(values
             .into_iter()
             .filter_map(|value| {
                 if value.starts_with('/') {
-                    Some(PathBuf::from(value))
+                    Some(PaneLocation::Folder(PathBuf::from(value)))
+                } else if let Some(path) = path_from_uri(value.as_bytes()) {
+                    Some(PaneLocation::Folder(path))
                 } else {
-                    path_from_uri(value.as_bytes())
+                    RemoteAddress::parse(&value).map(PaneLocation::Remote)
                 }
             })
             .collect())
@@ -318,7 +353,7 @@ mod tests {
             vec![
                 tab(&["/normal"], 0),
                 SessionTab {
-                    panes: vec!["/Été".into(), raw],
+                    panes: vec![PathBuf::from("/Été").into(), raw.into()],
                     active_pane: 1,
                 },
             ],
@@ -363,6 +398,34 @@ mod tests {
             "version = 2\n[[tabs]]\npanes = ['file://remote/data', 'file:///bad%00name', 'relative', 'file:///saved%20folder']\n",
         );
         assert_eq!(restored, Session::single("/saved folder".into()));
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn remote_panes_are_kept_by_address_without_their_password() {
+        let remote = RemoteAddress::parse("sftp://me:hunter2@host/srv/sub dir").unwrap();
+        let session = Session::new(
+            vec![SessionTab {
+                panes: vec![
+                    PaneLocation::Remote(remote.clone()),
+                    PathBuf::from("/home/me").into(),
+                ],
+                active_pane: 0,
+            }],
+            0,
+        );
+
+        let text = session.to_toml().unwrap();
+
+        assert!(!text.contains("hunter2"), "{text}");
+        let restored = parse(&text);
+        assert_eq!(
+            restored.tabs[0].panes,
+            [
+                PaneLocation::Remote(RemoteAddress::parse("sftp://me@host/srv/sub dir").unwrap()),
+                PathBuf::from("/home/me").into(),
+            ]
+        );
     }
 
     #[test]
@@ -417,7 +480,10 @@ mod tests {
 
     fn tab(panes: &[&str], active_pane: usize) -> SessionTab {
         SessionTab {
-            panes: panes.iter().map(PathBuf::from).collect(),
+            panes: panes
+                .iter()
+                .map(|path| PaneLocation::Folder(PathBuf::from(path)))
+                .collect(),
             active_pane,
         }
     }

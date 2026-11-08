@@ -1,5 +1,14 @@
 # Validation evidence
 
+### 2026-11-08 — W-080b remote tabs and breadcrumbs by address
+- **Phase:** 6 Implement; follow-up to W-080 (a saved remote tab pointed at a kio-fuse mount path that does not survive a restart).
+- **Reference:** Dolphin saves remote tab URLs and reconnects them when a session is restored, and shows remote locations by URL in its navigator.
+- **Change:** session panes are `PaneLocation::{Folder, Remote}`; remote panes are written as the password-free address (format stays 2: older readers drop unknown entries). The browser tracks a pending remote mount with the location it started from; navigation clears it. On restore a remote pane opens the fallback folder and mounts its address; a failed restore keeps the address saved until the user moves the tab, a failed typed address is forgotten. `saved_location` maps folders inside a mount to their address. Breadcrumbs come from a pure `crumb_trail`: inside a mount the trail starts at the mount root, labelled with its remote address. The platform client gains `mount_root_of`.
+- **Tests/proof:** new session round-trip test (remote pane kept, password absent from the TOML) and crumb-trail test; platform mapping test extended. Mutations caught and restored: remote panes dropped on read, mount ancestors kept in the trail, a foreign mount relabelling a local trail, any mount matching any path.
+- **Isolated replay (W9–W10):** private KWin/HOME/session bus with the generated stand-in. Crumbs read `sftp://me@fixture-host/projects / sub dir`; session.toml held `sftp://me@fixture-host/projects/sub dir`; the first crumb opened the mount root. Relaunch without arguments: the stand-in received `mountUrl sftp://me@fixture-host/projects/sub dir` and the tab showed `deep.txt` under the remote crumb. Stand-in restarted in fail mode: the tab showed the home fallback with "sftp://me@fixture-host/projects/sub dir could not be opened. Connection refused. …"; session.toml SHA-256 unchanged (aa4dd8f2…); after opening Local in that tab it held the Local URI. A typed `sftp://me:hunter2@…` that failed was not saved; `hunter2` absent from session.toml, recent-locations.toml and the app log. No real host contacted.
+- **Gate:** rust-tc doctor PASS, 453 tests. Evidence: target/rust-toolchain/w080b/{doctor.log,mock-kiofuse.py}.
+- **Limits:** recent-folder history still records mount paths (W-080c). Up from a mount root goes to kio-fuse's local parent folder. No real server.
+
 ### 2026-11-08 — W-076n location shortcuts from the places panel
 - **Phase:** 6 Implement (S11, keyboard checklist)
 - **Red:** W-080 replay (same date): with a place row focused, Ctrl+L did nothing and the following text reached the panel's single-letter shortcuts; `h` hid the generated Local bookmark. Dolphin's Ctrl+L/F6 work anywhere in the window (window-level "Replace location" action).

@@ -41,6 +41,7 @@ use crate::{
     menu::{self, MenuCommand, MenuEffect, MenuKey},
     operations::{self, hub},
     remote,
+    session::PaneLocation,
     settings::Settings,
     theme::{Theme, size, space, text},
     thumbs::{self, thumbs},
@@ -277,6 +278,9 @@ pub struct Browser {
     select_on_arrival: Option<Vec<Vec<u8>>>,
     failure: Option<Failure>,
     editing_location: bool,
+    /// A remote folder being mounted for this pane, and where the pane was
+    /// when it was asked for. It counts only while the pane is still there.
+    pending_remote: Option<(RemoteAddress, Option<PathBuf>)>,
     location_input: Entity<InputState>,
     /// The entry being renamed in place, by its current name.
     renaming: Option<Vec<u8>>,
@@ -385,6 +389,7 @@ impl Browser {
             select_on_arrival: None,
             failure: None,
             editing_location: false,
+            pending_remote: None,
             location_input,
             renaming: None,
             rename_input,
@@ -623,6 +628,7 @@ impl Browser {
     }
 
     fn open(&mut self, path: PathBuf) {
+        self.pending_remote = None;
         self.dismiss_menu();
         self.folder_state_scroll.set_offset(point(px(0.), px(0.)));
         if let Some(model) = &mut self.model {
@@ -1379,6 +1385,53 @@ impl Browser {
         self.model.as_ref().and_then(DirectoryModel::location)
     }
 
+    /// The remote folder this pane is waiting for, if the user has not gone
+    /// elsewhere since asking.
+    fn pending_remote(&self) -> Option<&RemoteAddress> {
+        self.pending_remote
+            .as_ref()
+            .filter(|(_, from)| *from == self.location())
+            .map(|(address, _)| address)
+    }
+
+    /// Mounts `address` through kio-fuse and shows it here, unless the user
+    /// goes elsewhere first. A restored tab keeps waiting for its address
+    /// after a failure, so it is still saved by that address.
+    pub(crate) fn open_remote(
+        &mut self,
+        address: RemoteAddress,
+        keep_on_failure: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.pending_remote = Some((address.clone(), self.location()));
+        remote::open(address.clone(), cx, move |view: &mut Self, mounted, cx| {
+            if view.pending_remote() != Some(&address) {
+                return;
+            }
+            match mounted {
+                Some(path) => view.open(path),
+                None if !keep_on_failure => view.pending_remote = None,
+                None => {}
+            }
+            cx.notify();
+        });
+    }
+
+    /// Where this pane is, for the saved session: a remote folder by its
+    /// address, since kio-fuse mount paths do not outlive the run.
+    pub(crate) fn saved_location(&self, cx: &App) -> Option<PaneLocation> {
+        if let Some(address) = self.pending_remote() {
+            return Some(PaneLocation::Remote(address.clone()));
+        }
+        let location = self.location()?;
+        Some(
+            match remote::address_of(&location, cx).and_then(|text| RemoteAddress::parse(&text)) {
+                Some(address) => PaneLocation::Remote(address),
+                None => PaneLocation::Folder(location),
+            },
+        )
+    }
+
     /// Shows the location as editable text with keyboard focus.
     pub(crate) fn edit_location(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // A folder opened through kio-fuse is shown by its remote address,
@@ -1415,14 +1468,7 @@ impl Browser {
                 let typed = input.read(cx).value();
                 let typed = typed.trim();
                 if let Some(address) = RemoteAddress::parse(typed) {
-                    // Opens when mounted, unless the user has gone elsewhere.
-                    let from = self.location();
-                    remote::open(address, cx, move |view: &mut Self, path, cx| {
-                        if view.location() == from {
-                            view.open(path);
-                            cx.notify();
-                        }
-                    });
+                    self.open_remote(address, false, cx);
                 } else if let Some(path) = path_from_uri(typed.as_bytes())
                     .or_else(|| expand_path(typed, self.location().as_deref()))
                 {
@@ -1879,14 +1925,21 @@ impl Browser {
         theme: Theme,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let ancestors: Vec<PathBuf> = location
+        let ancestors = location
             .map(|path| {
-                let mut list: Vec<_> = path.ancestors().map(Path::to_path_buf).collect();
-                list.reverse();
-                list
+                let remote = remote::root_of(path, cx);
+                crumb_trail(
+                    path,
+                    remote
+                        .as_ref()
+                        .map(|(root, address)| (root.as_path(), address.as_str())),
+                )
             })
             .unwrap_or_default();
         let last = ancestors.len().saturating_sub(1);
+        let after_root: Vec<bool> = (0..ancestors.len())
+            .map(|index| index > 0 && ancestors[index - 1].1 == "/")
+            .collect();
         let first_shown = ancestors.len().saturating_sub(crumbs_for_width(self.width));
 
         div()
@@ -1908,49 +1961,44 @@ impl Browser {
                         .child("\u{2026}"),
                 )
             })
-            .children(
-                ancestors
-                    .into_iter()
-                    .enumerate()
-                    .skip(first_shown)
-                    .map(|(index, path)| {
-                        let label: SharedString = match path.file_name() {
-                            Some(name) => display_name(name.as_encoded_bytes()).into_owned().into(),
-                            None => "/".into(),
-                        };
-                        let current = index == last;
-                        div()
-                            .flex()
-                            .flex_none()
-                            .items_center()
-                            .when(index > 1 || (index == 1 && first_shown > 0), |crumb| {
-                                crumb.child(div().text_color(theme.text_muted).child("/"))
-                            })
-                            .child(
-                                div()
-                                    .id(("crumb", index))
-                                    .role(Role::Button)
-                                    .aria_label(label.clone())
-                                    .px(px(space::XS))
-                                    .rounded(px(size::RADIUS))
-                                    .cursor_pointer()
-                                    .text_color(if current {
-                                        theme.text
-                                    } else {
-                                        theme.text_muted
-                                    })
-                                    .hover(|crumb| crumb.bg(theme.hover).text_color(theme.text))
-                                    .child(label)
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        cx.stop_propagation();
-                                        if !current {
-                                            this.open(path.clone());
-                                            cx.notify();
-                                        }
-                                    })),
-                            )
-                    }),
-            )
+            .children(ancestors.into_iter().enumerate().skip(first_shown).map(
+                |(index, (path, label))| {
+                    let label: SharedString = label.into();
+                    let current = index == last;
+                    // No separator first, or right after the "/" crumb.
+                    let separated = index > 0 && (index == first_shown || !after_root[index]);
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .when(separated, |crumb| {
+                            crumb.child(div().text_color(theme.text_muted).child("/"))
+                        })
+                        .child(
+                            div()
+                                .id(("crumb", index))
+                                .role(Role::Button)
+                                .aria_label(label.clone())
+                                .px(px(space::XS))
+                                .rounded(px(size::RADIUS))
+                                .cursor_pointer()
+                                .text_color(if current {
+                                    theme.text
+                                } else {
+                                    theme.text_muted
+                                })
+                                .hover(|crumb| crumb.bg(theme.hover).text_color(theme.text))
+                                .child(label)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    if !current {
+                                        this.open(path.clone());
+                                        cx.notify();
+                                    }
+                                })),
+                        )
+                },
+            ))
     }
 
     fn failure_banner(
@@ -3377,6 +3425,30 @@ fn expand_path(typed: &str, base: Option<&Path>) -> Option<PathBuf> {
     })
 }
 
+/// The folders the location bar offers, outermost first, with their labels.
+/// Inside a remote folder the trail starts at its mount, labelled with the
+/// remote address, instead of kio-fuse's local mount path.
+fn crumb_trail(path: &Path, remote: Option<(&Path, &str)>) -> Vec<(PathBuf, String)> {
+    let mut trail: Vec<(PathBuf, String)> = path
+        .ancestors()
+        .map(|ancestor| {
+            let label = match ancestor.file_name() {
+                Some(name) => display_name(name.as_encoded_bytes()).into_owned(),
+                None => "/".to_owned(),
+            };
+            (ancestor.to_path_buf(), label)
+        })
+        .collect();
+    trail.reverse();
+    if let Some((root, address)) = remote.filter(|(root, _)| path.starts_with(root)) {
+        trail.retain(|(ancestor, _)| ancestor.starts_with(root));
+        if let Some(first) = trail.first_mut() {
+            first.1 = address.to_owned();
+        }
+    }
+    trail
+}
+
 /// A rubber-band selection in progress.
 #[derive(Debug, Clone, Copy)]
 struct Band {
@@ -3716,6 +3788,32 @@ mod tests {
             trash_label(Path::new("/home/u/.local/share/Trash")),
             "Home trash"
         );
+    }
+
+    #[test]
+    fn the_crumb_trail_starts_at_a_remote_mount() {
+        let labels = |path: &str, remote: Option<(&Path, &str)>| -> Vec<String> {
+            crumb_trail(Path::new(path), remote)
+                .into_iter()
+                .map(|(_, label)| label)
+                .collect()
+        };
+        assert_eq!(labels("/srv/data", None), ["/", "srv", "data"]);
+        let mount = Some((
+            Path::new("/run/kio-fuse-x/sftp/host/projects"),
+            "sftp://me@host/projects",
+        ));
+        assert_eq!(
+            labels("/run/kio-fuse-x/sftp/host/projects/sub dir", mount),
+            ["sftp://me@host/projects", "sub dir"]
+        );
+        let trail = crumb_trail(
+            Path::new("/run/kio-fuse-x/sftp/host/projects/sub dir"),
+            mount,
+        );
+        assert_eq!(trail[0].0, Path::new("/run/kio-fuse-x/sftp/host/projects"));
+        // A mount elsewhere does not change a local trail.
+        assert_eq!(labels("/srv/data", mount), ["/", "srv", "data"]);
     }
 
     #[test]

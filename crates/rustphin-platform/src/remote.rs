@@ -242,19 +242,33 @@ impl KioFuse {
     }
 
     /// The remote address of `path` when it lies in a folder this process
-    /// mounted, such as `sftp://host/projects/sub%20dir`.
+    /// mounted, such as `sftp://host/projects/sub dir`.
     pub fn remote_address_of(&self, path: &Path) -> Option<String> {
-        let mounts = self.mounts.lock().unwrap_or_else(PoisonError::into_inner);
-        let (mount, relative) = mounts
-            .iter()
-            .find_map(|mount| Some((mount, path.strip_prefix(&mount.root).ok()?)))?;
-        let base = mount.remote.trim_end_matches('/');
-        let relative = relative.as_os_str().as_encoded_bytes();
+        let (root, remote) = self.mount_root_of(path)?;
+        let relative = path
+            .strip_prefix(&root)
+            .ok()?
+            .as_os_str()
+            .as_encoded_bytes();
         Some(if relative.is_empty() {
-            mount.remote.clone()
+            remote
         } else {
-            format!("{base}/{}", readable_path(relative))
+            format!(
+                "{}/{}",
+                remote.trim_end_matches('/'),
+                readable_path(relative)
+            )
         })
+    }
+
+    /// The local root and remote address of the mounted folder that holds
+    /// `path`, when this process mounted one.
+    pub fn mount_root_of(&self, path: &Path) -> Option<(PathBuf, String)> {
+        let mounts = self.mounts.lock().unwrap_or_else(PoisonError::into_inner);
+        mounts
+            .iter()
+            .find(|mount| path.starts_with(&mount.root))
+            .map(|mount| (mount.root.clone(), mount.remote.clone()))
     }
 }
 
@@ -475,6 +489,11 @@ mod tests {
             Some("sftp://me@host/projects")
         );
         assert_eq!(kio.remote_address_of(Path::new("/home/me")), None);
+        assert_eq!(
+            kio.mount_root_of(&root.join("sub dir")),
+            Some((root.clone(), "sftp://me@host/projects".to_owned()))
+        );
+        assert_eq!(kio.mount_root_of(root.parent().unwrap()), None);
     }
 
     #[test]
