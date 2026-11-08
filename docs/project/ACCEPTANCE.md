@@ -9,22 +9,15 @@ their cited entries first. Nothing here is ticked without a recorded check.
 can show it. **Needs the maintainer** means a decision, the real desktop or real
 hardware.
 
-## Closable by the agent
+## Closed by the agent on 2026-11-08
 
-None left after W-082 (2026-11-08). The rows below the first table record
-what remains for the maintainer.
-
-## Closable by the agent (closed)
-
-| Requirement · criterion | Evidence so far | Missing |
-|---|---|---|
-
-Closed on 2026-11-08 by K14/K15: Dolphin listing comparison, back/forward/up
-with per-tab history, content changes, selection and scroll kept, per-tab
-modes, case-insensitive sort with the new folders-first toggle, zoom in all
-modes and the Page keys. J4 also ran: every listed control is in Actions
-(R-106 still lacks an operation-details check). K15 found two display
-differences from Dolphin (symlink type icons, broken-link size), fixed in W-081.
+Replays K14–K17 and J4, the token audit and the floating-surface test closed
+the rest: the Dolphin listing comparison, back/forward/up with per-tab
+history, content changes with selection and scroll kept, per-tab view modes,
+case-insensitive sort with the new folders-first toggle, zoom in all modes,
+the Page keys, design tokens, opaque floating surfaces and secondary controls
+(with the new filter bar, W-082). K15 found two symlink display differences
+from Dolphin, fixed in W-081. Everything below needs the maintainer.
 
 ## Needs the maintainer: decisions
 
