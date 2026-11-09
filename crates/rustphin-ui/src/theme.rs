@@ -68,9 +68,17 @@ pub mod size {
     pub const ICON_LARGE: f32 = 32.;
     /// Height of a volume's row in the places panel: a name, a usage bar
     /// and a line of numbers.
-    pub const DEVICE_ROW: f32 = 48.;
+    pub const DEVICE_ROW: f32 = 56.;
+    /// Height of a place row and of a section heading in the places panel.
+    pub const PLACE_ROW: f32 = 32.;
+    /// Place and device icons in the places panel.
+    pub const PLACE_ICON: f32 = 20.;
+    /// The eject button on a device row.
+    pub const EJECT: f32 = 28.;
+    /// Height of a usage bar under a volume's name.
+    pub const USAGE: f32 = 4.;
     /// Width of the places panel.
-    pub const SIDEBAR: f32 = 220.;
+    pub const SIDEBAR: f32 = 240.;
     /// Width of a context menu and of its application list.
     pub const MENU: f32 = 240.;
     /// Width of the label column beside a dialog fact.
@@ -105,12 +113,12 @@ pub mod text {
     pub const FAMILY_HEADING: &str = "Space Grotesk";
     /// Data cells (`data-md`).
     pub const DATA: f32 = 14.;
-    /// The smallest text: figures under a usage bar.
-    pub const TINY: f32 = 11.;
     /// Secondary information: status line, captions.
     pub const SMALL: f32 = 12.;
     /// Body text and list rows.
     pub const BODY: f32 = 14.;
+    /// File and place names (`body-lg`).
+    pub const NAME: f32 = 15.;
     /// Panel and dialog titles (`headline-sm`).
     pub const HEADING: f32 = 17.;
     /// Line height for body text.

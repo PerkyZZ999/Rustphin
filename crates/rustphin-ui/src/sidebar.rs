@@ -18,7 +18,7 @@ use gpui_kit::{
     actions,
     component::{
         Icon, Sizable as _,
-        button::{Button, ButtonVariants as _},
+        button::Button,
         input::{Input, InputEvent, InputState},
     },
     div,
@@ -110,6 +110,8 @@ enum Row {
     Group(usize),
     /// A storage volume, by the device service's name for it.
     Device(String),
+    /// The Devices heading, which folds the volumes away.
+    Devices,
 }
 
 /// A place being dragged within the panel.
@@ -161,6 +163,8 @@ pub struct Sidebar {
     devices: Vec<Device>,
     /// A device-service failure, distinct from a successful empty inventory.
     devices_unavailable: bool,
+    /// Whether the Devices section is folded, for this run.
+    devices_folded: bool,
     usage: HashMap<String, (u64, u64)>,
     device_service: Arc<dyn Devices>,
     /// The volume being mounted or unmounted, shown as busy.
@@ -265,13 +269,17 @@ fn device_name(device: &Device) -> String {
     }
 }
 
-/// How full a volume is, in words short enough for the panel.
+/// How full a volume is, in words short enough for the panel: "120.6 of
+/// 476.9 GiB free", or both units when they differ.
 fn usage_text(total: u64, free: u64) -> String {
-    format!(
-        "{} free of {}",
-        format::size_short(free),
-        format::size_short(total)
-    )
+    let (free, total) = (format::size(free), format::size(total));
+    let unit = |size: &str| size.rsplit_once(' ').map(|(_, unit)| unit.to_owned());
+    match (free.rsplit_once(' '), unit(&total)) {
+        (Some((number, free_unit)), Some(total_unit)) if free_unit == total_unit => {
+            format!("{number} of {total} free")
+        }
+        _ => format!("{free} of {total} free"),
+    }
 }
 
 /// Whether the panel offers to unmount or remove `device`: anything mounted
@@ -347,6 +355,7 @@ impl Sidebar {
             current: None,
             devices: Vec::new(),
             devices_unavailable: false,
+            devices_folded: false,
             usage: HashMap::new(),
             device_service: Arc::new(NoDevices),
             device_busy: None,
@@ -550,11 +559,16 @@ impl Sidebar {
 
     fn rows(&self) -> Vec<Row> {
         let mut rows = rows(&self.places, &self.groups, self.show_hidden);
-        rows.extend(
-            self.devices
-                .iter()
-                .map(|device| Row::Device(device.id.clone())),
-        );
+        if !self.devices.is_empty() || self.devices_unavailable {
+            rows.push(Row::Devices);
+        }
+        if !self.devices_folded {
+            rows.extend(
+                self.devices
+                    .iter()
+                    .map(|device| Row::Device(device.id.clone())),
+            );
+        }
         rows
     }
 
@@ -605,6 +619,10 @@ impl Sidebar {
                 self.set_collapsed(*index, !collapsed, cx);
             }
             Row::Device(id) => self.open_device(id, new_tab, cx),
+            Row::Devices => {
+                self.devices_folded = !self.devices_folded;
+                cx.notify();
+            }
         }
     }
 
@@ -797,6 +815,11 @@ impl Sidebar {
         let (click_row, middle_row) = (row.clone(), row.clone());
         let eject_id = device.id.clone();
         let name: SharedString = device_name(device).into();
+        // The name with where it is mounted: "Data (/data)".
+        let shown: SharedString = match &device.mount_point {
+            Some(mount) => format!("{name} ({})", mount.display()).into(),
+            None => name.clone(),
+        };
         let line = self
             .row_surface(&row, is_current, theme, window, cx)
             .id(SharedString::from(format!("device-{}", device.id)));
@@ -811,12 +834,16 @@ impl Sidebar {
         );
         self.row_semantics(line, &row, name.clone(), is_current, window, cx)
             .aria_level(1)
-            .aria_description(if device.mount_point.is_some() {
-                "Mounted volume"
-            } else {
-                "Unmounted volume"
+            // The figures in full, since the panel may cut them short.
+            .aria_description(match (device.mount_point.is_some(), usage) {
+                (true, Some((total, free))) => {
+                    format!("Mounted volume, {}", usage_text(total, free))
+                }
+                (true, None) => "Mounted volume".to_owned(),
+                (false, _) => "Unmounted volume".to_owned(),
             })
             .h(px(size::DEVICE_ROW))
+            .pr(px(space::XS))
             // A volume that is not mounted is listed, but fainter.
             .when(device.mount_point.is_none(), |line| {
                 line.text_color(theme.text_muted)
@@ -829,7 +856,7 @@ impl Sidebar {
                 } else {
                     I::HardDrive
                 })
-                .size(px(size::ICON))
+                .size(px(size::PLACE_ICON))
                 .flex_none()
                 .text_color(if is_current {
                     theme.accent
@@ -843,8 +870,9 @@ impl Sidebar {
                     .flex_col()
                     .flex_1()
                     .min_w_0()
-                    .gap(px(space::XS / 2.))
-                    .child(div().truncate().child(name))
+                    .gap(px(space::XS))
+                    .text_size(px(text::BODY))
+                    .child(div().truncate().child(shown))
                     // How full it is: a bar, and the same in words on hover
                     // and in the line under it.
                     .when_some(usage, |column, (total, free)| {
@@ -853,7 +881,7 @@ impl Sidebar {
                             .child(
                                 div()
                                     .w_full()
-                                    .h(px(size::PROGRESS / 2.))
+                                    .h(px(size::USAGE))
                                     .rounded(px(size::RADIUS))
                                     .bg(theme.track)
                                     .child(
@@ -867,7 +895,8 @@ impl Sidebar {
                             .child(
                                 div()
                                     .font_family(text::FAMILY_DATA)
-                                    .text_size(px(text::TINY))
+                                    .text_size(px(text::SMALL))
+                                    .line_height(px(text::LINE - space::XS))
                                     .text_color(theme.text_muted)
                                     .truncate()
                                     .child(usage_text(total, free)),
@@ -877,9 +906,13 @@ impl Sidebar {
             .when(ejectable && !busy, |line| {
                 line.child(
                     Button::new(SharedString::from(format!("eject-{}", device.id)))
-                        .ghost()
-                        .xsmall()
-                        .icon(I::Eject)
+                        .outline()
+                        // 8 pixels from the figures, as in the mockup.
+                        .ml(px(-space::XS))
+                        .with_size(px(size::EJECT))
+                        .size(px(size::EJECT))
+                        // Lucide has no eject glyph (docs/DESIGN.md).
+                        .child(Icon::new(I::ArrowUpFromLine).size(px(size::ICON)))
                         .accessibility_label(eject_label)
                         .tooltip(if device.removable && device.can_power_off() {
                             "Safely remove (E)"
@@ -915,7 +948,7 @@ impl Sidebar {
             Row::Place(id) => self.place(id).map(|place| place.title.clone()),
             Row::Group(index) => self.groups.groups.get(*index).map(|g| g.name.clone()),
             // A volume's label belongs to its filesystem.
-            Row::Device(_) => None,
+            Row::Device(_) | Row::Devices => None,
         };
         let Some(name) = name else { return };
         let len = name.len();
@@ -948,7 +981,7 @@ impl Sidebar {
                     self.groups.rename(index, &typed);
                     self.save_groups(cx);
                 }
-                Row::Device(_) => {}
+                Row::Device(_) | Row::Devices => {}
             }
         }
         if self
@@ -997,7 +1030,7 @@ impl Sidebar {
                 cx.notify();
             }
             // A volume is not removed from the list; `E` unmounts it.
-            Some(Row::Device(_)) | None => {}
+            Some(Row::Device(_) | Row::Devices) | None => {}
         }
     }
 
@@ -1065,7 +1098,7 @@ impl Sidebar {
                     |_, (), _| {},
                 );
             }
-            Some(Row::Device(_)) | None => {}
+            Some(Row::Device(_) | Row::Devices) | None => {}
         }
     }
 
@@ -1113,7 +1146,7 @@ impl Sidebar {
     fn drop_place(&mut self, id: &str, target: &Row, cx: &mut Context<Self>) {
         match target {
             Row::Group(index) => self.move_to_group(id, Some(*index), None, cx),
-            Row::Device(_) => {}
+            Row::Device(_) | Row::Devices => {}
             Row::Place(other) if other == id => {}
             Row::Place(other) => match self.groups.group_of(other) {
                 Some(index) => self.move_to_group(id, Some(index), Some(other), cx),
@@ -1142,7 +1175,7 @@ impl Sidebar {
         let group = match target {
             Some(Row::Group(index)) => Some(*index),
             Some(Row::Place(id)) => self.groups.group_of(id),
-            Some(Row::Device(_)) | None => None,
+            Some(Row::Device(_) | Row::Devices) | None => None,
         };
         for folder in folders {
             self.add_place(folder, group, cx);
@@ -1245,11 +1278,11 @@ impl Sidebar {
         let keyboard_here = self.focused.as_ref() == Some(row) && self.is_focused(window, cx);
         div()
             .flex()
+            .flex_none()
             .items_center()
-            .gap(px(space::SM))
-            .h(px(size::ROW))
-            .mx(px(space::XS))
-            .px(px(space::SM))
+            .gap(px(space::MD))
+            .h(px(size::PLACE_ROW))
+            .px(px(space::MD - size::SELECTION_BAR))
             .rounded(px(size::RADIUS))
             .border_l(px(size::SELECTION_BAR))
             .border_color(gpui_kit::transparent_black())
@@ -1312,12 +1345,15 @@ impl Sidebar {
         let line = self
             .row_semantics(line, &row, title.clone(), is_current, window, cx)
             .aria_level(if indented { 2 } else { 1 })
-            .when(indented, |line| line.pl(px(space::LG + space::SM)))
+            .when(indented, |line| {
+                line.pl(px(space::LG * 2. - size::SELECTION_BAR))
+            })
             // A hidden place is only listed while hidden ones are shown.
             .when(place.hidden, |line| line.opacity(0.5))
+            .text_size(px(text::NAME))
             .child(
                 Icon::new(icon_for(place))
-                    .size(px(size::ICON))
+                    .size(px(size::PLACE_ICON))
                     .flex_none()
                     .text_color(if is_current {
                         theme.accent
@@ -1344,6 +1380,61 @@ impl Sidebar {
         Self::drop_target(line, Some(row), theme, cx).into_any_element()
     }
 
+    /// A sentence in the panel with its icon: no places yet, or why devices
+    /// are missing.
+    fn note(icon: gpui_kit::assets::IconName, text: &'static str, theme: Theme) -> gpui_kit::Div {
+        div()
+            .flex()
+            .flex_none()
+            .items_start()
+            .gap(px(space::SM))
+            .px(px(space::MD))
+            .py(px(space::SM))
+            .text_size(px(text::BODY))
+            .text_color(theme.text_muted)
+            .child(
+                Icon::new(icon)
+                    .size(px(size::ICON))
+                    .flex_none()
+                    .mt(px(space::XS / 2.)),
+            )
+            .child(div().flex_1().min_w_0().child(text))
+    }
+
+    /// A section heading ("Devices", a group): the arrow saying whether it
+    /// is open, the name in `body-strong`. [`Self::section_rule`] goes above.
+    /// The hairline that opens a section, 8 pixels below what comes before.
+    fn section_rule(theme: Theme) -> gpui_kit::Div {
+        div()
+            .flex_none()
+            .mt(px(space::SM))
+            .h(px(size::HAIRLINE))
+            .bg(theme.border)
+    }
+
+    fn section_heading<E: gpui_kit::Styled + gpui_kit::ParentElement>(
+        line: E,
+        folded: bool,
+        theme: Theme,
+    ) -> E {
+        use gpui_kit::assets::IconName as I;
+        line.gap(px(space::SM))
+            .px(px(space::SM - size::SELECTION_BAR))
+            .text_color(theme.text_muted)
+            .text_size(px(text::BODY))
+            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+            // The arrow, not colour, says whether the section is open.
+            .child(
+                Icon::new(if folded {
+                    I::ChevronRight
+                } else {
+                    I::ChevronDown
+                })
+                .size(px(size::ICON))
+                .flex_none(),
+            )
+    }
+
     fn group_row(
         &self,
         index: usize,
@@ -1353,47 +1444,33 @@ impl Sidebar {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        use gpui_kit::assets::IconName as I;
         let row = Row::Group(index);
         let (name, collapsed) = (group.name.as_str(), group.collapsed);
         let click_row = row.clone();
-        let line = self
-            .row_surface(&row, false, theme, window, cx)
-            .id(("group-heading", index))
-            .mt(px(space::SM))
-            .text_color(theme.text_muted)
-            .font_family(text::FAMILY_HEADING)
-            .text_size(px(text::SMALL))
-            // The arrow, not colour, says whether the group is open.
-            .child(
-                Icon::new(if collapsed {
-                    I::ChevronRight
-                } else {
-                    I::ChevronDown
-                })
-                .size(px(size::ICON_SMALL))
-                .flex_none(),
-            )
-            .child(self.name_or_field(&row, name.to_owned().into(), theme, window, cx))
-            .when(collapsed && !members.is_empty(), |line| {
-                line.child(
-                    div()
-                        .flex_none()
-                        .font_family(text::FAMILY_DATA)
-                        .child(members.len().to_string()),
-                )
-            })
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.focused = Some(click_row.clone());
-                this.focus.focus(window, cx);
-                this.open(&click_row.clone(), false, cx);
-            }));
+        let label = if collapsed && !members.is_empty() {
+            format!("{name} ({})", members.len())
+        } else {
+            name.to_owned()
+        };
+        let line = Self::section_heading(
+            self.row_surface(&row, false, theme, window, cx)
+                .id(("group-heading", index)),
+            collapsed,
+            theme,
+        )
+        .child(self.name_or_field(&row, label.into(), theme, window, cx))
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.focused = Some(click_row.clone());
+            this.focus.focus(window, cx);
+            this.open(&click_row.clone(), false, cx);
+        }));
         let header = Self::drop_target(line, Some(row.clone()), theme, cx);
         let mut branch = div()
             .id(("group", index))
             .flex()
             .flex_col()
             .flex_none()
+            .child(Self::section_rule(theme))
             .child(header);
         if !collapsed {
             branch = branch.children(
@@ -1446,47 +1523,64 @@ impl Render for Sidebar {
         }
         if lines.is_empty() {
             lines.push(
-                div()
-                    .p(px(space::MD))
-                    .text_size(px(text::SMALL))
-                    .text_color(theme.text_muted)
-                    .child(
-                        "No places yet. Add the folder shown with Ctrl+Shift+D, or drag a folder here.",
-                    )
-                    .into_any_element(),
+                Self::note(
+                    gpui_kit::assets::IconName::Bookmark,
+                    "No places yet. Add the folder shown with Ctrl+Shift+D, or drag a folder here.",
+                    theme,
+                )
+                .into_any_element(),
             );
         }
         let devices = self.devices.clone();
         if !devices.is_empty() || self.devices_unavailable {
+            let folded = self.devices_folded;
+            let row = Row::Devices;
+            let click_row = row.clone();
+            let heading = Self::section_heading(
+                self.row_surface(&row, false, theme, window, cx)
+                    .id("devices-heading"),
+                folded,
+                theme,
+            )
+            .child(div().flex_1().min_w_0().truncate().child(if folded {
+                format!("Devices ({})", devices.len())
+            } else {
+                "Devices".to_owned()
+            }))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.focused = Some(click_row.clone());
+                this.focus.focus(window, cx);
+                this.open(&click_row.clone(), false, cx);
+            }));
+            lines.push(Self::section_rule(theme).into_any_element());
             lines.push(
-                div()
-                    .mt(px(space::SM))
-                    .mx(px(space::XS))
-                    .px(px(space::SM))
-                    .h(px(size::ROW))
-                    .flex()
-                    .items_center()
-                    .font_family(text::FAMILY_HEADING)
-                    .text_size(px(text::SMALL))
-                    .text_color(theme.text_muted)
-                    .child("Devices")
+                self.row_semantics(heading, &row, "Devices".into(), false, window, cx)
+                    .aria_level(1)
+                    .aria_expanded(!folded)
+                    .aria_description(if folded {
+                        "Collapsed section. Activate to expand."
+                    } else {
+                        "Expanded section. Activate to collapse."
+                    })
                     .into_any_element(),
             );
-            if self.devices_unavailable {
-                lines.push(
-                    div()
+            if !folded {
+                if self.devices_unavailable {
+                    lines.push(
+                        Self::note(
+                            gpui_kit::assets::IconName::TriangleAlert,
+                            DEVICES_UNAVAILABLE,
+                            theme,
+                        )
                         .id("devices-unavailable")
                         .role(Role::Status)
                         .aria_label(DEVICES_UNAVAILABLE)
-                        .p(px(space::MD))
-                        .text_size(px(text::SMALL))
-                        .text_color(theme.text_muted)
-                        .child(DEVICES_UNAVAILABLE)
                         .into_any_element(),
-                );
-            }
-            for device in &devices {
-                lines.push(self.device_row(device, theme, window, cx));
+                    );
+                }
+                for device in &devices {
+                    lines.push(self.device_row(device, theme, window, cx));
+                }
             }
         }
 
@@ -1503,10 +1597,11 @@ impl Render for Sidebar {
                 div()
                     .flex_1()
                     .min_w_0()
-                    .px(px(space::XS))
+                    .px(px(space::SM))
                     .font_family(text::FAMILY_HEADING)
-                    .text_size(px(text::SMALL))
-                    .text_color(theme.text_muted)
+                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                    .text_size(px(text::HEADING))
+                    .text_color(theme.text)
                     .child("Places"),
             );
 
@@ -1516,7 +1611,7 @@ impl Render for Sidebar {
             .flex_1()
             .min_h_0()
             .overflow_y_scroll()
-            .py(px(space::XS))
+            .p(px(space::SM))
             .children(lines);
 
         div()
@@ -1707,9 +1802,13 @@ mod tests {
         assert_eq!(device_name(&volume), "64.0 GiB volume");
         volume.label = Some("STICK".into());
         assert_eq!(device_name(&volume), "STICK");
+        const GIB: u64 = 1024 * 1024 * 1024;
+        // One unit when both figures share it, so the line fits the panel.
+        assert_eq!(usage_text(64 * GIB, 16 * GIB), "16.0 of 64.0 GiB free");
+        // Both units when they differ.
         assert_eq!(
-            usage_text(64 * 1024 * 1024 * 1024, 16 * 1024 * 1024 * 1024),
-            "16 GiB free of 64 GiB"
+            usage_text(GIB + GIB / 5, 512 * 1024 * 1024),
+            "512.0 MiB of 1.2 GiB free"
         );
         assert_eq!(device_name(&device(Some("/"), false, false)), "System");
     }

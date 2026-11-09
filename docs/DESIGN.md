@@ -842,6 +842,9 @@ except where the list below says otherwise; each W-079 step adds its line.
   chevron and shortcut, the 640/560/300 px rules, the 52 px places title, and
   the window lines' order. Disabled toolbar buttons use the component
   library's dimmed text, close to but not exactly `text-disabled`.
+- W-079c (2026-11-08): the places panel as described, with Devices folding
+  for the run (not saved). With an eject button, long figures can still be
+  cut short.
 - Not yet implemented: the rest of "Changes from the earlier design" (sizes,
   layout, new components and wording).
 
