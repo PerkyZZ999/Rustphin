@@ -105,15 +105,23 @@ impl Workspace {
                             .parent_node()
                             .set_live(gpui_kit::accesskit::Live::Polite);
                     })
+                    .flex()
                     .flex_none()
+                    .items_center()
+                    .gap(px(space::SM))
                     .min_h(px(size::STATUS))
-                    .px(px(space::LG))
+                    .px(px(space::MD))
                     .py(px(space::XS))
                     .border_t_1()
                     .border_color(theme.border)
                     .bg(theme.chrome)
-                    .text_size(px(text::SMALL))
+                    .text_size(px(text::BODY))
                     .text_color(theme.text_muted)
+                    .child(
+                        gpui_kit::component::Icon::new(gpui_kit::component::IconName::Info)
+                            .size(px(size::ICON))
+                            .flex_none(),
+                    )
                     .child(label)
             })
     }

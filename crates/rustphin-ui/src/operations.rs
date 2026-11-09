@@ -48,6 +48,8 @@ pub struct Running {
     /// Whether it reverts an earlier operation.
     undo: bool,
     started: Instant,
+    /// The icon beside its line.
+    pub icon: gpui_kit::assets::IconName,
 }
 
 impl Running {
@@ -128,6 +130,15 @@ pub struct Notice {
     pub offers_undo: bool,
 }
 
+/// What an operation left out, for the error details dialog.
+#[derive(Debug, Clone)]
+pub struct Problems {
+    /// What the operation was doing: "Copying 12 items to “Pictures”".
+    pub title: String,
+    /// The entries left out and why.
+    pub entries: Vec<rustphin_core::ops::Skipped>,
+}
+
 /// The application's file operations and their state.
 pub struct Hub {
     ops: Operations,
@@ -145,6 +156,9 @@ pub struct Hub {
     pub questions: VecDeque<Question>,
     /// The latest message, if not yet dismissed.
     pub notice: Option<Notice>,
+    /// The entries the operation behind [`Self::notice`] left out, with what
+    /// it was doing, for the error details dialog. Empty otherwise.
+    pub problems: Option<Problems>,
     /// The file clipboard: the desktop's, or a private one where the
     /// desktop offers none to share.
     clipboard: Arc<dyn FileClipboard>,
@@ -209,6 +223,7 @@ pub fn init(cx: &mut App) {
             running: Vec::new(),
             questions: VecDeque::new(),
             notice: None,
+            problems: None,
             clipboard,
             clip: None,
             told_unshared: false,
@@ -547,6 +562,7 @@ impl Hub {
     /// Dismisses the message being shown.
     pub fn dismiss_notice(&mut self, cx: &mut Context<Self>) {
         self.notice = None;
+        self.problems = None;
         cx.notify();
     }
 
@@ -565,6 +581,7 @@ impl Hub {
     ) -> u64 {
         self.notice_serial += 1;
         let serial = self.notice_serial;
+        self.problems = None;
         self.notice = Some(Notice {
             text,
             is_error,
@@ -576,6 +593,7 @@ impl Hub {
                 let _ = hub.update(cx, |hub, cx| {
                     if hub.notice_serial == serial {
                         hub.notice = None;
+                        hub.problems = None;
                         cx.notify();
                     }
                 });
@@ -595,6 +613,7 @@ impl Hub {
                     .unwrap_or_else(|| (activity(&request, undo), past(&request)));
                 self.running.push(Running {
                     id,
+                    icon: activity_icon(&request),
                     label,
                     done,
                     undo,
@@ -639,6 +658,16 @@ impl Hub {
                 let (done, undo) = finished
                     .as_ref()
                     .map_or(("", false), |running| (running.done.as_str(), running.undo));
+                let problems = match &result {
+                    Finished::Done(outcome) if !outcome.skipped.is_empty() => Some(Problems {
+                        title: finished
+                            .as_ref()
+                            .map(|running| running.label.clone())
+                            .unwrap_or_default(),
+                        entries: outcome.skipped.clone(),
+                    }),
+                    _ => None,
+                };
                 let lasting = self.lasting.remove(&id);
                 if let Some(notice) = result_notice(done, undo, &result) {
                     let expires = !notice.is_error && !lasting;
@@ -649,6 +678,7 @@ impl Hub {
                         expires,
                         cx,
                     );
+                    self.problems = problems;
                 }
             }
         }
@@ -801,6 +831,21 @@ fn result_notice(done: &str, undo: bool, result: &Finished) -> Option<Notice> {
             is_error: true,
             offers_undo: false,
         }),
+    }
+}
+
+/// The icon of an activity line: what kind of work it is (docs/DESIGN.md).
+fn activity_icon(request: &Request) -> gpui_kit::assets::IconName {
+    use gpui_kit::assets::IconName as I;
+    match request {
+        Request::Copy { .. } | Request::Duplicate { .. } => I::Copy,
+        Request::Move { .. } => I::Move,
+        Request::Trash { .. } | Request::Delete { .. } => I::Trash,
+        Request::Restore { .. } => I::Undo2,
+        Request::Rename { .. }
+        | Request::RenameBatch { .. }
+        | Request::RecoverRenameBatch { .. } => I::Pencil,
+        _ => I::Loader,
     }
 }
 

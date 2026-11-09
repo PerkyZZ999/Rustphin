@@ -1405,6 +1405,27 @@ mod tests {
     }
 
     #[test]
+    fn the_selection_revision_changes_with_the_selected_entries_only() {
+        let (_model, _events, shown) = listed(5);
+        let mut selection = crate::Selection::default();
+        selection.select_only(&shown, 0);
+        let one = selection.revision();
+        // A copy is the same selection.
+        assert_eq!(selection.clone().revision(), one);
+        // Another entry with the same count is a different selection.
+        selection.select_only(&shown, 1);
+        let other = selection.revision();
+        assert_ne!(other, one);
+        selection.clear();
+        assert_ne!(selection.revision(), other);
+        // Independent selections never share a revision once changed.
+        let mut second = crate::Selection::default();
+        second.select_only(&shown, 1);
+        assert_ne!(second.revision(), other);
+        assert_ne!(second.revision(), selection.revision());
+    }
+
+    #[test]
     fn the_selection_follows_its_entries_through_a_resort() {
         let (mut model, events, shown) = listed(5);
         let mut selection = crate::Selection::default();

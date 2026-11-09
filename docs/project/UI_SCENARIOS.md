@@ -19,7 +19,7 @@ Notes for the agent:
 
 ## Expected fixture listing
 
-Details view, name order, hidden files off: folders Documents, empty, locked, only-hidden, Pictures, Projects; then backup.tar.gz, the bad name (shown as `bad�␊name.txt`), file2.txt, file10.txt, main.rs, Makefile, mystery, notes.txt, photo.JPG, report.pdf, video.mp4. Status line: "17 items, 1 hidden".
+Details view, name order, hidden files off: folders Documents, empty, locked, only-hidden, Pictures, Projects; then backup.tar.gz, the bad name (shown as `bad�␊name.txt`), file2.txt, file10.txt, main.rs, Makefile, mystery, notes.txt, photo.JPG, report.pdf, video.mp4. Status line (since W-079e): "17 items (5.1 MiB), 1 hidden" on the left and "Free: … of …" on the right in panes of 600 px or more; sizes count files only.
 
 ## Scenarios
 
@@ -31,15 +31,15 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | N4 | Double-click "locked" | Inline error "you do not have permission…"; listing unchanged; location bar still names the fixture |
 | N5 | Ctrl+L, Ctrl+A, type `/no/such/folderX`, Backspace, Enter | The field held `/no/such/folder` (Backspace edited text); inline error "does not exist"; listing and location unchanged |
 | N6 | Enter "only-hidden" | "This folder has only hidden items", "1 hidden item is not shown.", a "Show hidden files" button |
-| N7 | Ctrl+H in the fixture | `.hidden` appears; status "18 items"; press again to hide |
-| S1 | Click row 1, Ctrl+click rows 4 and 7 | Three separate rows selected; status "3 of 17 items selected" |
-| S2 | Click row 1, Shift+click row 4 | Rows 1–4 selected; "4 of 17 items selected" |
+| N7 | Ctrl+H in the fixture | `.hidden` appears; status "18 items (…)"; press again to hide |
+| S1 | Click row 1, Ctrl+click rows 4 and 7 | Three separate rows selected; status "3 items selected (…)" before "17 items (…), 1 hidden" |
+| S2 | Click row 1, Shift+click row 4 | Rows 1–4 selected; "4 items selected (…)" |
 | S3 | Ctrl+Shift+A | The other 13 selected; the focused, unselected row keeps an accent bar |
-| S4 | Escape | Nothing selected; status "17 items, 1 hidden" |
+| S4 | Escape | Nothing selected; status "17 items (…), 1 hidden" with no selection part |
 | S5 | Click the last row, type `p` | Selection wraps to "Pictures" |
 | S6 | Shift+Down twice | Three consecutive rows selected |
 | S8 | Press the mouse button on the fifth row to the right of its name (in the Size column), move down five rows, release (use `mouse_button_down`, `mouse_move`, `mouse_button_up`) | An outlined band while dragging; the six rows it crossed stay selected after release |
-| S7 | Ctrl+A | All selected: "17 of 17 items selected" |
+| S7 | Ctrl+A | All selected: "17 items selected (…)" |
 | O1 | Click the Size heading twice | Largest first (video.mp4, report.pdf, …), folders still on top, a down arrow on Size |
 | O2 | Click the Modified heading | Oldest first among files: photo.JPG (2023), notes.txt (2024), video.mp4 (2025) |
 | O3 | Click the Type heading | Files without an extension first (Makefile, mystery), then by extension: gz, JPG, mp4, pdf, rs, txt |

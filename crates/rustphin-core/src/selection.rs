@@ -1,8 +1,15 @@
 //! Which entries of a listing are selected.
 
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use crate::Snapshot;
+
+/// The next revision handed out; shared so independent selections never
+/// share one after a change.
+static NEXT_REVISION: AtomicU64 = AtomicU64::new(1);
 
 /// The selected entries of one listing, with the anchor and focus that
 /// keyboard and range selection work from.
@@ -18,9 +25,23 @@ pub struct Selection {
     anchor: Option<u32>,
     /// The entry keyboard movement continues from.
     focus: Option<u32>,
+    /// See [`Self::revision`].
+    revision: u64,
 }
 
 impl Selection {
+    /// Identifies this state of the selection: it changes whenever the
+    /// selected entries may have changed, so equal revisions mean the same
+    /// entries are selected. Lets views cache what they derive from it, such
+    /// as the size of the selected files.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    fn changed(&mut self) {
+        self.revision = NEXT_REVISION.fetch_add(1, Ordering::Relaxed);
+    }
+
     /// Number of selected entries.
     pub fn len(&self) -> usize {
         self.count
@@ -39,11 +60,13 @@ impl Selection {
                 listing: snapshot.listing(),
                 ..Self::default()
             };
+            self.changed();
             return;
         }
         if self.count == 0 {
             return;
         }
+        self.changed();
         let mut shown = vec![0u64; self.bits.len()];
         for row in 0..snapshot.len() {
             let id = snapshot.entry_id(row) as usize;
@@ -99,6 +122,7 @@ impl Selection {
         carried.anchor = id_of(anchor);
         carried.focus = id_of(focus);
         *self = carried;
+        self.changed();
     }
 
     /// Whether the entry shown in `row` is selected.
@@ -123,6 +147,7 @@ impl Selection {
 
     /// Deselects everything.
     pub fn clear(&mut self) {
+        self.changed();
         self.bits.clear();
         self.count = 0;
         self.anchor = None;
@@ -246,6 +271,7 @@ impl Selection {
         if self.has(id) == selected {
             return;
         }
+        self.changed();
         let id = id as usize;
         if self.bits.len() <= id / 64 {
             self.bits.resize(id / 64 + 1, 0);

@@ -29,7 +29,7 @@ S11 — Hardening for daily use (in progress)
   - [x] W-079b — Window and panes: tab strip (40 px, type icons, 24 px close, 40 px "+", filled strip); toolbar (52 px, outlined 36 px buttons, location field with folder icon and "Trash", Actions with its shortcut; 640/560/300 px breakpoints); window lines below the panes' status lines.
   - [x] W-079c — Places panel: 240 px, 52 px title, 32 px rows with 20 px icons, current place in primary-subtle with its bar, section headings with chevrons and counts, 56 px device rows with "x of y free" and the eject icon.
   - [x] W-079d — Views: 36 px default rows and the zoom table, new column widths and breakpoints, mono type column, "—" for folders, thumbnails from 24 px, 128 × 152 icon cells, 240 px compact columns, 28 px rename field, drag chip with icon, scrollbar below the headings, state headings.
-  - [ ] W-079e — Bottom of the pane and window: two-zone status line with free space (600/440 px rules), 32 px filter field, activity line, result line with Undo and dismiss, blur status line; error banner with Details… and the error details dialog.
+  - [x] W-079e — Bottom of the pane and window: two-zone status line with free space (600/440 px rules), 32 px filter field, activity line, result line with Undo and dismiss, blur status line; error banner with Details… and the error details dialog.
   - [ ] W-079f — Context menu with icons, shortcuts, the bar and the three new items; palette title row, icons, trails and 52 px results.
   - [ ] W-079g — Dialogs: 480 px, title rows with icon and close, buttons with keys; Properties header, thumbnail, owner and group, exact bytes, seconds; batch rename segments, arrow and neutral note; question titles, Keep both fact, Keep as the run default.
 

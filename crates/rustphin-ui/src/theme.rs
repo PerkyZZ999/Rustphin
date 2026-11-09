@@ -41,9 +41,17 @@ pub mod size {
     /// Minimum pane width for the Back button.
     pub const TOOLBAR_BACK_MIN: f32 = 300.;
     /// Height of the status line.
-    pub const STATUS: f32 = 28.;
+    pub const STATUS: f32 = 32.;
+    /// Narrowest pane whose status line still shows the free space.
+    pub const STATUS_FREE_SPACE_MIN: f32 = 600.;
+    /// Below this pane width, a status line with a selection shows only it.
+    pub const STATUS_SELECTION_ONLY_BELOW: f32 = 440.;
     /// Height of the filter bar above the status line.
-    pub const FILTER_BAR: f32 = 36.;
+    pub const FILTER_BAR: f32 = 40.;
+    /// Height of the field in the filter bar, leaving room for its ring.
+    pub const FILTER_FIELD: f32 = 32.;
+    /// Widest the filter field grows.
+    pub const FILTER_FIELD_MAX: f32 = 360.;
     /// Height of the tab strip.
     pub const TABS: f32 = 40.;
     /// Width of a tab.
@@ -79,8 +87,8 @@ pub mod size {
     pub const PLACE_ROW: f32 = 32.;
     /// Place and device icons in the places panel.
     pub const PLACE_ICON: f32 = 20.;
-    /// The eject button on a device row.
-    pub const EJECT: f32 = 28.;
+    /// Small icon buttons: eject on a device row, close in a bar.
+    pub const SMALL_BUTTON: f32 = 28.;
     /// Height of a usage bar under a volume's name.
     pub const USAGE: f32 = 4.;
     /// Width of the places panel.
@@ -94,7 +102,7 @@ pub mod size {
     /// Tallest a context menu grows before it scrolls: twelve rows.
     pub const MENU_VISIBLE: f32 = 336.;
     /// Width of a dialog.
-    pub const DIALOG: f32 = 440.;
+    pub const DIALOG: f32 = 480.;
     /// Width of the batch-rename dialog, which has a two-column preview.
     pub const RENAME_DIALOG: f32 = 640.;
     /// Maximum width of the command palette.
@@ -102,9 +110,15 @@ pub mod size {
     /// Height of a command result, including its second line.
     pub const PALETTE_ROW: f32 = 48.;
     /// Height of a progress bar.
-    pub const PROGRESS: f32 = 4.;
-    /// Width of a progress bar in the activity line.
-    pub const PROGRESS_WIDTH: f32 = 160.;
+    pub const PROGRESS: f32 = 6.;
+    /// Narrowest a progress bar gets in the activity line.
+    pub const PROGRESS_MIN: f32 = 80.;
+    /// Height of an activity or result line under the panes.
+    pub const LINE: f32 = 44.;
+    /// Height of a text button in lines and dialogs.
+    pub const BUTTON: f32 = 32.;
+    /// Height of a dialog's title row.
+    pub const DIALOG_TITLE: f32 = 48.;
     /// Corner radius shared by controls, rows and panels.
     pub const RADIUS: f32 = 2.;
 }

@@ -317,6 +317,11 @@ pub struct Browser {
     refocus: bool,
     /// The trash directory whose contents this view is showing, if it is one.
     trash_dir: Option<PathBuf>,
+    /// The size and free space of the volume holding the folder shown, and
+    /// the folder it was read for.
+    free_space: Option<(PathBuf, u64, u64)>,
+    /// What the status line last derived from a snapshot and selection.
+    status_sizes: std::cell::RefCell<Option<StatusSizes>>,
     /// Whether something in the folder shown is cut; refreshed every redraw.
     has_cut: bool,
     /// Set by an entry when the mouse button goes down on its draggable part.
@@ -425,6 +430,8 @@ impl Browser {
             rename_requested: None,
             refocus: false,
             trash_dir: None,
+            free_space: None,
+            status_sizes: std::cell::RefCell::new(None),
             has_cut: false,
             press_on_entry: false,
             other_trashes: Vec::new(),
@@ -583,6 +590,7 @@ impl Browser {
                     self.select_when_seen = None;
                     self.select_all_when_seen.clear();
                     self.detect_trash(snapshot.path().to_owned(), cx);
+                    self.measure_free_space(snapshot.path().to_owned(), cx);
                     // What the previous folder was waiting for is not wanted now.
                     thumbs(cx).update(cx, |thumbs, _| thumbs.drop_waiting());
                 } else if same_place.is_some_and(|shown| shown.listing() != snapshot.listing()) {
@@ -1687,6 +1695,26 @@ impl Browser {
     }
 
     /// Finds out in the background whether `path` shows a trash directory.
+    /// Reads how much space the folder's volume has left, in the background.
+    fn measure_free_space(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        self.free_space = None;
+        cx.spawn(async move |view, cx| {
+            let folder = path.clone();
+            let usage = cx
+                .background_spawn(async move { rustphin_platform::devices::usage(&folder) })
+                .await;
+            let _ = view.update(cx, |view, cx| {
+                if let Some((total, free)) = usage
+                    && view.location().as_deref() == Some(path.as_path())
+                {
+                    view.free_space = Some((path, total, free));
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
     fn detect_trash(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         self.trash_dir = None;
         self.other_trashes.clear();
@@ -3130,34 +3158,124 @@ impl Browser {
         true
     }
 
-    fn status(&self, theme: Theme) -> impl IntoElement {
-        let message = match self.current_snapshot() {
-            None => "Loading\u{2026}".to_owned(),
-            Some(snapshot) => status_message(&StatusFacts {
-                shown: snapshot.len(),
-                unfiltered: snapshot.unfiltered_len(),
-                total: snapshot.total(),
-                selected: self.selection.len(),
-                filter: snapshot.filter().map(NameFilter::text),
-                loading: snapshot.is_loading(),
-            }),
+    /// The sizes the status line shows for `snapshot`, worked out once per
+    /// snapshot and selection: summing half a million rows is not for every
+    /// frame.
+    fn status_sizes(&self, snapshot: &Arc<Snapshot>) -> StatusSizes {
+        let key = (
+            Arc::as_ptr(snapshot) as usize,
+            snapshot.generation(),
+            self.selection.revision(),
+        );
+        if let Some(cached) = *self.status_sizes.borrow()
+            && cached.key == key
+        {
+            return cached;
+        }
+        let _task = self.frames.task("status_sizes");
+        // Files only: a folder's own size says nothing useful.
+        let sum = |rows: &mut dyn Iterator<Item = usize>| {
+            rows.filter(|&row| !snapshot.is_container(row))
+                .filter_map(|row| snapshot.metadata(row))
+                .map(|metadata| metadata.size)
+                .reduce(u64::saturating_add)
         };
+        let sizes = StatusSizes {
+            key,
+            shown: sum(&mut (0..snapshot.len())),
+            selected: if self.selection.is_empty() {
+                None
+            } else {
+                sum(&mut self.selection.rows(snapshot).into_iter())
+            },
+        };
+        *self.status_sizes.borrow_mut() = Some(sizes);
+        sizes
+    }
+
+    fn status(&self, theme: Theme) -> impl IntoElement {
+        let (parts, selected) = match self.current_snapshot() {
+            None => (
+                StatusParts {
+                    selection: None,
+                    total: "Loading\u{2026}".to_owned(),
+                },
+                false,
+            ),
+            Some(snapshot) => {
+                let sizes = self.status_sizes(snapshot);
+                let facts = StatusFacts {
+                    shown: snapshot.len(),
+                    unfiltered: snapshot.unfiltered_len(),
+                    total: snapshot.total(),
+                    selected: self.selection.len(),
+                    filter: snapshot.filter().map(NameFilter::text),
+                    loading: snapshot.is_loading(),
+                    shown_size: sizes.shown,
+                    selected_size: sizes.selected,
+                };
+                (status_parts(&facts), facts.selected > 0)
+            }
+        };
+        let zones = StatusZones::for_width(self.width, selected);
+        let free = self
+            .free_space
+            .as_ref()
+            .filter(|(path, ..)| self.location().as_deref() == Some(path.as_path()))
+            .map(|(_, total, free)| {
+                format!("Free: {} of {}", format::size(*free), format::size(*total))
+            });
+        // Read in full by assistive technology, whatever fits on screen.
+        let spoken = [
+            parts.selection.clone(),
+            Some(parts.total.clone()),
+            free.clone(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(", ");
+        let divider = || {
+            div()
+                .flex_none()
+                .w(px(size::HAIRLINE))
+                .h(px(space::LG))
+                .bg(theme.border_strong)
+        };
+        let part = |text: String| div().min_w_0().truncate().child(text);
         div()
             .id("file-status")
             .role(Role::Label)
-            .aria_value(message.clone())
+            .aria_value(spoken)
             .flex()
             .flex_none()
             .items_center()
+            .gap(px(space::MD))
             .h(px(size::STATUS))
-            .px(px(space::LG))
+            .px(px(space::MD))
             .bg(theme.chrome)
             .border_t_1()
             .border_color(theme.border)
             .font_family(text::FAMILY_DATA)
             .text_size(px(text::SMALL))
             .text_color(theme.text_muted)
-            .child(div().flex_1().min_w_0().truncate().child(message))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_w_0()
+                    .items_center()
+                    .gap(px(space::MD))
+                    .overflow_hidden()
+                    .when_some(parts.selection, |zone, selection| {
+                        zone.child(part(selection).flex_none())
+                            .when(zones.totals, |zone| zone.child(divider()))
+                    })
+                    .when(zones.totals, |zone| zone.child(part(parts.total))),
+            )
+            .when_some(free.filter(|_| zones.free_space), |line, free| {
+                line.child(div().flex_none().child(free))
+            })
     }
 
     /// The filter bar: an icon, the field and a close button.
@@ -3171,7 +3289,8 @@ impl Browser {
             .items_center()
             .gap(px(space::SM))
             .h(px(size::FILTER_BAR))
-            .px(px(space::LG))
+            .pl(px(space::MD))
+            .pr(px(space::SM))
             .bg(theme.chrome)
             .border_t_1()
             .border_color(theme.border)
@@ -3181,18 +3300,26 @@ impl Browser {
                     .flex_none()
                     .text_color(theme.text_muted),
             )
-            .child(div().flex_1().min_w_0().child(crate::input::named(
-                Input::new(&self.filter_input).small(),
-                &self.filter_input,
-                "Filter by name",
-                window,
-                cx,
-            )))
+            // At most 360 pixels wide, as in the mockup.
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .max_w(px(size::FILTER_FIELD_MAX))
+                    .child(crate::input::named(
+                        Input::new(&self.filter_input).h(px(size::FILTER_FIELD)),
+                        &self.filter_input,
+                        "Filter by name",
+                        window,
+                        cx,
+                    )),
+            )
             .child(
                 Button::new("close-filter")
                     .ghost()
-                    .small()
-                    .icon(IconName::Close)
+                    .with_size(px(size::SMALL_BUTTON))
+                    .size(px(size::SMALL_BUTTON))
+                    .child(Icon::new(IconName::Close).size(px(size::ICON)))
                     .accessibility_label("Close the filter")
                     .tooltip("Close the filter (Esc)")
                     .on_click(cx.listener(|this, _, window, cx| this.close_filter(window, cx))),
@@ -4012,40 +4139,85 @@ struct StatusFacts<'a> {
     selected: usize,
     filter: Option<&'a str>,
     loading: bool,
+    /// Total size of the files shown, when any is known.
+    shown_size: Option<u64>,
+    /// Total size of the selected files, when any is known.
+    selected_size: Option<u64>,
 }
 
-/// The status line: how many entries are shown, selected, hidden and, with
-/// the filter bar in use, how many match.
-fn status_message(facts: &StatusFacts<'_>) -> String {
+/// The sizes behind the status line, with the snapshot and selection they
+/// were worked out for.
+#[derive(Debug, Clone, Copy)]
+struct StatusSizes {
+    key: (usize, u64, u64),
+    shown: Option<u64>,
+    selected: Option<u64>,
+}
+
+/// The status line's words: the selection, when there is one, and the
+/// totals ("12 items (150.4 MiB), 1 hidden").
+#[derive(Debug, PartialEq)]
+struct StatusParts {
+    selection: Option<String>,
+    total: String,
+}
+
+fn status_parts(facts: &StatusFacts<'_>) -> StatusParts {
     let items = |n: usize| plural(n, "item", "items");
-    let mut message = match (facts.filter, facts.selected) {
-        (Some(text), 0) => format!(
+    let sized = |text: String, size: Option<u64>| match size {
+        Some(size) => format!("{text} ({})", format::size(size)),
+        None => text,
+    };
+    let selection = (facts.selected > 0).then(|| {
+        sized(
+            format!(
+                "{} {} selected",
+                count(facts.selected),
+                items(facts.selected)
+            ),
+            facts.selected_size,
+        )
+    });
+    let mut total = match facts.filter {
+        Some(text) => format!(
             "{} of {} {} match \u{201c}{text}\u{201d}",
             count(facts.shown),
             count(facts.unfiltered),
             items(facts.unfiltered)
         ),
-        (Some(text), selected) => format!(
-            "{} of {} matching \u{201c}{text}\u{201d} selected",
-            count(selected),
-            count(facts.shown)
-        ),
-        (None, 0) => format!("{} {}", count(facts.shown), items(facts.shown)),
-        (None, selected) => format!(
-            "{} of {} {} selected",
-            count(selected),
-            count(facts.shown),
-            items(facts.shown)
+        None => sized(
+            format!("{} {}", count(facts.shown), items(facts.shown)),
+            facts.shown_size,
         ),
     };
     let hidden = facts.total.saturating_sub(facts.unfiltered);
     if hidden > 0 {
-        message.push_str(&format!(", {} hidden", count(hidden)));
+        total.push_str(&format!(", {} hidden", count(hidden)));
     }
     if facts.loading {
-        message.push_str(" \u{2014} loading\u{2026}");
+        total.push_str(" \u{2014} loading\u{2026}");
     }
-    message
+    StatusParts { selection, total }
+}
+
+/// Which parts of the status line fit a pane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct StatusZones {
+    /// The free space on the right.
+    free_space: bool,
+    /// The totals after the selection.
+    totals: bool,
+}
+
+impl StatusZones {
+    /// The free space leaves first; then, while entries are selected, the
+    /// totals, so the selection is never cut off.
+    fn for_width(width: f32, selected: bool) -> Self {
+        Self {
+            free_space: width >= size::STATUS_FREE_SPACE_MIN,
+            totals: !selected || width >= size::STATUS_SELECTION_ONLY_BELOW,
+        }
+    }
 }
 
 /// A rubber-band selection in progress.
@@ -4447,6 +4619,7 @@ mod tests {
 
     #[test]
     fn the_status_counts_matches_hidden_and_selected_entries() {
+        const MIB: u64 = 1024 * 1024;
         let facts = |shown, unfiltered, total, selected, filter| StatusFacts {
             shown,
             unfiltered,
@@ -4454,25 +4627,58 @@ mod tests {
             selected,
             filter,
             loading: false,
+            shown_size: None,
+            selected_size: None,
         };
-        assert_eq!(status_message(&facts(7, 7, 7, 0, None)), "7 items");
+        let parts = |facts: &StatusFacts<'_>| {
+            let parts = status_parts(facts);
+            (parts.selection, parts.total)
+        };
+        assert_eq!(parts(&facts(7, 7, 7, 0, None)), (None, "7 items".into()));
+        // The selection has its own part, before the totals.
         assert_eq!(
-            status_message(&facts(7, 7, 9, 2, None)),
-            "2 of 7 items selected, 2 hidden"
+            parts(&StatusFacts {
+                shown_size: Some(150 * MIB),
+                selected_size: Some(6 * MIB),
+                ..facts(7, 7, 9, 2, None)
+            }),
+            (
+                Some("2 items selected (6.0 MiB)".into()),
+                "7 items (150.0 MiB), 2 hidden".into()
+            )
         );
         assert_eq!(
-            status_message(&facts(2, 7, 9, 0, Some("txt"))),
-            "2 of 7 items match \u{201c}txt\u{201d}, 2 hidden"
+            parts(&facts(2, 7, 9, 0, Some("txt"))),
+            (
+                None,
+                "2 of 7 items match \u{201c}txt\u{201d}, 2 hidden".into()
+            )
         );
         assert_eq!(
-            status_message(&facts(2, 7, 7, 1, Some("txt"))),
-            "1 of 2 matching \u{201c}txt\u{201d} selected"
+            parts(&facts(2, 7, 7, 1, Some("txt"))),
+            (
+                Some("1 item selected".into()),
+                "2 of 7 items match \u{201c}txt\u{201d}".into()
+            )
         );
         let loading = StatusFacts {
             loading: true,
             ..facts(1, 1, 1, 0, None)
         };
-        assert_eq!(status_message(&loading), "1 item \u{2014} loading\u{2026}");
+        assert_eq!(parts(&loading).1, "1 item \u{2014} loading\u{2026}");
+    }
+
+    #[test]
+    fn the_status_line_drops_free_space_then_the_totals_as_the_pane_narrows() {
+        let wide = StatusZones::for_width(size::STATUS_FREE_SPACE_MIN, true);
+        assert!(wide.free_space && wide.totals);
+        let medium = StatusZones::for_width(size::STATUS_FREE_SPACE_MIN - 1., true);
+        assert!(!medium.free_space && medium.totals);
+        let narrow = StatusZones::for_width(size::STATUS_SELECTION_ONLY_BELOW - 1., true);
+        assert!(!narrow.free_space && !narrow.totals);
+        // Without a selection the totals stay, since they are all there is.
+        let unselected = StatusZones::for_width(size::STATUS_SELECTION_ONLY_BELOW - 1., false);
+        assert!(unselected.totals);
     }
 
     #[test]

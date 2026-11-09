@@ -909,8 +909,8 @@ impl Sidebar {
                         .outline()
                         // 8 pixels from the figures, as in the mockup.
                         .ml(px(-space::XS))
-                        .with_size(px(size::EJECT))
-                        .size(px(size::EJECT))
+                        .with_size(px(size::SMALL_BUTTON))
+                        .size(px(size::SMALL_BUTTON))
                         // Lucide has no eject glyph (docs/DESIGN.md).
                         .child(Icon::new(I::ArrowUpFromLine).size(px(size::ICON)))
                         .accessibility_label(eject_label)

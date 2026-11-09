@@ -317,6 +317,8 @@ pub struct Workspace {
     launch: Option<LaunchPrompt>,
     /// Properties of one entry, while that dialog is open.
     pub(crate) properties: Option<PropertiesDialog>,
+    /// The error details dialog: what the last operation left out.
+    error_details: Option<operations::Problems>,
     /// Distinguishes a properties read from one the user has already closed.
     property_token: u64,
     /// Paths other applications asked to see properties for.
@@ -403,6 +405,7 @@ impl Workspace {
             pending_shows: Vec::new(),
             launch: None,
             properties: None,
+            error_details: None,
             property_token: 0,
             pending_properties: Vec::new(),
             _history: cx.observe(&history(cx), |this, _, cx| this.refresh_palette(cx)),
@@ -1500,7 +1503,8 @@ impl Render for Workspace {
         let hub = hub(cx);
         let dialog_open = !hub.read(cx).questions.is_empty()
             || self.launch.is_some()
-            || self.properties.is_some();
+            || self.properties.is_some()
+            || self.error_details.is_some();
         if dialog_open && self.palette.is_some() {
             self.palette = None;
             self.palette_subscription = None;
@@ -1564,14 +1568,16 @@ impl Render for Workspace {
                 .child(div().flex_1().min_h_0().child(pane.browser.clone()))
         });
 
-        let activity = self.activity(hub.read(cx), theme);
+        let activity = self.activity(&hub, theme, cx);
         let question = hub.read(cx).questions.front().cloned();
         let dialog = if let Some(question) = question {
             Some(self.dialog(&question, theme, window, cx))
+        } else if let Some(prompt) = self.launch.as_ref() {
+            Some(self.launch_dialog(prompt, theme, window, cx))
         } else {
-            self.launch
+            self.error_details
                 .as_ref()
-                .map(|prompt| self.launch_dialog(prompt, theme, window, cx))
+                .map(|problems| self.error_details_dialog(problems, theme, window, cx))
         };
 
         div()
@@ -1720,17 +1726,23 @@ impl Render for Workspace {
 impl Workspace {
     /// What file operations are doing and what they last did, as lines under
     /// the panes. Nothing is shown while there is nothing to say.
-    fn activity(&self, hub: &Hub, theme: Theme) -> Option<impl IntoElement + use<>> {
-        let running: Vec<AnyElement> = hub
-            .running
-            .iter()
-            .filter(|running| running.is_visible())
-            .map(|running| Self::progress_line(running, theme).into_any_element())
-            .collect();
-        let notice = hub
-            .notice
-            .as_ref()
-            .map(|notice| Self::notice_line(notice, theme));
+    fn activity(
+        &self,
+        hub: &Entity<Hub>,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> Option<impl IntoElement + use<>> {
+        let (running, notice, problems) = {
+            let hub = hub.read(cx);
+            let running: Vec<AnyElement> = hub
+                .running
+                .iter()
+                .filter(|running| running.is_visible())
+                .map(|running| Self::progress_line(running, theme).into_any_element())
+                .collect();
+            (running, hub.notice.clone(), hub.problems.clone())
+        };
+        let notice = notice.map(|notice| self.notice_line(&notice, problems, theme, cx));
         if running.is_empty() && notice.is_none() {
             return None;
         }
@@ -1740,10 +1752,54 @@ impl Workspace {
                 .flex_col()
                 .flex_none()
                 .bg(theme.chrome)
-                .text_size(px(text::SMALL))
+                .text_size(px(text::BODY))
                 .children(running)
                 .children(notice),
         )
+    }
+
+    /// An outlined text button for the lines under the panes, with its key
+    /// in `data-sm` after the label.
+    fn line_button(
+        id: &'static str,
+        label: &'static str,
+        key: Option<&'static str>,
+        theme: Theme,
+    ) -> Button {
+        Button::new(id)
+            .outline()
+            // The library pads a custom-sized button by a fifth of the size:
+            // 80 gives the 16-pixel padding.
+            .with_size(px(space::LG * 5.))
+            .h(px(size::BUTTON))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(space::SM))
+                    .text_size(px(text::BODY))
+                    .child(label)
+                    .when_some(key, |button, key| {
+                        button.child(
+                            div()
+                                .font_family(text::FAMILY_DATA)
+                                .text_size(px(text::SMALL))
+                                .text_color(theme.text_muted)
+                                .child(key),
+                        )
+                    }),
+            )
+    }
+
+    /// A 28-pixel icon button with a tooltip.
+    fn icon_button(id: &'static str, icon: IconName, label: &'static str) -> Button {
+        Button::new(id)
+            .ghost()
+            .with_size(px(size::SMALL_BUTTON))
+            .size(px(size::SMALL_BUTTON))
+            .child(Icon::new(icon).size(px(size::ICON)))
+            .tooltip(label)
+            .accessibility_label(label)
     }
 
     fn progress_line(running: &Running, theme: Theme) -> impl IntoElement + use<> {
@@ -1753,13 +1809,20 @@ impl Workspace {
             .flex()
             .items_center()
             .gap(px(space::MD))
-            .h(px(size::STATUS))
-            .px(px(space::LG))
+            .h(px(size::LINE))
+            .pl(px(space::MD))
+            .pr(px(space::SM))
             .border_t_1()
             .border_color(theme.border)
             .child(
+                Icon::new(running.icon)
+                    .size(px(size::ICON))
+                    .flex_none()
+                    .text_color(theme.text_muted),
+            )
+            .child(
                 div()
-                    .flex_1()
+                    .flex_shrink_1()
                     .min_w_0()
                     .truncate()
                     .child(running.label.clone()),
@@ -1767,15 +1830,15 @@ impl Workspace {
             .child(
                 // The bar says how far; the numbers beside it say the same in text.
                 div()
-                    .flex_none()
-                    .w(px(size::PROGRESS_WIDTH))
+                    .flex_1()
+                    .min_w(px(size::PROGRESS_MIN))
                     .h(px(size::PROGRESS))
                     .rounded(px(size::RADIUS))
                     .bg(theme.track)
                     .child(
                         div()
                             .h_full()
-                            .w(px(size::PROGRESS_WIDTH * fraction))
+                            .w(gpui_kit::relative(fraction))
                             .rounded(px(size::RADIUS))
                             .bg(theme.activity),
                     ),
@@ -1784,20 +1847,28 @@ impl Workspace {
                 div()
                     .flex_none()
                     .font_family(text::FAMILY_DATA)
+                    .text_size(px(text::SMALL))
                     .text_color(theme.text_muted)
                     .child(running.detail()),
             )
             .child(
                 Button::new(("stop-operation", id.as_u64()))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Close)
+                    .outline()
+                    .with_size(px(space::LG * 5.))
+                    .h(px(size::BUTTON))
+                    .child(div().text_size(px(text::BODY)).child("Stop"))
                     .tooltip("Stop. What is already done stays.")
                     .on_click(move |_, _, cx| hub(cx).update(cx, |hub, _| hub.cancel(id))),
             )
     }
 
-    fn notice_line(notice: &Notice, theme: Theme) -> impl IntoElement + use<> {
+    fn notice_line(
+        &self,
+        notice: &Notice,
+        problems: Option<operations::Problems>,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let (icon, color) = if notice.is_error {
             (IconName::TriangleAlert, theme.danger)
         } else if notice.offers_undo {
@@ -1821,9 +1892,10 @@ impl Workspace {
             .a11y_synthetic_children(move |builder| builder.parent_node().set_live(live))
             .flex()
             .items_center()
-            .gap(px(space::SM))
-            .min_h(px(size::STATUS))
-            .px(px(space::LG))
+            .gap(px(space::MD))
+            .min_h(px(size::LINE))
+            .pl(px(space::MD))
+            .pr(px(space::SM))
             .py(px(space::XS))
             .border_t_1()
             .border_color(theme.border)
@@ -1840,22 +1912,240 @@ impl Workspace {
                     .text_color(color),
             )
             .child(div().flex_1().min_w_0().child(notice.text.clone()))
+            .when_some(problems, |line, problems| {
+                // In the error colours, as the line it sits on.
+                line.child(
+                    Button::new("notice-details")
+                        .danger()
+                        .outline()
+                        .with_size(px(space::LG * 5.))
+                        .h(px(size::BUTTON))
+                        .child(div().text_size(px(text::BODY)).child("Details\u{2026}"))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.error_details = Some(problems.clone());
+                            cx.notify();
+                        })),
+                )
+            })
             .when(notice.offers_undo, |line| {
                 line.child(
-                    Button::new("undo-notice")
-                        .ghost()
-                        .xsmall()
-                        .label("Undo (Ctrl+Z)")
+                    Self::line_button("undo-notice", "Undo", Some("Ctrl+Z"), theme)
                         .on_click(|_, _, cx| hub(cx).update(cx, Hub::undo)),
                 )
             })
             .child(
-                Button::new("dismiss-notice")
-                    .ghost()
-                    .xsmall()
-                    .label("Dismiss")
+                Self::icon_button("dismiss-notice", IconName::Close, "Dismiss")
                     .on_click(|_, _, cx| operations::hub(cx).update(cx, Hub::dismiss_notice)),
             )
+    }
+
+    fn close_error_details(
+        &mut self,
+        _: &gpui_kit::ClickEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.error_details = None;
+        cx.notify();
+    }
+
+    /// What an operation left out, one entry per row, with a way to copy
+    /// the list (docs/DESIGN.md, error details dialog).
+    fn error_details_dialog(
+        &self,
+        problems: &operations::Problems,
+        theme: Theme,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let left_out = problems.entries.len();
+        let summary = format!(
+            "{} {} left out. Everything else is done.",
+            format::count(left_out),
+            format::plural(left_out, "entry was", "entries were")
+        );
+        let list_text = error_list_text(problems);
+        let rows: Vec<AnyElement> = problems
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                let name = entry
+                    .path
+                    .file_name()
+                    .map(|name| display_name(name.as_encoded_bytes()).into_owned())
+                    .unwrap_or_else(|| entry.path.display().to_string());
+                let folder = entry
+                    .path
+                    .parent()
+                    .map(|folder| folder.display().to_string())
+                    .unwrap_or_default();
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(space::XS / 2.))
+                    .px(px(space::MD))
+                    .py(px(space::SM))
+                    .when(index > 0, |row| row.border_t_1().border_color(theme.border))
+                    .child(div().child(name))
+                    .child(
+                        div()
+                            .font_family(text::FAMILY_DATA)
+                            .text_size(px(text::SMALL))
+                            .text_color(theme.text_muted)
+                            .child(folder),
+                    )
+                    .child(
+                        div()
+                            .text_color(theme.text_muted)
+                            .child(entry.reason.clone()),
+                    )
+                    .into_any_element()
+            })
+            .collect();
+        div()
+            .absolute()
+            .inset_0()
+            .occlude()
+            .flex()
+            .items_center()
+            .justify_center()
+            .p(px(space::LG))
+            .bg(theme.scrim)
+            .child(
+                div()
+                    .id("error-details")
+                    .role(Role::Dialog)
+                    .aria_label(problems.title.clone())
+                    .aria_description(summary.clone())
+                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
+                    .key_context(DIALOG_CONTEXT)
+                    .track_focus(&self.dialog_focus)
+                    .on_key_down(cx.listener(Self::scroll_question))
+                    .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
+                        this.error_details = None;
+                        cx.notify();
+                    }))
+                    .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
+                        this.error_details = None;
+                        cx.notify();
+                    }))
+                    .on_action({
+                        let list_text = list_text.clone();
+                        move |_: &DialogCopy, _, cx| {
+                            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                list_text.clone(),
+                            ));
+                        }
+                    })
+                    .flex()
+                    .flex_col()
+                    .w_full()
+                    .max_w(px(size::DIALOG))
+                    .max_h(px(f32::from(window.viewport_size().height) - space::LG * 2.))
+                    .rounded(px(size::RADIUS))
+                    .bg(theme.raised)
+                    .border_1()
+                    .border_color(theme.border_accent)
+                    .shadow(vec![theme.floating_shadow()])
+                    .text_color(theme.text)
+                    .font_family(text::FAMILY_BODY)
+                    .text_size(px(text::BODY))
+                    .line_height(px(text::LINE))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .gap(px(space::MD))
+                            .h(px(size::DIALOG_TITLE))
+                            .pl(px(space::LG))
+                            .pr(px(space::SM))
+                            .border_b_1()
+                            .border_color(theme.border)
+                            .child(
+                                Icon::new(IconName::TriangleAlert)
+                                    .size(px(size::ICON))
+                                    .flex_none()
+                                    .text_color(theme.text_muted),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .font_family(text::FAMILY_HEADING)
+                                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                                    .text_size(px(text::HEADING))
+                                    .child(problems.title.clone()),
+                            )
+                            .child(
+                                Self::icon_button(
+                                    "error-details-close",
+                                    IconName::Close,
+                                    "Close (Esc)",
+                                )
+                                .on_click(cx.listener(Self::close_error_details)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_shrink_1()
+                            .min_h_0()
+                            .p(px(space::LG))
+                            .child(self.question_body(
+                                summary,
+                                vec![
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .rounded(px(size::RADIUS))
+                                        .border_1()
+                                        .border_color(theme.border)
+                                        .children(rows)
+                                        .into_any_element(),
+                                ],
+                                theme,
+                            )),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_none()
+                            .flex_wrap()
+                            .justify_end()
+                            .gap(px(space::SM))
+                            .px(px(space::LG))
+                            .pt(px(space::MD))
+                            .pb(px(space::LG))
+                            .border_t_1()
+                            .border_color(theme.border)
+                            .child(
+                                Self::line_button(
+                                    "error-details-copy",
+                                    "Copy list",
+                                    Some("C"),
+                                    theme,
+                                )
+                                .on_click(move |_, _, cx| {
+                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                        list_text.clone(),
+                                    ));
+                                }),
+                            )
+                            .child(
+                                Button::new("error-details-done")
+                                    .primary()
+                                    .with_size(px(space::LG * 5.))
+                                    .h(px(size::BUTTON))
+                                    .child(div().text_size(px(text::BODY)).child("Close (Esc)"))
+                                    .on_click(cx.listener(Self::close_error_details)),
+                            ),
+                    ),
+            )
+            .into_any_element()
     }
 
     /// One side of a conflict in words: "1.2 MiB, modified 2026-10-12 10:17".
@@ -2301,6 +2591,16 @@ fn classify(path: &Path) -> LaunchOutcome {
     }
 }
 
+/// The error details as plain text for the clipboard: the title, then one
+/// line per entry with its full path and the reason.
+fn error_list_text(problems: &operations::Problems) -> String {
+    let mut text = format!("{}\n", problems.title);
+    for entry in &problems.entries {
+        text.push_str(&format!("{}: {}\n", entry.path.display(), entry.reason));
+    }
+    text
+}
+
 fn file_label(path: &Path) -> String {
     path.file_name()
         .map(|name| display_name(name.as_bytes()).into_owned())
@@ -2316,6 +2616,31 @@ fn folder_label(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_error_list_names_every_entry_left_out_with_its_reason() {
+        use rustphin_core::ops::Skipped;
+        let problems = operations::Problems {
+            title: "Copying 2 items to \u{201c}Backup\u{201d}".into(),
+            entries: vec![
+                Skipped {
+                    path: "/home/u/a.jpg".into(),
+                    reason: "permission denied".into(),
+                },
+                Skipped {
+                    path: "/home/u/b.pdf".into(),
+                    reason: "it changed while it was being copied".into(),
+                },
+            ],
+        };
+        assert_eq!(
+            error_list_text(&problems),
+            "Copying 2 items to \u{201c}Backup\u{201d}\n\
+             /home/u/a.jpg: permission denied\n\
+             /home/u/b.pdf: it changed while it was being copied\n"
+        );
+    }
+
     use super::*;
 
     #[test]

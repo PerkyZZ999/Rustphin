@@ -851,6 +851,10 @@ except where the list below says otherwise; each W-079 step adds its line.
   field, the drag chip with its icon, 20 px state headings with reason
   lines. Compact view still fills rows, not columns; list views have no
   scrollbar to move below the headings.
+- W-079e (2026-11-08): the two-zone status line with free space and its
+  600/440 px rules (no volume name yet), the filter bar's 32 px field, the
+  activity line, the result line with Undo, Details… and dismiss, the error
+  details dialog (opened from the result line), the blur status line.
 - Not yet implemented: the rest of "Changes from the earlier design" (sizes,
   layout, new components and wording).
 
