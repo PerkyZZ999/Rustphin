@@ -844,7 +844,7 @@ impl Sidebar {
                                     .w_full()
                                     .h(px(size::PROGRESS / 2.))
                                     .rounded(px(size::RADIUS))
-                                    .bg(theme.hover)
+                                    .bg(theme.track)
                                     .child(
                                         div()
                                             .h_full()
@@ -1243,7 +1243,7 @@ impl Sidebar {
             .border_l(px(size::SELECTION_BAR))
             .border_color(gpui_kit::transparent_black())
             .when(is_current, |row| {
-                row.bg(theme.hover).border_color(theme.accent)
+                row.bg(theme.current).border_color(theme.accent)
             })
             // The row the keyboard acts on, shown while the panel has the focus.
             .when(keyboard_here, |row| row.border_color(theme.accent))

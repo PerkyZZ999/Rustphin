@@ -22,9 +22,16 @@ S11 — Hardening for daily use (in progress)
 - [x] W-085 — Count dropped frames (interval > 1.5 × refresh period) in the frame log and re-measure the three views of 500,000 entries against D-019 (≤ 5%). Refresh period from `Window::refresh_interval` (60 Hz assumed and logged when unknown); per-summary counts and a whole-run "scroll benchmark result" verdict. All three views pass.
 - [x] W-076s — Ctrl+L selects the whole location so typing replaces it, and Ctrl+L again with everything selected returns to the view, as Dolphin's replaceLocation (found while timing W-073g; K19).
 
-## Deferred until S11 is complete
+## Design pass (W-079, started 2026-11-08 under D-024)
 
-- [ ] W-079 — Match the user-provided docs/mockup.png as closely as feasible through a UI/UX/design pass, adapting to Rustphin's features. Start only after S11 acceptance is complete; then break the pass into focused design-token/component tasks and verify visual, keyboard, accessibility, responsive and fallback behavior. ROADMAP.md records scope and validation. Requested by the maintainer on 2026-11-06.
+- [ ] W-079 — Match the maintainer's HTML mockups (docs/mockup/, 34 screens) through a UI/UX/design pass, adapting to Rustphin's features. docs/DESIGN.md is the adopted target; each step updates its "Implementation status", replays the matching mockup screens in an isolated KWin session and compares screenshots. Requested by the maintainer on 2026-11-06.
+  - [x] W-079a — Tokens: navy surfaces with chrome-raised, primary-subtle, text-disabled, error-border and track; body-lg 15 px, data-md 14 px, headline-sm 17 px, body-strong; the new sizes. Contrast tests for every new pair, glass over white and opaque.
+  - [ ] W-079b — Window and panes: tab strip (40 px, type icons, 24 px close, 40 px "+", filled strip); toolbar (52 px, outlined 36 px buttons, location field with folder icon and "Trash", Actions with its shortcut; 640/560/300 px breakpoints); window lines below the panes' status lines.
+  - [ ] W-079c — Places panel: 240 px, 52 px title, 32 px rows with 20 px icons, current place in primary-subtle with its bar, section headings with chevrons and counts, 56 px device rows with "x of y free" and the eject icon.
+  - [ ] W-079d — Views: 36 px default rows and the zoom table, new column widths and breakpoints, mono type column, "—" for folders, thumbnails from 24 px, 128 × 152 icon cells, 240 px compact columns, 28 px rename field, drag chip with icon, scrollbar below the headings, state headings.
+  - [ ] W-079e — Bottom of the pane and window: two-zone status line with free space (600/440 px rules), 32 px filter field, activity line, result line with Undo and dismiss, blur status line; error banner with Details… and the error details dialog.
+  - [ ] W-079f — Context menu with icons, shortcuts, the bar and the three new items; palette title row, icons, trails and 52 px results.
+  - [ ] W-079g — Dialogs: 480 px, title rows with icon and close, buttons with keys; Properties header, thumbnail, owner and group, exact bytes, seconds; batch rename segments, arrow and neutral note; question titles, Keep both fact, Keep as the run default.
 
 ## Done (recent)
 - [x] W-083 — Interrupted batch renames recovered at startup (D-020): saved-tab and recent local folders (200) checked for a rename journal in the background, recovered through the journal-checked engine path with a notice that stays; skipped while another live Rustphin runs (zombies ignored). Core journal check, platform /proc reader, candidates and lasting notices tested; 4 mutations; replay BR0 with genuine SIGKILLed batches (launch folder, second instance, recent history). R-103 ticked. Full gate 474 tests.

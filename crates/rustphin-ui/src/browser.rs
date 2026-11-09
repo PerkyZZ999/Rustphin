@@ -2238,7 +2238,7 @@ impl Browser {
             .rounded(px(size::RADIUS))
             .bg(theme.danger_surface)
             .border_1()
-            .border_color(theme.danger)
+            .border_color(theme.danger_border)
             .text_color(theme.danger)
             .child(
                 Icon::new(IconName::TriangleAlert)
@@ -3346,7 +3346,7 @@ impl Browser {
                 row.bg(theme.selection).text_color(theme.on_selection)
             })
             .when(!current && enabled, |row| row.text_color(theme.text))
-            .when(!enabled, |row| row.text_color(theme.text_muted))
+            .when(!enabled, |row| row.text_color(theme.text_disabled))
             .child(div().flex_1().min_w_0().truncate().child(label.to_owned()))
             .when(submenu, |row| {
                 row.child(

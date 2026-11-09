@@ -2,8 +2,9 @@
 
 Written 2026-11-08 from [`DESIGN_BRIEF.md`](DESIGN_BRIEF.md) and the current
 build (`crates/rustphin-ui`). It describes the structure the design pass keeps
-and the few places where it changes. The visual rules are in the target
-[`DESIGN.md`](DESIGN.md); keys are in [`KEYBOARD.md`](KEYBOARD.md).
+and the few places where it changes. The visual rules are in
+[`../DESIGN.md`](../DESIGN.md) (adopted by W-079); the screens are drawn in
+[`../mockup/`](../mockup/); keys are in [`KEYBOARD.md`](KEYBOARD.md).
 
 Rustphin is a desktop application, not a web site: its "pages" are one window
 made of regions, plus the surfaces that float over it. Where the skill's

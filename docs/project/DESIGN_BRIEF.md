@@ -6,9 +6,11 @@ It is read together with:
 
 - [`INFORMATION_ARCHITECTURE.md`](INFORMATION_ARCHITECTURE.md): what each
   screen contains, in what order, and how the user moves between them;
-- [`DESIGN.md`](DESIGN.md) in this folder: the **target** visual system
-  (tokens and component rules) for the pass;
-- [`../mockup.png`](../mockup.png): the visual reference, 1672 × 941.
+- [`../DESIGN.md`](../DESIGN.md): the visual system (tokens and component
+  rules), adopted by W-079 on 2026-11-08;
+- [`../mockup/`](../mockup/): the maintainer's HTML mockups of the 34 screens, with
+  the changes they make in `00-what-changed.html`;
+- [`../mockup.png`](../mockup.png): the original visual reference, 1672 × 941.
 
 `docs/DESIGN.md` stays the record of what the current build implements
 (D-017) until W-079 adopts the target. W-079's first step copies the target

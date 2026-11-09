@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>What changed from DESIGN.md · Rustphin mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/rp.css">
+<style>body { margin: 0; background: #05080f; }</style>
+</head>
+<body>
+<div class="rp doc" style="width: 1280px; min-height: 2720px;">
+<div style="display: flex; flex-direction: column; gap: var(--spacing-sm);">
+<span class="t-lsm mut">W-079 · mockup notes · 2026-11-08</span>
+<h1>What changed from the target DESIGN.md</h1>
+<p>Everything on this canvas takes its colours, type, spacing and the 2 px radius from <code>docs/project/DESIGN.md</code>; the stylesheet names each custom property after its token so it can be compared with <code>theme.rs</code>. The rows below are the places where the mockup adds or changes something. Each one needs a line in DESIGN.md before W-079 touches the code.</p>
+</div>
+<h2>Layout</h2>
+<div class="ctable">
+<div class="h">Area</div><div class="h">In the mockup</div><div class="h">Update in DESIGN.md</div>
+<div>Toolbar, banners, status</div><div>Belong to each pane, as the current build does (each pane is a Browser with its own toolbar, banners, filter bar and status line). The places panel runs from under the tab strip to the bottom lines, so the toolbar starts at the panel's edge rather than spanning the window as in mockup.png.</div><div>Rewrite "Window, top to bottom" as two lists: window (tab strip, body, activity, result and blur lines) and pane (toolbar, banner, headings and list, filter bar, status line).</div>
+<div>Bottom lines</div><div>Activity, result and blur lines span the window below both panes. mockup.png shows activity above the status line.</div><div>State the order: pane status lines, then window lines.</div>
+<div>Places title</div><div>52 px tall, so its hairline lines up with the toolbar's.</div><div><code>places-title.height</code> 44 to 52 px.</div>
+<div>Toolbar breakpoints</div><div>The Ctrl+Shift+P hint leaves below 640 px; Forward and Up leave and Actions becomes an icon button below 560 px; Back leaves below 300 px. Screen 12 needs Back and an Actions icon at a 480 px pane; with the full toolbar the location field would get about 120 px.</div><div>Breakpoints 400/300 to 640/560/300 px of pane width.</div>
+<div>Status line</div><div>The free-space zone leaves below 600 px of pane width (both panes in screen 9, screen 12). Below 440 px, while entries are selected, the left zone shows only the selection ("1 item selected (6.3 MiB)") so neither part is cut off (screen 11).</div><div>Give both numbers; today it says "first at narrow widths".</div>
+</div>
+<h2>New sizes and components</h2>
+<div class="ctable">
+<div class="h">Area</div><div class="h">In the mockup</div><div class="h">Update in DESIGN.md</div>
+<div>Tabs</div><div>Close button 24 px with a 12 px icon; "+" is 40 px wide; the strip after the last tab is filled with <code>chrome-raised</code>.</div><div>Add <code>tab-close.size</code> 24 px and <code>tab-add.width</code> 40 px.</div>
+<div>Icons view</div><div>At the 96 px level a cell is 128 by 152 px with 8 px gaps; the name wraps to two lines, centred. Selection fills the whole cell and adds the 2 px bar.</div><div>Add <code>icon-cell</code> width 128, height 152, gap 8 (scale with the zoom level).</div>
+<div>Compact view</div><div>240 px columns, 8 px apart, 36 px rows, filled top to bottom.</div><div>Add <code>compact-column.width</code> 240 px.</div>
+<div>Device rows</div><div>The figures read "120.6 of 476.9 GiB free" and "1.8 of 3.6 TiB free". The documented "120.6 GiB free of 476.9 GiB" is 194 px in <code>data-sm</code>, and the row leaves 172 px for text (136 px beside an eject button), so it wrapped into the next row. When the two units differ, keep both: "512.0 MiB of 1.2 GiB free".</div><div>Change the device-row sentence and the example.</div>
+<div>Thumbnails</div><div>3:2 pictures fit the square without cropping: 24 by 16 px in rows, 96 by 64 px in icon cells and Properties.</div><div>Already the rule; add the sizes.</div>
+<div>Result line</div><div>44 px: emerald circle-check, the sentence, outlined "Undo Ctrl+Z", and a dismiss button. A result with problems uses the error colours and an alert icon and stays.</div><div>Add <code>result-line</code> and the dismiss button.</div>
+<div>Blur status</div><div>32 px chrome line with an info icon, text in <code>text-muted</code>.</div><div>Add <code>blur-status.height</code> 32 px.</div>
+<div>Fields in bars</div><div>The filter field is 32 px tall so it fits the 40 px bar with its 2 px ring. The rename field is 28 px inside a 36 px row with 4 px padding.</div><div>Add <code>filter-field.height</code> 32 and <code>rename-field.height</code> 28 px; <code>input</code> stays 36 px in dialogs.</div>
+<div>Icons</div><div>Icon-only Actions uses Lucide <code>menu</code>; eject uses <code>arrow-up-from-line</code> (Lucide has no eject glyph); copying uses <code>copy</code>; connecting and loading use <code>loader</code>.</div><div>List these names so the icon set stays fixed.</div>
+<div>Drag chip</div><div>Shows the first entry's thumbnail or type icon, then the name or count. It does not show a copy or move icon, because the drop asks "Move or copy?" unless Shift or Ctrl is held.</div><div>Add the icon rule to Dragging.</div>
+<div>Scrollbars</div><div>In details view the thumb starts below the column headings, 2 px in from the edge (screen 12).</div><div>Add where the track starts.</div>
+<div>Selection bar</div><div>Menu items and palette results take the 2 px bright bar as well as the fill, following the component reuse map. mockup.png shows the fill only.</div><div>Confirm, or drop the bar from menus.</div>
+<div>Separators</div><div>Menu separators use the <code>border</code> token.</div><div>Name the token.</div>
+<div>Focus ring</div><div>Buttons and checkboxes: 2 px <code>primary-bright</code> ring with a 1 to 2 px gap in <code>surface-raised</code>.</div><div>Give the ring's offset.</div>
+</div>
+<h2>Content and wording</h2>
+<div class="ctable">
+<div class="h">Area</div><div class="h">In the mockup</div><div class="h">Update in DESIGN.md or code</div>
+<div>Context menu</div><div>Adds Copy location (Ctrl+Alt+C), Duplicate here (Ctrl+D) and Delete… (Shift+Del), from KEYBOARD.md and the IA's menu groups.</div><div>Add the three shortcuts to the menu list. Fix code labels to sentence case: "Duplicate Here", "Folders First", "Copy/Move to Other View".</div>
+<div>Properties</div><div>Permission columns name the owner and group: "OWNER · alex", "GROUP · alex". The folder's size line counts items while calculating.</div><div>Add both to the Properties paragraph.</div>
+<div>Batch rename</div><div>"Nothing would change" is a neutral note (muted text, info icon, outline), not an error. The preview has an arrow between the columns and colours bad new names in <code>error</code>.</div><div>Add the neutral note style.</div>
+<div>Question titles</div><div>The name conflict's title is <code>“IMG_4821.jpg” already exists</code> and the failed entry's is <code>Couldn't copy “IMG_4821.jpg”</code>. The build uses "Name conflict" and "File operation failed".</div><div>Change the code strings so the title is the question or the fact.</div>
+<div>Name conflict</div><div>Adds a "Keep both" fact with the name the copy would get. Its four buttons (Stop, Skip, Replace, Keep both) are 462 px wide with the 16 px button padding, so at 480 px the primary wraps onto a second row, as the wrap rule allows.</div><div>Add the fact. Accept the wrap, or let question dialogs with four buttons grow to 520 px.</div>
+<div>Trash location</div><div>The location field shows "Trash", not "trash:/", the way Places names it; Ctrl+L still edits the address as text.</div><div>Add to the Location field paragraph.</div>
+<div>Run this file?</div><div>Run (Enter) is drawn as the primary because Enter runs it in the build. The brief says the safe choice is the default.</div><div>Open question: make Keep the Enter default, or accept Run.</div>
+</div>
+<h2>Mockup only</h2>
+<p>The desktop backdrop is a generated photograph (gpt-image) and the picture thumbnails are crops of it. File-type icons and application icons are stand-ins for the system icon theme. The window title bar is KWin's and is not drawn. Every screen has an Opaque switch in its Tweaks; screens 33 and 34 start opaque.</p></div>
+</body>
+</html>

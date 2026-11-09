@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>20 · Run this file? · Rustphin mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/rp.css">
+<style>body { margin: 0; background: #05080f; }</style>
+</head>
+<body>
+<div class="rp desk" style="width: 1280px; height: 800px;">
+<div class="rp win glass">
+<div class="tabstrip">
+<div class="tab">
+<button class="tab-btn"><span class="ic i-home"></span><span class="tab-label">Home</span></button>
+<button aria-label="Close tab (Ctrl+W)" class="tab-close"><span class="ic ic12 i-x"></span></button>
+</div>
+<div class="tab">
+<button class="tab-btn"><span class="ic i-image"></span><span class="tab-label">Pictures</span></button>
+<button aria-label="Close tab (Ctrl+W)" class="tab-close"><span class="ic ic12 i-x"></span></button>
+</div>
+<div class="tab is-active">
+<button class="tab-btn"><span class="ic i-download"></span><span class="tab-label">Downloads</span></button>
+<button aria-label="Close tab (Ctrl+W)" class="tab-close"><span class="ic ic12 i-x"></span></button>
+</div>
+<div class="tab-fill"><button aria-label="New tab (Ctrl+T)" class="tab-add"><span class="ic i-plus"></span></button></div>
+</div>
+<div class="wbody">
+<nav aria-label="Places" class="places">
+<div class="places-title"><h2 class="t-hsm">Places</h2></div>
+<div class="places-scroll">
+<button class="pl"><span class="ic ic20 i-home"></span><span class="nm">Home</span></button>
+<button class="pl"><span class="ic ic20 i-monitor"></span><span class="nm">Desktop</span></button>
+<button class="pl"><span class="ic ic20 i-file-text"></span><span class="nm">Documents</span></button>
+<button class="pl is-current"><span class="ic ic20 i-download"></span><span class="nm">Downloads</span></button>
+<button class="pl"><span class="ic ic20 i-image"></span><span class="nm">Pictures</span></button>
+<button class="pl"><span class="ic ic20 i-music"></span><span class="nm">Music</span></button>
+<button class="pl"><span class="ic ic20 i-film"></span><span class="nm">Videos</span></button>
+<button class="pl"><span class="ic ic20 i-trash"></span><span class="nm">Trash</span></button>
+<button class="sec"><span class="ic i-chev-down"></span><span>Devices</span></button>
+<div class="dev">
+<span class="ic ic20 i-drive"></span>
+<div class="dev-main">
+<div class="dev-name">System (/)</div>
+<div aria-hidden="true" class="usage"><div class="usage-fill" style="width: 75%;"></div></div>
+<div class="dev-fig">120.6 of 476.9 GiB free</div>
+</div>
+</div>
+<div class="dev">
+<span class="ic ic20 i-drive"></span>
+<div class="dev-main">
+<div class="dev-name">Data (/data)</div>
+<div aria-hidden="true" class="usage"><div class="usage-fill" style="width: 50%;"></div></div>
+<div class="dev-fig">1.8 of 3.6 TiB free</div>
+</div>
+<button aria-label="Safely remove (E)" class="btn-eject"><span class="ic i-eject"></span></button>
+</div>
+<button class="sec"><span class="ic i-chev-right"></span><span>Network (2)</span></button>
+</div>
+</nav>
+<section aria-label="Files in /home/alex/Downloads" class="pane">
+<div class="tb">
+<button aria-label="Back (Alt+Left)" class="tbtn"><span class="ic i-left"></span></button>
+<button aria-disabled="true" aria-label="Forward (Alt+Right)" class="tbtn is-dis"><span class="ic i-right"></span></button>
+<button aria-label="Up one folder (Alt+Up)" class="tbtn"><span class="ic i-up"></span></button>
+<div aria-label="Folder location" class="loc"><span class="ic i-folder"></span><span class="segs"><span class="seg-sep">/</span><span class="seg">home</span><span class="seg-sep">/</span><span class="seg">alex</span><span class="seg-sep">/</span><span class="seg seg-last">Downloads</span></span></div>
+<button class="actions">Actions<span class="ic i-chev-down"></span><span class="act-key">Ctrl+Shift+P</span></button>
+</div>
+<div class="content">
+<div class="cols">
+<button class="ch c-name is-sorted">Name<span aria-label="Sorted ascending">↑</span></button>
+<button class="ch c-size">Size</button>
+<button class="ch c-mod">Modified</button>
+<button class="ch c-type">Type</button>
+</div>
+<div class="rows">
+<div class="row">
+<span class="c-name">
+<span class="ft ft-folder"></span>
+<span class="nm">Archive</span>
+</span>
+<span class="cell-d c-size">—</span>
+<span class="cell-d c-mod">2026-11-08 20:44</span>
+<span class="cell-d c-type">Folder</span>
+</div>
+<div class="row">
+<span class="c-name">
+<span class="ft ft-folder"></span>
+<span class="nm">Installers</span>
+</span>
+<span class="cell-d c-size">—</span>
+<span class="cell-d c-mod">2026-10-02 13:20</span>
+<span class="cell-d c-type">Folder</span>
+</div>
+<div class="row">
+<span class="c-name">
+<span class="ft ft-tar"></span>
+<span class="nm">blender-4.5.1-linux-x64.tar.xz</span>
+</span>
+<span class="cell-d c-size">362.7 MiB</span>
+<span class="cell-d c-mod">2026-10-30 21:08</span>
+<span class="cell-d c-type">XZ archive</span>
+</div>
+<div class="row">
+<span class="c-name">
+<span class="ft ft-zip"></span>
+<span class="nm">font-pack.zip</span>
+</span>
+<span class="cell-d c-size">18.2 MiB</span>
+<span class="cell-d c-mod">2026-11-02 10:31</span>
+<span class="cell-d c-type">ZIP archive</span>
+</div>
+<div class="row is-sel">
+<span class="c-name">
+<span class="ft ft-exec"></span>
+<span class="nm">install-tools.sh</span>
+</span>
+<span class="cell-d c-size">6.1 KiB</span>
+<span class="cell-d c-mod">2026-11-07 09:14</span>
+<span class="cell-d c-type">Shell script</span>
+</div>
+<div class="row">
+<span class="c-name">
+<span class="ft ft-pdf"></span>
+<span class="nm">kio-fuse-guide.pdf</span>
+</span>
+<span class="cell-d c-size">2.4 MiB</span>
+<span class="cell-d c-mod">2026-11-05 16:50</span>
+<span class="cell-d c-type">PDF document</span>
+</div>
+<div class="row">
+<span class="c-name">
+<span class="ft ft-app"></span>
+<span class="nm">rustphin.desktop</span>
+</span>
+<span class="cell-d c-size">0.4 KiB</span>
+<span class="cell-d c-mod">2026-11-06 12:02</span>
+<span class="cell-d c-type">Desktop entry</span>
+</div>
+<div class="row">
+<span class="c-name">
+<span class="th th6"></span>
+<span class="nm">team-photo.jpg</span>
+</span>
+<span class="cell-d c-size">3.8 MiB</span>
+<span class="cell-d c-mod">2026-10-25 18:27</span>
+<span class="cell-d c-type">JPEG image</span>
+</div>
+<div class="row">
+<span class="c-name">
+<span class="ft ft-zip"></span>
+<span class="nm">wallpaper-pack.zip</span>
+</span>
+<span class="cell-d c-size">96.5 MiB</span>
+<span class="cell-d c-mod">2026-10-19 22:41</span>
+<span class="cell-d c-type">ZIP archive</span>
+</div>
+</div>
+</div>
+<div class="status">
+<div class="st-left"><span class="st-part">1 item selected (6.1 KiB)</span><span class="st-div"></span><span class="st-part">9 items (483.6 MiB)</span></div>
+<span>Free: 1.8 TiB of 3.6 TiB (Data)</span>
+</div>
+</section>
+</div>
+</div>
+<div class="modal">
+<div aria-label="Run “install-tools.sh”?" class="float dlg" role="alertdialog">
+<div class="dlg-title"><span class="ic i-terminal"></span><h2>Run “install-tools.sh”?</h2><button aria-label="Keep (Esc)" class="ibtn"><span class="ic i-x"></span></button></div>
+<div class="dlg-body">
+<p>This file is a program. Running it executes it on this computer. Open hands it to the default application instead.</p>
+<div class="facts narrow">
+<span class="fl">Location</span><span class="fv">/home/alex/Downloads</span>
+<span class="fl">Type</span><span class="fv">Shell script, executable</span>
+<span class="fl">Size</span><span class="fv">6.0 KiB (6,144 bytes)</span>
+</div>
+</div>
+<div class="dlg-actions">
+<button class="btn btn-outline">Keep (Esc)</button>
+<button class="btn btn-outline">Open (O)</button>
+<button class="btn btn-primary">Run (Enter)</button>
+</div>
+</div>
+</div></div>
+</body>
+</html>

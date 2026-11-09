@@ -92,8 +92,8 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Scope:** tabs/navigation/location toolbar, places and device presentation, file rows/selection, actions palette, context menus, properties and operation status/progress; carry the same design through icons/compact views, split panes, dialogs and states absent from the picture.
 - **Workflow:** after the S11 gate, break W-079 into focused steps. Update DESIGN.md first, implement its tokens through theme.rs, then update views. Preserve current features, operation safety, keyboard/accessibility behavior and locked platform/toolkit decisions; the image's Network row does not add network features to scope.
 - **Validation:** compare real application screenshots with the reference, including normal/minimum sizes, split panes, empty/loading/error/disabled/operation states. Re-run affected contrast, native/keyboard, responsiveness and fallback checks; rust-tc doctor, project evidence and one focused commit after every task.
-- **Inputs:** [`DESIGN_BRIEF.md`](DESIGN_BRIEF.md), [`INFORMATION_ARCHITECTURE.md`](INFORMATION_ARCHITECTURE.md) and the target [`DESIGN.md`](DESIGN.md) (2026-11-08), from which the maintainer produces an HTML mockup. The pass's first step makes the target the new `docs/DESIGN.md`.
-- **Status:** queued, not started. S11 acceptance and blockers remain in STATE.md/WORK_ITEMS.md.
+- **Inputs:** [`DESIGN_BRIEF.md`](DESIGN_BRIEF.md), [`INFORMATION_ARCHITECTURE.md`](INFORMATION_ARCHITECTURE.md), the maintainer's HTML mockups in [`../mockup/`](../mockup/) (34 screens, 2026-11-08) and [`../DESIGN.md`](../DESIGN.md), which W-079 adopted from the target on 2026-11-08 with the mockup's changes.
+- **Status:** in progress since 2026-11-08 (D-024: started before the remaining S11 criteria close). Steps W-079a–g in WORK_ITEMS.md.
 
 ## Traceability
 

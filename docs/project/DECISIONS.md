@@ -226,4 +226,12 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Confirmed by / date:** The maintainer, 2026-11-08 ("the Orca screen-reader can be forgotten and removed from the list of things todo")
 - **Supersedes / superseded by:** amends R-107 and the S11 acceptance
 
+## D-024 — Start the design pass before S11 acceptance closes
+- **Status:** locked
+- **Date:** 2026-11-08
+- **Context:** W-079 was queued "after S11 acceptance". Seven S11 criteria remain open: five need the maintainer's real desktop or hardware (non-KDE drop target, USB mount, busy unmount, blur look, contrast over a white window) and two need the toolkit focus patch W-076e, which is not approved. The maintainer delivered the HTML mockups (docs/mockup/, 34 screens).
+- **Decision:** W-079 starts now from the mockups. The open S11 criteria stay open on the list and are not ticked by the design pass. docs/DESIGN.md is replaced by the adopted target design (D-017 still makes it the reference), and its "Implementation status" says which parts the build follows. Two open points in the mockup notes are settled by following Dolphin and the brief: "Run this file?" makes Keep the Enter default (Dolphin focuses Cancel); the four-button name-conflict dialog stays 480 px and wraps its primary button.
+- **Confirmed by / date:** The maintainer, 2026-11-08 ("You should be good to skip remaining S11 tasks and start W-079 now using the mockups I just created")
+- **Supersedes / superseded by:** amends the W-079 start condition in ROADMAP.md
+
 W-076e (patching the locked toolkit's focus registration) was not approved on 2026-11-08 ("Not yet"); it stays open until a planned toolkit upgrade.

@@ -1323,6 +1323,7 @@ impl Workspace {
                     } else {
                         theme.text_muted
                     })
+                    .when(is_active, |tab| tab.bg(theme.chrome))
                     .when(!is_active, |tab| {
                         tab.hover(|tab| tab.bg(theme.hover).text_color(theme.text))
                     })
@@ -1391,7 +1392,7 @@ impl Workspace {
                 .items_center()
                 .h(px(size::TABS))
                 .px(px(space::XS))
-                .bg(theme.chrome)
+                .bg(theme.chrome_raised)
                 .border_b_1()
                 .border_color(theme.border)
                 .text_size(px(text::SMALL))
@@ -1738,7 +1739,7 @@ impl Workspace {
                     .w(px(size::PROGRESS_WIDTH))
                     .h(px(size::PROGRESS))
                     .rounded(px(size::RADIUS))
-                    .bg(theme.hover)
+                    .bg(theme.track)
                     .child(
                         div()
                             .h_full()
@@ -1767,6 +1768,8 @@ impl Workspace {
     fn notice_line(notice: &Notice, theme: Theme) -> impl IntoElement + use<> {
         let (icon, color) = if notice.is_error {
             (IconName::TriangleAlert, theme.danger)
+        } else if notice.offers_undo {
+            (IconName::CircleCheck, theme.success)
         } else {
             (IconName::Info, theme.text_muted)
         };
