@@ -107,7 +107,7 @@ enum Transfer {
 }
 
 /// The operation that sends the active view's selection into the other
-/// view's folder, as Dolphin's "Copy/Move to Other View", or why there is
+/// view's folder, as Dolphin's copy and move to the other view, or why there is
 /// nothing to do.
 fn transfer_to_other_view(
     transfer: Transfer,

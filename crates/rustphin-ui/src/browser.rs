@@ -1451,7 +1451,7 @@ impl Browser {
         }
     }
 
-    /// Dolphin's "Folders First": folders above files, or mixed in.
+    /// Dolphin's folders-first setting: folders above files, or mixed in.
     fn toggle_folders_first(&mut self, cx: &mut Context<Self>) {
         let Some(model) = &mut self.model else { return };
         let options = model.options();
@@ -3477,33 +3477,40 @@ impl Browser {
                 .my(px(space::XS))
                 .bg(theme.border)
                 .into_any_element(),
-            menu::MenuEntry::Submenu { label, .. } => self
-                .menu_button(label, true, true, current, theme, cx)
-                .aria_expanded(current && self.menu.as_ref().is_some_and(|menu| menu.state.submenu))
-                .aria_description(
-                    if current && self.menu.as_ref().is_some_and(|menu| menu.state.submenu) {
-                        "Expanded application submenu. Left returns to File actions."
-                    } else {
-                        "Application submenu. Right or activate to open."
-                    },
-                )
-                .when(active, |row| row.aria_active_descendant())
-                .on_a11y_action(
-                    AccessibleAction::Focus,
-                    Self::accessible_menu_action(index, nested, false, cx),
-                )
-                .on_a11y_action(
-                    AccessibleAction::Click,
-                    Self::accessible_menu_action(index, nested, true, cx),
-                )
-                .on_mouse_move(cx.listener(move |this, _, _, cx| {
-                    this.hover_menu(index, true, 0, cx);
-                }))
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    cx.stop_propagation();
-                    this.on_menu_key(MenuKey::Right, window, cx);
-                }))
-                .into_any_element(),
+            menu::MenuEntry::Submenu { label, .. } => Self::menu_button(
+                label,
+                gpui_kit::assets::IconName::AppWindow,
+                None,
+                true,
+                true,
+                current,
+                theme,
+            )
+            .aria_expanded(current && self.menu.as_ref().is_some_and(|menu| menu.state.submenu))
+            .aria_description(
+                if current && self.menu.as_ref().is_some_and(|menu| menu.state.submenu) {
+                    "Expanded application submenu. Left returns to File actions."
+                } else {
+                    "Application submenu. Right or activate to open."
+                },
+            )
+            .when(active, |row| row.aria_active_descendant())
+            .on_a11y_action(
+                AccessibleAction::Focus,
+                Self::accessible_menu_action(index, nested, false, cx),
+            )
+            .on_a11y_action(
+                AccessibleAction::Click,
+                Self::accessible_menu_action(index, nested, true, cx),
+            )
+            .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                this.hover_menu(index, true, 0, cx);
+            }))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                cx.stop_propagation();
+                this.on_menu_key(MenuKey::Right, window, cx);
+            }))
+            .into_any_element(),
             menu::MenuEntry::Item {
                 label,
                 command,
@@ -3511,37 +3518,43 @@ impl Browser {
             } => {
                 let command = command.clone();
                 let enabled = *enabled;
-                self.menu_button(label, enabled, false, current && enabled, theme, cx)
-                    .when(active && enabled, |row| row.aria_active_descendant())
-                    .when(enabled, |row| {
-                        row.on_a11y_action(
-                            AccessibleAction::Focus,
-                            Self::accessible_menu_action(index, nested, false, cx),
-                        )
-                        .on_a11y_action(
-                            AccessibleAction::Click,
-                            Self::accessible_menu_action(index, nested, true, cx),
-                        )
-                        .on_mouse_move(cx.listener(move |this, _, _, cx| {
-                            if nested {
-                                let cursor = this
-                                    .menu
-                                    .as_ref()
-                                    .map(|menu| menu.state.cursor)
-                                    .unwrap_or(0);
-                                this.hover_menu(cursor, true, index, cx);
-                            } else {
-                                this.hover_menu(index, false, 0, cx);
-                            }
-                        }))
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.run_menu(command.clone(), window, cx);
-                            },
-                        ))
-                    })
-                    .into_any_element()
+                Self::menu_button(
+                    label,
+                    command.icon(),
+                    command.shortcut(),
+                    enabled,
+                    false,
+                    current && enabled,
+                    theme,
+                )
+                .when(active && enabled, |row| row.aria_active_descendant())
+                .when(enabled, |row| {
+                    row.on_a11y_action(
+                        AccessibleAction::Focus,
+                        Self::accessible_menu_action(index, nested, false, cx),
+                    )
+                    .on_a11y_action(
+                        AccessibleAction::Click,
+                        Self::accessible_menu_action(index, nested, true, cx),
+                    )
+                    .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                        if nested {
+                            let cursor = this
+                                .menu
+                                .as_ref()
+                                .map(|menu| menu.state.cursor)
+                                .unwrap_or(0);
+                            this.hover_menu(cursor, true, index, cx);
+                        } else {
+                            this.hover_menu(index, false, 0, cx);
+                        }
+                    }))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.run_menu(command.clone(), window, cx);
+                    }))
+                })
+                .into_any_element()
             }
         }
     }
@@ -3569,14 +3582,21 @@ impl Browser {
     }
 
     fn menu_button(
-        &self,
         label: &str,
+        icon: gpui_kit::assets::IconName,
+        key: Option<&'static str>,
         enabled: bool,
         submenu: bool,
         current: bool,
         theme: Theme,
-        _: &mut Context<Self>,
     ) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let quiet = if current {
+            theme.on_selection
+        } else if enabled {
+            theme.text_muted
+        } else {
+            theme.text_disabled
+        };
         div()
             .id(SharedString::from(format!(
                 "menu-{}-{label}",
@@ -3598,9 +3618,9 @@ impl Browser {
             .flex()
             .flex_none()
             .items_center()
-            .gap(px(space::SM))
-            .h(px(size::ROW))
-            .px(px(space::SM))
+            .gap(px(space::MD))
+            .h(px(size::MENU_ROW))
+            .px(px(space::SM - size::SELECTION_BAR))
             .rounded(px(size::RADIUS))
             .border_l(px(size::SELECTION_BAR))
             .border_color(gpui_kit::transparent_black())
@@ -3610,7 +3630,18 @@ impl Browser {
             })
             .when(!current && enabled, |row| row.text_color(theme.text))
             .when(!enabled, |row| row.text_color(theme.text_disabled))
+            .child(Icon::new(icon).size(px(size::ICON)).flex_none())
             .child(div().flex_1().min_w_0().truncate().child(label.to_owned()))
+            .when_some(key, |row, key| {
+                row.child(
+                    div()
+                        .flex_none()
+                        .font_family(text::FAMILY_DATA)
+                        .text_size(px(text::SMALL))
+                        .text_color(quiet)
+                        .child(key),
+                )
+            })
             .when(submenu, |row| {
                 row.child(
                     Icon::new(IconName::ChevronRight)

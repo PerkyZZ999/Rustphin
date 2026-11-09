@@ -62,6 +62,30 @@ impl Candidate {
     }
 }
 
+/// A result's label split into its category and its name: "View: Show
+/// hidden files" gives ("View", "Show hidden files").
+fn split_label(label: &str) -> (&str, &str) {
+    label.split_once(": ").unwrap_or(("", label))
+}
+
+/// The icon of a result's category.
+fn category_icon(category: &str) -> gpui_kit::assets::IconName {
+    use gpui_kit::assets::IconName as I;
+    match category {
+        "Files" => I::File,
+        "Navigation" => I::Compass,
+        "Places" => I::Bookmark,
+        "Selection" => I::SquareCheck,
+        "Trash" => I::Trash,
+        "View" => I::Eye,
+        "Workspace" => I::PanelsTopLeft,
+        "Tab" => I::PanelTop,
+        "Place" => I::Folder,
+        "Recent" | "History" => I::Clock,
+        _ => I::Command,
+    }
+}
+
 pub enum PaletteEvent {
     Chosen(Target),
     Closed,
@@ -140,7 +164,7 @@ impl Palette {
     ) -> Self {
         let input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Search actions, places, tabs and recent folders")
+                .placeholder("Search actions, places, tabs and recent folders\u{2026}")
         });
         let subscription =
             cx.subscribe(
@@ -216,6 +240,17 @@ impl Palette {
     fn row(&self, row: usize, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let candidate = &self.candidates[self.results.indices[row]];
         let selected = self.results.selected == row;
+        let (category, name) = split_label(&candidate.label);
+        let trail = if category.is_empty() {
+            candidate.detail.clone()
+        } else {
+            format!("{category} \u{203a} {}", candidate.detail)
+        };
+        let quiet = if selected {
+            theme.on_selection
+        } else {
+            theme.text_muted
+        };
         let generation = self.results.generation;
         let palette = cx.entity().downgrade();
         let select = move |_: Option<&gpui_kit::accesskit::ActionData>,
@@ -247,11 +282,17 @@ impl Palette {
             .flex()
             .items_center()
             .h(px(size::PALETTE_ROW))
-            .gap(px(space::SM))
-            .pr(px(space::SM))
+            .gap(px(space::MD))
+            .pl(px(space::MD - size::SELECTION_BAR))
+            .pr(px(space::MD))
             .rounded(px(size::RADIUS))
+            // The selection look: fill and bar, as in menus and the list.
+            .border_l(px(size::SELECTION_BAR))
+            .border_color(gpui_kit::transparent_black())
             .when(selected, |row| {
-                row.bg(theme.selection).text_color(theme.on_selection)
+                row.bg(theme.selection)
+                    .border_color(theme.accent)
+                    .text_color(theme.on_selection)
             })
             .hover(|row| {
                 row.bg(if selected {
@@ -261,10 +302,10 @@ impl Palette {
                 })
             })
             .child(
-                div()
-                    .w(px(size::SELECTION_BAR))
-                    .h_full()
-                    .when(selected, |bar| bar.bg(theme.on_selection)),
+                gpui_kit::component::Icon::new(category_icon(category))
+                    .size(px(size::PLACE_ICON))
+                    .flex_none()
+                    .text_color(quiet),
             )
             .child(
                 div()
@@ -272,17 +313,20 @@ impl Palette {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .child(div().truncate().child(candidate.label.clone()))
                     .child(
                         div()
                             .truncate()
+                            .text_size(px(text::NAME))
+                            .child(name.to_owned()),
+                    )
+                    .child(
+                        div()
+                            .truncate()
+                            .font_family(text::FAMILY_DATA)
                             .text_size(px(text::SMALL))
-                            .text_color(if selected {
-                                theme.on_selection
-                            } else {
-                                theme.text_muted
-                            })
-                            .child(candidate.detail.clone()),
+                            .line_height(px(text::LINE - space::XS))
+                            .text_color(quiet)
+                            .child(trail),
                     ),
             )
             .child(
@@ -290,6 +334,7 @@ impl Palette {
                     .flex_none()
                     .font_family(text::FAMILY_DATA)
                     .text_size(px(text::SMALL))
+                    .text_color(quiet)
                     .child(candidate.shortcut.clone()),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
@@ -368,9 +413,11 @@ impl Render for Palette {
             .occlude()
             .bg(theme.scrim)
             .flex()
-            .items_center()
+            .items_start()
             .justify_center()
             .p(px(space::LG))
+            // Near the top, just under the toolbar's height.
+            .pt(px(size::TOOLBAR + space::LG))
             .key_context("Palette")
             .on_mouse_down(
                 MouseButton::Left,
@@ -384,14 +431,14 @@ impl Render for Palette {
                 div()
                     .id("command-palette")
                     .role(Role::Dialog)
-                    .aria_label("Command palette")
+                    .aria_label("Actions")
                     .aria_description("Search actions and folders. Up, Down or Tab chooses a result; Enter runs it; Escape closes.")
                     .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
                     .w_full()
                     .max_w(px(size::PALETTE))
                     .flex()
                     .flex_col()
-                    .gap(px(space::SM))
+                    .gap(px(space::MD))
                     .p(px(space::MD))
                     .bg(theme.raised)
                     .shadow(vec![theme.floating_shadow()])
@@ -405,13 +452,35 @@ impl Render for Palette {
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         div()
-                            .font_family(text::FAMILY_HEADING)
-                            .child("Command palette"),
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .px(px(space::XS))
+                            .child(
+                                div()
+                                    .font_family(text::FAMILY_HEADING)
+                                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                                    .text_size(px(text::HEADING))
+                                    .child("Actions"),
+                            )
+                            .child(
+                                div()
+                                    .font_family(text::FAMILY_DATA)
+                                    .text_size(px(text::SMALL))
+                                    .text_color(theme.text_muted)
+                                    .child("Ctrl+Shift+P"),
+                            ),
                     )
                     .child(crate::input::named(
-                        Input::new(&self.input),
+                        Input::new(&self.input)
+                            .h(px(size::PALETTE_FIELD))
+                            .prefix(
+                                gpui_kit::component::Icon::new(gpui_kit::assets::IconName::Search)
+                                    .size(px(size::ICON))
+                                    .text_color(theme.text_muted),
+                            ),
                         &self.input,
-                        "Search actions and folders",
+                        "Search actions, places, tabs and recent folders",
                         window,
                         cx,
                     ))
@@ -445,7 +514,18 @@ impl Render for Palette {
 
 #[cfg(test)]
 mod tests {
-    use super::Results;
+    use super::{Results, split_label};
+
+    #[test]
+    fn a_result_shows_its_name_and_names_its_category_in_the_trail() {
+        assert_eq!(
+            split_label("View: Show hidden files"),
+            ("View", "Show hidden files")
+        );
+        // Only the first colon separates: a folder name may hold more.
+        assert_eq!(split_label("Recent: a: b"), ("Recent", "a: b"));
+        assert_eq!(split_label("No category"), ("", "No category"));
+    }
 
     #[test]
     fn a_selection_from_an_old_query_cannot_choose_a_new_result() {

@@ -855,6 +855,9 @@ except where the list below says otherwise; each W-079 step adds its line.
   600/440 px rules (no volume name yet), the filter bar's 32 px field, the
   activity line, the result line with Undo, Details… and dismiss, the error
   details dialog (opened from the result line), the blur status line.
+- W-079f (2026-11-08): menu icons, shortcuts and the selection bar; the
+  palette's title row, search icon, 52 px results with category icons and
+  trails, placed near the top. Results use one icon per category.
 - Not yet implemented: the rest of "Changes from the earlier design" (sizes,
   layout, new components and wording).
 

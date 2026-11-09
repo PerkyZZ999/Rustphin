@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-08 — W-079e status line, window lines, error details; full gate 488 tests
+- Latest validation entry: VALIDATION.md, 2026-11-08 — W-079f context menu and palette; full gate 490 tests
 
 ## Open loops
 - Task: W-079 design pass started 2026-11-08 (D-024) from the maintainer's HTML mockups in docs/mockup/. docs/DESIGN.md is now the adopted target, with an "Implementation status" that each step W-079a–g updates. Open points settled: Run defaults to Keep (Dolphin), the four-button conflict dialog wraps at 480 px.

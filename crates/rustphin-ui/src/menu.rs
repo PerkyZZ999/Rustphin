@@ -28,10 +28,10 @@ pub enum MenuCommand {
     /// Paste the clipboard into the folder being shown.
     Paste,
     /// Put the path (or remote address) of the first selected entry on the
-    /// clipboard as text, as Dolphin's "Copy Location".
+    /// clipboard as text, as Dolphin's copy-location action.
     CopyLocation,
     /// Copy the selection beside itself as "name copy.ext" (Dolphin's
-    /// "Duplicate Here", D-021).
+    /// duplicate-here action, D-021).
     Duplicate,
     /// Rename the selection.
     Rename,
@@ -74,6 +74,50 @@ pub enum MenuEntry {
     },
     /// A hairline between groups.
     Separator,
+}
+
+impl MenuCommand {
+    /// The key that does the same outside the menu, as the row shows it.
+    pub fn shortcut(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::Open => "Enter",
+            Self::Cut => "Ctrl+X",
+            Self::Copy => "Ctrl+C",
+            Self::Paste => "Ctrl+V",
+            Self::CopyLocation => "Ctrl+Alt+C",
+            Self::Duplicate => "Ctrl+D",
+            Self::Rename => "F2",
+            Self::MoveToTrash => "Del",
+            Self::Delete => "Shift+Del",
+            Self::Properties => "Alt+Enter",
+            Self::NewFolder => "F10",
+            Self::NewFile => "Ctrl+Alt+N",
+            Self::OpenWith(_) | Self::Restore | Self::EmptyTrash | Self::OpenTrash(_) => {
+                return None;
+            }
+        })
+    }
+
+    /// The Lucide icon of the row.
+    pub fn icon(&self) -> gpui_kit::assets::IconName {
+        use gpui_kit::assets::IconName as I;
+        match self {
+            Self::Open => I::SquareArrowOutUpRight,
+            Self::OpenWith(_) => I::AppWindow,
+            Self::Cut => I::Scissors,
+            Self::Copy => I::Copy,
+            Self::Paste => I::ClipboardPaste,
+            Self::CopyLocation => I::Link,
+            Self::Duplicate => I::CopyPlus,
+            Self::Rename => I::Pencil,
+            Self::MoveToTrash | Self::EmptyTrash | Self::OpenTrash(_) => I::Trash,
+            Self::Delete => I::CircleX,
+            Self::Properties => I::Info,
+            Self::Restore => I::ArchiveRestore,
+            Self::NewFolder => I::FolderPlus,
+            Self::NewFile => I::FilePlus,
+        }
+    }
 }
 
 impl MenuEntry {
@@ -402,6 +446,26 @@ fn labels(entries: &[MenuEntry]) -> Vec<&str> {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn menu_rows_show_the_keys_that_do_the_same() {
+        let keys = |command: MenuCommand| command.shortcut();
+        assert_eq!(keys(MenuCommand::Open), Some("Enter"));
+        assert_eq!(keys(MenuCommand::Cut), Some("Ctrl+X"));
+        assert_eq!(keys(MenuCommand::Copy), Some("Ctrl+C"));
+        assert_eq!(keys(MenuCommand::Paste), Some("Ctrl+V"));
+        assert_eq!(keys(MenuCommand::CopyLocation), Some("Ctrl+Alt+C"));
+        assert_eq!(keys(MenuCommand::Duplicate), Some("Ctrl+D"));
+        assert_eq!(keys(MenuCommand::Rename), Some("F2"));
+        assert_eq!(keys(MenuCommand::MoveToTrash), Some("Del"));
+        assert_eq!(keys(MenuCommand::Delete), Some("Shift+Del"));
+        assert_eq!(keys(MenuCommand::Properties), Some("Alt+Enter"));
+        assert_eq!(keys(MenuCommand::NewFolder), Some("F10"));
+        assert_eq!(keys(MenuCommand::NewFile), Some("Ctrl+Alt+N"));
+        // Rows without a key of their own show none.
+        assert_eq!(keys(MenuCommand::Restore), None);
+        assert_eq!(keys(MenuCommand::EmptyTrash), None);
+    }
 
     fn facts(mut change: impl FnMut(&mut MenuFacts)) -> MenuFacts {
         let mut facts = MenuFacts {

@@ -99,8 +99,10 @@ pub mod size {
     pub const FACT_LABEL: f32 = 72.;
     /// A hairline divider, such as a menu separator.
     pub const HAIRLINE: f32 = 1.;
+    /// Height of a menu item.
+    pub const MENU_ROW: f32 = 32.;
     /// Tallest a context menu grows before it scrolls: twelve rows.
-    pub const MENU_VISIBLE: f32 = 336.;
+    pub const MENU_VISIBLE: f32 = 384.;
     /// Width of a dialog.
     pub const DIALOG: f32 = 480.;
     /// Width of the batch-rename dialog, which has a two-column preview.
@@ -108,7 +110,9 @@ pub mod size {
     /// Maximum width of the command palette.
     pub const PALETTE: f32 = 640.;
     /// Height of a command result, including its second line.
-    pub const PALETTE_ROW: f32 = 48.;
+    pub const PALETTE_ROW: f32 = 52.;
+    /// Height of the palette's search field.
+    pub const PALETTE_FIELD: f32 = 40.;
     /// Height of a progress bar.
     pub const PROGRESS: f32 = 6.;
     /// Narrowest a progress bar gets in the activity line.
