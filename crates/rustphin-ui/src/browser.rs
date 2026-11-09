@@ -10,8 +10,8 @@ use std::{
 };
 
 use gpui_kit::{
-    AccessibleAction, AnyElement, App, AppContext as _, AsyncApp, ClickEvent, Context, Edges,
-    Entity, EventEmitter, ExternalDragPayload, ExternalPaths, FileDragPaths, FocusHandle,
+    AccessibleAction, AnyElement, App, AppContext as _, AsyncApp, Bounds, ClickEvent, Context,
+    Edges, Entity, EventEmitter, ExternalDragPayload, ExternalPaths, FileDragPaths, FocusHandle,
     Focusable as _, InteractiveElement, IntoElement, KeyBinding, KeyDownEvent, Modifiers,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point,
     Render, Role, ScrollHandle, ScrollStrategy, SharedString, StatefulInteractiveElement as _,
@@ -37,7 +37,7 @@ use crate::{
     diagnostics::FrameLog,
     filetypes::{Database, TypeInfo},
     format::{self, count, plural},
-    layout::{self, Layout, Rect, ViewMode},
+    layout::{self, Flow, Grid, Layout, Rect, Step, ViewMode},
     location::Location,
     menu::{self, MenuCommand, MenuEffect, MenuKey},
     operations::{self, hub},
@@ -60,8 +60,6 @@ const BAND_THRESHOLD: f32 = 4.;
 const TYPE_AHEAD_PAUSE: Duration = Duration::from_millis(1000);
 /// Icons smaller than this stay type icons: a thumbnail would be a smudge.
 const MIN_THUMBNAIL_EDGE: f32 = 24.;
-/// Rows moved by Page Up and Page Down.
-const PAGE_ROWS: isize = 15;
 
 actions!(
     browser,
@@ -349,8 +347,9 @@ pub struct Browser {
     zone: TimeZone,
     mode: ViewMode,
     zoom: usize,
-    /// Entries per row of the list or grid as last drawn; 1 in details mode.
-    per_row: usize,
+    /// Entries per line (details, icons) or per column (compact) as last
+    /// drawn; 1 in details mode.
+    lanes: usize,
     /// Bumped when the icon size changes, so lookups for the old size are dropped.
     icon_epoch: u64,
     /// Where view settings are stored; `None` when they must not be written.
@@ -365,6 +364,12 @@ pub struct Browser {
     /// Set when a band ends, so the click that the same press produces is ignored.
     ignore_click: bool,
     scroll: UniformListScrollHandle,
+    /// The compact view's sideways scrolling.
+    columns_scroll: ScrollHandle,
+    /// The height the compact view's columns were last fitted to.
+    columns_height: f32,
+    /// The folder the compact view last showed; another one starts at the left.
+    columns_folder: Option<PathBuf>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -448,7 +453,7 @@ impl Browser {
             zone: TimeZone::system(),
             mode: settings.mode(),
             zoom: settings.zoom(),
-            per_row: 1,
+            lanes: 1,
             icon_epoch: 0,
             settings_path,
             saved: settings.clone(),
@@ -457,6 +462,9 @@ impl Browser {
             band: None,
             ignore_click: false,
             scroll: UniformListScrollHandle::new(),
+            columns_scroll: ScrollHandle::new(),
+            columns_height: 0.,
+            columns_folder: None,
             _subscriptions: subscriptions,
         };
         match DirectoryModel::new(Arc::new(RealFs)) {
@@ -735,17 +743,83 @@ impl Browser {
         );
     }
 
+    /// The height to fit the compact view's columns to: the list's height
+    /// as last drawn, or an estimate before it has been. When the list turns
+    /// out another height, the next frame draws again with that one.
+    fn fit_columns(&mut self, window: &mut Window, cx: &mut Context<Self>) -> f32 {
+        let drawn = f32::from(self.columns_scroll.bounds().size.height);
+        self.columns_height = if drawn > 0. {
+            drawn
+        } else {
+            f32::from(window.viewport_size().height) - size::TOOLBAR - size::STATUS
+        };
+        cx.on_next_frame(window, |this, _, cx| {
+            let drawn = f32::from(this.columns_scroll.bounds().size.height);
+            if this.mode == ViewMode::Compact && drawn > 0. && drawn != this.columns_height {
+                cx.notify();
+            }
+        });
+        self.columns_height
+    }
+
+    /// Another folder in the compact view starts at its first column; the
+    /// same folder keeps its place, within the columns it still has.
+    fn follow_columns_folder(&mut self, snapshot: Option<&Snapshot>, grid: Grid) {
+        let folder = snapshot.map(|snapshot| snapshot.path());
+        let offset = self.columns_scroll.offset();
+        if self.columns_folder.as_deref() != folder {
+            self.columns_folder = folder.map(Path::to_path_buf);
+            self.columns_scroll.set_offset(point(px(0.), offset.y));
+            return;
+        }
+        let viewport = f32::from(self.columns_scroll.bounds().size.width);
+        let furthest = (grid.width() + space::SM * 2. - viewport).max(0.);
+        if -f32::from(offset.x) > furthest {
+            self.columns_scroll
+                .set_offset(point(px(-furthest), offset.y));
+        }
+    }
+
+    /// Where the entries of the current folder sit as last drawn.
+    fn arrangement(&self) -> Grid {
+        let len = self.current_snapshot().map_or(0, |snapshot| snapshot.len());
+        Grid::new(
+            self.mode.layout(self.zoom),
+            self.mode.flow(),
+            self.lanes,
+            len,
+        )
+    }
+
     fn reveal_focus(&self) {
-        if let Some(row) = self.focus_row {
-            self.scroll
-                .scroll_to_item(row / self.per_row.max(1), ScrollStrategy::Nearest);
+        let Some(row) = self.focus_row else { return };
+        let grid = self.arrangement();
+        match grid.flow {
+            Flow::Across => self
+                .scroll
+                .scroll_to_item(row / grid.lanes, ScrollStrategy::Nearest),
+            Flow::Down => {
+                let viewport = f32::from(self.columns_scroll.bounds().size.width);
+                if viewport <= 0. {
+                    return;
+                }
+                let (left, right) = grid.column_span(row);
+                let offset = layout::nearest_offset(
+                    f32::from(self.columns_scroll.offset().x),
+                    left,
+                    right + space::SM * 2.,
+                    viewport,
+                );
+                let furthest = (grid.width() + space::SM * 2. - viewport).max(0.);
+                self.columns_scroll
+                    .set_offset(point(px(offset.clamp(-furthest, 0.)), px(0.)));
+            }
         }
     }
 
     /// Moves the focus by keyboard; with `extend`, selects the range to it.
-    fn move_selection(&mut self, motion: Motion, extend: bool, cx: &mut Context<Self>) {
-        let len = self.current_snapshot().map_or(0, |snapshot| snapshot.len());
-        let Some(row) = target_row(self.focus_row, len, motion) else {
+    fn move_selection(&mut self, step: Step, extend: bool, cx: &mut Context<Self>) {
+        let Some(row) = self.arrangement().step(self.focus_row, step) else {
             return;
         };
         self.change_selection(
@@ -764,16 +838,24 @@ impl Browser {
     /// top-left corner, whatever the scroll position. `None` before the list
     /// has been drawn.
     fn list_point(&self, position: Point<Pixels>) -> Option<(f32, f32)> {
-        let state = self.scroll.0.borrow();
-        let bounds = state.base_handle.bounds();
-        if bounds.size.height <= px(0.) {
-            return None;
-        }
-        let offset = state.base_handle.offset();
+        let (bounds, offset) = self.list_viewport()?;
         Some((
-            f32::from(position.x - bounds.origin.x) - space::SM,
+            f32::from(position.x - bounds.origin.x - offset.x) - space::SM,
             f32::from(position.y - bounds.origin.y - offset.y) - space::XS,
         ))
+    }
+
+    /// The area the entries are drawn in and how far they are scrolled, in
+    /// window coordinates. `None` before the list has been drawn.
+    fn list_viewport(&self) -> Option<(Bounds<Pixels>, Point<Pixels>)> {
+        let (bounds, offset) = match self.mode.flow() {
+            Flow::Across => {
+                let state = self.scroll.0.borrow();
+                (state.base_handle.bounds(), state.base_handle.offset())
+            }
+            Flow::Down => (self.columns_scroll.bounds(), self.columns_scroll.offset()),
+        };
+        (bounds.size.height > px(0.)).then_some((bounds, offset))
     }
 
     /// Opens the context menu for `row`, or for empty space when `row` is
@@ -864,11 +946,9 @@ impl Browser {
     /// Where a keyboard-opened menu starts below the focused entry, and the
     /// entry's top for opening upward; the list's corner without an entry.
     fn menu_anchors(&self, row: Option<usize>) -> (Point<Pixels>, Option<Point<Pixels>>) {
-        let state = self.scroll.0.borrow();
-        let bounds = state.base_handle.bounds();
-        if bounds.size.height <= px(0.) {
+        let Some((bounds, offset)) = self.list_viewport() else {
             return (point(px(space::LG), px(size::TOOLBAR + space::LG)), None);
-        }
+        };
         let corner = point(
             bounds.origin.x + px(space::LG),
             bounds.origin.y + px(space::LG),
@@ -877,15 +957,15 @@ impl Browser {
             return (corner, None);
         };
         // The inverse of `list_point`.
-        let layout = self.mode.layout(self.zoom);
-        let (x, y) = layout.cell_bottom_left(row, self.per_row);
-        let offset = state.base_handle.offset();
+        let grid = self.arrangement();
+        let (x, y) = grid.cell_bottom_left(row);
+        let row_height = grid.layout.row_height;
         let top = bounds.origin.y;
         let bottom = bounds.origin.y + bounds.size.height;
         let clamp = |value: Pixels| value.clamp(top, bottom.max(top));
-        let left = bounds.origin.x + px(x + space::SM + space::LG);
+        let left = bounds.origin.x + offset.x + px(x + space::SM + space::LG);
         let below = clamp(bounds.origin.y + offset.y + px(y + space::XS));
-        let above = clamp(bounds.origin.y + offset.y + px(y - layout.row_height + space::XS));
+        let above = clamp(bounds.origin.y + offset.y + px(y - row_height + space::XS));
         (point(left, below), Some(point(left, above)))
     }
 
@@ -1158,12 +1238,8 @@ impl Browser {
             return;
         }
         let in_list = self
-            .scroll
-            .0
-            .borrow()
-            .base_handle
-            .bounds()
-            .contains(&event.position);
+            .list_viewport()
+            .is_some_and(|(bounds, _)| bounds.contains(&event.position));
         if in_list
             && !self.editing_location
             && let Some(start) = self.list_point(event.position)
@@ -1201,8 +1277,7 @@ impl Browser {
         ) else {
             return;
         };
-        let layout = self.mode.layout(self.zoom);
-        let rows = layout.rows_in(Rect::between(band.start, end), self.per_row, snapshot.len());
+        let rows = self.arrangement().rows_in(Rect::between(band.start, end));
         self.selection.select_rows(&snapshot, rows, band.add);
         self.selection_revision += 1;
         // The view does not scroll to follow a band.
@@ -1217,36 +1292,35 @@ impl Browser {
         }
     }
 
-    /// The outline of the band being dragged, in window coordinates.
+    /// The outline of the band being dragged, kept inside the list. Pointer
+    /// positions are window coordinates, and this view may start anywhere in
+    /// the window (after the places panel, or as the right pane of a split),
+    /// so the outline is placed in the window, not in the view.
     fn band_outline(&self, theme: Theme) -> Option<impl IntoElement + use<>> {
         let band = self.band.filter(|band| band.active)?;
+        let (list, _) = self.list_viewport()?;
         let (left, right) = (
-            band.pressed_at.x.min(band.pointer.x),
-            band.pressed_at.x.max(band.pointer.x),
+            band.pressed_at.x.min(band.pointer.x).max(list.left()),
+            band.pressed_at.x.max(band.pointer.x).min(list.right()),
         );
         let (top, bottom) = (
-            band.pressed_at.y.min(band.pointer.y),
-            band.pressed_at.y.max(band.pointer.y),
+            band.pressed_at.y.min(band.pointer.y).max(list.top()),
+            band.pressed_at.y.max(band.pointer.y).min(list.bottom()),
         );
-        Some(
-            div()
-                .absolute()
-                .left(left)
-                .top(top)
-                .w(right - left)
-                .h(bottom - top)
-                .rounded(px(size::RADIUS))
-                .border_1()
-                .border_color(theme.accent)
-                .bg(theme.hover),
-        )
-    }
-
-    /// Left and right move between neighbours in a grid; a list has none.
-    fn move_sideways(&mut self, delta: isize, extend: bool, cx: &mut Context<Self>) {
-        if self.per_row > 1 {
-            self.move_selection(Motion::By(delta), extend, cx);
+        if right <= left || bottom <= top {
+            return None;
         }
+        Some(
+            anchored().position(point(left, top)).child(
+                div()
+                    .w(right - left)
+                    .h(bottom - top)
+                    .rounded(px(size::RADIUS))
+                    .border_1()
+                    .border_color(theme.accent)
+                    .bg(theme.hover),
+            ),
+        )
     }
 
     /// Jumps to the next entry whose name starts with what has been typed.
@@ -2873,7 +2947,82 @@ impl Browser {
             .child(self.entry_list(snapshot, list))
     }
 
-    /// The icons and compact views: a virtualised grid, `per_row` entries wide.
+    /// One entry of the icons or compact view: a large icon over its name, or
+    /// a small icon beside it.
+    fn grid_cell(
+        &mut self,
+        rows: &Snapshot,
+        row: usize,
+        layout: Layout,
+        theme: Theme,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let stacked = self.mode == ViewMode::Icons;
+        let cell_width = layout.cell_width.unwrap_or(layout.row_height);
+        let entry = self.entry(rows, row, cx);
+        let icon = entry.icon(layout.icon, theme);
+        let surface = entry.surface(theme).size_full();
+        let cell = if stacked {
+            // Icon above a centred name of up to two lines.
+            surface
+                .flex()
+                .flex_col()
+                .items_center()
+                .gap(px(space::XS))
+                .py(px(space::SM))
+                .px(px(space::XS))
+                .text_size(px(text::NAME))
+                .child(icon)
+                .child(if entry.renaming {
+                    self.name_cell(&entry, theme, window, cx).w_full()
+                } else {
+                    div()
+                        .w_full()
+                        .text_center()
+                        .line_clamp(2)
+                        .when(entry.link, |name| name.italic())
+                        .child(entry.name.clone())
+                })
+        } else {
+            surface
+                .flex()
+                .items_center()
+                .gap(px(space::MD))
+                .px(px(space::SM))
+                .text_size(px(text::NAME))
+                .child(icon)
+                .child(self.name_cell(&entry, theme, window, cx).flex_1().min_w_0())
+        };
+        let is_folder = entry.container;
+        let drag_icon = entry.drag_icon();
+        let cell = Self::drag_source(
+            entry
+                .accessible(rows, row, cx)
+                .flex_none()
+                .w(px(cell_width))
+                .h(px(layout.row_height))
+                // Half the gap on each side: 8 pixels between cells; compact
+                // rows touch, as list rows do.
+                .px(px(size::CELL_GAP / 2.))
+                .when(stacked, |cell| cell.py(px(size::CELL_GAP / 2.)))
+                .child(cell)
+                .on_click(Self::entry_click(row, cx))
+                .on_mouse_down(MouseButton::Middle, Self::entry_middle_click(row, cx))
+                .on_mouse_down(MouseButton::Right, Self::entry_right_click(row, cx)),
+            row,
+            drag_icon,
+            cx,
+        );
+        if is_folder {
+            Self::drop_target(cell, Some(row), theme, cx)
+        } else {
+            cell
+        }
+    }
+
+    /// The icons view: a virtualised grid, `per_row` entries to a line,
+    /// scrolling up and down.
     fn grid(
         &self,
         snapshot: &Arc<Snapshot>,
@@ -2884,9 +3033,6 @@ impl Browser {
     ) -> impl IntoElement {
         let rows = Arc::clone(snapshot);
         let len = snapshot.len();
-        let cell_width = layout.cell_width.unwrap_or(layout.row_height);
-        let stacked = self.mode == ViewMode::Icons;
-
         let list = uniform_list(
             "entries",
             len.div_ceil(per_row),
@@ -2895,77 +3041,9 @@ impl Browser {
                 range
                     .map(|line| {
                         let first = line * per_row;
-                        let cells = (first..(first + per_row).min(len)).map(|row| {
-                            let entry = this.entry(&rows, row, cx);
-                            let icon = entry.icon(layout.icon, theme);
-                            let surface = entry.surface(theme).size_full();
-                            let cell = if stacked {
-                                // Icon above a centred name of up to two lines.
-                                surface
-                                    .flex()
-                                    .flex_col()
-                                    .items_center()
-                                    .gap(px(space::XS))
-                                    .py(px(space::SM))
-                                    .px(px(space::XS))
-                                    .text_size(px(text::NAME))
-                                    .child(icon)
-                                    .child(if entry.renaming {
-                                        this.name_cell(&entry, theme, window, cx).w_full()
-                                    } else {
-                                        div()
-                                            .w_full()
-                                            .text_center()
-                                            .line_clamp(2)
-                                            .when(entry.link, |name| name.italic())
-                                            .child(entry.name.clone())
-                                    })
-                            } else {
-                                surface
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(space::MD))
-                                    .px(px(space::SM))
-                                    .text_size(px(text::NAME))
-                                    .child(icon)
-                                    .child(
-                                        this.name_cell(&entry, theme, window, cx)
-                                            .flex_1()
-                                            .min_w_0(),
-                                    )
-                            };
-                            let is_folder = entry.container;
-                            let drag_icon = entry.drag_icon();
-                            let cell = Self::drag_source(
-                                entry
-                                    .accessible(&rows, row, cx)
-                                    .flex_none()
-                                    .w(px(cell_width))
-                                    .h_full()
-                                    // Half the gap on each side: 8 pixels between
-                                    // cells; compact rows touch, as list rows do.
-                                    .px(px(size::CELL_GAP / 2.))
-                                    .when(stacked, |cell| cell.py(px(size::CELL_GAP / 2.)))
-                                    .child(cell)
-                                    .on_click(Self::entry_click(row, cx))
-                                    .on_mouse_down(
-                                        MouseButton::Middle,
-                                        Self::entry_middle_click(row, cx),
-                                    )
-                                    .on_mouse_down(
-                                        MouseButton::Right,
-                                        Self::entry_right_click(row, cx),
-                                    ),
-                                row,
-                                drag_icon,
-                                cx,
-                            );
-                            if is_folder {
-                                Self::drop_target(cell, Some(row), theme, cx)
-                            } else {
-                                cell
-                            }
-                        });
+                        let cells = (first..(first + per_row).min(len))
+                            .map(|row| this.grid_cell(&rows, row, layout, theme, window, cx))
+                            .collect::<Vec<_>>();
                         div()
                             .flex()
                             .w_full()
@@ -2980,6 +3058,54 @@ impl Browser {
         .flex_1()
         .py(px(space::XS));
         self.entry_list(snapshot, list)
+    }
+
+    /// The compact view: entries fill columns from top to bottom and the
+    /// view scrolls sideways, as in Dolphin. Only the columns in view are
+    /// built, so a folder of any size costs the same to draw.
+    fn columns(
+        &mut self,
+        snapshot: &Arc<Snapshot>,
+        grid: Grid,
+        theme: Theme,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let _rows = self.frames.task("visible_rows");
+        let pitch = grid.layout.cell_width.unwrap_or(0.);
+        let shown = -f32::from(self.columns_scroll.offset().x);
+        let viewport = f32::from(self.columns_scroll.bounds().size.width).max(self.width);
+        let visible = grid.columns_between(shown - space::SM, shown - space::SM + viewport);
+        let mut columns = Vec::with_capacity(visible.len());
+        for column in visible {
+            let first = column * grid.lanes;
+            let cells = (first..(first + grid.lanes).min(grid.len))
+                .map(|row| self.grid_cell(snapshot, row, grid.layout, theme, window, cx))
+                .collect::<Vec<_>>();
+            columns.push(
+                div()
+                    .absolute()
+                    .left(px(space::SM + column as f32 * pitch))
+                    .top(px(space::XS))
+                    .flex()
+                    .flex_col()
+                    .children(cells),
+            );
+        }
+        let content = div()
+            .relative()
+            .h_full()
+            .w(px(grid.width() + space::SM * 2.))
+            .children(columns);
+        // A vertical wheel scrolls sideways when only that axis scrolls.
+        let scroller = div()
+            .id("entries")
+            .flex_1()
+            .min_h_0()
+            .overflow_x_scroll()
+            .track_scroll(&self.columns_scroll)
+            .child(content);
+        self.entry_list(snapshot, scroller)
     }
 
     /// Shown instead of the list when it has no rows: says why and what to do.
@@ -3722,16 +3848,36 @@ impl Render for Browser {
         let width = self.width;
         let columns = Columns::for_width(width);
         let layout = self.mode.layout(self.zoom);
-        // Cells fill the width inside the list's side gutters.
-        self.per_row = layout.columns(width - space::SM * 2.);
-        let per_row = self.per_row;
-        let lines = snapshot
-            .as_ref()
-            .map_or(0, |snapshot| snapshot.len().div_ceil(per_row));
-        if let Some(line) = self.frames.next_bench_row(lines) {
-            self.scroll.scroll_to_item(line, ScrollStrategy::Top);
+        let len = snapshot.as_ref().map_or(0, |snapshot| snapshot.len());
+        self.lanes = match self.mode.flow() {
+            // Cells fill the width inside the list's side gutters.
+            Flow::Across => layout.columns(width - space::SM * 2.),
+            // Rows fill the height inside the top and bottom padding.
+            Flow::Down => layout.rows(self.fit_columns(window, cx) - space::XS * 2.),
+        };
+        let per_row = self.lanes;
+        let grid = Grid::new(layout, self.mode.flow(), self.lanes, len);
+        if self.mode == ViewMode::Compact {
+            self.follow_columns_folder(snapshot.as_deref(), grid);
+        }
+        if let Some(line) = self.frames.next_bench_row(grid.lines()) {
+            match grid.flow {
+                Flow::Across => self.scroll.scroll_to_item(line, ScrollStrategy::Top),
+                Flow::Down => {
+                    let pitch = layout.cell_width.unwrap_or(0.);
+                    self.columns_scroll
+                        .set_offset(point(px(-(line as f32) * pitch), px(0.)));
+                }
+            }
             window.request_animation_frame();
         }
+        let compact = match &snapshot {
+            Some(snapshot) if !snapshot.is_empty() && self.mode == ViewMode::Compact => Some(
+                self.columns(snapshot, grid, theme, window, cx)
+                    .into_any_element(),
+            ),
+            _ => None,
+        };
 
         self.has_cut = self
             .location()
@@ -3758,63 +3904,63 @@ impl Render for Browser {
             .track_focus(&self.focus)
             .on_action(cx.listener(|this, _: &SelectPrevious, _, cx| {
                 if !this.scroll_folder_state("up", cx) {
-                    this.move_selection(Motion::By(-(this.per_row as isize)), false, cx);
+                    this.move_selection(Step::Up, false, cx);
                 }
             }))
             .on_action(cx.listener(|this, _: &SelectNext, _, cx| {
                 if !this.scroll_folder_state("down", cx) {
-                    this.move_selection(Motion::By(this.per_row as isize), false, cx);
+                    this.move_selection(Step::Down, false, cx);
                 }
             }))
             .on_action(cx.listener(|this, _: &SelectFirst, _, cx| {
                 if !this.scroll_folder_state("home", cx) {
-                    this.move_selection(Motion::First, false, cx);
+                    this.move_selection(Step::First, false, cx);
                 }
             }))
             .on_action(cx.listener(|this, _: &SelectLast, _, cx| {
                 if !this.scroll_folder_state("end", cx) {
-                    this.move_selection(Motion::Last, false, cx);
+                    this.move_selection(Step::Last, false, cx);
                 }
             }))
             .on_action(cx.listener(|this, _: &PageUp, _, cx| {
                 if !this.scroll_folder_state("pageup", cx) {
-                    this.move_selection(Motion::By(-PAGE_ROWS * this.per_row as isize), false, cx);
+                    this.move_selection(Step::PageUp, false, cx);
                 }
             }))
             .on_action(cx.listener(|this, _: &PageDown, _, cx| {
                 if !this.scroll_folder_state("pagedown", cx) {
-                    this.move_selection(Motion::By(PAGE_ROWS * this.per_row as isize), false, cx);
+                    this.move_selection(Step::PageDown, false, cx);
                 }
             }))
             .on_action(cx.listener(|this, _: &ExtendPrevious, _, cx| {
-                this.move_selection(Motion::By(-(this.per_row as isize)), true, cx);
+                this.move_selection(Step::Up, true, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendNext, _, cx| {
-                this.move_selection(Motion::By(this.per_row as isize), true, cx);
+                this.move_selection(Step::Down, true, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendFirst, _, cx| {
-                this.move_selection(Motion::First, true, cx);
+                this.move_selection(Step::First, true, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendLast, _, cx| {
-                this.move_selection(Motion::Last, true, cx);
+                this.move_selection(Step::Last, true, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendPageUp, _, cx| {
-                this.move_selection(Motion::By(-PAGE_ROWS * this.per_row as isize), true, cx);
+                this.move_selection(Step::PageUp, true, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendPageDown, _, cx| {
-                this.move_selection(Motion::By(PAGE_ROWS * this.per_row as isize), true, cx);
+                this.move_selection(Step::PageDown, true, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectLeft, _, cx| {
-                this.move_sideways(-1, false, cx);
+                this.move_selection(Step::Left, false, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectRight, _, cx| {
-                this.move_sideways(1, false, cx);
+                this.move_selection(Step::Right, false, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendLeft, _, cx| {
-                this.move_sideways(-1, true, cx);
+                this.move_selection(Step::Left, true, cx);
             }))
             .on_action(cx.listener(|this, _: &ExtendRight, _, cx| {
-                this.move_sideways(1, true, cx);
+                this.move_selection(Step::Right, true, cx);
             }))
             .on_action(cx.listener(|this, _: &ZoomIn, _, cx| {
                 this.set_zoom(layout::step_zoom(this.zoom, 1), cx);
@@ -3954,6 +4100,7 @@ impl Render for Browser {
                     .bg(theme.content)
                     .on_mouse_down(MouseButton::Right, cx.listener(Self::on_background_menu))
                     .map(|content| match &snapshot {
+                        _ if compact.is_some() => content.children(compact),
                         Some(snapshot) if !snapshot.is_empty() => {
                             if self.mode == ViewMode::Details {
                                 content.child(self.list(snapshot, layout, columns, theme, cx))
@@ -4106,29 +4253,6 @@ fn type_ahead_query(typed: &str) -> (&str, bool) {
         Some(first) if chars.all(|c| c == first) => (&typed[..first.len_utf8()], true),
         _ => (typed, false),
     }
-}
-
-/// A keyboard movement of the selection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Motion {
-    /// Up (negative) or down (positive) by a number of rows.
-    By(isize),
-    First,
-    Last,
-}
-
-/// The row a motion lands on in a list of `len` rows, or `None` for an empty
-/// list. With nothing selected, moving down starts at the top and moving up at
-/// the bottom.
-fn target_row(current: Option<usize>, len: usize, motion: Motion) -> Option<usize> {
-    let last = len.checked_sub(1)?;
-    Some(match (motion, current) {
-        (Motion::First, _) => 0,
-        (Motion::Last, _) => last,
-        (Motion::By(delta), Some(row)) => row.saturating_add_signed(delta).min(last),
-        (Motion::By(delta), None) if delta >= 0 => 0,
-        (Motion::By(_), None) => last,
-    })
 }
 
 /// Turns typed text into an absolute path: expands a leading `~` and resolves
@@ -4558,39 +4682,6 @@ mod tests {
         assert_eq!(type_ahead_query("fi"), ("fi", false));
         assert_eq!(type_ahead_query("\u{e9}\u{e9}"), ("\u{e9}", true));
         assert_eq!(type_ahead_query(""), ("", false));
-    }
-
-    #[test]
-    fn end_selects_the_last_row_even_with_nothing_selected() {
-        assert_eq!(target_row(None, 500_000, Motion::Last), Some(499_999));
-        assert_eq!(target_row(Some(3), 10, Motion::Last), Some(9));
-    }
-
-    #[test]
-    fn home_selects_the_first_row() {
-        assert_eq!(target_row(Some(7), 10, Motion::First), Some(0));
-        assert_eq!(target_row(None, 10, Motion::First), Some(0));
-    }
-
-    #[test]
-    fn stepping_is_clamped_to_the_list() {
-        assert_eq!(target_row(Some(0), 10, Motion::By(-1)), Some(0));
-        assert_eq!(target_row(Some(9), 10, Motion::By(1)), Some(9));
-        assert_eq!(target_row(Some(4), 10, Motion::By(15)), Some(9));
-        assert_eq!(target_row(Some(4), 10, Motion::By(-15)), Some(0));
-        assert_eq!(target_row(Some(4), 10, Motion::By(2)), Some(6));
-    }
-
-    #[test]
-    fn first_step_without_a_selection_enters_from_the_matching_edge() {
-        assert_eq!(target_row(None, 10, Motion::By(1)), Some(0));
-        assert_eq!(target_row(None, 10, Motion::By(-1)), Some(9));
-    }
-
-    #[test]
-    fn an_empty_list_has_no_target() {
-        assert_eq!(target_row(None, 0, Motion::Last), None);
-        assert_eq!(target_row(None, 0, Motion::By(1)), None);
     }
 
     #[test]

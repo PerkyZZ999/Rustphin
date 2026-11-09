@@ -44,7 +44,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | O2 | Click the Modified heading | Oldest first among files: photo.JPG (2023), notes.txt (2024), video.mp4 (2025) |
 | O3 | Click the Type heading | Files without an extension first (Makefile, mystery), then by extension: gz, JPG, mp4, pdf, rs, txt |
 | V1 | Ctrl+1 | Grid of large icons with names underneath; Down then Right moves to the second cell of the first row |
-| V2 | Ctrl+2 | Compact grid: small icon beside each name, several per row |
+| V2 | Ctrl+2, Home, Right, Down; Right until the view scrolls; End, Shift+Page Up | Small icon beside each name; entries fill columns top to bottom, as many rows as fit. Right goes to the next column at the same row and the view scrolls sideways just enough; End reaches the last, short column; Shift+Page Up selects to the top of that column. A band from the space under the short column selects only the cells it covers, and its outline follows the pointer |
 | V3 | Ctrl+= then Ctrl+- twice, then Ctrl+0 | Icons grow, shrink below the default, and return to the default size |
 | V4 | Ctrl+3 | Details view again, with sizes and dates |
 | P1 | Set icons view, zoom in once, sort by Type, show hidden; read `<isolated home>/.config/rustphin/settings.toml` | `mode = "icons"`, `zoom = 2`, `sort = "type"`, `show_hidden = true` |

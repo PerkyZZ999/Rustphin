@@ -32,7 +32,7 @@ S11 — Hardening for daily use (in progress)
   - [x] W-079e — Bottom of the pane and window: two-zone status line with free space (600/440 px rules), 32 px filter field, activity line, result line with Undo and dismiss, blur status line; error banner with Details… and the error details dialog.
   - [x] W-079f — Context menu with icons, shortcuts, the bar and the three new items; palette title row, icons, trails and 52 px results.
   - [x] W-079g — Dialogs: 480 px, title rows with icon and close, buttons with keys; Properties header, thumbnail, owner and group, exact bytes, seconds; batch rename segments, arrow and neutral note; question titles, Keep both fact, Keep as the run default.
-- [ ] W-086 — Compact view in columns, as Dolphin and the mockup: entries fill 240 px columns top to bottom and the view scrolls sideways; arrow keys follow the columns. A behaviour change to scrolling, keyboard movement and the rubber band, proposed after W-079; not started.
+- [x] W-086 — Compact view in columns, as Dolphin and the mockup: entries fill 240 px columns top to bottom and the view scrolls sideways; arrow keys follow the columns. Approved by the maintainer on 2026-11-09; done 2026-11-09 (see VALIDATION.md).
 
 ## Done (recent)
 - [x] W-083 — Interrupted batch renames recovered at startup (D-020): saved-tab and recent local folders (200) checked for a rename journal in the background, recovered through the journal-checked engine path with a notice that stays; skipped while another live Rustphin runs (zombies ignored). Core journal check, platform /proc reader, candidates and lasting notices tested; 4 mutations; replay BR0 with genuine SIGKILLed batches (launch folder, second instance, recent history). R-103 ticked. Full gate 474 tests.

@@ -579,7 +579,10 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   level. Icons view uses 48, 64, 96, 128 and 192 px icons as today; at the
   96 px level a cell is 128 × 152 px with 8 px gaps (cells scale with the
   level), the name wraps to two lines, centred. Compact view fills 240 px
-  columns, 8 px apart, top to bottom, with 36 px rows.
+  columns, 8 px apart, top to bottom, with 36 px rows; as many rows as fit
+  the pane's height, and the view scrolls sideways (the wheel too). Up and
+  Down step through the entries, Left and Right change columns, Page Up and
+  Page Down go to the ends of the column, as in Dolphin.
 - **Split view:** two equal panes with a 1 px divider; each applies the column
   rules to its own width.
 - **Status line:** left zone: "1 item selected (6.3 MiB)", a `border` divider,
@@ -849,8 +852,9 @@ except where the list below says otherwise; each W-079 step adds its line.
   240 px compact columns, column widths and pane-width rules, the mono type
   column, "—" for folder sizes, thumbnails from 24 px, the 28 px rename
   field, the drag chip with its icon, 20 px state headings with reason
-  lines. Compact view still fills rows, not columns; list views have no
-  scrollbar to move below the headings.
+  lines. List views have no scrollbar to move below the headings.
+- W-086 (2026-11-09): compact view fills columns top to bottom and scrolls
+  sideways, with Dolphin's keys in that view.
 - W-079e (2026-11-08): the two-zone status line with free space and its
   600/440 px rules (no volume name yet), the filter bar's 32 px field, the
   activity line, the result line with Undo, Details… and dismiss, the error
@@ -862,8 +866,8 @@ except where the list below says otherwise; each W-079 step adds its line.
   action row; question titles that state the question; the Keep both fact;
   Keep as the run default; Properties' header, facts and permission columns;
   batch rename's segments, preview and notes.
-- Not yet implemented: compact view filling columns top to bottom (it still
-  fills rows); scrollbars on the list views; the volume name after the free
+- Not yet implemented: scrollbars on the list views (the compact view has
+  none either); the volume name after the free
   space; per-command palette icons and application icons in "Open with";
   tab overflow; `text-disabled` on disabled toolbar buttons (the component
   library dims them its own way); saving whether Devices is folded. "Details…"
