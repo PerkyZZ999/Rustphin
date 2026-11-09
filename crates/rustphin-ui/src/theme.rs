@@ -20,9 +20,15 @@ pub mod space {
 
 /// Fixed sizes in pixels.
 pub mod size {
-    /// Height of the column headings: a 20-pixel text line plus 4 pixels above
-    /// and below. Entry rows take their height from the view layout.
-    pub const ROW: f32 = 28.;
+    /// Height of the column headings. Entry rows take their height from the
+    /// view layout.
+    pub const ROW: f32 = 32.;
+    /// The gap between grid cells, split as half a gap around each cell.
+    pub const CELL_GAP: f32 = 8.;
+    /// Height of the rename field inside a row.
+    pub const RENAME_FIELD: f32 = 28.;
+    /// The drag chip.
+    pub const DRAG_CHIP: f32 = 28.;
     /// Height of the toolbar.
     pub const TOOLBAR: f32 = 52.;
     /// Toolbar buttons, the location field and Actions: 36 pixels square or
@@ -53,17 +59,17 @@ pub mod size {
     /// Width of the accent bar marking a selected row.
     pub const SELECTION_BAR: f32 = 2.;
     /// Width of the size column.
-    pub const COLUMN_SIZE: f32 = 88.;
+    pub const COLUMN_SIZE: f32 = 96.;
     /// Minimum pane width that leaves room for the size column beside names.
-    pub const WIDTH_FOR_SIZE: f32 = 320.;
+    pub const WIDTH_FOR_SIZE: f32 = 360.;
     /// Width of the modified column.
-    pub const COLUMN_MODIFIED: f32 = 144.;
+    pub const COLUMN_MODIFIED: f32 = 168.;
     /// Width of the type column.
-    pub const COLUMN_TYPE: f32 = 184.;
-    /// Narrowest window that still shows the modified column.
-    pub const WIDTH_FOR_MODIFIED: f32 = 560.;
-    /// Narrowest window that still shows the type column.
-    pub const WIDTH_FOR_TYPE: f32 = 760.;
+    pub const COLUMN_TYPE: f32 = 160.;
+    /// Narrowest pane that still shows the modified column.
+    pub const WIDTH_FOR_MODIFIED: f32 = 600.;
+    /// Narrowest pane that still shows the type column.
+    pub const WIDTH_FOR_TYPE: f32 = 820.;
     /// Icons in empty and error states.
     pub const ICON_LARGE: f32 = 32.;
     /// Height of a volume's row in the places panel: a name, a usage bar
@@ -119,6 +125,8 @@ pub mod text {
     pub const BODY: f32 = 14.;
     /// File and place names (`body-lg`).
     pub const NAME: f32 = 15.;
+    /// Headings of empty, loading and error states (`headline-md`).
+    pub const TITLE: f32 = 20.;
     /// Panel and dialog titles (`headline-sm`).
     pub const HEADING: f32 = 17.;
     /// Line height for body text.

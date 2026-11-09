@@ -12,7 +12,7 @@ Replayable checks of the running application, driven by an agent through the kwi
 Notes for the agent:
 
 - The application is not visible to `list_windows` or `find_ui_elements` (nothing is exposed over AT-SPI in these sessions), so observe with screenshots and act by keyboard or coordinates.
-- With the 1280×800 screen the window is centred: toolbar at y≈119, column headings at y≈159, first row at y≈192 and 28 px per row at the default zoom (W-079 changes these; re-read a screenshot); the labelled Actions button is at the right of the location bar. View controls and hidden-files toggling are in its palette or on their shortcuts. Re-read a screenshot if the layout has changed.
+- With the 1280×800 screen the window is centred: toolbar at y≈119, column headings at y≈159, first row at y≈200 and 36 px per row at the default zoom (24 px icons, since W-079d; re-read a screenshot); the labelled Actions button is at the right of the location bar. View controls and hidden-files toggling are in its palette or on their shortcuts. Re-read a screenshot if the layout has changed.
 - Spell punctuation keys literally: `ctrl+=`, `ctrl+-`; use lower-case function keys such as `shift+f10` in kwin-mcp input.
 - Detect blur in the isolated compositor instead of assuming it is absent: current KWin may expose the background-effect global even with its blur effect unloaded. J12/J14 toggle only the private compositor. Explicit opaque mode is available for deterministic solid-theme checks. Icons use the default `breeze-dark` theme.
 - Stop the session when done. Before deleting the fixture run `chmod 755 <dir>/locked`.

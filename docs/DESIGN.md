@@ -845,6 +845,12 @@ except where the list below says otherwise; each W-079 step adds its line.
 - W-079c (2026-11-08): the places panel as described, with Devices folding
   for the run (not saved). With an eject button, long figures can still be
   cut short.
+- W-079d (2026-11-08): the zoom table and 36 px default rows, icon cells,
+  240 px compact columns, column widths and pane-width rules, the mono type
+  column, "—" for folder sizes, thumbnails from 24 px, the 28 px rename
+  field, the drag chip with its icon, 20 px state headings with reason
+  lines. Compact view still fills rows, not columns; list views have no
+  scrollbar to move below the headings.
 - Not yet implemented: the rest of "Changes from the earlier design" (sizes,
   layout, new components and wording).
 

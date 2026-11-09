@@ -14,20 +14,27 @@ pub enum ViewMode {
 
 /// Number of zoom levels; valid levels are `0..ZOOM_LEVELS`.
 pub const ZOOM_LEVELS: usize = 5;
-/// The zoom level a new window starts at.
-pub const DEFAULT_ZOOM: usize = 1;
+/// The zoom level a new window starts at: 24-pixel icons and 36-pixel rows
+/// in the list views, 96-pixel icons in the icons view.
+pub const DEFAULT_ZOOM: usize = 2;
 
 /// Icon sizes of the two list-like modes, by zoom level.
 const SMALL_ICONS: [f32; ZOOM_LEVELS] = [16., 20., 24., 32., 48.];
 /// Icon sizes of the icons mode, by zoom level.
 const LARGE_ICONS: [f32; ZOOM_LEVELS] = [48., 64., 96., 128., 192.];
-/// Cell widths of the compact mode, by zoom level.
-const COMPACT_WIDTHS: [f32; ZOOM_LEVELS] = [224., 224., 240., 256., 288.];
-/// Space around a large icon and its two-line label: padding, gap and label.
-const ICON_CELL_EXTRA: f32 = 64.;
-/// Rows are at least this tall, and otherwise the icon plus this padding.
+/// Column pitch of the compact mode, by zoom level: the column plus the
+/// 8-pixel gap after it (240-pixel columns at the default level).
+const COMPACT_WIDTHS: [f32; ZOOM_LEVELS] = [232., 240., 248., 264., 296.];
+/// Width a large icon's cell adds to the icon, gap included: 128-pixel
+/// cells 8 pixels apart at the 96-pixel level.
+const ICON_CELL_EXTRA_WIDTH: f32 = 40.;
+/// Height a large icon's cell adds for padding, two lines of name and the
+/// gap: 152-pixel cells 8 pixels apart at the 96-pixel level.
+const ICON_CELL_EXTRA_HEIGHT: f32 = 64.;
+/// Rows are at least this tall, and otherwise the icon plus this padding:
+/// 28, 32, 36, 44 and 60 pixels.
 const MIN_ROW: f32 = 28.;
-const ROW_PADDING: f32 = 8.;
+const ROW_PADDING: f32 = 12.;
 
 /// Sizes, in pixels, for drawing entries in one mode at one zoom level.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -58,8 +65,8 @@ impl ViewMode {
             },
             Self::Icons => Layout {
                 icon: LARGE_ICONS[zoom],
-                row_height: LARGE_ICONS[zoom] + ICON_CELL_EXTRA,
-                cell_width: Some(LARGE_ICONS[zoom] + ICON_CELL_EXTRA),
+                row_height: LARGE_ICONS[zoom] + ICON_CELL_EXTRA_HEIGHT,
+                cell_width: Some(LARGE_ICONS[zoom] + ICON_CELL_EXTRA_WIDTH),
             },
         }
     }
@@ -162,9 +169,11 @@ mod tests {
     fn details_rows_span_the_width_and_grow_with_the_icon() {
         let default = ViewMode::Details.layout(DEFAULT_ZOOM);
         assert_eq!(default.cell_width, None);
-        assert_eq!((default.icon, default.row_height), (20., 28.));
-        let largest = ViewMode::Details.layout(ZOOM_LEVELS - 1);
-        assert_eq!((largest.icon, largest.row_height), (48., 56.));
+        assert_eq!((default.icon, default.row_height), (24., 36.));
+        let rows: Vec<f32> = (0..ZOOM_LEVELS)
+            .map(|zoom| ViewMode::Details.layout(zoom).row_height)
+            .collect();
+        assert_eq!(rows, [28., 32., 36., 44., 60.]);
         assert_eq!(default.columns(2000.), 1);
     }
 
@@ -188,11 +197,17 @@ mod tests {
     }
 
     #[test]
-    fn icons_mode_uses_square_cells_larger_than_the_icon() {
+    fn icons_mode_cells_hold_the_icon_and_two_lines_with_a_gap() {
+        // 128 × 152-pixel cells, 8 pixels apart, at the 96-pixel level.
         let layout = ViewMode::Icons.layout(DEFAULT_ZOOM);
-        assert_eq!(layout.icon, 64.);
-        assert_eq!(layout.cell_width, Some(128.));
-        assert_eq!(layout.row_height, 128.);
+        assert_eq!(layout.icon, 96.);
+        assert_eq!(layout.cell_width, Some(128. + 8.));
+        assert_eq!(layout.row_height, 152. + 8.);
+        // Compact columns are 240 pixels with the same gap.
+        assert_eq!(
+            ViewMode::Compact.layout(DEFAULT_ZOOM).cell_width,
+            Some(240. + 8.)
+        );
     }
 
     #[test]
@@ -226,16 +241,16 @@ mod tests {
     #[test]
     fn columns_fill_the_width_with_whole_cells() {
         let layout = ViewMode::Icons.layout(DEFAULT_ZOOM);
-        assert_eq!(layout.columns(128. * 5.), 5);
-        assert_eq!(layout.columns(128. * 5. + 127.), 5);
-        assert_eq!(layout.columns(128. * 6.), 6);
+        assert_eq!(layout.columns(136. * 5.), 5);
+        assert_eq!(layout.columns(136. * 5. + 135.), 5);
+        assert_eq!(layout.columns(136. * 6.), 6);
         // A window narrower than one cell still shows a column.
         assert_eq!(layout.columns(50.), 1);
     }
 
     #[test]
     fn a_band_over_a_list_selects_every_row_its_height_crosses() {
-        let layout = ViewMode::Details.layout(DEFAULT_ZOOM); // 28-pixel rows
+        let layout = ViewMode::Details.layout(0); // 28-pixel rows
         let band = Rect::between((400., 30.), (10., 85.));
         assert_eq!(layout.rows_in(band, 1, 100), [1, 2, 3]);
         // A band inside one row selects that row.
@@ -247,7 +262,7 @@ mod tests {
 
     #[test]
     fn a_band_over_a_grid_selects_only_the_cells_it_touches() {
-        let layout = ViewMode::Icons.layout(DEFAULT_ZOOM); // 128-pixel cells
+        let layout = ViewMode::Icons.layout(1); // 104 × 128-pixel cells
         // Columns 1-2 of lines 0-1, five cells per line.
         let band = Rect::between((130., 10.), (300., 200.));
         assert_eq!(layout.rows_in(band, 5, 100), [1, 2, 6, 7]);
@@ -255,7 +270,7 @@ mod tests {
 
     #[test]
     fn a_band_is_clipped_to_the_entries_that_exist() {
-        let layout = ViewMode::Icons.layout(DEFAULT_ZOOM);
+        let layout = ViewMode::Icons.layout(1);
         // Seven entries, five per line: the second line has only two cells.
         let band = Rect::between((0., 0.), (2000., 2000.));
         assert_eq!(layout.rows_in(band, 5, 7), [0, 1, 2, 3, 4, 5, 6]);
@@ -270,7 +285,7 @@ mod tests {
 
     #[test]
     fn a_band_entirely_above_or_left_of_the_entries_selects_nothing() {
-        let layout = ViewMode::Icons.layout(DEFAULT_ZOOM);
+        let layout = ViewMode::Icons.layout(1);
         assert!(
             layout
                 .rows_in(Rect::between((10., -50.), (60., -5.)), 5, 100)

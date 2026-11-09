@@ -59,7 +59,7 @@ const BAND_THRESHOLD: f32 = 4.;
 /// A pause longer than this starts a new type-ahead search.
 const TYPE_AHEAD_PAUSE: Duration = Duration::from_millis(1000);
 /// Icons smaller than this stay type icons: a thumbnail would be a smudge.
-const MIN_THUMBNAIL_EDGE: f32 = 32.;
+const MIN_THUMBNAIL_EDGE: f32 = 24.;
 /// Rows moved by Page Up and Page Down.
 const PAGE_ROWS: isize = 15;
 
@@ -2454,7 +2454,10 @@ impl Browser {
                 .bg(theme.raised)
                 .text_color(theme.text)
                 .child(crate::input::named(
-                    Input::new(&self.rename_input).xsmall(),
+                    Input::new(&self.rename_input)
+                        .xsmall()
+                        .h(px(size::RENAME_FIELD))
+                        .px(px(space::XS)),
                     &self.rename_input,
                     "New name",
                     window,
@@ -2488,6 +2491,7 @@ impl Browser {
     fn drag_source(
         handle: gpui_kit::Stateful<gpui_kit::Div>,
         row: usize,
+        icon: DragIcon,
         cx: &mut Context<Self>,
     ) -> gpui_kit::Stateful<gpui_kit::Div> {
         let dragged = DraggedEntries {
@@ -2501,9 +2505,13 @@ impl Browser {
                 MouseButton::Left,
                 cx.listener(|this, _, _, _| this.press_on_entry = true),
             )
-            .on_drag(dragged, |dragged, _, _, cx| {
+            .on_drag(dragged, move |dragged, _, _, cx| {
                 let label = operations::what(&dragged.paths(cx));
-                cx.new(|_| DragPreview(label.into()))
+                let icon = icon.clone();
+                cx.new(|_| DragPreview {
+                    label: label.into(),
+                    icon,
+                })
             })
             .external_drag_payload(|dragged: &DraggedEntries, _, cx| {
                 let paths = dragged.paths(cx);
@@ -2653,7 +2661,7 @@ impl Browser {
             .px(px(gutter))
             .border_b_1()
             .border_color(theme.border)
-            .text_size(px(text::SMALL))
+            .text_size(px(text::BODY))
             .child(
                 self.heading("Name", SortKey::Name, options, theme, cx)
                     .flex_1()
@@ -2689,11 +2697,14 @@ impl Browser {
                         let entry = this.entry(&rows, row, cx);
                         let metadata = rows.metadata(row);
                         let secondary = entry.secondary(theme);
-                        // Folders show no size: a folder's own size says nothing useful.
-                        let size_text = metadata
-                            .filter(|_| !entry.container)
-                            .map(|metadata| format::size(metadata.size))
-                            .unwrap_or_default();
+                        // Folders show a dash: a folder's own size says nothing useful.
+                        let size_text = if entry.container {
+                            "\u{2014}".to_owned()
+                        } else {
+                            metadata
+                                .map(|metadata| format::size(metadata.size))
+                                .unwrap_or_default()
+                        };
                         let modified_text = metadata
                             .map(|metadata| format::timestamp(metadata.modified, &zone))
                             .unwrap_or_default();
@@ -2709,13 +2720,14 @@ impl Browser {
                             .gap(px(space::MD))
                             .size_full()
                             .px(px(space::SM))
+                            .text_size(px(text::NAME))
                             .child(
                                 div()
                                     .flex()
                                     .flex_1()
                                     .min_w_0()
                                     .items_center()
-                                    .gap(px(space::SM))
+                                    .gap(px(space::MD))
                                     // Icon and name are what gets dragged; the rest
                                     // of the row is free for a rubber band.
                                     .child(Self::drag_source(
@@ -2723,7 +2735,7 @@ impl Browser {
                                             .id(("entry-handle", row))
                                             .flex()
                                             .items_center()
-                                            .gap(px(space::SM))
+                                            .gap(px(space::MD))
                                             .min_w_0()
                                             .when(entry.renaming, |handle| handle.flex_1())
                                             .child(entry.icon(layout.icon, theme))
@@ -2733,6 +2745,7 @@ impl Browser {
                                                     .when(entry.renaming, |name| name.flex_1()),
                                             ),
                                         row,
+                                        entry.drag_icon(),
                                         cx,
                                     )),
                             )
@@ -2767,6 +2780,8 @@ impl Browser {
                                         .w(px(size::COLUMN_TYPE))
                                         .flex_none()
                                         .truncate()
+                                        .font_family(text::FAMILY_DATA)
+                                        .text_size(px(text::DATA))
                                         .text_color(secondary)
                                         .when(!description.is_empty(), |cell| {
                                             cell.child(description)
@@ -2836,8 +2851,10 @@ impl Browser {
                                     .flex()
                                     .flex_col()
                                     .items_center()
-                                    .gap(px(space::SM))
-                                    .p(px(space::SM))
+                                    .gap(px(space::XS))
+                                    .py(px(space::SM))
+                                    .px(px(space::XS))
+                                    .text_size(px(text::NAME))
                                     .child(icon)
                                     .child(if entry.renaming {
                                         this.name_cell(&entry, theme, window, cx).w_full()
@@ -2853,8 +2870,9 @@ impl Browser {
                                 surface
                                     .flex()
                                     .items_center()
-                                    .gap(px(space::SM))
+                                    .gap(px(space::MD))
                                     .px(px(space::SM))
+                                    .text_size(px(text::NAME))
                                     .child(icon)
                                     .child(
                                         this.name_cell(&entry, theme, window, cx)
@@ -2863,13 +2881,17 @@ impl Browser {
                                     )
                             };
                             let is_folder = entry.container;
+                            let drag_icon = entry.drag_icon();
                             let cell = Self::drag_source(
                                 entry
                                     .accessible(&rows, row, cx)
                                     .flex_none()
                                     .w(px(cell_width))
                                     .h_full()
-                                    .p(px(space::XS / 2.))
+                                    // Half the gap on each side: 8 pixels between
+                                    // cells; compact rows touch, as list rows do.
+                                    .px(px(size::CELL_GAP / 2.))
+                                    .when(stacked, |cell| cell.py(px(size::CELL_GAP / 2.)))
                                     .child(cell)
                                     .on_click(Self::entry_click(row, cx))
                                     .on_mouse_down(
@@ -2881,6 +2903,7 @@ impl Browser {
                                         Self::entry_right_click(row, cx),
                                     ),
                                 row,
+                                drag_icon,
                                 cx,
                             );
                             if is_folder {
@@ -2936,6 +2959,22 @@ impl Browser {
         } else {
             String::new()
         };
+        // Why, under the heading: what is happening or what can be done.
+        let reason = if snapshot.is_loading() {
+            format!(
+                "Reading {}. Entries appear as soon as the first ones are read.",
+                snapshot.path().display()
+            )
+        } else if hidden == 0 && self.trash_dir.is_none() {
+            "Drop files here, or make a new folder with F10.".to_owned()
+        } else {
+            String::new()
+        };
+        let spoken_reason = if reason.is_empty() {
+            String::new()
+        } else {
+            format!("{reason} ")
+        };
         let content = div()
             .flex()
             .flex_col()
@@ -2951,10 +2990,13 @@ impl Browser {
                 div()
                     .flex_none()
                     .font_family(text::FAMILY_HEADING)
-                    .text_size(px(text::HEADING))
+                    .text_size(px(text::TITLE))
                     .text_color(theme.text)
                     .child(heading),
             )
+            .when(!reason.is_empty(), |state| {
+                state.child(div().flex_none().max_w_full().text_center().child(reason))
+            })
             .when(hidden > 0 && !snapshot.is_loading(), |state| {
                 state
                     .child(div().flex_none().child(hidden_message.clone()))
@@ -2989,7 +3031,7 @@ impl Browser {
                     .id("folder-state")
                     .role(Role::Status)
                     .aria_label(heading)
-                    .aria_description(format!("{hidden_message} Use arrows, Page Up/Down or Home/End to scroll this message.").trim().to_owned())
+                    .aria_description(format!("{spoken_reason}{hidden_message} Use arrows, Page Up/Down or Home/End to scroll this message.").trim().to_owned())
                     .a11y_synthetic_children(|builder| builder.parent_node().set_live(gpui_kit::accesskit::Live::Polite))
                     .size_full()
                     .min_h_0()
@@ -3047,7 +3089,7 @@ impl Browser {
                 div()
                     .flex_none()
                     .font_family(text::FAMILY_HEADING)
-                    .text_size(px(text::HEADING))
+                    .text_size(px(text::TITLE))
                     .text_color(theme.text)
                     .child(heading),
             )
@@ -3797,21 +3839,53 @@ impl DraggedEntries {
     }
 }
 
-/// What follows the pointer during a drag: the name of the entry, or how many.
-struct DragPreview(SharedString);
+/// The picture a drag chip shows for the entry it started on.
+#[derive(Clone)]
+enum DragIcon {
+    /// A thumbnail or the type's icon from the system theme.
+    Image(Arc<Path>),
+    Folder,
+    File,
+}
+
+/// What follows the pointer during a drag: the first entry's thumbnail or
+/// icon, then its name or how many. No copy or move sign: the drop asks.
+struct DragPreview {
+    label: SharedString,
+    icon: DragIcon,
+}
 
 impl Render for DragPreview {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use gpui_kit::StyledImage as _;
         let theme = *cx.global::<Theme>();
+        let icon = match &self.icon {
+            DragIcon::Image(path) => img(path.clone())
+                .size(px(size::ICON))
+                .flex_none()
+                .object_fit(gpui_kit::ObjectFit::Contain)
+                .into_any_element(),
+            DragIcon::Folder | DragIcon::File => Icon::new(match self.icon {
+                DragIcon::Folder => IconName::Folder,
+                _ => IconName::File,
+            })
+            .size(px(size::ICON))
+            .flex_none()
+            .into_any_element(),
+        };
         div()
-            .px(px(space::MD))
-            .py(px(space::XS))
+            .flex()
+            .items_center()
+            .gap(px(space::SM))
+            .h(px(size::DRAG_CHIP))
+            .px(px(space::SM))
             .rounded(px(size::RADIUS))
             .bg(theme.selection)
             .text_color(theme.on_selection)
             .font_family(text::FAMILY_BODY)
-            .text_size(px(text::SMALL))
-            .child(self.0.clone())
+            .text_size(px(text::BODY))
+            .child(icon)
+            .child(self.label.clone())
     }
 }
 
@@ -4049,6 +4123,19 @@ impl Entry {
                     this.focus.focus(window, cx);
                 });
             })
+    }
+
+    /// What the drag chip shows for this entry.
+    fn drag_icon(&self) -> DragIcon {
+        match (
+            &self.thumb,
+            self.info.as_ref().and_then(|info| info.icon.clone()),
+        ) {
+            (Some(thumb), _) => DragIcon::Image(thumb.clone()),
+            (None, Some(icon)) => DragIcon::Image(icon),
+            (None, None) if self.container => DragIcon::Folder,
+            (None, None) => DragIcon::File,
+        }
     }
 
     /// Colour for secondary text and the placeholder icon.
