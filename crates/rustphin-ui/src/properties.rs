@@ -1,5 +1,6 @@
 //! The properties dialog: facts about one entry, and its permissions.
 
+use crate::controls::Outlined as _;
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -19,7 +20,7 @@ use gpui_kit::{
     },
     div, img,
     prelude::FluentBuilder as _,
-    px,
+    px, relative,
 };
 use jiff::tz::TimeZone;
 use rustphin_core::{
@@ -213,6 +214,9 @@ impl PropertiesDialog {
                     .flex_col()
                     .min_h_0()
                     .flex_shrink_1()
+                    // The scrollbar lies in the body's right padding, so the
+                    // content keeps the full width.
+                    .mr(px(-space::LG))
                     .child(
                         div()
                             .id("properties-content")
@@ -286,6 +290,7 @@ impl PropertiesDialog {
                             .font_family(text::FAMILY_HEADING)
                             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                             .text_size(px(text::HEADING))
+                            .line_height(px(text::HEADING_LINE))
                             .child(self.title.clone()),
                     )
                     .child(
@@ -466,7 +471,9 @@ impl PropertiesDialog {
             .aria_label(heading.clone())
             .flex()
             .flex_col()
-            .flex_1()
+            // Three equal columns, whatever their padding.
+            .flex_none()
+            .w(relative(1. / 3.))
             .min_w_0()
             .gap(px(space::XS))
             .when(class == 0, |column| column.pr(px(space::LG)))
@@ -483,7 +490,9 @@ impl PropertiesDialog {
                     .font_weight(gpui_kit::FontWeight::MEDIUM)
                     .text_size(px(text::LABEL))
                     .text_color(theme.text_muted)
-                    .child(heading),
+                    // `label-sm` is set in capitals; the group's name keeps
+                    // the original spelling for assistive technology.
+                    .child(heading.to_uppercase()),
             )
             .child(self.bit(class, "Read", read_bit(class), editable, cx))
             .child(self.bit(class, "Write", write_bit(class), editable, cx))
@@ -501,19 +510,22 @@ impl PropertiesDialog {
         cx: &mut gpui_kit::Context<Workspace>,
     ) -> impl IntoElement {
         let checked = has_bit(self.mode, bit);
-        Checkbox::new(format!("perm-{class}-{label}"))
-            .label(label)
-            .accessibility_label(format!("{} {label}", PERMISSION_CLASSES[class as usize]))
-            .checked(checked)
-            .disabled(!editable)
-            .on_click(cx.listener(move |this, checked: &bool, _, cx| {
-                if let Some(dialog) = &mut this.properties
-                    && dialog.editable
-                {
-                    dialog.mode = with_bit(dialog.mode, bit, *checked);
-                }
-                cx.notify();
-            }))
+        // 28-pixel rows, as the design's checkbox rows.
+        div().flex().items_center().h(px(size::CHECK_ROW)).child(
+            Checkbox::new(format!("perm-{class}-{label}"))
+                .label(label)
+                .accessibility_label(format!("{} {label}", PERMISSION_CLASSES[class as usize]))
+                .checked(checked)
+                .disabled(!editable)
+                .on_click(cx.listener(move |this, checked: &bool, _, cx| {
+                    if let Some(dialog) = &mut this.properties
+                        && dialog.editable
+                    {
+                        dialog.mode = with_bit(dialog.mode, bit, *checked);
+                    }
+                    cx.notify();
+                })),
+        )
     }
 
     fn buttons(
@@ -525,7 +537,7 @@ impl PropertiesDialog {
         dialog::actions(theme)
             .child(
                 dialog::button("properties-close", "Close (Esc)")
-                    .outline()
+                    .outlined()
                     .on_click(cx.listener(|this, _, _, cx| this.close_properties(cx))),
             )
             .when(self.error.is_none(), |row| {

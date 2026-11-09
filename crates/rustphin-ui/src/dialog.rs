@@ -94,6 +94,7 @@ pub fn title_row(
                 .font_family(text::FAMILY_HEADING)
                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                 .text_size(px(text::HEADING))
+                .line_height(px(text::HEADING_LINE))
                 .child(title.into()),
         )
         .child(

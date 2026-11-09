@@ -1,5 +1,6 @@
 //! The window's content: tabs, each showing one folder or two side by side.
 
+use crate::controls::{Destructive as _, Outlined as _};
 use std::{
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
@@ -869,7 +870,7 @@ impl Workspace {
                 .when(program, |row| {
                     row.child(
                         dialog::button("launch-open", "Open (O)")
-                            .outline()
+                            .outlined()
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.answer_launch(false, true, cx);
                             })),
@@ -877,7 +878,7 @@ impl Workspace {
                 })
                 .child(
                     dialog::button("launch-run", "Run (R)")
-                        .danger()
+                        .destructive(&theme)
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.answer_launch(true, false, cx);
                         })),
@@ -1811,7 +1812,7 @@ impl Workspace {
         theme: Theme,
     ) -> Button {
         Button::new(id)
-            .outline()
+            .outlined()
             // The library pads a custom-sized button by a fifth of the size:
             // 80 gives the 16-pixel padding.
             .with_size(px(space::LG * 5.))
@@ -1897,7 +1898,7 @@ impl Workspace {
             )
             .child(
                 Button::new(("stop-operation", id.as_u64()))
-                    .outline()
+                    .outlined()
                     .with_size(px(space::LG * 5.))
                     .h(px(size::BUTTON))
                     .child(div().text_size(px(text::BODY)).child("Stop"))
@@ -1960,8 +1961,8 @@ impl Workspace {
                 // In the error colours, as the line it sits on.
                 line.child(
                     Button::new("notice-details")
-                        .danger()
-                        .outline()
+                        .destructive(&theme)
+                        .outlined()
                         .with_size(px(space::LG * 5.))
                         .h(px(size::BUTTON))
                         .child(div().text_size(px(text::BODY)).child("Details\u{2026}"))
@@ -2098,7 +2099,7 @@ impl Workspace {
             dialog::actions(theme)
                 .child(
                     dialog::button("error-details-copy", "Copy list (C)")
-                        .outline()
+                        .outlined()
                         .on_click(move |_, _, cx| {
                             cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
                                 list_text.clone(),
@@ -2154,7 +2155,14 @@ impl Workspace {
                         .px(px(space::MD))
                         .min_h(px(size::CONTROL))
                         .when(index > 0, |row| row.border_t_1().border_color(theme.border))
-                        .child(div().min_w_0().truncate().child(folder_label(path)))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .truncate()
+                                .font_family(text::FAMILY_DATA)
+                                .text_size(px(text::DATA))
+                                .child(folder_label(path)),
+                        )
                 }))
                 .into_any_element()
         };
@@ -2176,7 +2184,7 @@ impl Workspace {
         };
         let cancel = |label: &'static str| {
             dialog::button("dialog-cancel", label)
-                .outline()
+                .outlined()
                 .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx)))
         };
         let (icon, title, sentence, body, buttons): (
@@ -2233,13 +2241,13 @@ impl Workspace {
                     vec![
                         cancel("Stop (Esc)"),
                         dialog::button("dialog-skip", "Skip (S)")
-                            .outline()
+                            .outlined()
                             .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Skip, cx))),
                         dialog::button(
                             "dialog-replace",
                             if folder { "Merge (R)" } else { "Replace (R)" },
                         )
-                        .outline()
+                        .outlined()
                         .disabled(!conflict.can_overwrite)
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Replace, cx))),
                         dialog::button("dialog-accept", "Keep both (Enter)")
@@ -2270,7 +2278,7 @@ impl Workspace {
                 vec![
                     cancel("Stop (Esc)"),
                     dialog::button("dialog-skip", "Skip (S)")
-                        .outline()
+                        .outlined()
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Skip, cx))),
                     dialog::button("dialog-accept", "Try again (Enter)")
                         .primary()
@@ -2297,7 +2305,7 @@ impl Workspace {
                 vec![
                     cancel("Cancel (Esc)"),
                     dialog::button("dialog-copy", "Copy here (C)")
-                        .outline()
+                        .outlined()
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Copy, cx))),
                     dialog::button("dialog-accept", "Move here (Enter)")
                         .primary()
@@ -2315,7 +2323,7 @@ impl Workspace {
                 vec![
                     cancel("Keep (Esc)"),
                     dialog::button("dialog-accept", "Delete for good (Enter)")
-                        .danger()
+                        .destructive(&theme)
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
@@ -2331,7 +2339,7 @@ impl Workspace {
                 vec![
                     cancel("Keep (Esc)"),
                     dialog::button("dialog-accept", "Empty the trash (Enter)")
-                        .danger()
+                        .destructive(&theme)
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
@@ -2420,6 +2428,9 @@ impl Workspace {
             .flex_col()
             .min_h_0()
             .flex_shrink_1()
+            // The scrollbar lies in the body's right padding, so the content
+            // keeps the full width.
+            .mr(px(-space::LG))
             .child(
                 div()
                     .id("question-content")

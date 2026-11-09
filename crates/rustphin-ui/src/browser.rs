@@ -1,5 +1,6 @@
 //! The browser view: toolbar, entry list and status line for one location.
 
+use crate::controls::Outlined as _;
 use std::{
     collections::{HashMap, HashSet},
     ffi::{OsStr, OsString},
@@ -1968,7 +1969,7 @@ impl Browser {
                     .child(
                         div().flex_none().child(
                             Button::new("trash-actions")
-                                .outline()
+                                .outlined()
                                 .small()
                                 .label("Trash actions")
                                 .tooltip("Restore, empty or browse another trash; also available in Actions")
@@ -2197,13 +2198,18 @@ impl Browser {
 
         let navigation = Navigation::for_width(self.width);
         // Outlined 36-pixel buttons, as in docs/DESIGN.md.
-        let nav_button = |id: &'static str, icon: IconName, label: &'static str| {
+        let nav_button = |id: &'static str, icon: IconName, label: &'static str, enabled: bool| {
             // The icon is a child: the library scales `.icon()` to the button.
             Button::new(id)
-                .outline()
+                .outlined()
                 .with_size(px(size::CONTROL))
                 .size(px(size::CONTROL))
-                .child(Icon::new(icon).size(px(size::ICON)))
+                .child(
+                    Icon::new(icon)
+                        .size(px(size::ICON))
+                        .when(!enabled, |icon| icon.text_color(theme.text_disabled)),
+                )
+                .disabled(!enabled)
                 .tooltip(label)
                 .accessibility_label(label)
         };
@@ -2220,26 +2226,25 @@ impl Browser {
             .border_color(theme.border)
             .when(navigation.back, |bar| {
                 bar.child(
-                    nav_button("back", IconName::ArrowLeft, "Back (Alt+Left)")
-                        .disabled(!can_back)
-                        .on_click(
-                            cx.listener(|this, _, _, cx| this.navigate(DirectoryModel::back, cx)),
-                        ),
+                    nav_button("back", IconName::ArrowLeft, "Back (Alt+Left)", can_back).on_click(
+                        cx.listener(|this, _, _, cx| this.navigate(DirectoryModel::back, cx)),
+                    ),
                 )
             })
             .when(navigation.forward_and_up, |bar| {
                 bar.child(
-                    nav_button("forward", IconName::ArrowRight, "Forward (Alt+Right)")
-                        .disabled(!can_forward)
-                        .on_click(
-                            cx.listener(|this, _, _, cx| {
-                                this.navigate(DirectoryModel::forward, cx)
-                            }),
-                        ),
+                    nav_button(
+                        "forward",
+                        IconName::ArrowRight,
+                        "Forward (Alt+Right)",
+                        can_forward,
+                    )
+                    .on_click(
+                        cx.listener(|this, _, _, cx| this.navigate(DirectoryModel::forward, cx)),
+                    ),
                 )
                 .child(
-                    nav_button("up", IconName::ArrowUp, "Up one folder (Alt+Up)")
-                        .disabled(!can_up)
+                    nav_button("up", IconName::ArrowUp, "Up one folder (Alt+Up)", can_up)
                         .on_click(cx.listener(|this, _, _, cx| this.go_up(cx))),
                 )
             })
@@ -2251,7 +2256,7 @@ impl Browser {
                     .map(|bar| {
                         if self.editing_location {
                             bar.child(crate::input::named(
-                                Input::new(&self.location_input).h(px(size::CONTROL)),
+                                Input::new(&self.location_input).min_h(px(size::CONTROL)),
                                 &self.location_input,
                                 "Folder location",
                                 window,
@@ -2298,7 +2303,7 @@ impl Browser {
                 if navigation.labelled_actions {
                     bar.child(
                         Button::new("actions")
-                            .outline()
+                            .outlined()
                             // The library pads a custom-sized button by a fifth
                             // of the size: 60 gives the 12-pixel padding.
                             .with_size(px(space::MD * 5.))
@@ -2339,7 +2344,7 @@ impl Browser {
                 } else {
                     bar.child(
                         Button::new("actions")
-                            .outline()
+                            .outlined()
                             .with_size(px(size::CONTROL))
                             .size(px(size::CONTROL))
                             .child(Icon::new(gpui_kit::assets::IconName::Menu).size(px(size::ICON)))
@@ -2399,12 +2404,7 @@ impl Browser {
             .cursor_text()
             .on_click(cx.listener(|this, _, window, cx| this.edit_location(window, cx)))
             .when(first_shown > 0, |crumbs| {
-                crumbs.child(
-                    div()
-                        .px(px(space::XS))
-                        .text_color(theme.text_muted)
-                        .child("\u{2026}"),
-                )
+                crumbs.child(div().text_color(theme.text_muted).child("\u{2026}"))
             })
             .children(ancestors.into_iter().enumerate().skip(first_shown).map(
                 |(index, (path, label))| {
@@ -2424,7 +2424,6 @@ impl Browser {
                                 .id(("crumb", index))
                                 .role(Role::Button)
                                 .aria_label(label.clone())
-                                .px(px(space::XS))
                                 .rounded(px(size::RADIUS))
                                 .cursor_pointer()
                                 .text_color(theme.text)
@@ -2448,15 +2447,22 @@ impl Browser {
         theme: Theme,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // A 44-pixel banner under the toolbar: icon, one line of text (read in
+        // full by assistive technology) and a dismiss button.
+        let message = failure.message();
         div()
+            .id("failure-banner")
+            .role(Role::Alert)
+            .aria_label(message.clone())
             .flex()
             .flex_none()
             .items_center()
-            .gap(px(space::SM))
+            .gap(px(space::MD))
+            .h(px(size::LINE))
             .mx(px(space::SM))
             .mt(px(space::SM))
-            .px(px(space::MD))
-            .py(px(space::SM))
+            .pl(px(space::MD))
+            .pr(px(space::SM))
             .rounded(px(size::RADIUS))
             .bg(theme.danger_surface)
             .border_1()
@@ -2467,12 +2473,19 @@ impl Browser {
                     .size(px(size::ICON))
                     .flex_none(),
             )
-            .child(div().flex_1().min_w_0().child(failure.message()))
+            .child(div().flex_1().min_w_0().truncate().child(message))
             .child(
                 Button::new("dismiss-failure")
                     .ghost()
-                    .xsmall()
-                    .label("Dismiss")
+                    .with_size(px(size::SMALL_BUTTON))
+                    .size(px(size::SMALL_BUTTON))
+                    .child(
+                        Icon::new(IconName::Close)
+                            .size(px(size::ICON))
+                            .text_color(theme.danger),
+                    )
+                    .tooltip("Dismiss")
+                    .accessibility_label("Dismiss")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.failure = None;
                         cx.notify();
@@ -2506,19 +2519,17 @@ impl Browser {
             .items_center()
             .gap(px(space::XS))
             .h_full()
+            .px(px(space::SM))
             .cursor_pointer()
             .text_color(if active { theme.text } else { theme.text_muted })
             .hover(|heading| heading.text_color(theme.text))
             .child(label)
             .when(active, |heading| {
-                heading.child(
-                    Icon::new(if options.descending {
-                        IconName::ChevronDown
-                    } else {
-                        IconName::ChevronUp
-                    })
-                    .size(px(size::ICON_SMALL)),
-                )
+                heading.child(if options.descending {
+                    "\u{2193}"
+                } else {
+                    "\u{2191}"
+                })
             })
             .on_click(cx.listener(move |this, _, _, cx| this.sort_by(key, cx)))
     }
@@ -2526,6 +2537,9 @@ impl Browser {
     /// What a row or cell needs to know about the entry it shows.
     fn entry(&mut self, rows: &Snapshot, row: usize, cx: &mut Context<Self>) -> Entry {
         let container = rows.is_container(row);
+        // The entry being renamed shows the hover fill and the bar, so the
+        // field reads as text on the row rather than on the selection.
+        let renaming = self.renaming.as_deref() == Some(rows.name(row));
         let link = rows.kind(row) == EntryKind::Symlink;
         // A link looks like what it points to, as in Dolphin.
         let type_name = rows
@@ -2536,9 +2550,9 @@ impl Browser {
             name: display_name(rows.name(row)).into_owned().into(),
             container,
             link,
-            selected: self.selection.contains(rows, row),
-            focused: self.focus_row == Some(row),
-            renaming: self.renaming.as_deref() == Some(rows.name(row)),
+            selected: self.selection.contains(rows, row) && !renaming,
+            focused: self.focus_row == Some(row) || renaming,
+            renaming,
             cut: self.has_cut && hub(cx).read(cx).is_cut(&rows.entry_path(row)),
             info: self.type_info_for(&type_name, container, cx),
             thumb: self.thumbnail_for(rows, row, container, cx),
@@ -2575,17 +2589,37 @@ impl Browser {
         if entry.renaming {
             // Clicks in the field place the cursor; they must not reach the
             // row underneath or start a rubber band.
+            // As wide as the name it holds, as in Dolphin, up to the space
+            // the row has: the text, 4 pixels each side, the outline and room
+            // for the caret.
+            let value = self.rename_input.read(cx).value();
+            let run = gpui_kit::TextRun {
+                len: value.len(),
+                font: gpui_kit::font(text::FAMILY_BODY),
+                color: theme.text.into(),
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            };
+            let text_width = window
+                .text_system()
+                .layout_line(&value, px(text::NAME), &[run], None)
+                .width;
+            let width = text_width + px(space::XS * 2. + size::HAIRLINE * 2. + space::XS);
             div()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 // Solid and in the normal text colour, whatever the row's state.
+                .w(width)
+                .max_w_full()
                 .rounded(px(size::RADIUS))
                 .bg(theme.raised)
                 .text_color(theme.text)
                 .child(crate::input::named(
                     Input::new(&self.rename_input)
                         .xsmall()
-                        .h(px(size::RENAME_FIELD))
-                        .px(px(space::XS)),
+                        .min_h(px(size::RENAME_FIELD))
+                        .px(px(space::XS))
+                        .text_size(px(text::NAME)),
                     &self.rename_input,
                     "New name",
                     window,
@@ -2777,16 +2811,14 @@ impl Browser {
         let rows = Arc::clone(snapshot);
         let options = snapshot.options();
         let zone = self.zone.clone();
-        // Headings line up with the row text: same gutter, accent bar and padding.
-        let gutter = space::SM * 2. + size::SELECTION_BAR;
-
+        // Headings line up with the cells: the same 8-pixel side padding
+        // around the list and inside every column.
         let headings = div()
             .flex()
             .flex_none()
             .items_center()
-            .gap(px(space::MD))
             .h(px(size::ROW))
-            .px(px(gutter))
+            .px(px(space::SM))
             .border_b_1()
             .border_color(theme.border)
             .text_size(px(text::BODY))
@@ -2841,13 +2873,13 @@ impl Browser {
                             .as_ref()
                             .map(|info| info.description.clone())
                             .unwrap_or_default();
+                        // Every column has 8 pixels of padding on each side,
+                        // as the headings do.
                         let line = entry
                             .surface(theme)
                             .flex()
                             .items_center()
-                            .gap(px(space::MD))
                             .size_full()
-                            .px(px(space::SM))
                             .text_size(px(text::NAME))
                             .child(
                                 div()
@@ -2855,6 +2887,7 @@ impl Browser {
                                     .flex_1()
                                     .min_w_0()
                                     .items_center()
+                                    .px(px(space::SM))
                                     .gap(px(space::MD))
                                     // Icon and name are what gets dragged; the rest
                                     // of the row is free for a rubber band.
@@ -2868,9 +2901,7 @@ impl Browser {
                                             .when(entry.renaming, |handle| handle.flex_1())
                                             .child(entry.icon(layout.icon, theme))
                                             .child(
-                                                this.name_cell(&entry, theme, window, cx)
-                                                    .min_w_0()
-                                                    .when(entry.renaming, |name| name.flex_1()),
+                                                this.name_cell(&entry, theme, window, cx).min_w_0(),
                                             ),
                                         row,
                                         entry.drag_icon(),
@@ -2882,6 +2913,7 @@ impl Browser {
                                     div()
                                         .w(px(size::COLUMN_SIZE))
                                         .flex_none()
+                                        .px(px(space::SM))
                                         .text_right()
                                         .font_family(text::FAMILY_DATA)
                                         .text_size(px(text::DATA))
@@ -2894,6 +2926,7 @@ impl Browser {
                                     div()
                                         .w(px(size::COLUMN_MODIFIED))
                                         .flex_none()
+                                        .px(px(space::SM))
                                         .font_family(text::FAMILY_DATA)
                                         .text_size(px(text::DATA))
                                         .text_color(secondary)
@@ -2907,6 +2940,7 @@ impl Browser {
                                     div()
                                         .w(px(size::COLUMN_TYPE))
                                         .flex_none()
+                                        .px(px(space::SM))
                                         .truncate()
                                         .font_family(text::FAMILY_DATA)
                                         .text_size(px(text::DATA))
@@ -2992,7 +3026,11 @@ impl Browser {
                 .px(px(space::SM))
                 .text_size(px(text::NAME))
                 .child(icon)
-                .child(self.name_cell(&entry, theme, window, cx).flex_1().min_w_0())
+                .child(
+                    self.name_cell(&entry, theme, window, cx)
+                        .when(!entry.renaming, |name| name.flex_1())
+                        .min_w_0(),
+                )
         };
         let is_folder = entry.container;
         let drag_icon = entry.drag_icon();
@@ -3002,10 +3040,11 @@ impl Browser {
                 .flex_none()
                 .w(px(cell_width))
                 .h(px(layout.row_height))
-                // Half the gap on each side: 8 pixels between cells; compact
-                // rows touch, as list rows do.
-                .px(px(size::CELL_GAP / 2.))
-                .when(stacked, |cell| cell.py(px(size::CELL_GAP / 2.)))
+                // Icon cells keep half the 8-pixel gap on each side; compact
+                // columns start at their left edge with the gap after them,
+                // and their rows touch, as list rows do.
+                .when(stacked, |cell| cell.p(px(size::CELL_GAP / 2.)))
+                .when(!stacked, |cell| cell.pr(px(size::CELL_GAP)))
                 .child(cell)
                 .on_click(Self::entry_click(row, cx))
                 .on_mouse_down(MouseButton::Middle, Self::entry_middle_click(row, cx))
@@ -3044,11 +3083,13 @@ impl Browser {
                         let cells = (first..(first + per_row).min(len))
                             .map(|row| this.grid_cell(&rows, row, layout, theme, window, cx))
                             .collect::<Vec<_>>();
+                        // With the cells' half gaps: 16 pixels at the sides
+                        // and 12 above, as in docs/DESIGN.md.
                         div()
                             .flex()
                             .w_full()
                             .h(px(layout.row_height))
-                            .px(px(space::SM))
+                            .px(px(space::MD))
                             .children(cells)
                     })
                     .collect::<Vec<_>>()
@@ -3056,7 +3097,7 @@ impl Browser {
         )
         .track_scroll(&self.scroll)
         .flex_1()
-        .py(px(space::XS));
+        .py(px(space::SM));
         self.entry_list(snapshot, list)
     }
 
@@ -3121,14 +3162,11 @@ impl Browser {
         let (icon, heading) = if snapshot.is_loading() {
             (IconName::Loader, "Loading\u{2026}")
         } else {
-            (
-                IconName::FolderOpen,
-                if hidden > 0 {
-                    "This folder has only hidden items"
-                } else {
-                    "This folder is empty"
-                },
-            )
+            if hidden > 0 {
+                (IconName::EyeOff, "This folder has only hidden items")
+            } else {
+                (IconName::FolderOpen, "This folder is empty")
+            }
         };
         let hidden_message = if hidden > 0 && !snapshot.is_loading() {
             format!(
@@ -3163,19 +3201,32 @@ impl Browser {
             .p(px(space::LG))
             .items_center()
             .justify_center()
-            .gap(px(space::MD))
+            .gap(px(space::SM))
             .text_color(theme.text_muted)
-            .child(Icon::new(icon).size(px(size::ICON_LARGE)).flex_none())
+            .child(
+                Icon::new(icon)
+                    .size(px(size::ICON_LARGE))
+                    .flex_none()
+                    .mb(px(space::SM)),
+            )
             .child(
                 div()
                     .flex_none()
                     .font_family(text::FAMILY_HEADING)
+                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                     .text_size(px(text::TITLE))
+                    .line_height(px(text::TITLE_LINE))
                     .text_color(theme.text)
                     .child(heading),
             )
             .when(!reason.is_empty(), |state| {
-                state.child(div().flex_none().max_w_full().text_center().child(reason))
+                state.child(
+                    div()
+                        .flex_none()
+                        .max_w(px(size::STATE_TEXT_MAX))
+                        .text_center()
+                        .child(reason),
+                )
             })
             .when(hidden > 0 && !snapshot.is_loading(), |state| {
                 state
@@ -3184,15 +3235,13 @@ impl Browser {
                         div()
                             .flex_none()
                             .max_w_full()
+                            .mt(px(space::MD))
                             .track_focus(&self.folder_action_focus)
                             .key_context(FOLDER_ACTION_CONTEXT)
                             .child(
-                                Button::new("show-hidden")
+                                crate::dialog::button("show-hidden", "Show hidden")
                                     .primary()
-                                    .small()
                                     .max_w_full()
-                                    .px(px(space::XS))
-                                    .label("Show hidden")
                                     .accessibility_label("Show hidden files")
                                     .tooltip("Show hidden files (Ctrl+H)")
                                     .on_click(cx.listener(|this, _, window, cx| {
@@ -3258,27 +3307,35 @@ impl Browser {
             .p(px(space::LG))
             .items_center()
             .justify_center()
-            .gap(px(space::MD))
+            .gap(px(space::SM))
             .text_color(theme.text_muted)
             .child(
-                Icon::new(gpui_kit::assets::IconName::ListFilter)
+                Icon::new(gpui_kit::assets::IconName::SearchX)
                     .size(px(size::ICON_LARGE))
-                    .flex_none(),
+                    .flex_none()
+                    .mb(px(space::SM)),
             )
             .child(
                 div()
                     .flex_none()
                     .font_family(text::FAMILY_HEADING)
+                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                     .text_size(px(text::TITLE))
+                    .line_height(px(text::TITLE_LINE))
                     .text_color(theme.text)
                     .child(heading),
             )
-            .child(div().flex_none().child(advice))
             .child(
-                Button::new("clear-filter")
+                div()
+                    .flex_none()
+                    .max_w(px(size::STATE_TEXT_MAX))
+                    .text_center()
+                    .child(advice),
+            )
+            .child(
+                crate::dialog::button("clear-filter", "Clear filter")
                     .primary()
-                    .small()
-                    .label("Clear filter")
+                    .mt(px(space::MD))
                     .tooltip("Clear the filter (Esc in the filter bar)")
                     .on_click(cx.listener(|this, _, window, cx| this.close_filter(window, cx))),
             )
@@ -3346,6 +3403,10 @@ impl Browser {
     }
 
     fn status(&self, theme: Theme) -> impl IntoElement {
+        let renaming_name = self
+            .renaming
+            .as_deref()
+            .map(|name| display_name(name).into_owned());
         let (parts, selected) = match self.current_snapshot() {
             None => (
                 StatusParts {
@@ -3365,6 +3426,7 @@ impl Browser {
                     loading: snapshot.is_loading(),
                     shown_size: sizes.shown,
                     selected_size: sizes.selected,
+                    renaming: renaming_name.as_deref(),
                 };
                 (status_parts(&facts), facts.selected > 0)
             }
@@ -3447,7 +3509,7 @@ impl Browser {
             .border_t_1()
             .border_color(theme.border)
             .child(
-                Icon::new(gpui_kit::assets::IconName::ListFilter)
+                Icon::new(gpui_kit::assets::IconName::Funnel)
                     .size(px(size::ICON))
                     .flex_none()
                     .text_color(theme.text_muted),
@@ -3459,7 +3521,10 @@ impl Browser {
                     .min_w_0()
                     .max_w(px(size::FILTER_FIELD_MAX))
                     .child(crate::input::named(
-                        Input::new(&self.filter_input).h(px(size::FILTER_FIELD)),
+                        // 8 pixels inside, as the design's small field.
+                        Input::new(&self.filter_input)
+                            .min_h(px(size::FILTER_FIELD))
+                            .px(px(space::SM)),
                         &self.filter_input,
                         "Filter by name",
                         window,
@@ -4324,6 +4389,8 @@ struct StatusFacts<'a> {
     shown_size: Option<u64>,
     /// Total size of the selected files, when any is known.
     selected_size: Option<u64>,
+    /// The name being edited in place, if any.
+    renaming: Option<&'a str>,
 }
 
 /// The sizes behind the status line, with the snapshot and selection they
@@ -4349,15 +4416,21 @@ fn status_parts(facts: &StatusFacts<'_>) -> StatusParts {
         Some(size) => format!("{text} ({})", format::size(size)),
         None => text,
     };
-    let selection = (facts.selected > 0).then(|| {
-        sized(
-            format!(
-                "{} {} selected",
-                count(facts.selected),
-                items(facts.selected)
-            ),
-            facts.selected_size,
-        )
+    // While a name is edited, the status says how to finish, as Dolphin's does.
+    let renaming = facts.renaming.map(|name| {
+        format!("Renaming \u{201c}{name}\u{201d}: Enter keeps the new name, Esc cancels.")
+    });
+    let selection = renaming.or_else(|| {
+        (facts.selected > 0).then(|| {
+            sized(
+                format!(
+                    "{} {} selected",
+                    count(facts.selected),
+                    items(facts.selected)
+                ),
+                facts.selected_size,
+            )
+        })
     });
     let mut total = match facts.filter {
         Some(text) => format!(
@@ -4535,20 +4608,29 @@ impl Entry {
     /// shown by colour only.
     fn surface(&self, theme: Theme) -> gpui_kit::Div {
         div()
+            .relative()
             .rounded(px(size::RADIUS))
-            .border_l(px(size::SELECTION_BAR))
-            .border_color(gpui_kit::transparent_black())
             .text_color(theme.text)
-            .when(self.selected, |surface| {
-                surface
-                    .bg(theme.selection)
-                    .border_color(theme.accent)
-                    .text_color(theme.on_selection)
+            // The bar lies over the entry's left edge, so selecting it moves
+            // nothing.
+            .when(self.selected || self.focused, |surface| {
+                surface.child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top_0()
+                        .bottom_0()
+                        .w(px(size::SELECTION_BAR))
+                        .rounded_l(px(size::RADIUS))
+                        .bg(theme.accent),
+                )
             })
-            .when(!self.selected, |surface| {
-                surface
-                    .when(self.focused, |surface| surface.border_color(theme.accent))
-                    .hover(|surface| surface.bg(theme.hover))
+            .when(self.selected, |surface| {
+                surface.bg(theme.selection).text_color(theme.on_selection)
+            })
+            .when(self.renaming, |surface| surface.bg(theme.hover))
+            .when(!self.selected && !self.renaming, |surface| {
+                surface.hover(|surface| surface.bg(theme.hover))
             })
             // Cut entries are on their way out: drawn faded until pasted.
             .when(self.cut, |surface| surface.opacity(0.5))
@@ -4777,6 +4859,7 @@ mod tests {
             loading: false,
             shown_size: None,
             selected_size: None,
+            renaming: None,
         };
         let parts = |facts: &StatusFacts<'_>| {
             let parts = status_parts(facts);
@@ -4814,6 +4897,27 @@ mod tests {
             ..facts(1, 1, 1, 0, None)
         };
         assert_eq!(parts(&loading).1, "1 item \u{2014} loading\u{2026}");
+    }
+
+    #[test]
+    fn while_renaming_the_status_line_says_which_keys_finish() {
+        let renaming = StatusFacts {
+            shown: 12,
+            unfiltered: 12,
+            total: 12,
+            selected: 1,
+            filter: None,
+            loading: false,
+            shown_size: None,
+            selected_size: Some(6),
+            renaming: Some("IMG_4821.jpg"),
+        };
+        let parts = status_parts(&renaming);
+        assert_eq!(
+            parts.selection.as_deref(),
+            Some("Renaming \u{201c}IMG_4821.jpg\u{201d}: Enter keeps the new name, Esc cancels.")
+        );
+        assert_eq!(parts.total, "12 items");
     }
 
     #[test]

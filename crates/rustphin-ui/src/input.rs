@@ -3,13 +3,16 @@
 use std::{cell::Cell, ops::Range, rc::Rc};
 
 use gpui_kit::{
-    AccessibleAction, App, Div, Entity, Focusable as _, InteractiveElement as _,
+    AccessibleAction, App, BoxShadow, Div, Entity, Focusable as _, InteractiveElement as _,
     ParentElement as _, Role, Stateful, StatefulInteractiveElement as _, Styled as _, Window,
     accesskit::{ActionData, Node, NodeId, TextPosition, TextSelection},
     component::input::{Input, InputState},
-    div,
+    div, point,
     prelude::FluentBuilder as _,
+    px,
 };
+
+use crate::theme::Theme;
 
 pub(crate) fn named(
     input: Input,
@@ -19,6 +22,7 @@ pub(crate) fn named(
     cx: &App,
 ) -> Stateful<Div> {
     let focus = state.focus_handle(cx);
+    let input = designed(input, focus.is_focused(window), cx);
     let text = window.is_a11y_active().then(|| {
         let state = state.read(cx);
         (state.value(), state.selected_range(), state.cursor())
@@ -103,6 +107,29 @@ pub(crate) fn named(
         // The pinned component labels its frame, whose handle is separate
         // from the editor. Keep one semantic node on the editor's handle.
         .child(input.role(None))
+}
+
+/// A text field as docs/DESIGN.md draws it: on `surface-raised` unless the
+/// caller chose another fill, with the control outline, and when focused a
+/// bright outline plus a 1-pixel ring of the same colour. The library's own
+/// focus style (a wide half-transparent ring) is turned off.
+///
+/// Callers size a single-line field with `min_h`: the field's own `h` only
+/// applies to multi-line fields and is otherwise ignored.
+fn designed(mut input: Input, focused: bool, cx: &App) -> Input {
+    let theme = *cx.global::<Theme>();
+    if input.style().background.is_none() {
+        input = input.bg(theme.raised);
+    }
+    input.focus_bordered(false).when(focused, |input| {
+        input.border_color(theme.accent).shadow(vec![BoxShadow {
+            color: theme.accent.into(),
+            offset: point(px(0.), px(0.)),
+            blur_radius: px(0.),
+            spread_radius: px(1.),
+            inset: false,
+        }])
+    })
 }
 
 fn byte_offset(text: &str, character: usize) -> Option<usize> {

@@ -287,6 +287,10 @@ components:
     textColor: "{colors.on-primary}"
     rounded: "{rounded.sm}"
     size: 16px
+  checkbox-row:
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    height: 28px
   floating-surface:
     backgroundColor: "{colors.surface-raised}"
     textColor: "{colors.text}"
@@ -866,12 +870,36 @@ except where the list below says otherwise; each W-079 step adds its line.
   action row; question titles that state the question; the Keep both fact;
   Keep as the run default; Properties' header, facts and permission columns;
   batch rename's segments, preview and notes.
-- Not yet implemented: scrollbars on the list views (the compact view has
-  none either); the volume name after the free
-  space; per-command palette icons and application icons in "Open with";
-  tab overflow; `text-disabled` on disabled toolbar buttons (the component
-  library dims them its own way); saving whether Devices is folded. "Details…"
-  sits on the result line, since operation results are window-level here.
+- Mockup comparison (2026-11-09): each screen was laid over its mockup
+  render at the mockup's size. Fixed to match: outlined buttons clear until
+  hovered and destructive buttons with their error outline; text fields on
+  `surface-raised` (the palette's on `content`) with the 1 px focus ring and
+  their real heights (a single-line field's `h` was ignored, so every field
+  was 32 px); disabled toolbar icons in `text-disabled`; the path as one
+  string; table columns with 8 px padding and no gaps, so headings line up
+  with cells, and the "↑"/"↓" sort mark; the selection bar laid over the
+  entry instead of pushing it; icons-view padding 16/12 px and compact cells
+  starting at their column; the film icon for Videos; heading line heights
+  (24 and 28 px); the palette without a visible key-hint footer; the funnel
+  filter icon and 8 px field padding; renaming on the hover fill with a field
+  as wide as the name, `primary` text selection and the status hint; equal
+  permission columns, `label-sm` capitals and 28 px checkbox rows; dialog
+  scrollbars in the body padding; mono name lists; state icons (`eye-off`,
+  `search-x`), spacing and 32 px buttons; the 44 px folder error banner with
+  a dismiss icon; batch rename segments with icons, Find and Replace side by
+  side in mono, and one problem note above the preview.
+- Not yet implemented: semibold weights. The installed Inter and Space
+  Grotesk are variable fonts and the pinned GPUI renders every weight at the
+  font's default, so headings show at regular (Inter) or light (Space
+  Grotesk) weight; static font files would fix it. Also: scrollbars on the
+  list views (the compact view has none either); the volume name after the
+  free space; per-command palette icons and application icons in "Open
+  with"; icons and sizes in a question's list of names; tab overflow; the
+  design's offset focus ring on buttons (the library draws its own); saving
+  whether Devices is folded. "Details…" sits on the result line, since
+  operation results are window-level here. A folder that cannot be opened
+  shows the error banner over the folder it was opened from (scenario N4),
+  not the in-place state of the mockup.
 
 Carried over unchanged from the earlier design and implemented: the Actions
 palette's **Recover original names after interruption** for the current folder

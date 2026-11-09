@@ -4,6 +4,7 @@
 //! edited there in place. Groups are Rustphin's own and stored separately
 //! (decision D-008). All file access happens off the UI thread.
 
+use crate::controls::Outlined as _;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -241,7 +242,7 @@ fn icon_for(place: &Place) -> gpui_kit::assets::IconName {
     } else if has("picture") || has("image") {
         I::Image
     } else if has("video") {
-        I::Video
+        I::Film
     } else if has("game") {
         I::Gamepad2
     } else {
@@ -906,7 +907,7 @@ impl Sidebar {
             .when(ejectable && !busy, |line| {
                 line.child(
                     Button::new(SharedString::from(format!("eject-{}", device.id)))
-                        .outline()
+                        .outlined()
                         // 8 pixels from the figures, as in the mockup.
                         .ml(px(-space::XS))
                         .with_size(px(size::SMALL_BUTTON))
@@ -1601,6 +1602,7 @@ impl Render for Sidebar {
                     .font_family(text::FAMILY_HEADING)
                     .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                     .text_size(px(text::HEADING))
+                    .line_height(px(text::HEADING_LINE))
                     .text_color(theme.text)
                     .child("Places"),
             );

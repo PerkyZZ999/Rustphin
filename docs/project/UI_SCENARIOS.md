@@ -216,6 +216,21 @@ The test binary comes from `rust-tc test`; its filename contains a build hash.
 | BR3 | Select both files, F2; find `a`, replace with `b`; then change replacement to `c`, Enter; Ctrl+Z | Conflict text blocks Rename for `b`; `c` enables it. Applying leaves `b` = `B`, `c` = `A`, with no journal. Undo restores `a` = `A`, `b` = `B`, with no journal |
 | BR4 | Restart in the same fixture with no journal; run the recovery command again | Neutral "Checked rename recovery" completion notice; both files stay unchanged and no journal is created |
 
+## Mockup comparison (W-087)
+
+1. Render the mockups: `chromium --headless=new --hide-scrollbars --window-size=<w>,<h> --screenshot=<out>.png docs/mockup/<page>.html`, at the size of the page's `.desk` (1280 × 800, 960 × 640 or 480 × 320).
+2. Start an isolated session at 1280 × 828 with `isolate_home: true`, fill the home with `tests/ui/make-mockup-home.sh <home>`, launch Rustphin in `<home>/Pictures` with `RUSTPHIN_OPAQUE=1` (the opaque theme matches mockups 33 and 34 colour for colour) and maximise it (Meta+Page Up): the window is then 1280 × 800 under a 28 px title bar.
+3. Crop the same region from both and compare them enlarged; mockups with a tab strip sit 40 px lower than a one-tab window.
+
+| ID | Screen | Expected |
+|---|---|---|
+| M1 | Details (mockups 01, 05, 33) | Heading text and cells share columns (Size ends at 936, Modified starts at 952, Type at 1120); "↑" after the sorted heading; toolbar buttons have only an outline; the path is one string |
+| M2 | Palette with "hid" (04) | 40 px search field on the content fill with a bright outline and ring; no footer |
+| M3 | F2 on one name (07) | Hover fill and bar on the row; field as wide as the name; selection in `primary`; status "Renaming “…”: Enter keeps the new name, Esc cancels." |
+| M4 | Properties (13) | Three equal permission columns; capital labels; checkbox rows 32 px apart |
+| M5 | Batch rename with a "/" (15) | Segments with icons; Find and Replace side by side; one problem note; new names in red |
+| M6 | Empty, only hidden, filter with no match (25–27) | 32 px icon, heading, text, 32 px button, at 8/8/12 px spacing |
+
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.

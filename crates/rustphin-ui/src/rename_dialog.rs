@@ -1,5 +1,6 @@
 //! The batch-rename dialog: one rule, a live preview, and no change until Rename.
 
+use crate::controls::Outlined as _;
 use std::{
     ffi::{OsStr, OsString},
     os::unix::ffi::OsStrExt,
@@ -11,7 +12,7 @@ use gpui_kit::{
     IntoElement, ParentElement as _, Rgba, Role, ScrollHandle, SharedString,
     StatefulInteractiveElement as _, Styled as _, Subscription, Window,
     component::{
-        Disableable as _,
+        Disableable as _, Sizable as _,
         button::ButtonVariants as _,
         checkbox::Checkbox,
         input::{Input, InputEvent, InputState},
@@ -266,6 +267,9 @@ impl RenameDialog {
                     .flex_col()
                     .min_h_0()
                     .flex_shrink_1()
+                    // The scrollbar lies in the body's right padding, so the
+                    // content keeps the full width.
+                    .mr(px(-space::LG))
                     .child(
                         div()
                             .id("rename-content")
@@ -281,6 +285,16 @@ impl RenameDialog {
                             .when_some(plan_problem, |dialog, problem| {
                                 dialog.child(problem_note(problem, theme))
                             })
+                            // What is wrong with the new names, said once above
+                            // the preview rather than under every row.
+                            .when_some(
+                                preview.as_ref().and_then(|preview| {
+                                    row_problems(preview.rows.iter().map(|row| {
+                                        row.problems.iter().map(|problem| problem.message()).collect()
+                                    }))
+                                }),
+                                |dialog, problems| dialog.child(problem_note(problems, theme)),
+                            )
                             .when(
                                 !changed && preview.as_ref().is_some_and(Preview::can_apply),
                                 |dialog| {
@@ -311,7 +325,7 @@ impl RenameDialog {
             dialog::actions(theme)
                 .child(
                     dialog::button("rename-cancel", "Cancel (Esc)")
-                        .outline()
+                        .outlined()
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.cancel_rename(window, cx)
                         })),
@@ -339,9 +353,9 @@ impl RenameDialog {
             .border_1()
             .border_color(theme.border_strong)
             .overflow_hidden()
-            .child(self.mode_button("mode-replace", "Replace", Mode::Replace, cx))
-            .child(self.mode_button("mode-pattern", "Pattern", Mode::Pattern, cx))
-            .child(self.mode_button("mode-case", "Case", Mode::Case, cx))
+            .child(self.mode_button("mode-replace", "Replace", Mode::Replace, theme, cx))
+            .child(self.mode_button("mode-pattern", "Pattern", Mode::Pattern, theme, cx))
+            .child(self.mode_button("mode-case", "Case", Mode::Case, theme, cx))
     }
 
     fn mode_button(
@@ -349,9 +363,32 @@ impl RenameDialog {
         id: &'static str,
         label: &'static str,
         mode: Mode,
+        theme: Theme,
         cx: &mut Context<Workspace>,
     ) -> impl IntoElement {
-        let button = dialog::button(id, label);
+        let icon = match mode {
+            Mode::Replace => gpui_kit::assets::IconName::ArrowLeftRight,
+            Mode::Pattern => gpui_kit::assets::IconName::Hash,
+            Mode::Case => gpui_kit::assets::IconName::Type,
+        };
+        // A segment: icon and label, divided from the one before it.
+        let button = gpui_kit::component::button::Button::new(id)
+            .with_size(px(space::LG * 5.))
+            .h(px(size::BUTTON))
+            .rounded(gpui_kit::component::button::ButtonRounded::None)
+            .accessibility_label(label)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(space::SM))
+                    .text_size(px(text::BODY))
+                    .child(gpui_kit::component::Icon::new(icon).size(px(size::ICON)))
+                    .child(label),
+            )
+            .when(mode != Mode::Replace, |button| {
+                button.border_l_1().border_color(theme.border_strong)
+            });
         let button = if self.mode == mode {
             button.primary()
         } else {
@@ -380,8 +417,13 @@ impl RenameDialog {
     ) -> Vec<gpui_kit::AnyElement> {
         match self.mode {
             Mode::Replace => vec![
-                field(theme, "Find", &self.find, window, cx).into_any_element(),
-                field(theme, "Replace with", &self.replace, window, cx).into_any_element(),
+                div()
+                    .flex_none()
+                    .flex()
+                    .gap(px(space::MD))
+                    .child(div().flex_1().min_w_0().child(field(theme, "Text to find", &self.find, window, cx)))
+                    .child(div().flex_1().min_w_0().child(field(theme, "Replace with", &self.replace, window, cx)))
+                    .into_any_element(),
                 div().flex_none().child(Checkbox::new("rename-regex")
                     .label("Regular expression")
                     .checked(self.regex)
@@ -430,7 +472,7 @@ impl RenameDialog {
         let button = if self.case == case {
             button.primary()
         } else {
-            button.outline()
+            button.outlined()
         };
         button.on_click(cx.listener(move |this, _, _, cx| {
             if let Some(dialog) = &mut this.rename {
@@ -482,10 +524,7 @@ impl RenameDialog {
                         .text_size(px(text::DATA))
                         .child(
                             line()
-                                .child(name_cell(
-                                    &row.from,
-                                    if bad { theme.danger } else { theme.text },
-                                ))
+                                .child(name_cell(&row.from, theme.text))
                                 .child(
                                     div()
                                         .w(px(size::ICON + space::SM))
@@ -499,15 +538,6 @@ impl RenameDialog {
                                     if bad { theme.danger } else { theme.text },
                                 )),
                         )
-                        .children(problems.into_iter().map(|message| {
-                            div()
-                                .px(px(space::MD))
-                                .pb(px(space::XS))
-                                .font_family(text::FAMILY_BODY)
-                                .text_size(px(text::BODY))
-                                .text_color(theme.danger)
-                                .child(message)
-                        }))
                 })
                 .collect::<Vec<_>>()
         });
@@ -548,7 +578,10 @@ fn field(
         .gap(px(space::XS))
         .child(div().text_color(theme.text_muted).child(label))
         .child(crate::input::named(
-            Input::new(state).h(px(size::CONTROL)),
+            // Names and rules are typed in the data font, as names are shown.
+            Input::new(state)
+                .min_h(px(size::CONTROL))
+                .font_family(text::FAMILY_DATA),
             state,
             label,
             window,
@@ -564,6 +597,18 @@ fn note(color: Rgba, message: String) -> impl IntoElement {
         .aria_value(message.clone())
         .text_color(color)
         .child(message)
+}
+
+/// The problems of the preview's rows, each said once, in the order they
+/// first appear; `None` when every row is fine.
+fn row_problems(rows: impl IntoIterator<Item = Vec<String>>) -> Option<String> {
+    let mut seen: Vec<String> = Vec::new();
+    for message in rows.into_iter().flatten() {
+        if !seen.contains(&message) {
+            seen.push(message);
+        }
+    }
+    (!seen.is_empty()).then(|| seen.join(" "))
 }
 
 /// A problem with the rule: error colours, an alert icon and an outline.
@@ -638,5 +683,24 @@ impl Workspace {
         self.rename = None;
         self.focus_active(window, cx);
         cx.notify();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::row_problems;
+
+    #[test]
+    fn problems_shared_by_rows_are_said_once_in_order() {
+        let rows = vec![
+            vec!["Names cannot contain /.".to_owned()],
+            vec![],
+            vec!["Names cannot contain /.".to_owned(), "Too long.".to_owned()],
+        ];
+        assert_eq!(
+            row_problems(rows).as_deref(),
+            Some("Names cannot contain /. Too long.")
+        );
+        assert_eq!(row_problems(vec![Vec::<String>::new()]), None);
     }
 }

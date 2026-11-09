@@ -89,6 +89,10 @@ pub mod size {
     pub const PLACE_ICON: f32 = 20.;
     /// Small icon buttons: eject on a device row, close in a bar.
     pub const SMALL_BUTTON: f32 = 28.;
+    /// Widest line of text under a state's heading.
+    pub const STATE_TEXT_MAX: f32 = 440.;
+    /// A checkbox and its label, as one row (`checkbox-row`).
+    pub const CHECK_ROW: f32 = 28.;
     /// Height of a usage bar under a volume's name.
     pub const USAGE: f32 = 4.;
     /// Width of the places panel.
@@ -157,6 +161,10 @@ pub mod text {
     pub const TITLE: f32 = 20.;
     /// Panel and dialog titles (`headline-sm`).
     pub const HEADING: f32 = 17.;
+    /// Line height of `headline-sm`.
+    pub const HEADING_LINE: f32 = 24.;
+    /// Line height of `headline-md`.
+    pub const TITLE_LINE: f32 = 28.;
     /// Line height for body text.
     pub const LINE: f32 = 20.;
 }
@@ -297,6 +305,8 @@ impl Theme {
         components.border = self.border_strong.into();
         components.muted_foreground = self.text_muted.into();
         components.caret = self.text.into();
+        // Selected text in fields is highlighted in `primary`, as a selected row.
+        components.selection = self.selection.into();
         components.ring = self.accent.into();
         // Destructive buttons: error text on the error surface.
         let danger_hover = over(self.hover, self.danger_surface);

@@ -461,6 +461,7 @@ impl Render for Palette {
                                     .font_family(text::FAMILY_HEADING)
                                     .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                                     .text_size(px(text::HEADING))
+                                    .line_height(px(text::HEADING_LINE))
                                     .child("Actions"),
                             )
                             .child(
@@ -472,8 +473,12 @@ impl Render for Palette {
                             ),
                     )
                     .child(crate::input::named(
+                        // The search field sits on the darker content fill.
                         Input::new(&self.input)
-                            .h(px(size::PALETTE_FIELD))
+                            .min_h(px(size::PALETTE_FIELD))
+                            .gap(px(space::SM))
+                            .bg(theme.content)
+                            .text_size(px(text::NAME))
                             .prefix(
                                 gpui_kit::component::Icon::new(gpui_kit::assets::IconName::Search)
                                     .size(px(size::ICON))
@@ -493,9 +498,12 @@ impl Render for Palette {
                             .a11y_synthetic_children(|builder| {
                                 builder.parent_node().set_live(gpui_kit::accesskit::Live::Polite);
                             })
-                            .text_size(px(text::SMALL))
-                            .text_color(theme.text_muted)
-                            .child("↑ ↓ or Tab to choose · Enter to run · Esc to close"),
+                            // Read out, not shown: the palette's description
+                            // already says which keys work, and the design
+                            // has no footer.
+                            .absolute()
+                            .size_0()
+                            .overflow_hidden(),
                     )
                     .when_some(self.status.clone(), |surface, status| {
                         surface.child(
