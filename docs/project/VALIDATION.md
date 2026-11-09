@@ -1,5 +1,10 @@
 # Validation evidence
 
+### 2026-11-08 — D-023 Orca pass dropped; R-107 names and roles ticked on W-074
+- **Decision:** The maintainer: "the Orca screen-reader can be forgotten and removed from the list of things todo". Recorded as D-023; R-107's criterion and S11's acceptance no longer ask for an Orca pass.
+- **Ticked on existing evidence:** R-107 "names and roles through AccessKit, with gaps listed", from W-074a–i (AT-SPI in isolated sessions). Listed gaps: native expanded and disabled flags, EditableText. 27 ticked, 7 open.
+- **No code change; no new check run** beyond this commit's gate.
+
 ### 2026-11-08 — R-105 opaque-mode contrast accepted on token-level tests
 - **Decision:** asked whether to audit each screen or accept the token tests, the maintainer chose "Accept token tests".
 - **Evidence relied on:** `theme::tests::opaque_theme_meets_contrast_minimums` checks 16 text/surface pairs (window, content, chrome, hover, selection, primary-button hover, danger surface, dialogs/menus/palette and palette hover) at 4.5:1, plus the accent and progress indicators at 3:1; it runs in every `rust-tc doctor`, including the gate for this entry. W-078c's code audit found the UI's colours come from these tokens. The opaque theme was observed as the fallback in isolated sessions (W-076h/j).

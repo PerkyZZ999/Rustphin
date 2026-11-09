@@ -218,4 +218,12 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Confirmed by / date:** The maintainer, 2026-11-08 ("Exclude startup")
 - **Supersedes / superseded by:** clarifies R-101
 
+## D-023 — No Orca screen-reader pass in the MVP
+- **Status:** locked
+- **Date:** 2026-11-08
+- **Context:** R-107 asked for a recorded Orca pass. Orca is not installed, and the accessibility tree itself was verified through AT-SPI in W-074a–i (names, roles, selection, focus, text), with gaps listed there.
+- **Decision:** the Orca pass is dropped from R-107 and from S11's acceptance. R-107 keeps the AccessKit names-and-roles criterion, judged on the AT-SPI evidence.
+- **Confirmed by / date:** The maintainer, 2026-11-08 ("the Orca screen-reader can be forgotten and removed from the list of things todo")
+- **Supersedes / superseded by:** amends R-107 and the S11 acceptance
+
 W-076e (patching the locked toolkit's focus registration) was not approved on 2026-11-08 ("Not yet"); it stays open until a planned toolkit upgrade.

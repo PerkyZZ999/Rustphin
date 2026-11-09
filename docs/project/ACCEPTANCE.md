@@ -16,7 +16,7 @@ the rest: the Dolphin listing comparison, back/forward/up with per-tab
 history, content changes with selection and scroll kept, per-tab view modes,
 case-insensitive sort with the new folders-first toggle, zoom in all modes,
 the Page keys, design tokens, opaque floating surfaces and secondary controls
-(with the new filter bar, W-082). R-105's opaque-mode contrast was accepted by the maintainer on token-level tests, without a per-screen audit. K15 found two symlink display differences
+(with the new filter bar, W-082). R-105's opaque-mode contrast was accepted by the maintainer on token-level tests, without a per-screen audit. The maintainer dropped the Orca pass (D-023), and R-107's names-and-roles criterion was ticked on W-074a–i. K15 found two symlink display differences
 from Dolphin, fixed in W-081. Everything below needs the maintainer.
 
 ## Needs the maintainer: decisions
@@ -35,7 +35,6 @@ from Dolphin, fixed in W-081. Everything below needs the maintainer.
 | R-013 · busy unmount shows the reason | Mock service only | A real drive kept busy, then unmount |
 | R-105 · the DESIGN.md theme with compositor blur | User saw blur in W-012; tokens applied | A look at the current build on the real desktop |
 | R-105 · AA over blur with a white window behind | Token tests against white | A look on the real desktop over a white window |
-| R-107 · Orca pass with gaps listed | AT-SPI names/roles checked (W-074a–i) | Orca installed (`orca` is not on PATH) and a session on the real desktop |
 
 ## Not part of any criterion yet
 

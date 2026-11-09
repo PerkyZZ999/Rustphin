@@ -223,7 +223,7 @@ Conventions:
 - **Priority:** should
 - **Acceptance:**
   - [ ] Keyboard-complete operation (R-004) with a visible focus indicator everywhere.
-  - [ ] The entry list, places panel, tabs and dialogs expose names and roles through AccessKit; a pass with the Orca screen reader is recorded, with gaps listed.
+  - [x] The entry list, places panel, tabs and dialogs expose names and roles through AccessKit, with gaps listed. (W-074a–i over AT-SPI in isolated sessions: entries, places/groups, tabs, palette, menus, properties and operation dialogs, text fields. Gaps: native expanded and disabled flags and EditableText are not mapped by the pinned adapter. The Orca pass was dropped by D-023.)
 - **Validation:** manual
 
 ### R-108 — Privacy

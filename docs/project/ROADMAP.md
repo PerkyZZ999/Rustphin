@@ -80,8 +80,8 @@ Each slice ends with something the author can run and use, and with its acceptan
 
 ## Slice S11 — Hardening for daily use
 - **Outcome:** Ready for the two-week daily-driver trial.
-- **Acceptance:** Contrast checks pass in both surface modes; Orca pass recorded; keyboard-only checklist passes; parser fuzzing has run without findings; dependency audit shows no application network use (toolkit exception under D-018) and compatible licences.
-- **Requirements:** R-104 (parsers), R-105 (contrast), R-107, R-108
+- **Acceptance:** Contrast checks pass in both surface modes; keyboard-only checklist passes; parser fuzzing has run without findings; dependency audit shows no application network use (toolkit exception under D-018) and compatible licences.
+- **Requirements:** R-104 (parsers), R-105 (contrast), R-107, R-108 (no Orca pass: D-023)
 - **Validation:** test, manual
 - **Status:** in progress, 2026-10-20; W-069 assessment and W-070–W-078 queue
 
