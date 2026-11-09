@@ -836,6 +836,12 @@ except where the list below says otherwise; each W-079 step adds its line.
   tab on `chrome`, progress and usage bars on `track`, the error banner's
   `error-border`, the current place in `primary-subtle`, disabled menu items
   in `text-disabled`, the success icon on results that can be undone.
+- W-079b (2026-11-08): the tab strip (40 px, icons, 24 px close, 40 px "+"),
+  the 52 px toolbar with outlined 36 px buttons, the outlined location field
+  with its icon and mono segments ("Trash" in the trash), Actions with its
+  chevron and shortcut, the 640/560/300 px rules, the 52 px places title, and
+  the window lines' order. Disabled toolbar buttons use the component
+  library's dimmed text, close to but not exactly `text-disabled`.
 - Not yet implemented: the rest of "Changes from the earlier design" (sizes,
   layout, new components and wording).
 

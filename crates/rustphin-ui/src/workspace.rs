@@ -54,8 +54,6 @@ impl Global for ShowService {}
 const KEY_CONTEXT: &str = "Workspace";
 /// A dialog that is waiting for an answer.
 const DIALOG_CONTEXT: &str = "Dialog";
-/// Widest a tab's label may be before it is cut short.
-const TAB_MAX_WIDTH: f32 = 200.;
 
 actions!(
     workspace,
@@ -1286,6 +1284,19 @@ impl Workspace {
         }
     }
 
+    /// The icon of a tab: its folder's place icon when it is a place (Home,
+    /// Pictures, Trash…), otherwise a folder.
+    fn tab_icon(&self, tab: &Tab, cx: &App) -> gpui_kit::assets::IconName {
+        let browser = tab.browser().read(cx);
+        if browser.shows_trash() {
+            return gpui_kit::assets::IconName::Trash;
+        }
+        browser
+            .location()
+            .and_then(|path| self.sidebar.read(cx).icon_for_folder(&path))
+            .unwrap_or(gpui_kit::assets::IconName::Folder)
+    }
+
     fn tab_strip(&self, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement {
         let active = self.tabs.active_index();
         let tabs: Vec<_> = self
@@ -1295,6 +1306,7 @@ impl Workspace {
             .map(|(index, tab)| {
                 let label = Self::label(tab, cx);
                 let is_active = index == active;
+                let icon = self.tab_icon(tab, cx);
                 div()
                     .id(("tab", index))
                     .role(Role::Tab)
@@ -1302,37 +1314,55 @@ impl Workspace {
                     .aria_selected(is_active)
                     .aria_position_in_set(index)
                     .group("tab")
+                    .relative()
                     .flex()
                     .flex_none()
                     .items_center()
                     .gap(px(space::XS))
                     .h_full()
-                    .max_w(px(TAB_MAX_WIDTH))
+                    .w(px(size::TAB))
                     .pl(px(space::MD))
-                    .pr(px(space::XS))
+                    .pr(px(space::SM))
                     .cursor_pointer()
-                    // The active tab is brighter and underlined, never colour alone.
-                    .border_b_2()
-                    .border_color(if is_active {
-                        theme.accent
-                    } else {
-                        gpui_kit::transparent_black().into()
-                    })
+                    .border_r_1()
+                    .border_color(theme.border)
                     .text_color(if is_active {
                         theme.text
                     } else {
                         theme.text_muted
                     })
-                    .when(is_active, |tab| tab.bg(theme.chrome))
+                    // The active tab takes the toolbar's surface and an
+                    // underline, never colour alone.
+                    .when(is_active, |tab| {
+                        tab.bg(theme.chrome).child(
+                            div()
+                                .absolute()
+                                .left_0()
+                                .right_0()
+                                .bottom_0()
+                                .h(px(size::SELECTION_BAR))
+                                .bg(theme.accent),
+                        )
+                    })
                     .when(!is_active, |tab| {
                         tab.hover(|tab| tab.bg(theme.hover).text_color(theme.text))
                     })
-                    .child(div().min_w_0().truncate().child(label.clone()))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_1()
+                            .min_w_0()
+                            .items_center()
+                            .gap(px(space::SM))
+                            .child(Icon::new(icon).size(px(size::ICON)).flex_none())
+                            .child(div().min_w_0().truncate().child(label.clone())),
+                    )
                     .child(
                         Button::new(("close-tab", index))
                             .ghost()
-                            .xsmall()
-                            .icon(IconName::Close)
+                            .with_size(px(size::TAB_CLOSE))
+                            .size(px(size::TAB_CLOSE))
+                            .child(Icon::new(IconName::Close).size(px(size::ICON_SMALL)))
                             .tooltip("Close tab (Ctrl+W)")
                             .accessibility_label(format!("Close {label} tab (Ctrl+W)"))
                             .on_click(cx.listener(move |this, _, window, cx| {
@@ -1391,11 +1421,10 @@ impl Workspace {
                 .flex()
                 .items_center()
                 .h(px(size::TABS))
-                .px(px(space::XS))
                 .bg(theme.chrome_raised)
                 .border_b_1()
                 .border_color(theme.border)
-                .text_size(px(text::SMALL))
+                .text_size(px(text::BODY))
                 .child(
                     div()
                         .id("folder-tabs")
@@ -1409,11 +1438,12 @@ impl Workspace {
                         .children(tabs),
                 )
                 .child(
-                    div().px(px(space::XS)).child(
+                    div().flex_1().h_full().child(
                         Button::new("new-tab")
                             .ghost()
-                            .xsmall()
-                            .icon(IconName::Plus)
+                            .w(px(size::TAB_ADD))
+                            .h_full()
+                            .icon(Icon::new(IconName::Plus).size(px(size::ICON)))
                             .tooltip("New tab (Ctrl+T)")
                             .accessibility_label("New tab (Ctrl+T)")
                             .on_click(cx.listener(|this, _, window, cx| this.new_tab(window, cx))),
@@ -1664,8 +1694,10 @@ impl Render for Workspace {
                     .when(self.sidebar_visible, |row| row.child(self.sidebar.clone()))
                     .children(panes),
             )
-            .children(self.blur_status(theme))
+            // Window lines under the panes' status lines: activity and
+            // results first, the blur status last.
             .children(activity)
+            .children(self.blur_status(theme))
             .children(dialog)
             .when(self.rename.is_some(), |workspace| {
                 let element = self

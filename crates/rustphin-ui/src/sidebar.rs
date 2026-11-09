@@ -245,6 +245,17 @@ fn icon_for(place: &Place) -> gpui_kit::assets::IconName {
     }
 }
 
+impl Sidebar {
+    /// The icon of the place that is exactly `folder`, if there is one, so
+    /// other views (tabs) can show Home, Pictures… the way Places does.
+    pub fn icon_for_folder(&self, folder: &Path) -> Option<gpui_kit::assets::IconName> {
+        self.places
+            .iter()
+            .find(|place| place.path.as_deref() == Some(folder))
+            .map(icon_for)
+    }
+}
+
 /// The name shown for a volume: its label, or its size when it has none.
 fn device_name(device: &Device) -> String {
     match &device.label {

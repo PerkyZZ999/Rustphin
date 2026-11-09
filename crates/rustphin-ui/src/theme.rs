@@ -24,17 +24,28 @@ pub mod size {
     /// and below. Entry rows take their height from the view layout.
     pub const ROW: f32 = 28.;
     /// Height of the toolbar.
-    pub const TOOLBAR: f32 = 44.;
-    /// Minimum pane width for all three navigation buttons.
-    pub const TOOLBAR_FULL_MIN: f32 = 320.;
+    pub const TOOLBAR: f32 = 52.;
+    /// Toolbar buttons, the location field and Actions: 36 pixels square or
+    /// tall.
+    pub const CONTROL: f32 = 36.;
+    /// Minimum pane width for the shortcut hint beside Actions.
+    pub const TOOLBAR_HINT_MIN: f32 = 640.;
+    /// Minimum pane width for Forward, Up and the labelled Actions button.
+    pub const TOOLBAR_FULL_MIN: f32 = 560.;
     /// Minimum pane width for the Back button.
-    pub const TOOLBAR_BACK_MIN: f32 = 240.;
+    pub const TOOLBAR_BACK_MIN: f32 = 300.;
     /// Height of the status line.
     pub const STATUS: f32 = 28.;
     /// Height of the filter bar above the status line.
     pub const FILTER_BAR: f32 = 36.;
     /// Height of the tab strip.
-    pub const TABS: f32 = 32.;
+    pub const TABS: f32 = 40.;
+    /// Width of a tab.
+    pub const TAB: f32 = 168.;
+    /// A tab's close button.
+    pub const TAB_CLOSE: f32 = 24.;
+    /// Width of the new-tab button after the last tab.
+    pub const TAB_ADD: f32 = 40.;
     /// Icons in toolbars and banners.
     pub const ICON: f32 = 16.;
     /// Sort arrows and other inline indicators.

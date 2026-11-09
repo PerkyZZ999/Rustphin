@@ -1569,10 +1569,15 @@ impl Browser {
         }
         // A folder opened through kio-fuse is shown by its remote address,
         // as Dolphin shows it, rather than by its local mount path.
-        let current = self
-            .location()
-            .map(|p| remote::address_of(&p, cx).unwrap_or_else(|| p.to_string_lossy().into_owned()))
-            .unwrap_or_default();
+        let current = if self.shows_trash() {
+            "trash:/".to_owned()
+        } else {
+            self.location()
+                .map(|p| {
+                    remote::address_of(&p, cx).unwrap_or_else(|| p.to_string_lossy().into_owned())
+                })
+                .unwrap_or_default()
+        };
         self.editing_location = true;
         self.location_input.update(cx, |input, cx| {
             input.set_value(current, window, cx);
@@ -1660,7 +1665,9 @@ impl Browser {
             InputEvent::PressEnter { .. } => {
                 let typed = input.read(cx).value();
                 let typed = typed.trim();
-                if let Some(address) = RemoteAddress::parse(typed) {
+                if names_trash(typed) {
+                    self.open_trash(cx);
+                } else if let Some(address) = RemoteAddress::parse(typed) {
                     self.open_remote(address, false, cx);
                 } else if let Some(path) = path_from_uri(typed.as_bytes())
                     .or_else(|| expand_path(typed, self.location().as_deref()))
@@ -2061,11 +2068,23 @@ impl Browser {
         let can_up = location.as_deref().and_then(Path::parent).is_some();
 
         let navigation = Navigation::for_width(self.width);
+        // Outlined 36-pixel buttons, as in docs/DESIGN.md.
+        let nav_button = |id: &'static str, icon: IconName, label: &'static str| {
+            // The icon is a child: the library scales `.icon()` to the button.
+            Button::new(id)
+                .outline()
+                .with_size(px(size::CONTROL))
+                .size(px(size::CONTROL))
+                .child(Icon::new(icon).size(px(size::ICON)))
+                .tooltip(label)
+                .accessibility_label(label)
+        };
+        let shows_trash = self.shows_trash();
         div()
             .flex()
             .flex_none()
             .items_center()
-            .gap(px(space::XS))
+            .gap(px(space::SM))
             .h(px(size::TOOLBAR))
             .px(px(space::SM))
             .bg(theme.chrome)
@@ -2073,12 +2092,7 @@ impl Browser {
             .border_color(theme.border)
             .when(navigation.back, |bar| {
                 bar.child(
-                    Button::new("back")
-                        .ghost()
-                        .small()
-                        .icon(IconName::ArrowLeft)
-                        .tooltip("Back (Alt+Left)")
-                        .accessibility_label("Back (Alt+Left)")
+                    nav_button("back", IconName::ArrowLeft, "Back (Alt+Left)")
                         .disabled(!can_back)
                         .on_click(
                             cx.listener(|this, _, _, cx| this.navigate(DirectoryModel::back, cx)),
@@ -2087,12 +2101,7 @@ impl Browser {
             })
             .when(navigation.forward_and_up, |bar| {
                 bar.child(
-                    Button::new("forward")
-                        .ghost()
-                        .small()
-                        .icon(IconName::ArrowRight)
-                        .tooltip("Forward (Alt+Right)")
-                        .accessibility_label("Forward (Alt+Right)")
+                    nav_button("forward", IconName::ArrowRight, "Forward (Alt+Right)")
                         .disabled(!can_forward)
                         .on_click(
                             cx.listener(|this, _, _, cx| {
@@ -2101,39 +2110,117 @@ impl Browser {
                         ),
                 )
                 .child(
-                    Button::new("up")
-                        .ghost()
-                        .small()
-                        .icon(IconName::ArrowUp)
-                        .tooltip("Up one folder (Alt+Up)")
-                        .accessibility_label("Up one folder (Alt+Up)")
+                    nav_button("up", IconName::ArrowUp, "Up one folder (Alt+Up)")
                         .disabled(!can_up)
                         .on_click(cx.listener(|this, _, _, cx| this.go_up(cx))),
                 )
             })
-            .child(div().flex_1().min_w_0().px(px(space::XS)).map(|bar| {
-                if self.editing_location {
-                    bar.child(crate::input::named(
-                        Input::new(&self.location_input).small(),
-                        &self.location_input,
-                        "Folder location",
-                        window,
-                        cx,
-                    ))
-                } else {
-                    bar.child(self.breadcrumbs(location.as_deref(), theme, cx))
-                }
-            }))
             .child(
-                Button::new("actions")
-                    .ghost()
-                    .small()
-                    .label("Actions")
-                    .tooltip("Search actions and folders (Ctrl+Shift+P)")
-                    .on_click(|_, window, cx| {
-                        window.dispatch_action(Box::new(crate::workspace::OpenPalette), cx);
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .font_family(text::FAMILY_DATA)
+                    .map(|bar| {
+                        if self.editing_location {
+                            bar.child(crate::input::named(
+                                Input::new(&self.location_input).h(px(size::CONTROL)),
+                                &self.location_input,
+                                "Folder location",
+                                window,
+                                cx,
+                            ))
+                        } else {
+                            bar.child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(space::SM))
+                                    .h(px(size::CONTROL))
+                                    .px(px(space::MD))
+                                    .overflow_hidden()
+                                    .rounded(px(size::RADIUS))
+                                    .bg(theme.content)
+                                    .border_1()
+                                    .border_color(theme.border_strong)
+                                    .font_family(text::FAMILY_DATA)
+                                    .text_size(px(text::DATA))
+                                    .child(
+                                        Icon::new(if shows_trash {
+                                            gpui_kit::assets::IconName::Trash
+                                        } else {
+                                            gpui_kit::assets::IconName::Folder
+                                        })
+                                        .size(px(size::ICON))
+                                        .flex_none()
+                                        .text_color(theme.text_muted),
+                                    )
+                                    .child(div().flex_1().min_w_0().child(self.breadcrumbs(
+                                        location.as_deref(),
+                                        theme,
+                                        cx,
+                                    ))),
+                            )
+                        }
                     }),
             )
+            .map(|bar| {
+                let open_palette = |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                    window.dispatch_action(Box::new(crate::workspace::OpenPalette), cx);
+                };
+                if navigation.labelled_actions {
+                    bar.child(
+                        Button::new("actions")
+                            .outline()
+                            // The library pads a custom-sized button by a fifth
+                            // of the size: 60 gives the 12-pixel padding.
+                            .with_size(px(space::MD * 5.))
+                            .h(px(size::CONTROL))
+                            .tooltip("Search actions and folders (Ctrl+Shift+P)")
+                            .accessibility_label("Actions (Ctrl+Shift+P)")
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(space::SM))
+                                    .text_size(px(text::BODY))
+                                    .child("Actions")
+                                    .child(
+                                        Icon::new(IconName::ChevronDown)
+                                            .size(px(size::ICON))
+                                            .text_color(theme.text_muted),
+                                    )
+                                    .when(navigation.shortcut_hint, |button| {
+                                        button.child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .h(px(text::LINE))
+                                                .ml(px(space::XS))
+                                                .pl(px(space::MD))
+                                                .border_l_1()
+                                                .border_color(theme.border_strong)
+                                                .font_family(text::FAMILY_DATA)
+                                                .text_size(px(text::SMALL))
+                                                .text_color(theme.text_muted)
+                                                .child("Ctrl+Shift+P"),
+                                        )
+                                    }),
+                            )
+                            .on_click(open_palette),
+                    )
+                } else {
+                    bar.child(
+                        Button::new("actions")
+                            .outline()
+                            .with_size(px(size::CONTROL))
+                            .size(px(size::CONTROL))
+                            .child(Icon::new(gpui_kit::assets::IconName::Menu).size(px(size::ICON)))
+                            .tooltip("Actions (Ctrl+Shift+P)")
+                            .accessibility_label("Actions (Ctrl+Shift+P)")
+                            .on_click(open_palette),
+                    )
+                }
+            })
     }
 
     /// The current location as clickable ancestors. Clicking the free space
@@ -2144,6 +2231,18 @@ impl Browser {
         theme: Theme,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        // Trash shows as Places names it; Ctrl+L still edits the address.
+        if self.shows_trash() {
+            return div()
+                .id("breadcrumbs")
+                .role(Role::Group)
+                .aria_label("Folder location")
+                .flex()
+                .items_center()
+                .cursor_text()
+                .on_click(cx.listener(|this, _, window, cx| this.edit_location(window, cx)))
+                .child(div().text_color(theme.text).child("Trash"));
+        }
         let ancestors = location
             .map(|path| {
                 let remote = remote::root_of(path, cx);
@@ -2167,7 +2266,6 @@ impl Browser {
             .aria_label("Folder location")
             .flex()
             .items_center()
-            .h(px(size::ROW))
             .overflow_hidden()
             .rounded(px(size::RADIUS))
             .cursor_text()
@@ -2201,12 +2299,8 @@ impl Browser {
                                 .px(px(space::XS))
                                 .rounded(px(size::RADIUS))
                                 .cursor_pointer()
-                                .text_color(if current {
-                                    theme.text
-                                } else {
-                                    theme.text_muted
-                                })
-                                .hover(|crumb| crumb.bg(theme.hover).text_color(theme.text))
+                                .text_color(theme.text)
+                                .when(!current, |crumb| crumb.hover(|crumb| crumb.bg(theme.hover)))
                                 .child(label)
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
@@ -3781,6 +3875,16 @@ fn target_row(current: Option<usize>, len: usize, motion: Motion) -> Option<usiz
 
 /// Turns typed text into an absolute path: expands a leading `~` and resolves
 /// relative paths against `base`. Returns `None` for empty input.
+/// Whether a typed location is a trash address, which Rustphin opens itself,
+/// as Dolphin does, instead of asking kio-fuse to mount it. Folders inside the
+/// trash have no address of their own here, so any trash address opens the
+/// trash.
+fn names_trash(typed: &str) -> bool {
+    typed
+        .split_once(':')
+        .is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("trash"))
+}
+
 fn expand_path(typed: &str, base: Option<&Path>) -> Option<PathBuf> {
     if typed.is_empty() {
         return None;
@@ -4057,15 +4161,23 @@ fn crumbs_for_width(width: f32) -> usize {
 struct Navigation {
     back: bool,
     forward_and_up: bool,
+    /// Actions with its label and chevron, rather than an icon button.
+    labelled_actions: bool,
+    /// The Ctrl+Shift+P hint beside the Actions label.
+    shortcut_hint: bool,
 }
 
 impl Navigation {
-    /// Forward and Up leave first. Back leaves only when the pane can no
-    /// longer hold it beside the location and Actions.
+    /// The shortcut hint leaves first; then Forward and Up leave and Actions
+    /// becomes an icon. Back leaves only when the pane can no longer hold it
+    /// beside the location and Actions.
     fn for_width(width: f32) -> Self {
+        let full = width >= size::TOOLBAR_FULL_MIN;
         Self {
             back: width >= size::TOOLBAR_BACK_MIN,
-            forward_and_up: width >= size::TOOLBAR_FULL_MIN,
+            forward_and_up: full,
+            labelled_actions: full,
+            shortcut_hint: width >= size::TOOLBAR_HINT_MIN,
         }
     }
 }
@@ -4184,11 +4296,26 @@ mod tests {
     }
 
     #[test]
+    fn a_typed_trash_address_opens_the_trash_not_a_mount() {
+        for typed in ["trash:/", "trash:", "trash:///", "TRASH:/", "trash:/old"] {
+            assert!(names_trash(typed), "{typed}");
+        }
+        // A folder called "trash", or one inside it, is an ordinary path.
+        for typed in ["trash", "/trash", "trash/", "./trash:", "sftp:/"] {
+            assert!(!names_trash(typed), "{typed}");
+        }
+    }
+
+    #[test]
     fn narrow_panes_drop_forward_and_up_then_back() {
-        let wide = Navigation::for_width(size::TOOLBAR_FULL_MIN);
-        assert!(wide.back && wide.forward_and_up);
+        let widest = Navigation::for_width(size::TOOLBAR_HINT_MIN);
+        assert!(widest.shortcut_hint && widest.labelled_actions && widest.forward_and_up);
+        let wide = Navigation::for_width(size::TOOLBAR_HINT_MIN - 1.);
+        assert!(!wide.shortcut_hint && wide.labelled_actions);
+        let full = Navigation::for_width(size::TOOLBAR_FULL_MIN);
+        assert!(full.back && full.forward_and_up && full.labelled_actions);
         let medium = Navigation::for_width(size::TOOLBAR_FULL_MIN - 1.);
-        assert!(medium.back && !medium.forward_and_up);
+        assert!(medium.back && !medium.forward_and_up && !medium.labelled_actions);
         let back_only = Navigation::for_width(size::TOOLBAR_BACK_MIN);
         assert!(back_only.back && !back_only.forward_and_up);
         let narrow = Navigation::for_width(size::TOOLBAR_BACK_MIN - 1.);
