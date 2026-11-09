@@ -28,8 +28,10 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | N1 | Launch | Listing as above; `file2.txt` before `file10.txt`; sizes `42 B`, `1.5 KiB`, `120.6 KiB`, `5.0 MiB`; folders show no size; a type name and icon on every row |
 | N2 | Press Down, Down, Enter | Enters "empty": "This folder is empty" |
 | N3 | Alt+Up | Back in the fixture with "empty" selected |
-| N4 | Double-click "locked" | Inline error "you do not have permission…"; listing unchanged; location bar still names the fixture |
-| N5 | Ctrl+L, Ctrl+A, type `/no/such/folderX`, Backspace, Enter | The field held `/no/such/folder` (Backspace edited text); inline error "does not exist"; listing and location unchanged |
+| N4 | Double-click "locked", then click Back | In place of the list: lock icon, "Could not open this folder", "You do not have permission to open …/locked. Ask its owner for access, or go back to the previous folder.", a "Back (Alt+Left)" button; location bar and tab name "locked"; status "Not readable" with free space. Back shows the fixture again with Forward enabled |
+| N5 | Ctrl+L, Ctrl+A, type `/no/such/folderX`, Backspace, Enter, then Alt+Left | The field held `/no/such/folder` (Backspace edited text); in place: folder-x icon, "/no/such/folder does not exist. Check the address, or go back to the previous folder."; status "Does not exist". Alt+Left returns to the fixture |
+| N5b | Start Rustphin with the locked folder as its argument; click the button | The same state with "Up (Alt+Up)" and "…or go up to the folder that contains it."; Up shows the parent with "locked" selected |
+| N5c | Open a folder, make it unreadable (`chmod 000`), press F5 | Its listing stays, under the red banner "Could not open …: you do not have permission…" |
 | N6 | Enter "only-hidden" | "This folder has only hidden items", "1 hidden item is not shown.", a "Show hidden files" button |
 | N7 | Ctrl+H in the fixture | `.hidden` appears; status "18 items (…)"; press again to hide |
 | S1 | Click row 1, Ctrl+click rows 4 and 7 | Three separate rows selected; status "3 items selected (…)" before "17 items (…), 1 hidden" |
@@ -230,6 +232,7 @@ The test binary comes from `rust-tc test`; its filename contains a build hash.
 | M4 | Properties (13) | Three equal permission columns; capital labels; checkbox rows 32 px apart |
 | M5 | Batch rename with a "/" (15) | Segments with icons; Find and Replace side by side; one problem note; new names in red |
 | M6 | Empty, only hidden, filter with no match (25–27) | 32 px icon, heading, text, 32 px button, at 8/8/12 px spacing |
+| M7 | Could not open (28): `chmod 000` a folder in the scene and open it | As N4, laid out like M6 |
 
 ## Not covered by these scenarios
 

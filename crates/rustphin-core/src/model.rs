@@ -250,7 +250,8 @@ pub enum ModelEvent {
         /// The directory that went away.
         from: PathBuf,
     },
-    /// A request to open `path` failed. The model's location is back where it was.
+    /// A request to open `path` failed. The model stays at `path`, so the
+    /// consumer can say so in place and Back returns to where it was.
     Failed {
         /// The failed request.
         generation: u64,
@@ -439,12 +440,9 @@ impl Shared {
             }
             return;
         }
-        {
-            let mut history = lock(&self.history);
-            if !self.is_current(request.generation) {
-                return;
-            }
-            *history = request.restore;
+        // The location stays at the requested folder (see `ModelEvent::Failed`).
+        if !self.is_current(request.generation) {
+            return;
         }
         let _ = self.events.send(ModelEvent::Failed {
             generation: request.generation,
@@ -502,7 +500,6 @@ impl Shared {
             generation,
             options: *lock(&self.options),
             filter: lock(&self.filter).clone(),
-            restore: lock(&self.history).clone(),
             quiet: true,
             background: true,
         };
@@ -520,7 +517,7 @@ impl Shared {
         else {
             return;
         };
-        let restore = {
+        {
             let mut history = lock(&self.history);
             if !self.is_current(request.generation) {
                 return;
@@ -529,8 +526,7 @@ impl Shared {
             if let Some(entry) = history.entries.get_mut(position) {
                 *entry = ancestor.clone();
             }
-            history.clone()
-        };
+        }
         let _ = self.events.send(ModelEvent::Moved {
             generation: request.generation,
             from: request.path,
@@ -540,7 +536,6 @@ impl Shared {
             generation: request.generation,
             options: request.options,
             filter: request.filter,
-            restore,
             quiet: false,
             background: false,
         });
@@ -657,8 +652,6 @@ struct Request {
     options: ViewOptions,
     /// The name filter to apply to the published rows.
     filter: Option<Arc<NameFilter>>,
-    /// History to put back if the request fails.
-    restore: History,
     /// Publish only the finished result, retaining the previous complete view.
     quiet: bool,
     /// Watcher refreshes leave the previous view on failure; explicit requests
@@ -849,13 +842,11 @@ impl DirectoryModel {
         };
         // The listing is complete: reuse it without reading the directory again.
         let generation = self.shared.generation.fetch_add(1, Ordering::AcqRel) + 1;
-        let restore = lock(&self.shared.history).clone();
         let request = Request {
             path,
             generation,
             options,
             filter: self.filter.clone(),
-            restore,
             quiet: false,
             background: false,
         };
@@ -880,7 +871,6 @@ impl DirectoryModel {
         }
         let (request, generation) = {
             let mut history = lock(&self.shared.history);
-            let restore = history.clone();
             change(&mut history);
             let generation = self.shared.generation.fetch_add(1, Ordering::AcqRel) + 1;
             let path = history.current().cloned().unwrap_or_default();
@@ -890,7 +880,6 @@ impl DirectoryModel {
                     generation,
                     options: self.options,
                     filter: self.filter.clone(),
-                    restore,
                     quiet,
                     background: false,
                 },
@@ -905,11 +894,7 @@ impl DirectoryModel {
     }
 
     fn spawn(&self, name: &str, request: Request, work: impl FnOnce(Request) + Send + 'static) {
-        let (generation, path, restore) = (
-            request.generation,
-            request.path.clone(),
-            request.restore.clone(),
-        );
+        let (generation, path) = (request.generation, request.path.clone());
         let spawned = thread::Builder::new()
             .name(name.to_owned())
             .spawn(move || work(request));
@@ -921,7 +906,6 @@ impl DirectoryModel {
                     generation,
                     options,
                     filter: None,
-                    restore,
                     quiet: false,
                     background: false,
                 },
@@ -1063,7 +1047,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_open_keeps_the_previous_location() {
+    fn a_failed_open_stays_at_the_requested_folder() {
         let dir = tree();
         let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
         snapshot(&events, model.open(dir.path()));
@@ -1072,9 +1056,13 @@ mod tests {
         let ModelEvent::Failed { path, error, .. } = settle(&events, model.open(&missing)) else {
             panic!("expected a failure");
         };
-        assert_eq!((path, error), (missing, LoadError::NotFound));
-        assert_eq!(model.location().as_deref(), Some(dir.path()));
-        assert!(!model.can_go_forward());
+        assert_eq!((path, error), (missing.clone(), LoadError::NotFound));
+        // As Dolphin: the view is at the folder it could not open, and Back
+        // returns to where it was.
+        assert_eq!(model.location(), Some(missing.clone()));
+        let back = snapshot(&events, model.back().unwrap());
+        assert_eq!(back.path(), dir.path());
+        assert!(model.can_go_forward());
 
         let file = dir.path().join("Zeta.md");
         let ModelEvent::Failed { error, .. } = settle(&events, model.open(file)) else {
@@ -1188,7 +1176,8 @@ mod tests {
             panic!("expected a failure");
         };
         assert_eq!(error, LoadError::PermissionDenied);
-        assert_eq!(model.location(), None);
+        assert_eq!(model.location().as_deref(), Some(Path::new("/denied")));
+        assert!(!model.can_go_back());
     }
 
     #[test]
@@ -1219,7 +1208,6 @@ mod tests {
             generation: stale,
             options: ViewOptions::default(),
             filter: None,
-            restore: History::default(),
             quiet: false,
             background: false,
         };

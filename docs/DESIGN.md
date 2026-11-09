@@ -899,9 +899,14 @@ except where the list below says otherwise; each W-079 step adds its line.
   with"; icons and sizes in a question's list of names; tab overflow; the
   design's offset focus ring on buttons (the library draws its own); saving
   whether Devices is folded. "Details…" sits on the result line, since
-  operation results are window-level here. A folder that cannot be opened
-  shows the error banner over the folder it was opened from (scenario N4),
-  not the in-place state of the mockup.
+  operation results are window-level here.
+- A folder that cannot be opened (W-089): the view goes into it and says so
+  in place, as mockup 28 draws it: a lock icon (`folder-x` when the reason is
+  not permission), "Could not open this folder", why and what to do, and a
+  primary "Back (Alt+Left)" button, or "Up (Alt+Up)" when there is no history.
+  The status line names the reason ("Not readable", "Does not exist"). A
+  shown folder that fails to re-read keeps its listing under the error
+  banner, as does a folder that vanished.
 
 Carried over unchanged from the earlier design and implemented: the Actions
 palette's **Recover original names after interruption** for the current folder

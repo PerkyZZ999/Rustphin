@@ -222,7 +222,63 @@ struct Failure {
     moved: bool,
 }
 
+/// Where the button of a folder error shown in place leads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Way {
+    /// Back to the previous folder (Alt+Left).
+    Back,
+    /// Up to the containing folder (Alt+Up), when there is nothing to go back to.
+    Up,
+    /// Nowhere: no history and no parent.
+    Nowhere,
+}
+
 impl Failure {
+    /// Whether to explain the failure in place of the list, as mockup 28
+    /// draws it, rather than in a banner over a listing. Only an attempt to
+    /// open the folder now shown, with nothing listed for it, is said in
+    /// place.
+    fn in_place(&self, location: Option<&Path>, listed: bool) -> bool {
+        !self.moved && !listed && location == Some(self.path.as_path())
+    }
+
+    /// The in-place explanation: what happened, then what can be done.
+    fn explanation(&self, way: Way) -> String {
+        let path = display_name(self.path.as_os_str().as_encoded_bytes());
+        let (what, advice) = match &self.error {
+            LoadError::PermissionDenied => (
+                format!("You do not have permission to open {path}."),
+                "Ask its owner for access",
+            ),
+            LoadError::NotFound => (format!("{path} does not exist."), "Check the address"),
+            LoadError::NotADirectory => {
+                return format!(
+                    "{path} is a file, not a folder. Open it from the folder that contains it."
+                );
+            }
+            LoadError::Io(reason) => (
+                format!("{path} could not be read: {reason}."),
+                "Try again with F5",
+            ),
+        };
+        let way = match way {
+            Way::Back => ", or go back to the previous folder",
+            Way::Up => ", or go up to the folder that contains it",
+            Way::Nowhere => "",
+        };
+        format!("{what} {advice}{way}.")
+    }
+
+    /// The status line's text while the failure is shown in place.
+    fn status(&self) -> &'static str {
+        match self.error {
+            LoadError::PermissionDenied => "Not readable",
+            LoadError::NotFound => "Does not exist",
+            LoadError::NotADirectory => "Not a folder",
+            LoadError::Io(_) => "Could not be read",
+        }
+    }
+
     /// What happened, in a sentence.
     fn message(&self) -> String {
         let path = display_name(self.path.as_os_str().as_encoded_bytes());
@@ -671,6 +727,8 @@ impl Browser {
                 error,
             } if generation == self.generation => {
                 self.select_on_arrival = None;
+                // Shown in place, the status line still says how full its disk is.
+                self.measure_free_space(path.clone(), cx);
                 self.failure = Some(Failure {
                     path,
                     error,
@@ -2441,6 +2499,95 @@ impl Browser {
             ))
     }
 
+    /// The failure to explain in place of the list, if any.
+    fn failure_in_place(&self) -> Option<&Failure> {
+        let location = self.location();
+        let listed = self.current_snapshot().is_some();
+        self.failure
+            .as_ref()
+            .filter(|failure| failure.in_place(location.as_deref(), listed))
+    }
+
+    /// Where a folder error shown in place can lead: back, else up.
+    fn way_out(&self) -> Way {
+        let Some(model) = &self.model else {
+            return Way::Nowhere;
+        };
+        if model.can_go_back() {
+            Way::Back
+        } else if model.location().is_some_and(|path| path.parent().is_some()) {
+            Way::Up
+        } else {
+            Way::Nowhere
+        }
+    }
+
+    /// Mockup 28: a folder that could not be opened, said in place of its
+    /// list, with the way back.
+    fn failure_state(&self, failure: &Failure, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+        const HEADING: &str = "Could not open this folder";
+        let way = self.way_out();
+        let explanation = failure.explanation(way);
+        let icon = if failure.error == LoadError::PermissionDenied {
+            gpui_kit::assets::IconName::Lock
+        } else {
+            gpui_kit::assets::IconName::FolderX
+        };
+        let button = match way {
+            Way::Back => Some(
+                crate::dialog::button("folder-error-back", "Back (Alt+Left)")
+                    .accessibility_label("Back to the previous folder")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.navigate(DirectoryModel::back, cx);
+                    })),
+            ),
+            Way::Up => Some(
+                crate::dialog::button("folder-error-up", "Up (Alt+Up)")
+                    .accessibility_label("Up to the folder that contains it")
+                    .on_click(cx.listener(|this, _, _, cx| this.go_up(cx))),
+            ),
+            Way::Nowhere => None,
+        };
+        div()
+            .id("folder-state")
+            .role(Role::Alert)
+            .aria_label(HEADING)
+            .aria_description(explanation.clone())
+            .size_full()
+            .flex()
+            .flex_col()
+            .p(px(space::LG))
+            .items_center()
+            .justify_center()
+            .gap(px(space::SM))
+            .text_color(theme.text_muted)
+            .child(
+                Icon::new(icon)
+                    .size(px(size::ICON_LARGE))
+                    .flex_none()
+                    .mb(px(space::SM)),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .font_family(text::FAMILY_HEADING)
+                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                    .text_size(px(text::TITLE))
+                    .line_height(px(text::TITLE_LINE))
+                    .text_color(theme.text)
+                    .child(HEADING),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .max_w(px(size::STATE_TEXT_MAX))
+                    .text_center()
+                    .child(explanation),
+            )
+            .children(button.map(|button| button.primary().mt(px(space::MD))))
+            .into_any_element()
+    }
+
     fn failure_banner(
         &self,
         failure: &Failure,
@@ -3411,7 +3558,10 @@ impl Browser {
             None => (
                 StatusParts {
                     selection: None,
-                    total: "Loading\u{2026}".to_owned(),
+                    total: self
+                        .failure_in_place()
+                        .map_or("Loading\u{2026}", Failure::status)
+                        .to_owned(),
                 },
                 false,
             ),
@@ -3936,6 +4086,9 @@ impl Render for Browser {
             }
             window.request_animation_frame();
         }
+        let failed_here = self
+            .failure_in_place()
+            .map(|failure| self.failure_state(failure, theme, cx));
         let compact = match &snapshot {
             Some(snapshot) if !snapshot.is_empty() && self.mode == ViewMode::Compact => Some(
                 self.columns(snapshot, grid, theme, window, cx)
@@ -4147,9 +4300,10 @@ impl Render for Browser {
             .text_size(px(text::BODY))
             .line_height(px(text::LINE))
             .child(self.toolbar(theme, window, cx))
-            .when_some(self.failure.as_ref(), |view, failure| {
-                view.child(self.failure_banner(failure, theme, cx))
-            })
+            .when_some(
+                self.failure.as_ref().filter(|_| failed_here.is_none()),
+                |view, failure| view.child(self.failure_banner(failure, theme, cx)),
+            )
             .when(self.trash_dir.is_some() && snapshot.is_some(), |view| {
                 view.child(self.trash_banner(theme, cx))
             })
@@ -4176,7 +4330,7 @@ impl Render for Browser {
                         Some(snapshot) => content.child(
                             self.entry_list(snapshot, self.empty_state(snapshot, theme, cx)),
                         ),
-                        None => content,
+                        None => content.children(failed_here),
                     }),
             )
             .when(self.filter_open, |view| {
@@ -4755,6 +4909,70 @@ mod tests {
             gone.message(),
             "/data/old no longer exists. Showing the nearest folder that does."
         );
+    }
+
+    fn failure(path: &str, error: LoadError, moved: bool) -> Failure {
+        Failure {
+            path: PathBuf::from(path),
+            error,
+            moved,
+        }
+    }
+
+    #[test]
+    fn a_folder_that_could_not_be_opened_is_explained_in_place() {
+        let locked = failure("/data/locked", LoadError::PermissionDenied, false);
+        let here = Some(Path::new("/data/locked"));
+        // Opened and failed: nothing is listed for it, so it is said in place.
+        assert!(locked.in_place(here, false));
+        // A shown folder that failed to re-read keeps its listing and a banner.
+        assert!(!locked.in_place(here, true));
+        // The view moved on, or out of a folder that vanished: a banner.
+        assert!(!locked.in_place(Some(Path::new("/data")), false));
+        let gone = failure("/data/locked", LoadError::NotFound, true);
+        assert!(!gone.in_place(here, false));
+    }
+
+    #[test]
+    fn the_in_place_error_says_why_and_where_its_button_leads() {
+        let locked = failure("/data/locked", LoadError::PermissionDenied, false);
+        assert_eq!(
+            locked.explanation(Way::Back),
+            "You do not have permission to open /data/locked. Ask its owner \
+             for access, or go back to the previous folder."
+        );
+        assert_eq!(
+            locked.explanation(Way::Up),
+            "You do not have permission to open /data/locked. Ask its owner \
+             for access, or go up to the folder that contains it."
+        );
+        assert_eq!(
+            locked.explanation(Way::Nowhere),
+            "You do not have permission to open /data/locked. Ask its owner for access."
+        );
+        assert_eq!(
+            failure("/no/such", LoadError::NotFound, false).explanation(Way::Back),
+            "/no/such does not exist. Check the address, or go back to the previous folder."
+        );
+        assert_eq!(
+            failure("/notes.txt", LoadError::NotADirectory, false).explanation(Way::Nowhere),
+            "/notes.txt is a file, not a folder. Open it from the folder that contains it."
+        );
+        assert_eq!(
+            failure("/mnt/x", LoadError::Io("Input/output error".into()), false)
+                .explanation(Way::Back),
+            "/mnt/x could not be read: Input/output error. Try again with F5, \
+             or go back to the previous folder."
+        );
+    }
+
+    #[test]
+    fn the_status_line_names_the_failure_while_it_is_shown_in_place() {
+        let status = |error| failure("/x", error, false).status();
+        assert_eq!(status(LoadError::PermissionDenied), "Not readable");
+        assert_eq!(status(LoadError::NotFound), "Does not exist");
+        assert_eq!(status(LoadError::NotADirectory), "Not a folder");
+        assert_eq!(status(LoadError::Io("broken".into())), "Could not be read");
     }
 
     #[test]
