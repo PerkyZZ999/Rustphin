@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-08 — R-105 opaque-mode contrast accepted on token-level tests
+- **Decision:** asked whether to audit each screen or accept the token tests, the maintainer chose "Accept token tests".
+- **Evidence relied on:** `theme::tests::opaque_theme_meets_contrast_minimums` checks 16 text/surface pairs (window, content, chrome, hover, selection, primary-button hover, danger surface, dialogs/menus/palette and palette hover) at 4.5:1, plus the accent and progress indicators at 3:1; it runs in every `rust-tc doctor`, including the gate for this entry. W-078c's code audit found the UI's colours come from these tokens. The opaque theme was observed as the fallback in isolated sessions (W-076h/j).
+- **Not done:** no per-screen pixel measurement of rendered text, so anti-aliasing, icon glyphs and any colour outside the token pairs are not measured.
+- **Ticked:** R-105 "opaque window … every text element still meets WCAG AA", noting the token-level basis on the line. 26 ticked, 8 open.
+- **No code change.**
+
 ### 2026-11-08 — D-022 startup outside R-101; R-101 first-entries and 16 ms criteria ticked
 - **Decision:** The maintainer chose "Exclude startup": R-101 measures opening folders and work in a running window; the window/GPU bootstrap (93–104 ms UI-thread poll) and the off-thread font warm-up before it are recorded, not targets. Recorded as D-022.
 - **Ticked on existing evidence:** first entries within 200 ms with input during loading (W-073g 59–78 ms in every mode; W-073e input), and no UI-thread task over 16 ms in listing, sorting, metadata or thumbnail paths (W-073e model callback 0.8 ms; W-073f thumbnails 0.56 ms, draws 9.3 ms), each line noting the scope and the single non-recurring 16.2 ms draw from W-085. All four R-101 criteria are now ticked; 25 ticked, 9 open overall.
