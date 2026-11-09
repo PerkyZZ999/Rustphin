@@ -1,20 +1,23 @@
 //! The properties dialog: facts about one entry, and its permissions.
 
 use std::{
-    path::PathBuf,
-    sync::{Arc, atomic::AtomicBool},
+    path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
 };
 
 use gpui_kit::{
     AnyElement, FocusHandle, InteractiveElement as _, IntoElement, ParentElement as _, Role,
     ScrollHandle, StatefulInteractiveElement as _, Styled as _, Window,
     component::{
-        Disableable as _, Sizable as _,
-        button::{Button, ButtonVariants as _},
+        Disableable as _,
+        button::ButtonVariants as _,
         checkbox::Checkbox,
         scroll::{Scrollbar, ScrollbarMode},
     },
-    div,
+    div, img,
     prelude::FluentBuilder as _,
     px,
 };
@@ -26,13 +29,24 @@ use rustphin_core::{
 use rustphin_platform::properties::{Facts, Kind};
 
 use crate::{
-    format,
+    dialog, format,
     layout::scroll_offset,
     theme::{Theme, size, space, text},
     workspace::{DialogAccept, DialogCancel, Workspace},
 };
 
 const PERMISSION_CLASSES: [&str; 3] = ["Owner", "Group", "Others"];
+
+/// What the dialog's header shows for an entry before and besides its facts.
+#[derive(Debug, Clone, Default)]
+pub struct Look {
+    /// A folder, drawn with the folder icon when the theme has none.
+    pub folder: bool,
+    /// The type's icon from the system theme.
+    pub icon: Option<Arc<Path>>,
+    /// A thumbnail can be made of it.
+    pub picture: bool,
+}
 
 /// How far a folder's size has got.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +63,8 @@ pub enum SizeLine {
         bytes: u64,
         /// Entries that could not be read.
         unreadable: u64,
+        /// Entries inside it, folders included.
+        items: u64,
     },
     /// The measurement failed.
     Failed(String),
@@ -78,12 +94,16 @@ pub struct PropertiesDialog {
     pub token: u64,
     /// Set when the dialog closes, so a folder walk stops.
     pub cancel: Arc<AtomicBool>,
+    /// Entries a folder walk has found so far.
+    pub seen: Arc<AtomicU64>,
+    /// The header's picture.
+    look: Look,
     scroll: ScrollHandle,
 }
 
 impl PropertiesDialog {
     /// A dialog that has not read anything yet.
-    pub fn loading(path: PathBuf, type_label: String, token: u64) -> Self {
+    pub fn loading(path: PathBuf, type_label: String, look: Look, token: u64) -> Self {
         let title = path
             .file_name()
             .map(|name| display_name(name.as_encoded_bytes()).into_owned())
@@ -100,6 +120,8 @@ impl PropertiesDialog {
             editable: false,
             token,
             cancel: Arc::new(AtomicBool::new(false)),
+            seen: Arc::new(AtomicU64::new(0)),
+            look,
             scroll: ScrollHandle::new(),
         }
     }
@@ -126,111 +148,155 @@ impl PropertiesDialog {
         window: &Window,
         cx: &mut gpui_kit::Context<Workspace>,
     ) -> AnyElement {
+        use gpui_kit::assets::IconName as I;
         let dirty = self.editable && self.mode != self.original;
         let body = self.body(zone, theme, cx);
-        div()
-            .absolute()
-            .inset_0()
-            .occlude()
-            .flex()
-            .items_center()
-            .justify_center()
-            .p(px(space::LG))
-            .bg(theme.scrim)
-            .child(
+        let icon = if self.look.picture {
+            I::Image
+        } else if self.look.folder {
+            I::Folder
+        } else {
+            I::File
+        };
+        let panel = dialog::panel(
+            div()
+                .id("properties-dialog")
+                .role(Role::Dialog)
+                .aria_label(format!("Properties: {}", self.title))
+                .aria_description("File properties and permissions. Apply saves permission changes; Close or Escape discards unapplied changes.")
+                .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
+                .key_context("Dialog")
+                .track_focus(focus)
+                .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
+                    this.apply_properties(cx);
+                }))
+                .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
+                    this.close_properties(cx);
+                }))
+                .on_key_down(cx.listener(|this, event: &gpui_kit::KeyDownEvent, _, cx| {
+                    let modifiers = event.keystroke.modifiers;
+                    if modifiers.control || modifiers.alt || modifiers.platform || modifiers.shift {
+                        return;
+                    }
+                    let Some(dialog) = &this.properties else {
+                        return;
+                    };
+                    let mut offset = dialog.scroll.offset();
+                    if let Some(y) = scroll_offset(
+                        &event.keystroke.key,
+                        f32::from(offset.y),
+                        f32::from(dialog.scroll.max_offset().y),
+                        f32::from(dialog.scroll.bounds().size.height),
+                    ) {
+                        offset.y = px(y);
+                        dialog.scroll.set_offset(offset);
+                        cx.stop_propagation();
+                        cx.notify();
+                    }
+                })),
+            size::DIALOG,
+            theme,
+            window,
+        )
+        .child(dialog::title_row(
+            icon,
+            format!("{} \u{2014} Properties", self.title),
+            "Close (Esc)",
+            cx.listener(|this, _, _, cx| this.close_properties(cx)),
+            theme,
+        ))
+        .child(
+            dialog::body().child(
                 div()
-                    .id("properties-dialog")
-                    .role(Role::Dialog)
-                    .aria_label(format!("Properties: {}", self.title))
-                    .aria_description("File properties and permissions. Apply saves permission changes; Close or Escape discards unapplied changes.")
-                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
-                    .key_context("Dialog")
-                    .track_focus(focus)
-                    .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
-                        this.apply_properties(cx);
-                    }))
-                    .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
-                        this.close_properties(cx);
-                    }))
-                    .on_key_down(cx.listener(|this, event: &gpui_kit::KeyDownEvent, _, cx| {
-                        let modifiers = event.keystroke.modifiers;
-                        if modifiers.control
-                            || modifiers.alt
-                            || modifiers.platform
-                            || modifiers.shift
-                        {
-                            return;
-                        }
-                        let Some(dialog) = &this.properties else {
-                            return;
-                        };
-                        let mut offset = dialog.scroll.offset();
-                        if let Some(y) = scroll_offset(
-                            &event.keystroke.key,
-                            f32::from(offset.y),
-                            f32::from(dialog.scroll.max_offset().y),
-                            f32::from(dialog.scroll.bounds().size.height),
-                        ) {
-                            offset.y = px(y);
-                            dialog.scroll.set_offset(offset);
-                            cx.stop_propagation();
-                            cx.notify();
-                        }
-                    }))
+                    .relative()
                     .flex()
                     .flex_col()
-                    .gap(px(space::MD))
-                    .w_full()
-                    .max_w(px(size::DIALOG))
-                    .max_h(px(f32::from(window.viewport_size().height) - space::LG * 2.))
-                    .p(px(space::LG))
-                    .rounded(px(size::RADIUS))
-                    .bg(theme.raised)
-                    .border_1()
-                    .border_color(theme.border_accent)
-                    .shadow(vec![theme.floating_shadow()])
-                    .text_color(theme.text)
-                    .font_family(text::FAMILY_BODY)
-                    .text_size(px(text::BODY))
-                    .line_height(px(text::LINE))
+                    .min_h_0()
+                    .flex_shrink_1()
                     .child(
                         div()
-                            .flex_none()
-                            .font_family(text::FAMILY_HEADING)
-                            .text_size(px(text::HEADING))
+                            .id("properties-content")
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .track_scroll(&self.scroll)
+                            .child(div().pr(px(space::LG)).child(body)),
+                    )
+                    .child(
+                        Scrollbar::vertical(&self.scroll)
+                            .mode(ScrollbarMode::Always)
+                            .styles(|styles| {
+                                styles
+                                    .track(|style| style.bg(gpui_kit::transparent_black()))
+                                    .thumb(|style| style.bg(theme.text_muted).radius(px(size::RADIUS)))
+                                    .thumb_hover(|style| style.bg(theme.accent))
+                                    .thumb_active(|style| style.bg(theme.accent))
+                            }),
+                    ),
+            ),
+        )
+        .child(self.buttons(dirty, theme, cx));
+        dialog::scrim(panel, theme)
+    }
+
+    /// The header: a thumbnail or the type icon, the name and the type.
+    fn header(
+        &self,
+        type_label: String,
+        theme: Theme,
+        cx: &mut gpui_kit::Context<Workspace>,
+    ) -> impl IntoElement {
+        use gpui_kit::StyledImage as _;
+        let thumbnail = self.look.picture.then(|| {
+            let size = rustphin_platform::thumbnails::ThumbSize::for_edge(
+                size::PROPERTIES_THUMB_WIDTH as u32,
+            );
+            crate::thumbs::thumbs(cx).update(cx, |thumbs, _| thumbs.get(&self.path, size))
+        });
+        let picture = match (thumbnail.flatten(), &self.look.icon) {
+            (Some(thumb), _) => img(thumb)
+                .w(px(size::PROPERTIES_THUMB_WIDTH))
+                .h(px(size::PROPERTIES_THUMB_HEIGHT))
+                .object_fit(gpui_kit::ObjectFit::Contain)
+                .into_any_element(),
+            (None, Some(icon)) => img(icon.clone())
+                .size(px(size::ICON_HEADER))
+                .into_any_element(),
+            (None, None) => gpui_kit::component::Icon::new(if self.look.folder {
+                gpui_kit::assets::IconName::Folder
+            } else {
+                gpui_kit::assets::IconName::File
+            })
+            .size(px(size::ICON_HEADER))
+            .text_color(theme.text_muted)
+            .into_any_element(),
+        };
+        div()
+            .flex()
+            .items_center()
+            .gap(px(space::LG))
+            .child(div().flex_none().child(picture))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .min_w_0()
+                    .child(
+                        div()
                             .truncate()
+                            .font_family(text::FAMILY_HEADING)
+                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                            .text_size(px(text::HEADING))
                             .child(self.title.clone()),
                     )
                     .child(
                         div()
-                            .relative()
-                            .flex()
-                            .flex_col()
-                            .min_h_0()
-                            .flex_shrink_1()
-                            .child(
-                                div()
-                                    .id("properties-content")
-                                    .min_h_0()
-                                    .overflow_y_scroll()
-                                    .track_scroll(&self.scroll)
-                                    .child(body),
-                            )
-                            .child(
-                                Scrollbar::vertical(&self.scroll)
-                                    .mode(ScrollbarMode::Always)
-                                    .styles(|styles| {
-                                        styles
-                                            .track(|style| style.bg(gpui_kit::transparent_black()))
-                                            .thumb(|style| style.bg(theme.text_muted).radius(px(size::RADIUS)))
-                                            .thumb_hover(|style| style.bg(theme.accent))
-                                            .thumb_active(|style| style.bg(theme.accent))
-                                    }),
-                            ),
-                    )
-                    .child(self.buttons(dirty, theme, cx)),
+                            .truncate()
+                            .font_family(text::FAMILY_DATA)
+                            .text_size(px(text::DATA))
+                            .text_color(theme.text_muted)
+                            .child(type_label),
+                    ),
             )
-            .into_any_element()
     }
 
     fn body(
@@ -260,35 +326,64 @@ impl PropertiesDialog {
         } else {
             self.type_label.clone()
         };
+        let location = self
+            .path
+            .parent()
+            .map(|folder| display_name(folder.as_os_str().as_encoded_bytes()).into_owned())
+            .unwrap_or_default();
         div()
             .flex()
             .flex_col()
-            .gap(px(space::SM))
-            .child(fact("Type", type_label, theme))
-            .child(fact("Size", self.size_text(), theme))
-            .child(fact("Modified", time_text(facts.modified, zone), theme))
-            .child(fact("Accessed", time_text(facts.accessed, zone), theme))
-            .when_some(facts.created, |column, created| {
-                column.child(fact("Created", time_text(Some(created), zone), theme))
-            })
-            .when_some(facts.target.clone(), |column, target| {
-                column.child(fact(
-                    "Points to",
-                    display_name(target.as_os_str().as_encoded_bytes()).into_owned(),
-                    theme,
-                ))
-            })
-            .child(self.permissions(theme, cx))
+            .gap(px(space::LG))
+            .child(self.header(type_label, theme, cx))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(space::XS))
+                    .child(fact("Location", location, theme))
+                    .child(fact("Size", self.size_text(), theme))
+                    .child(fact("Modified", time_text(facts.modified, zone), theme))
+                    .child(fact("Accessed", time_text(facts.accessed, zone), theme))
+                    .when_some(facts.created, |column, created| {
+                        column.child(fact("Created", time_text(Some(created), zone), theme))
+                    })
+                    .when_some(facts.target.clone(), |column, target| {
+                        column.child(fact(
+                            "Points to",
+                            display_name(target.as_os_str().as_encoded_bytes()).into_owned(),
+                            theme,
+                        ))
+                    }),
+            )
+            .child(div().h(px(size::HAIRLINE)).bg(theme.border))
+            .child(self.permissions(facts, theme, cx))
             .into_any_element()
     }
 
     fn size_text(&self) -> String {
         match &self.size {
             SizeLine::Reading => "Reading…".to_owned(),
-            SizeLine::Known(bytes) => format::size(*bytes),
-            SizeLine::Calculating => "Calculating size…".to_owned(),
-            SizeLine::Folder { bytes, unreadable } => {
-                let size = format::size(*bytes);
+            SizeLine::Known(bytes) => format::size_exact(*bytes),
+            SizeLine::Calculating => match self.seen.load(Ordering::Relaxed) {
+                0 => "Calculating size…".to_owned(),
+                seen => format!(
+                    "Calculating… {} {} so far",
+                    format::count(seen as usize),
+                    format::plural(seen as usize, "item", "items")
+                ),
+            },
+            SizeLine::Folder {
+                bytes,
+                unreadable,
+                items,
+            } => {
+                let size = format!(
+                    "{}, {} {}",
+                    format::size_exact(*bytes),
+                    format::count(*items as usize),
+                    format::plural(*items as usize, "item", "items")
+                );
                 if *unreadable == 0 {
                     size
                 } else {
@@ -303,26 +398,29 @@ impl PropertiesDialog {
         }
     }
 
-    fn permissions(&self, theme: Theme, cx: &mut gpui_kit::Context<Workspace>) -> impl IntoElement {
+    fn permissions(
+        &self,
+        facts: &Facts,
+        theme: Theme,
+        cx: &mut gpui_kit::Context<Workspace>,
+    ) -> impl IntoElement {
         let mode = combine_mode(self.mode, self.original);
         let editable = self.editable;
+        let words = format!("{} ({})", symbolic_mode(mode), octal_mode(mode));
+        let names = [
+            format!("OWNER \u{b7} {}", facts.owner),
+            format!("GROUP \u{b7} {}", facts.group),
+            "OTHERS".to_owned(),
+        ];
         div()
             .id("permissions")
             .role(Role::Group)
             .aria_label("Permissions")
-            .aria_description(format!("{}  {}", symbolic_mode(mode), octal_mode(mode)))
+            .aria_description(words.clone())
             .flex()
             .flex_col()
-            .gap(px(space::SM))
-            .pt(px(space::SM))
-            .child("Permissions")
-            .child(
-                div()
-                    .font_family(text::FAMILY_DATA)
-                    .text_size(px(text::DATA))
-                    .text_color(theme.text)
-                    .child(format!("{}  {}", symbolic_mode(mode), octal_mode(mode))),
-            )
+            .gap(px(space::MD))
+            .child(fact("Permissions", words, theme))
             .when(has_special(self.original), |column| {
                 column.child(
                     div()
@@ -330,7 +428,6 @@ impl PropertiesDialog {
                         .role(Role::Label)
                         .aria_value("Setuid, setgid or the sticky bit is set, and is kept.")
                         .text_color(theme.text_muted)
-                        .text_size(px(text::SMALL))
                         .child("Setuid, setgid or the sticky bit is set, and is kept."),
                 )
             })
@@ -341,33 +438,58 @@ impl PropertiesDialog {
                         .role(Role::Label)
                         .aria_value("Permissions of a shortcut are not changed here.")
                         .text_color(theme.text_muted)
-                        .text_size(px(text::SMALL))
                         .child("Permissions of a shortcut are not changed here."),
                 )
             })
-            .child(self.class_row(0, editable, cx))
-            .child(self.class_row(1, editable, cx))
-            .child(self.class_row(2, editable, cx))
+            .child(div().flex().children({
+                let mut columns = Vec::new();
+                for (class, name) in names.into_iter().enumerate() {
+                    columns.push(self.class_column(class as u8, name, editable, theme, cx));
+                }
+                columns
+            }))
     }
 
-    fn class_row(
+    /// One class's checkboxes under its name, hairlines between the columns.
+    fn class_column(
         &self,
         class: u8,
+        heading: String,
         editable: bool,
+        theme: Theme,
         cx: &mut gpui_kit::Context<Workspace>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
         let name = PERMISSION_CLASSES[class as usize];
         div()
             .id(("permission-class", class as usize))
             .role(Role::Group)
-            .aria_label(name)
+            .aria_label(heading.clone())
             .flex()
-            .items_center()
-            .gap(px(space::SM))
-            .child(div().w(px(size::COLUMN_SIZE)).flex_none().child(name))
+            .flex_col()
+            .flex_1()
+            .min_w_0()
+            .gap(px(space::XS))
+            .when(class == 0, |column| column.pr(px(space::LG)))
+            .when(class > 0, |column| {
+                column
+                    .px(px(space::LG))
+                    .border_l_1()
+                    .border_color(theme.border)
+            })
+            .child(
+                div()
+                    .truncate()
+                    .font_family(text::FAMILY_DATA)
+                    .font_weight(gpui_kit::FontWeight::MEDIUM)
+                    .text_size(px(text::LABEL))
+                    .text_color(theme.text_muted)
+                    .child(heading),
+            )
             .child(self.bit(class, "Read", read_bit(class), editable, cx))
             .child(self.bit(class, "Write", write_bit(class), editable, cx))
             .child(self.bit(class, "Execute", execute_bit(class), editable, cx))
+            .aria_description(format!("{name} permissions"))
+            .into_any_element()
     }
 
     fn bit(
@@ -397,29 +519,20 @@ impl PropertiesDialog {
     fn buttons(
         &self,
         dirty: bool,
-        _theme: Theme,
+        theme: Theme,
         cx: &mut gpui_kit::Context<Workspace>,
     ) -> impl IntoElement {
-        div()
-            .flex_none()
-            .flex()
-            .justify_end()
-            .gap(px(space::SM))
-            .pt(px(space::SM))
+        dialog::actions(theme)
             .child(
-                Button::new("properties-close")
-                    .small()
-                    .primary()
-                    .label("Close (Esc)")
+                dialog::button("properties-close", "Close (Esc)")
+                    .outline()
                     .on_click(cx.listener(|this, _, _, cx| this.close_properties(cx))),
             )
             .when(self.error.is_none(), |row| {
                 row.child(
-                    Button::new("properties-apply")
-                        .small()
-                        .outline()
+                    dialog::button("properties-apply", "Apply (Enter)")
+                        .primary()
                         .disabled(!dirty)
-                        .label("Apply (Enter)")
                         .on_click(cx.listener(|this, _, _, cx| this.apply_properties(cx))),
                 )
             })
@@ -432,11 +545,11 @@ fn fact(label: &str, value: String, theme: Theme) -> impl IntoElement {
         .role(Role::Label)
         .aria_value(format!("{label}: {value}"))
         .flex()
-        .items_baseline()
-        .gap(px(space::MD))
+        .items_start()
+        .gap(px(space::SM))
         .child(
             div()
-                .w(px(size::COLUMN_SIZE))
+                .w(px(size::PROPERTIES_LABEL))
                 .flex_none()
                 .text_color(theme.text_muted)
                 .child(label.to_owned()),
@@ -454,7 +567,7 @@ fn fact(label: &str, value: String, theme: Theme) -> impl IntoElement {
 
 fn time_text(seconds: Option<i64>, zone: &TimeZone) -> String {
     seconds
-        .map(|seconds| format::timestamp(seconds, zone))
+        .map(|seconds| format::timestamp_precise(seconds, zone))
         .filter(|text| !text.is_empty())
         .unwrap_or_else(|| "Unknown".to_owned())
 }

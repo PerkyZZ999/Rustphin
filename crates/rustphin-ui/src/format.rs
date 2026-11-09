@@ -40,20 +40,40 @@ pub fn size(bytes: u64) -> String {
 /// Formats seconds since the Unix epoch as a date and time in `zone`:
 /// `2026-10-12 14:03`. Out-of-range values give an empty string.
 pub fn timestamp(seconds: i64, zone: &TimeZone) -> String {
+    formatted(seconds, zone, "%Y-%m-%d %H:%M")
+}
+
+/// Like [`timestamp`] with seconds, for Properties: `2026-10-12 14:03:27`.
+pub fn timestamp_precise(seconds: i64, zone: &TimeZone) -> String {
+    formatted(seconds, zone, "%Y-%m-%d %H:%M:%S")
+}
+
+fn formatted(seconds: i64, zone: &TimeZone, format: &str) -> String {
     Timestamp::from_second(seconds)
-        .map(|instant| {
-            instant
-                .to_zoned(zone.clone())
-                .strftime("%Y-%m-%d %H:%M")
-                .to_string()
-        })
+        .map(|instant| instant.to_zoned(zone.clone()).strftime(format).to_string())
         .unwrap_or_default()
+}
+
+/// A size with its exact bytes, for Properties: `6.3 MiB (6,611,968 bytes)`.
+/// Below 1 KiB the bytes alone say it all.
+pub fn size_exact(bytes: u64) -> String {
+    if bytes < 1024 {
+        return format!("{bytes} {}", plural(bytes as usize, "byte", "bytes"));
+    }
+    format!("{} ({} bytes)", size(bytes), count(bytes as usize))
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exact_sizes_add_the_bytes_with_separators() {
+        assert_eq!(size_exact(6_611_968), "6.3 MiB (6,611,968 bytes)");
+        assert_eq!(size_exact(1), "1 byte");
+        assert_eq!(size_exact(512), "512 bytes");
+    }
 
     #[test]
     fn counts_use_thousands_separators() {
@@ -100,6 +120,10 @@ mod tests {
         let montreal = TimeZone::fixed(jiff::tz::offset(-4));
         assert_eq!(timestamp(seconds, &montreal), "2026-10-12 09:30");
         assert_eq!(timestamp(0, &TimeZone::UTC), "1970-01-01 00:00");
+        assert_eq!(
+            timestamp_precise(seconds + 7, &TimeZone::UTC),
+            "2026-10-12 13:30:52"
+        );
     }
 
     #[test]

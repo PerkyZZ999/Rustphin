@@ -428,6 +428,8 @@ mod tests {
             panic!("expected a conflict");
         };
         assert_eq!(conflict.target, d.dst.join("a.txt"));
+        // The question can name what keeping both would create.
+        assert_eq!(conflict.keep_both, d.dst.join("a (1).txt"));
         // Still waiting: nothing has been written.
         assert_eq!(names(&d.dst), ["a.txt"]);
         ops.resolve(

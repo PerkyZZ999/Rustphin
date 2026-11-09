@@ -95,6 +95,14 @@ pub mod size {
     pub const SIDEBAR: f32 = 240.;
     /// Width of a context menu and of its application list.
     pub const MENU: f32 = 240.;
+    /// Properties' thumbnail: a 3:2 picture fitted in 96 × 64 pixels.
+    pub const PROPERTIES_THUMB_WIDTH: f32 = 96.;
+    /// Height of Properties' thumbnail.
+    pub const PROPERTIES_THUMB_HEIGHT: f32 = 64.;
+    /// The type icon in Properties' header when there is no thumbnail.
+    pub const ICON_HEADER: f32 = 48.;
+    /// Width of the label column of Properties' facts.
+    pub const PROPERTIES_LABEL: f32 = 128.;
     /// Width of the label column beside a dialog fact.
     pub const FACT_LABEL: f32 = 72.;
     /// A hairline divider, such as a menu separator.
@@ -141,6 +149,8 @@ pub mod text {
     pub const SMALL: f32 = 12.;
     /// Body text and list rows.
     pub const BODY: f32 = 14.;
+    /// Short capital labels such as OWNER (`label-sm`).
+    pub const LABEL: f32 = 11.;
     /// File and place names (`body-lg`).
     pub const NAME: f32 = 15.;
     /// Headings of empty, loading and error states (`headline-md`).

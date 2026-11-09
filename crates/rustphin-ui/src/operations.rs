@@ -50,6 +50,8 @@ pub struct Running {
     started: Instant,
     /// The icon beside its line.
     pub icon: gpui_kit::assets::IconName,
+    /// What it does to each entry, for "Couldn't copy “x”".
+    pub verb: &'static str,
 }
 
 impl Running {
@@ -614,6 +616,7 @@ impl Hub {
                 self.running.push(Running {
                     id,
                     icon: activity_icon(&request),
+                    verb: activity_verb(&request),
                     label,
                     done,
                     undo,
@@ -834,6 +837,22 @@ fn result_notice(done: &str, undo: bool, result: &Finished) -> Option<Notice> {
     }
 }
 
+/// What an operation does to each entry, in a question's title:
+/// "Couldn't copy “x”".
+fn activity_verb(request: &Request) -> &'static str {
+    match request {
+        Request::Copy { .. } | Request::Duplicate { .. } => "copy",
+        Request::Move { .. } => "move",
+        Request::Trash { .. } => "move to the trash",
+        Request::Delete { .. } => "delete",
+        Request::Restore { .. } => "restore",
+        Request::Rename { .. }
+        | Request::RenameBatch { .. }
+        | Request::RecoverRenameBatch { .. } => "rename",
+        _ => "change",
+    }
+}
+
 /// The icon of an activity line: what kind of work it is (docs/DESIGN.md).
 fn activity_icon(request: &Request) -> gpui_kit::assets::IconName {
     use gpui_kit::assets::IconName as I;
@@ -889,7 +908,7 @@ fn outcome_notice(done: &str, outcome: &Outcome) -> Option<Notice> {
     })
 }
 
-fn upper_first(text: &str) -> String {
+pub(crate) fn upper_first(text: &str) -> String {
     let mut chars = text.chars();
     match chars.next() {
         Some(first) => first.to_uppercase().chain(chars).collect(),

@@ -4,7 +4,7 @@
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 in progress; W-079 design pass started (D-024)
-- **Status:** active — W-079 design pass from the maintainer's mockups
+- **Status:** active — W-079 design pass done (a–g); remaining S11 acceptance needs the maintainer
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-11-08
 
@@ -14,10 +14,10 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-08 — W-079f context menu and palette; full gate 490 tests
+- Latest validation entry: VALIDATION.md, 2026-11-08 — W-079g dialogs, W-079 pass complete; full gate 492 tests
 
 ## Open loops
-- Task: W-079 design pass started 2026-11-08 (D-024) from the maintainer's HTML mockups in docs/mockup/. docs/DESIGN.md is now the adopted target, with an "Implementation status" that each step W-079a–g updates. Open points settled: Run defaults to Keep (Dolphin), the four-button conflict dialog wraps at 480 px.
+- Task: W-079 design pass done 2026-11-08 (D-024, steps a–g) from the maintainer's HTML mockups; docs/DESIGN.md "Implementation status" lists what is left (compact columns W-086, list scrollbars, volume name, per-command palette icons, app icons, tab overflow, disabled toolbar colour, saved Devices fold). Glass look needs the real desktop.
 - Task: W-078: 27 criteria ticked on evidence; 7 open in docs/project/ACCEPTANCE.md. Decided by the maintainer on 2026-11-08: D-019 (60 fps = ≤5% dropped frames, met in W-085), D-020 (startup batch recovery, done W-083), D-021 (Ctrl+D duplicate, done W-084); W-076e not approved. D-022 (startup outside R-101) closed R-101; R-105 opaque-mode contrast accepted on token tests; D-023 dropped the Orca pass and R-107 names/roles is ticked on W-074a–i. Still open for the maintainer: the 5 real-desktop/hardware checks (non-KDE drop, USB mount/busy, blur look and white-window contrast).
 - Task: W-076o–r add docs/project/KEYBOARD.md (Rustphin vs Dolphin defaults) and fix Backspace=Back, Alt+Home, Alt+D, Alt+1…0, Ctrl+P, Ctrl+Q, Shift+F5/F6 copy/move to the other view, Ctrl+Shift+T reopen closed tab, Ctrl+Alt+C copy location, Menu key. Ctrl+F3 is bound but KWin takes it by default (Dolphin too); Tab works. Not offered yet: redo (Duplicate added in W-084).
 - Task: W-080/W-080b/W-080c (requested addition) open typed remote addresses and network bookmarks through kio-fuse, save remote tabs by address and reconnect them on restart, and show remote breadcrumbs; verified with a private-bus stand-in and the real kio-fuse on a generated tar archive, no real host. Recent folders and the palette also keep remote folders by address. Not yet tried against a real sftp/smb server. The Ctrl+L gap W-080 found is fixed in W-076n.
@@ -43,7 +43,7 @@
 - W-076e: complete reverse field traversal and native input focus conflict through duplicate registration in the pinned toolkit. Removing the wrapper tracking restores traversal but loses native focus; original code restored. DISCOVERY.md records a concrete deduplication candidate and required checks. The maintainer approved a bounded isolated experiment on 2026-11-05; its corrected latest-registration candidate passes seven focused tests and native reverse-field/Unicode checks. Production pins remain unchanged. Full published toolkit tests are unavailable; broader modal/performance assessment and adoption still require review. This blocks that acceptance item, not unrelated S11 work. The baseline gate passes.
 
 ## Next action
-- W-079a–g in order (WORK_ITEMS.md): tokens first, then window and panes, places, views, bottom lines, menus and palette, dialogs. Each step: DESIGN.md status, isolated kwin-mcp replay against the matching mockup screens, full gate, commit. The open S11 criteria stay open (5 need the maintainer's desktop or hardware; 2 wait on W-076e).
+- The maintainer to review the W-079 result on the real desktop (glass look) and decide W-086 (compact view in columns). The open S11 criteria still need the maintainer's desktop or hardware (5) or W-076e (2). Otherwise continue with the smaller W-079 leftovers listed in docs/DESIGN.md.
 
 ## Phase checklist
 - [x] 0 Intake

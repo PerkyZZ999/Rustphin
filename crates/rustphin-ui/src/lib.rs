@@ -6,6 +6,7 @@
 mod browser;
 mod commands;
 mod diagnostics;
+mod dialog;
 mod filetypes;
 mod format;
 mod groups;

@@ -250,6 +250,8 @@ pub enum BrowserEvent {
         path: PathBuf,
         /// A readable type, such as "Plain text document".
         type_label: String,
+        /// What the dialog's header shows until a thumbnail, if any, is ready.
+        look: crate::properties::Look,
     },
     /// Open this file with the application whose desktop-file id is `id`.
     OpenWith {
@@ -1040,9 +1042,33 @@ impl Browser {
         let row = rows[0];
         let path = snapshot.entry_path(row);
         let type_label = self.properties_type(&snapshot, row);
+        let look = self.properties_look(&snapshot, row);
         self.menu = None;
-        cx.emit(BrowserEvent::Properties { path, type_label });
+        cx.emit(BrowserEvent::Properties {
+            path,
+            type_label,
+            look,
+        });
         self.focus.focus(window, cx);
+    }
+
+    /// The type icon of the entry in `row`, and whether a thumbnail of it
+    /// can be made.
+    fn properties_look(&self, snapshot: &Snapshot, row: usize) -> crate::properties::Look {
+        let container = snapshot.is_container(row);
+        let mime = self.types.as_ref().map(|types| {
+            types.mime_type(
+                snapshot.link_target_name(row).unwrap_or(snapshot.name(row)),
+                container,
+            )
+        });
+        crate::properties::Look {
+            folder: container,
+            icon: mime
+                .and_then(|mime| self.type_info.get(mime))
+                .and_then(|info| info.icon.clone()),
+            picture: !container && mime.is_some_and(thumbs::has_thumbnail),
+        }
     }
 
     fn properties_type(&self, snapshot: &Snapshot, row: usize) -> String {

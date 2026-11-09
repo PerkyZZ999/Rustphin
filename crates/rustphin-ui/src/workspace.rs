@@ -30,7 +30,7 @@ use rustphin_core::{
 use crate::{
     browser::{Browser, BrowserEvent, DraggedEntries, EditLocation},
     commands::{self, Scope},
-    format,
+    dialog, format,
     history::history,
     location::Location,
     operations::{self, Hub, Notice, Question, Running, hub},
@@ -317,6 +317,8 @@ pub struct Workspace {
     launch: Option<LaunchPrompt>,
     /// Properties of one entry, while that dialog is open.
     pub(crate) properties: Option<PropertiesDialog>,
+    /// Redraws the properties dialog when a thumbnail is ready, while it is open.
+    properties_thumbs: Option<Subscription>,
     /// The error details dialog: what the last operation left out.
     error_details: Option<operations::Problems>,
     /// Distinguishes a properties read from one the user has already closed.
@@ -406,6 +408,7 @@ impl Workspace {
             launch: None,
             properties: None,
             error_details: None,
+            properties_thumbs: None,
             property_token: 0,
             pending_properties: Vec::new(),
             _history: cx.observe(&history(cx), |this, _, cx| this.refresh_palette(cx)),
@@ -549,8 +552,12 @@ impl Workspace {
                 history(cx).read(cx).visit(location);
             }
             BrowserEvent::Activate(path) => self.consider_launch(path.clone(), cx),
-            BrowserEvent::Properties { path, type_label } => {
-                self.open_properties(path.clone(), type_label.clone(), cx);
+            BrowserEvent::Properties {
+                path,
+                type_label,
+                look,
+            } => {
+                self.open_properties(path.clone(), type_label.clone(), look.clone(), cx);
             }
             BrowserEvent::OpenWith { id, path } => {
                 self.open_with(id.clone(), path.clone(), cx);
@@ -578,7 +585,13 @@ impl Workspace {
     }
 
     /// Opens the properties dialog and reads the entry off the UI thread.
-    fn open_properties(&mut self, path: PathBuf, type_label: String, cx: &mut Context<Self>) {
+    fn open_properties(
+        &mut self,
+        path: PathBuf,
+        type_label: String,
+        look: crate::properties::Look,
+        cx: &mut Context<Self>,
+    ) {
         if self.properties.is_some()
             || self.launch.is_some()
             || self.rename.is_some()
@@ -588,7 +601,16 @@ impl Workspace {
         }
         self.property_token += 1;
         let token = self.property_token;
-        self.properties = Some(PropertiesDialog::loading(path.clone(), type_label, token));
+        // A picture's thumbnail may arrive while the dialog is open.
+        self.properties_thumbs = look
+            .picture
+            .then(|| cx.observe(&crate::thumbs::thumbs(cx), |_, _, cx| cx.notify()));
+        self.properties = Some(PropertiesDialog::loading(
+            path.clone(),
+            type_label,
+            look,
+            token,
+        ));
         cx.notify();
         cx.spawn(async move |this, cx| {
             let read = cx
@@ -633,10 +655,36 @@ impl Workspace {
         };
         let path = dialog.path.clone();
         let cancel = Arc::clone(&dialog.cancel);
+        let seen = Arc::clone(&dialog.seen);
+        // Shows how many entries the walk has found while it runs.
+        cx.spawn({
+            async move |this, cx| {
+                loop {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(250))
+                        .await;
+                    let running = this
+                        .update(cx, |this, cx| {
+                            let waiting = this.properties.as_ref().is_some_and(|dialog| {
+                                dialog.token == token && dialog.size == SizeLine::Calculating
+                            });
+                            if waiting {
+                                cx.notify();
+                            }
+                            waiting
+                        })
+                        .unwrap_or(false);
+                    if !running {
+                        break;
+                    }
+                }
+            }
+        })
+        .detach();
         cx.spawn(async move |this, cx| {
             let measured = cx
                 .background_spawn(async move {
-                    rustphin_platform::properties::folder_size(&path, &cancel)
+                    rustphin_platform::properties::folder_size(&path, &cancel, &seen)
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
@@ -653,6 +701,7 @@ impl Workspace {
                         dialog.size = SizeLine::Folder {
                             bytes: size.bytes,
                             unreadable: size.unreadable,
+                            items: size.items,
                         };
                         cx.notify();
                     }
@@ -686,6 +735,7 @@ impl Workspace {
         if let Some(dialog) = self.properties.take() {
             dialog.cancel.store(true, Ordering::Relaxed);
         }
+        self.properties_thumbs = None;
         cx.notify();
     }
 
@@ -749,104 +799,98 @@ impl Workspace {
         } else {
             "This is an application shortcut. Running it starts that application."
         };
-        div()
-            .absolute()
-            .inset_0()
-            .occlude()
-            .flex()
-            .items_center()
-            .justify_center()
-            .p(px(space::LG))
-            .bg(theme.scrim)
-            .child(
-                div()
-                    .id("launch-question")
-                    .role(Role::Dialog)
-                    .aria_label(format!("Run “{name}”?"))
-                    .aria_description(body)
-                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
-                    .key_context(DIALOG_CONTEXT)
-                    .track_focus(&self.dialog_focus)
-                    .on_key_down(cx.listener(Self::scroll_question))
-                    .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
-                        this.answer_launch(true, false, cx);
-                    }))
-                    .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
-                        this.answer_launch(false, false, cx);
-                    }))
-                    .on_action(cx.listener(move |this, _: &DialogOpen, _, cx| {
-                        if program {
-                            this.answer_launch(false, true, cx);
-                        }
-                    }))
-                    .flex()
-                    .flex_col()
-                    .gap(px(space::MD))
-                    .w_full()
-                    .max_w(px(size::DIALOG))
-                    .max_h(px(f32::from(window.viewport_size().height) - space::LG * 2.))
-                    .p(px(space::LG))
-                    .rounded(px(size::RADIUS))
-                    .bg(theme.raised)
-                    .border_1()
-                    .border_color(theme.border_accent)
-                    .shadow(vec![theme.floating_shadow()])
-                    .text_color(theme.text)
-                    .font_family(text::FAMILY_BODY)
-                    .text_size(px(text::BODY))
-                    .line_height(px(text::LINE))
-                    .child(
-                        div()
-                            .flex_none()
-                            .font_family(text::FAMILY_HEADING)
-                            .text_size(px(text::HEADING))
-                            .child("Run this file?"),
-                    )
-                    .child(self.question_body(
-                        format!("Run “{name}”?"),
-                        vec![div().child(body).into_any_element()],
-                        theme,
-                    ))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .flex_wrap()
-                            .justify_end()
-                            .gap(px(space::SM))
-                            .pt(px(space::SM))
-                            .child(
-                                Button::new("launch-keep")
-                                    .small()
-                                    .primary()
-                                    .label("Keep (Esc)")
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.answer_launch(false, false, cx);
-                                    })),
+        let location = prompt
+            .path
+            .parent()
+            .map(|folder| folder.display().to_string());
+        let panel = dialog::panel(
+            div()
+                .id("launch-question")
+                .role(Role::Dialog)
+                .aria_label(format!("Run “{name}”?"))
+                .aria_description(format!(
+                    "{body} Enter or Escape keeps it; R runs it{}.",
+                    if program { "; O opens it" } else { "" }
+                ))
+                .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
+                .key_context(DIALOG_CONTEXT)
+                .track_focus(&self.dialog_focus)
+                .on_key_down(cx.listener(Self::scroll_question))
+                // The safe choice is the default, as Dolphin focuses Cancel
+                // (D-024): Enter keeps the file; running it takes R.
+                .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
+                    this.answer_launch(false, false, cx);
+                }))
+                .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
+                    this.answer_launch(false, false, cx);
+                }))
+                .on_action(cx.listener(|this, _: &DialogReplace, _, cx| {
+                    this.answer_launch(true, false, cx);
+                }))
+                .on_action(cx.listener(move |this, _: &DialogOpen, _, cx| {
+                    if program {
+                        this.answer_launch(false, true, cx);
+                    }
+                })),
+            size::DIALOG,
+            theme,
+            window,
+        )
+        .child(dialog::title_row(
+            gpui_kit::assets::IconName::Terminal,
+            format!("Run “{name}”?"),
+            "Keep (Esc)",
+            cx.listener(|this, _, _, cx| this.answer_launch(false, false, cx)),
+            theme,
+        ))
+        .child(
+            dialog::body().child(
+                self.question_body(
+                    body.to_owned(),
+                    location
+                        .map(|folder| {
+                            dialog::fact(
+                                "fact-location",
+                                "Location",
+                                size::FACT_LABEL,
+                                folder,
+                                theme,
                             )
-                            .when(program, |row| {
-                                row.child(
-                                    Button::new("launch-open")
-                                        .small()
-                                        .outline()
-                                        .label("Open (O)")
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.answer_launch(false, true, cx);
-                                        })),
-                                )
-                            })
-                            .child(
-                                Button::new("launch-run")
-                                    .small()
-                                    .danger()
-                                    .label("Run (Enter)")
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.answer_launch(true, false, cx);
-                                    })),
-                            ),
-                    ),
-            )
-            .into_any_element()
+                            .into_any_element()
+                        })
+                        .into_iter()
+                        .collect(),
+                    theme,
+                ),
+            ),
+        )
+        .child(
+            dialog::actions(theme)
+                .when(program, |row| {
+                    row.child(
+                        dialog::button("launch-open", "Open (O)")
+                            .outline()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.answer_launch(false, true, cx);
+                            })),
+                    )
+                })
+                .child(
+                    dialog::button("launch-run", "Run (R)")
+                        .danger()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.answer_launch(true, false, cx);
+                        })),
+                )
+                .child(
+                    dialog::button("launch-keep", "Keep (Enter)")
+                        .primary()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.answer_launch(false, false, cx);
+                        })),
+                ),
+        );
+        dialog::scrim(panel, theme)
     }
 
     /// Applies the run dialog: run the file, open it, or leave it alone.
@@ -1465,7 +1509,7 @@ impl Render for Workspace {
             && hub(cx).read(cx).questions.is_empty()
         {
             let path = self.pending_properties.remove(0);
-            self.open_properties(path, "File".to_owned(), cx);
+            self.open_properties(path, "File".to_owned(), Default::default(), cx);
         }
         if !self.pending_shows.is_empty() {
             let pending = std::mem::take(&mut self.pending_shows);
@@ -2003,149 +2047,71 @@ impl Workspace {
                     .into_any_element()
             })
             .collect();
-        div()
-            .absolute()
-            .inset_0()
-            .occlude()
-            .flex()
-            .items_center()
-            .justify_center()
-            .p(px(space::LG))
-            .bg(theme.scrim)
-            .child(
+        let copy = list_text.clone();
+        let panel = dialog::panel(
+            div()
+                .id("error-details")
+                .role(Role::Dialog)
+                .aria_label(problems.title.clone())
+                .aria_description(summary.clone())
+                .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
+                .key_context(DIALOG_CONTEXT)
+                .track_focus(&self.dialog_focus)
+                .on_key_down(cx.listener(Self::scroll_question))
+                .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
+                    this.error_details = None;
+                    cx.notify();
+                }))
+                .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
+                    this.error_details = None;
+                    cx.notify();
+                }))
+                .on_action(move |_: &DialogCopy, _, cx| {
+                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy.clone()));
+                }),
+            size::DIALOG,
+            theme,
+            window,
+        )
+        .child(dialog::title_row(
+            gpui_kit::assets::IconName::TriangleAlert,
+            problems.title.clone(),
+            "Close (Esc)",
+            cx.listener(Self::close_error_details),
+            theme,
+        ))
+        .child(dialog::body().child(self.question_body(
+            summary,
+            vec![
                 div()
-                    .id("error-details")
-                    .role(Role::Dialog)
-                    .aria_label(problems.title.clone())
-                    .aria_description(summary.clone())
-                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
-                    .key_context(DIALOG_CONTEXT)
-                    .track_focus(&self.dialog_focus)
-                    .on_key_down(cx.listener(Self::scroll_question))
-                    .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
-                        this.error_details = None;
-                        cx.notify();
-                    }))
-                    .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
-                        this.error_details = None;
-                        cx.notify();
-                    }))
-                    .on_action({
-                        let list_text = list_text.clone();
-                        move |_: &DialogCopy, _, cx| {
+                    .flex()
+                    .flex_col()
+                    .rounded(px(size::RADIUS))
+                    .border_1()
+                    .border_color(theme.border)
+                    .children(rows)
+                    .into_any_element(),
+            ],
+            theme,
+        )))
+        .child(
+            dialog::actions(theme)
+                .child(
+                    dialog::button("error-details-copy", "Copy list (C)")
+                        .outline()
+                        .on_click(move |_, _, cx| {
                             cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
                                 list_text.clone(),
                             ));
-                        }
-                    })
-                    .flex()
-                    .flex_col()
-                    .w_full()
-                    .max_w(px(size::DIALOG))
-                    .max_h(px(f32::from(window.viewport_size().height) - space::LG * 2.))
-                    .rounded(px(size::RADIUS))
-                    .bg(theme.raised)
-                    .border_1()
-                    .border_color(theme.border_accent)
-                    .shadow(vec![theme.floating_shadow()])
-                    .text_color(theme.text)
-                    .font_family(text::FAMILY_BODY)
-                    .text_size(px(text::BODY))
-                    .line_height(px(text::LINE))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .items_center()
-                            .gap(px(space::MD))
-                            .h(px(size::DIALOG_TITLE))
-                            .pl(px(space::LG))
-                            .pr(px(space::SM))
-                            .border_b_1()
-                            .border_color(theme.border)
-                            .child(
-                                Icon::new(IconName::TriangleAlert)
-                                    .size(px(size::ICON))
-                                    .flex_none()
-                                    .text_color(theme.text_muted),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .font_family(text::FAMILY_HEADING)
-                                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                    .text_size(px(text::HEADING))
-                                    .child(problems.title.clone()),
-                            )
-                            .child(
-                                Self::icon_button(
-                                    "error-details-close",
-                                    IconName::Close,
-                                    "Close (Esc)",
-                                )
-                                .on_click(cx.listener(Self::close_error_details)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_shrink_1()
-                            .min_h_0()
-                            .p(px(space::LG))
-                            .child(self.question_body(
-                                summary,
-                                vec![
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .rounded(px(size::RADIUS))
-                                        .border_1()
-                                        .border_color(theme.border)
-                                        .children(rows)
-                                        .into_any_element(),
-                                ],
-                                theme,
-                            )),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .flex_wrap()
-                            .justify_end()
-                            .gap(px(space::SM))
-                            .px(px(space::LG))
-                            .pt(px(space::MD))
-                            .pb(px(space::LG))
-                            .border_t_1()
-                            .border_color(theme.border)
-                            .child(
-                                Self::line_button(
-                                    "error-details-copy",
-                                    "Copy list",
-                                    Some("C"),
-                                    theme,
-                                )
-                                .on_click(move |_, _, cx| {
-                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
-                                        list_text.clone(),
-                                    ));
-                                }),
-                            )
-                            .child(
-                                Button::new("error-details-done")
-                                    .primary()
-                                    .with_size(px(space::LG * 5.))
-                                    .h(px(size::BUTTON))
-                                    .child(div().text_size(px(text::BODY)).child("Close (Esc)"))
-                                    .on_click(cx.listener(Self::close_error_details)),
-                            ),
-                    ),
-            )
-            .into_any_element()
+                        }),
+                )
+                .child(
+                    dialog::button("error-details-done", "Close (Esc)")
+                        .primary()
+                        .on_click(cx.listener(Self::close_error_details)),
+                ),
+        );
+        dialog::scrim(panel, theme)
     }
 
     /// One side of a conflict in words: "1.2 MiB, modified 2026-10-12 10:17".
@@ -2169,26 +2135,34 @@ impl Workspace {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let fact = |label: &'static str, value: String| {
+        use gpui_kit::assets::IconName as I;
+        let fact = |id: &'static str, label: &'static str, value: String| {
+            dialog::fact(id, label, size::FACT_LABEL, value, theme)
+        };
+        // The names of a few entries, one per row, as the question is about them.
+        let name_list = |paths: &[PathBuf]| {
             div()
-                .id(label)
-                .role(Role::Label)
-                .aria_value(format!("{label}: {value}"))
                 .flex()
-                .gap(px(space::SM))
-                .child(
+                .flex_col()
+                .rounded(px(size::RADIUS))
+                .border_1()
+                .border_color(theme.border)
+                .children(paths.iter().enumerate().map(|(index, path)| {
                     div()
-                        .w(px(size::FACT_LABEL))
-                        .flex_none()
-                        .text_color(theme.text_muted)
-                        .child(label),
-                )
-                .child(
-                    div()
-                        .font_family(text::FAMILY_DATA)
-                        .text_size(px(text::DATA))
-                        .child(value),
-                )
+                        .flex()
+                        .items_center()
+                        .px(px(space::MD))
+                        .min_h(px(size::CONTROL))
+                        .when(index > 0, |row| row.border_t_1().border_color(theme.border))
+                        .child(div().min_w_0().truncate().child(folder_label(path)))
+                }))
+                .into_any_element()
+        };
+        let verb = |id: rustphin_core::ops::OpId, hub: &Hub| {
+            hub.running
+                .iter()
+                .find(|running| running.id == id)
+                .map_or("change", |running| running.verb)
         };
         let description = match question {
             Question::Conflict { conflict, .. } => format!(
@@ -2200,7 +2174,18 @@ impl Workspace {
             Question::ConfirmDelete { .. } => "This does not use the trash. It cannot be undone. Keep or Escape cancels.".to_owned(),
             Question::ConfirmEmpty { .. } => "Everything in the trash is deleted for good. It cannot be undone. Keep or Escape cancels.".to_owned(),
         };
-        let (title, body, buttons): (String, Vec<AnyElement>, Vec<Button>) = match question {
+        let cancel = |label: &'static str| {
+            dialog::button("dialog-cancel", label)
+                .outline()
+                .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx)))
+        };
+        let (icon, title, sentence, body, buttons): (
+            I,
+            String,
+            String,
+            Vec<AnyElement>,
+            Vec<Button>,
+        ) = match question {
             Question::Conflict { conflict, .. } => {
                 let folder = conflict.target_info.kind == rustphin_core::EntryKind::Directory;
                 let name = folder_label(&conflict.target);
@@ -2211,10 +2196,31 @@ impl Workspace {
                     .unwrap_or_default();
                 let all = self.apply_to_all;
                 (
-                    format!("\u{201c}{name}\u{201d} already exists in \u{201c}{place}\u{201d}"),
+                    I::Copy,
+                    format!("\u{201c}{name}\u{201d} already exists"),
+                    format!(
+                        "{} with this name is already in \u{201c}{place}\u{201d}. Keep both gives the new one another name; Stop cancels the rest.",
+                        if folder { "A folder" } else { "A file" }
+                    ),
                     vec![
-                        fact("Existing", self.describe(&conflict.target_info)).into_any_element(),
-                        fact("Incoming", self.describe(&conflict.source_info)).into_any_element(),
+                        fact(
+                            "fact-existing",
+                            "Existing",
+                            self.describe(&conflict.target_info),
+                        )
+                        .into_any_element(),
+                        fact(
+                            "fact-incoming",
+                            "Incoming",
+                            self.describe(&conflict.source_info),
+                        )
+                        .into_any_element(),
+                        fact(
+                            "fact-keep-both",
+                            "Keep both",
+                            folder_label(&conflict.keep_both),
+                        )
+                        .into_any_element(),
                         Checkbox::new("apply-to-all")
                             .label("Do the same for all other conflicts (A)")
                             .checked(all)
@@ -2225,66 +2231,62 @@ impl Workspace {
                             .into_any_element(),
                     ],
                     vec![
-                        Button::new("dialog-cancel")
-                            .ghost()
-                            .label("Stop (Esc)")
-                            .on_click(
-                                cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx)),
-                            ),
-                        Button::new("dialog-skip")
+                        cancel("Stop (Esc)"),
+                        dialog::button("dialog-skip", "Skip (S)")
                             .outline()
-                            .label("Skip (S)")
                             .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Skip, cx))),
-                        Button::new("dialog-replace")
-                            .outline()
-                            .label(if folder { "Merge (R)" } else { "Replace (R)" })
-                            .disabled(!conflict.can_overwrite)
-                            .on_click(
-                                cx.listener(|this, _, _, cx| this.answer(Answer::Replace, cx)),
-                            ),
-                        Button::new("dialog-accept")
+                        dialog::button(
+                            "dialog-replace",
+                            if folder { "Merge (R)" } else { "Replace (R)" },
+                        )
+                        .outline()
+                        .disabled(!conflict.can_overwrite)
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Replace, cx))),
+                        dialog::button("dialog-accept", "Keep both (Enter)")
                             .primary()
-                            .label("Keep both (Enter)")
                             .on_click(
                                 cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx)),
                             ),
                     ],
                 )
             }
-            Question::Failed { path, message, .. } => (
+            Question::Failed { id, path, message } => (
+                I::TriangleAlert,
                 format!(
-                    "\u{201c}{}\u{201d} could not be processed",
+                    "Couldn't {} \u{201c}{}\u{201d}",
+                    verb(*id, hub(cx).read(cx)),
                     folder_label(path)
                 ),
+                format!(
+                    "{}. Skip leaves this entry out and continues with the rest.",
+                    operations::upper_first(message)
+                ),
+                path.parent()
+                    .map(|folder| {
+                        fact("fact-from", "From", folder.display().to_string()).into_any_element()
+                    })
+                    .into_iter()
+                    .collect(),
                 vec![
-                    div().child(format!("{message}.")).into_any_element(),
-                    div()
-                        .text_color(theme.text_muted)
-                        .child("Skip leaves this entry out and continues with the rest.")
-                        .into_any_element(),
-                ],
-                vec![
-                    Button::new("dialog-cancel")
-                        .ghost()
-                        .label("Stop (Esc)")
-                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx))),
-                    Button::new("dialog-skip")
+                    cancel("Stop (Esc)"),
+                    dialog::button("dialog-skip", "Skip (S)")
                         .outline()
-                        .label("Skip (S)")
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Skip, cx))),
-                    Button::new("dialog-accept")
+                    dialog::button("dialog-accept", "Try again (Enter)")
                         .primary()
-                        .label("Try again (Enter)")
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
             Question::Drop { sources, into } => (
+                I::ArrowLeftRight,
+                "Move or copy?".to_owned(),
                 format!(
                     "Move or copy {} into \u{201c}{}\u{201d}?",
                     operations::what(sources),
                     folder_label(into)
                 ),
                 vec![
+                    name_list(sources),
                     div()
                         .text_color(theme.text_muted)
                         .child(
@@ -2293,144 +2295,93 @@ impl Workspace {
                         .into_any_element(),
                 ],
                 vec![
-                    Button::new("dialog-cancel")
-                        .ghost()
-                        .label("Cancel (Esc)")
-                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx))),
-                    Button::new("dialog-copy")
+                    cancel("Cancel (Esc)"),
+                    dialog::button("dialog-copy", "Copy here (C)")
                         .outline()
-                        .label("Copy here (C)")
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Copy, cx))),
-                    Button::new("dialog-accept")
+                    dialog::button("dialog-accept", "Move here (Enter)")
                         .primary()
-                        .label("Move here (Enter)")
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
             Question::ConfirmDelete { paths } => (
-                format!("Delete {} for good?", operations::what(paths)),
+                I::CircleX,
+                "Delete for good?".to_owned(),
+                format!(
+                    "Delete {} for good? This does not use the trash. It cannot be undone.",
+                    operations::what(paths)
+                ),
+                vec![name_list(paths)],
                 vec![
-                    div()
-                        .child("This does not use the trash. It cannot be undone.")
-                        .into_any_element(),
-                ],
-                vec![
-                    Button::new("dialog-cancel")
-                        .outline()
-                        .label("Keep (Esc)")
-                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx))),
-                    Button::new("dialog-accept")
+                    cancel("Keep (Esc)"),
+                    dialog::button("dialog-accept", "Delete for good (Enter)")
                         .danger()
-                        .label("Delete for good (Enter)")
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
             Question::ConfirmEmpty { entries, .. } => (
+                I::Trash,
+                "Empty the trash?".to_owned(),
                 format!(
-                    "Empty the trash? It holds {} {}.",
+                    "It holds {} {}. Everything in the trash is deleted for good. It cannot be undone.",
                     format::count(*entries),
                     format::plural(*entries, "item", "items")
                 ),
+                Vec::new(),
                 vec![
-                    div()
-                        .child("Everything in it is deleted for good. It cannot be undone.")
-                        .into_any_element(),
-                ],
-                vec![
-                    Button::new("dialog-cancel")
-                        .outline()
-                        .label("Keep (Esc)")
-                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx))),
-                    Button::new("dialog-accept")
+                    cancel("Keep (Esc)"),
+                    dialog::button("dialog-accept", "Empty the trash (Enter)")
                         .danger()
-                        .label("Empty the trash (Enter)")
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
         };
-        div()
-            .absolute()
-            .inset_0()
-            .occlude()
-            .flex()
-            .items_center()
-            .justify_center()
-            .p(px(space::LG))
-            .bg(theme.scrim)
-            .child(
-                div()
-                    .id("operation-question")
-                    .role(Role::Dialog)
-                    .aria_label(title.clone())
-                    .aria_description(description)
-                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
-                    .key_context(DIALOG_CONTEXT)
-                    .track_focus(&self.dialog_focus)
-                    .on_key_down(cx.listener(Self::scroll_question))
-                    .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
-                        this.answer(Answer::Accept, cx);
-                    }))
-                    .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
-                        this.answer(Answer::Cancel, cx);
-                    }))
-                    .on_action(cx.listener(|this, _: &DialogSkip, _, cx| {
-                        this.answer(Answer::Skip, cx);
-                    }))
-                    .on_action(cx.listener(|this, _: &DialogKeepBoth, _, cx| {
-                        this.answer(Answer::Accept, cx);
-                    }))
-                    .on_action(cx.listener(|this, _: &DialogReplace, _, cx| {
-                        this.answer(Answer::Replace, cx);
-                    }))
-                    .on_action(cx.listener(|this, _: &DialogCopy, _, cx| {
-                        this.answer(Answer::Copy, cx);
-                    }))
-                    .on_action(cx.listener(|this, _: &DialogToggleAll, _, cx| {
-                        this.apply_to_all = !this.apply_to_all;
-                        cx.notify();
-                    }))
-                    .flex()
-                    .flex_col()
-                    .gap(px(space::MD))
-                    .w_full()
-                    .max_w(px(size::DIALOG))
-                    .max_h(px(f32::from(window.viewport_size().height) - space::LG * 2.))
-                    .p(px(space::LG))
-                    .rounded(px(size::RADIUS))
-                    .bg(theme.raised)
-                    .border_1()
-                    .border_color(theme.border_accent)
-                    .shadow(vec![theme.floating_shadow()])
-                    .text_color(theme.text)
-                    .font_family(text::FAMILY_BODY)
-                    .text_size(px(text::BODY))
-                    .line_height(px(text::LINE))
-                    .child(
-                        div()
-                            .flex_none()
-                            .font_family(text::FAMILY_HEADING)
-                            .text_size(px(text::HEADING))
-                            .child(match question {
-                                Question::Conflict { .. } => "Name conflict",
-                                Question::Failed { .. } => "File operation failed",
-                                Question::Drop { .. } => "Move or copy?",
-                                Question::ConfirmDelete { .. } => "Delete for good?",
-                                Question::ConfirmEmpty { .. } => "Empty the trash?",
-                            }),
-                    )
-                    .child(self.question_body(title, body, theme))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .flex_wrap()
-                            .justify_end()
-                            .gap(px(space::SM))
-                            .pt(px(space::SM))
-                            .children(buttons.into_iter().map(|button| button.small())),
-                    ),
-            )
-            .into_any_element()
+        let panel = dialog::panel(
+            div()
+                .id("operation-question")
+                .role(Role::Dialog)
+                .aria_label(title.clone())
+                .aria_description(description)
+                .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
+                .key_context(DIALOG_CONTEXT)
+                .track_focus(&self.dialog_focus)
+                .on_key_down(cx.listener(Self::scroll_question))
+                .on_action(cx.listener(|this, _: &DialogAccept, _, cx| {
+                    this.answer(Answer::Accept, cx);
+                }))
+                .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
+                    this.answer(Answer::Cancel, cx);
+                }))
+                .on_action(cx.listener(|this, _: &DialogSkip, _, cx| {
+                    this.answer(Answer::Skip, cx);
+                }))
+                .on_action(cx.listener(|this, _: &DialogKeepBoth, _, cx| {
+                    this.answer(Answer::Accept, cx);
+                }))
+                .on_action(cx.listener(|this, _: &DialogReplace, _, cx| {
+                    this.answer(Answer::Replace, cx);
+                }))
+                .on_action(cx.listener(|this, _: &DialogCopy, _, cx| {
+                    this.answer(Answer::Copy, cx);
+                }))
+                .on_action(cx.listener(|this, _: &DialogToggleAll, _, cx| {
+                    this.apply_to_all = !this.apply_to_all;
+                    cx.notify();
+                })),
+            size::DIALOG,
+            theme,
+            window,
+        )
+        .child(dialog::title_row(
+            icon,
+            title,
+            "Close (Esc)",
+            cx.listener(|this, _, _, cx| this.answer(Answer::Cancel, cx)),
+            theme,
+        ))
+        .child(dialog::body().child(self.question_body(sentence, body, theme)))
+        .child(dialog::actions(theme).children(buttons));
+        dialog::scrim(panel, theme)
     }
 
     fn scroll_question(

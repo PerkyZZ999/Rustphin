@@ -6,9 +6,9 @@
 
 use std::{
     fs, io,
-    os::unix::fs::PermissionsExt,
+    os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::SystemTime,
 };
 
@@ -43,6 +43,10 @@ pub struct Facts {
     pub created: Option<i64>,
     /// Permission bits.
     pub mode: u32,
+    /// The owning user's name, or its number when it has none here.
+    pub owner: String,
+    /// The owning group's name, or its number when it has none here.
+    pub group: String,
 }
 
 /// The size of everything inside a folder.
@@ -53,6 +57,8 @@ pub struct FolderSize {
     pub bytes: u64,
     /// Entries that could not be read.
     pub unreadable: u64,
+    /// Entries found, folders included.
+    pub items: u64,
     /// The walk stopped because `cancel` was set.
     pub cancelled: bool,
 }
@@ -83,23 +89,48 @@ pub fn read(path: &Path) -> io::Result<Facts> {
         accessed: seconds(metadata.accessed().ok()),
         created: seconds(metadata.created().ok()),
         mode: metadata.permissions().mode() & 0o7777,
+        owner: account_name(&account_file("/etc/passwd"), metadata.uid()),
+        group: account_name(&account_file("/etc/group"), metadata.gid()),
     })
+}
+
+/// The contents of an account file, or nothing when it cannot be read.
+fn account_file(path: &str) -> String {
+    fs::read_to_string(path).unwrap_or_default()
+}
+
+/// The name an account file (`/etc/passwd` or `/etc/group`: `name:x:id:…`)
+/// gives `id`, or the number itself. Accounts kept elsewhere (LDAP and the
+/// like) show as numbers.
+fn account_name(file: &str, id: u32) -> String {
+    file.lines()
+        .filter_map(|line| {
+            let mut fields = line.split(':');
+            let name = fields.next().filter(|name| !name.is_empty())?;
+            let number = fields.nth(1)?.parse::<u32>().ok()?;
+            (number == id).then_some(name)
+        })
+        .next()
+        .map_or_else(|| id.to_string(), str::to_owned)
 }
 
 /// Sums the sizes of files under `path`. Does not follow symbolic links.
 ///
 /// The first directory must be readable. A later directory or file that cannot
-/// be read counts in [`FolderSize::unreadable`] and the walk continues.
-pub fn folder_size(path: &Path, cancel: &AtomicBool) -> io::Result<FolderSize> {
+/// be read counts in [`FolderSize::unreadable`] and the walk continues. `seen`
+/// counts the entries found so far, for a view to show while it waits.
+pub fn folder_size(path: &Path, cancel: &AtomicBool, seen: &AtomicU64) -> io::Result<FolderSize> {
     let mut stack = vec![path.to_owned()];
     let mut bytes = 0;
     let mut unreadable = 0;
+    let mut items = 0;
     let mut started = false;
     while let Some(dir) = stack.pop() {
         if cancel.load(Ordering::Relaxed) {
             return Ok(FolderSize {
                 bytes,
                 unreadable,
+                items,
                 cancelled: true,
             });
         }
@@ -118,6 +149,8 @@ pub fn folder_size(path: &Path, cancel: &AtomicBool) -> io::Result<FolderSize> {
                 continue;
             };
             let path = entry.path();
+            items += 1;
+            seen.store(items, Ordering::Relaxed);
             let Ok(metadata) = fs::symlink_metadata(&path) else {
                 unreadable += 1;
                 continue;
@@ -136,6 +169,7 @@ pub fn folder_size(path: &Path, cancel: &AtomicBool) -> io::Result<FolderSize> {
     Ok(FolderSize {
         bytes,
         unreadable,
+        items,
         cancelled: false,
     })
 }
@@ -157,10 +191,23 @@ mod tests {
             ffi::OsStringExt,
             fs::{PermissionsExt, symlink},
         },
-        sync::atomic::AtomicBool,
+        sync::atomic::{AtomicBool, AtomicU64},
     };
 
     use super::*;
+
+    #[test]
+    fn owners_are_named_from_the_account_files_or_by_number() {
+        let passwd =
+            "root:x:0:0:root:/root:/bin/sh\n# comment\nalex:x:1000:1000:Alex:/home/alex:/bin/zsh\n";
+        assert_eq!(account_name(passwd, 1000), "alex");
+        assert_eq!(account_name(passwd, 0), "root");
+        // Unknown ids and broken lines fall back to the number.
+        assert_eq!(account_name(passwd, 4242), "4242");
+        assert_eq!(account_name("broken\n:x:7:7\n", 7), "7");
+        let group = "wheel:x:10:alex\nalex:x:1000:\n";
+        assert_eq!(account_name(group, 10), "wheel");
+    }
 
     #[test]
     fn a_file_reports_its_size_and_permissions_and_a_bad_name_does_not_panic() {
@@ -195,13 +242,18 @@ mod tests {
         fs::create_dir(&blocked).unwrap();
         fs::set_permissions(&blocked, fs::Permissions::from_mode(0o000)).unwrap();
 
-        let size = folder_size(&dir, &AtomicBool::new(false)).unwrap();
+        let seen = AtomicU64::new(0);
+        let size = folder_size(&dir, &AtomicBool::new(false), &seen).unwrap();
         assert!(!size.cancelled);
         assert_eq!(size.bytes, 3 + 2 + 100);
         assert!(size.unreadable >= 1);
+        // Every entry listed counts, as the dialog says while it waits:
+        // a, nested, nested/b, big, link and blocked.
+        assert_eq!(size.items, 6);
+        assert_eq!(seen.load(Ordering::Relaxed), 6);
 
         fs::set_permissions(&blocked, fs::Permissions::from_mode(0o755)).unwrap();
-        let stopped = folder_size(&dir, &AtomicBool::new(true)).unwrap();
+        let stopped = folder_size(&dir, &AtomicBool::new(true), &AtomicU64::new(0)).unwrap();
         assert!(stopped.cancelled);
     }
 
@@ -216,7 +268,7 @@ mod tests {
         assert_eq!(facts.kind, Kind::Symlink);
         assert_eq!(facts.target.unwrap(), file);
         assert_eq!(
-            folder_size(root.path(), &AtomicBool::new(false))
+            folder_size(root.path(), &AtomicBool::new(false), &AtomicU64::new(0))
                 .unwrap()
                 .bytes,
             5

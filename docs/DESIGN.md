@@ -858,8 +858,16 @@ except where the list below says otherwise; each W-079 step adds its line.
 - W-079f (2026-11-08): menu icons, shortcuts and the selection bar; the
   palette's title row, search icon, 52 px results with category icons and
   trails, placed near the top. Results use one icon per category.
-- Not yet implemented: the rest of "Changes from the earlier design" (sizes,
-  layout, new components and wording).
+- W-079g (2026-11-08): every dialog on the shared frame, title row and
+  action row; question titles that state the question; the Keep both fact;
+  Keep as the run default; Properties' header, facts and permission columns;
+  batch rename's segments, preview and notes.
+- Not yet implemented: compact view filling columns top to bottom (it still
+  fills rows); scrollbars on the list views; the volume name after the free
+  space; per-command palette icons and application icons in "Open with";
+  tab overflow; `text-disabled` on disabled toolbar buttons (the component
+  library dims them its own way); saving whether Devices is folded. "Details…"
+  sits on the result line, since operation results are window-level here.
 
 Carried over unchanged from the earlier design and implemented: the Actions
 palette's **Recover original names after interruption** for the current folder

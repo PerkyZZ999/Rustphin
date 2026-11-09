@@ -11,8 +11,8 @@ use gpui_kit::{
     IntoElement, ParentElement as _, Rgba, Role, ScrollHandle, SharedString,
     StatefulInteractiveElement as _, Styled as _, Subscription, Window,
     component::{
-        Disableable as _, Sizable as _,
-        button::{Button, ButtonVariants as _},
+        Disableable as _,
+        button::ButtonVariants as _,
         checkbox::Checkbox,
         input::{Input, InputEvent, InputState},
         scroll::{Scrollbar, ScrollbarMode},
@@ -24,6 +24,7 @@ use gpui_kit::{
 use rustphin_core::{CaseChange, Preview, RenameRules, display_name, ops::Request};
 
 use crate::{
+    dialog,
     layout::scroll_offset,
     operations::hub,
     theme::{Theme, size, space, text},
@@ -192,175 +193,152 @@ impl RenameDialog {
         let ready = preview.as_ref().is_some_and(Preview::can_apply) && changed;
         let count = self.selected.len();
 
-        div()
-            .absolute()
-            .inset_0()
-            .occlude()
-            .flex()
-            .items_center()
-            .justify_center()
-            .p(px(space::LG))
-            .bg(theme.scrim)
-            .child(
+        let panel = dialog::panel(
+            div()
+                .id("rename-dialog")
+                .role(Role::Dialog)
+                .aria_label(format!("Rename {count} items"))
+                .aria_description(format!(
+                    "{} mode. {} Review the preview before Rename; Escape cancels.",
+                    match self.mode {
+                        Mode::Replace => "Replace",
+                        Mode::Pattern => "Pattern",
+                        Mode::Case => "Case",
+                    },
+                    plan_problem
+                        .as_deref()
+                        .unwrap_or("Only the preview is shown until Rename is activated.")
+                ))
+                .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
+                .key_context("Dialog")
+                .track_focus(&self.focus)
+                .on_action(cx.listener(
+                    |this, _: &crate::workspace::DialogAccept, window, cx| {
+                        this.apply_rename(window, cx);
+                    },
+                ))
+                .on_action(cx.listener(
+                    |this, _: &crate::workspace::DialogCancel, window, cx| {
+                        this.cancel_rename(window, cx);
+                    },
+                ))
+                .on_key_down(cx.listener(|this, event: &gpui_kit::KeyDownEvent, _, cx| {
+                    let modifiers = event.keystroke.modifiers;
+                    if !modifiers.control || modifiers.alt || modifiers.platform || modifiers.shift
+                    {
+                        return;
+                    }
+                    if !matches!(event.keystroke.key.as_str(), "pageup" | "pagedown") {
+                        return;
+                    }
+                    let Some(dialog) = &this.rename else {
+                        return;
+                    };
+                    let mut offset = dialog.scroll.offset();
+                    if let Some(y) = scroll_offset(
+                        &event.keystroke.key,
+                        f32::from(offset.y),
+                        f32::from(dialog.scroll.max_offset().y),
+                        f32::from(dialog.scroll.bounds().size.height),
+                    ) {
+                        offset.y = px(y);
+                        dialog.scroll.set_offset(offset);
+                        cx.stop_propagation();
+                        cx.notify();
+                    }
+                })),
+            size::RENAME_DIALOG,
+            theme,
+            window,
+        )
+        .child(dialog::title_row(
+            gpui_kit::assets::IconName::Pencil,
+            format!("Rename {count} items"),
+            "Cancel (Esc)",
+            cx.listener(|this, _, window, cx| this.cancel_rename(window, cx)),
+            theme,
+        ))
+        .child(
+            dialog::body().child(
                 div()
-                    .id("rename-dialog")
-                    .role(Role::Dialog)
-                    .aria_label(format!("Rename {count} items"))
-                    .aria_description(format!(
-                        "{} mode. {} Review the preview before Rename; Escape cancels.",
-                        match self.mode {
-                            Mode::Replace => "Replace",
-                            Mode::Pattern => "Pattern",
-                            Mode::Case => "Case",
-                        },
-                        plan_problem
-                            .as_deref()
-                            .unwrap_or("Only the preview is shown until Rename is activated.")
-                    ))
-                    .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
-                    .key_context("Dialog")
-                    .track_focus(&self.focus)
-                    .on_action(cx.listener(
-                        |this, _: &crate::workspace::DialogAccept, window, cx| {
-                            this.apply_rename(window, cx);
-                        },
-                    ))
-                    .on_action(cx.listener(
-                        |this, _: &crate::workspace::DialogCancel, window, cx| {
-                            this.cancel_rename(window, cx);
-                        },
-                    ))
-                    .on_key_down(cx.listener(|this, event: &gpui_kit::KeyDownEvent, _, cx| {
-                        let modifiers = event.keystroke.modifiers;
-                        if !modifiers.control
-                            || modifiers.alt
-                            || modifiers.platform
-                            || modifiers.shift
-                        {
-                            return;
-                        }
-                        if !matches!(event.keystroke.key.as_str(), "pageup" | "pagedown") {
-                            return;
-                        }
-                        let Some(dialog) = &this.rename else {
-                            return;
-                        };
-                        let mut offset = dialog.scroll.offset();
-                        if let Some(y) = scroll_offset(
-                            &event.keystroke.key,
-                            f32::from(offset.y),
-                            f32::from(dialog.scroll.max_offset().y),
-                            f32::from(dialog.scroll.bounds().size.height),
-                        ) {
-                            offset.y = px(y);
-                            dialog.scroll.set_offset(offset);
-                            cx.stop_propagation();
-                            cx.notify();
-                        }
-                    }))
+                    .relative()
                     .flex()
                     .flex_col()
-                    .gap(px(space::MD))
-                    .w_full()
-                    .max_w(px(size::RENAME_DIALOG))
-                    .max_h(px(f32::from(window.viewport_size().height) - space::LG * 2.))
-                    .p(px(space::LG))
-                    .rounded(px(size::RADIUS))
-                    .bg(theme.raised)
-                    .border_1()
-                    .border_color(theme.border_accent)
-                    .shadow(vec![theme.floating_shadow()])
-                    .text_color(theme.text)
-                    .font_family(text::FAMILY_BODY)
-                    .text_size(px(text::BODY))
-                    .line_height(px(text::LINE))
+                    .min_h_0()
+                    .flex_shrink_1()
                     .child(
                         div()
-                            .flex_none()
-                            .font_family(text::FAMILY_HEADING)
-                            .text_size(px(text::HEADING))
-                            .child(format!("Rename {count} items")),
-                    )
-                    .child(
-                        div()
-                            .relative()
+                            .id("rename-content")
                             .flex()
                             .flex_col()
+                            .gap(px(space::LG))
                             .min_h_0()
-                            .flex_shrink_1()
-                            .child(
-                                div()
-                                    .id("rename-content")
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(space::MD))
-                                    .min_h_0()
-                                    .overflow_y_scroll()
-                                    .pr(px(space::LG))
-                                    .track_scroll(&self.scroll)
-                                    .child(self.modes(cx))
-                                    .children(self.fields(theme, window, cx))
-                                    .when_some(plan_problem, |dialog, problem| {
-                                        dialog.child(note(theme.danger, problem))
-                                    })
-                                    .when(
-                                        !changed
-                                            && preview.as_ref().is_some_and(Preview::can_apply),
-                                        |dialog| {
-                                            dialog.child(note(
-                                                theme.text_muted,
-                                                "Nothing would change. Edit the rule to give the files new names.".to_owned(),
-                                            ))
-                                        },
-                                    )
-                                    .child(self.preview(preview.as_ref(), theme)),
+                            .overflow_y_scroll()
+                            .pr(px(space::LG))
+                            .track_scroll(&self.scroll)
+                            .child(self.modes(theme, cx))
+                            .children(self.fields(theme, window, cx))
+                            .when_some(plan_problem, |dialog, problem| {
+                                dialog.child(problem_note(problem, theme))
+                            })
+                            .when(
+                                !changed && preview.as_ref().is_some_and(Preview::can_apply),
+                                |dialog| {
+                                    dialog.child(neutral_note(
+                                        "Nothing would change. Edit the rule to give the files new names.",
+                                        theme,
+                                    ))
+                                },
                             )
-                            .child(
-                                Scrollbar::vertical(&self.scroll)
-                                    .mode(ScrollbarMode::Always)
-                                    .styles(|styles| {
-                                        styles
-                                            .track(|style| style.bg(gpui_kit::transparent_black()))
-                                            .thumb(|style| {
-                                                style.bg(theme.text_muted).radius(px(size::RADIUS))
-                                            })
-                                            .thumb_hover(|style| style.bg(theme.accent))
-                                            .thumb_active(|style| style.bg(theme.accent))
-                                    }),
-                            ),
+                            .child(self.preview(preview.as_ref(), theme)),
                     )
                     .child(
-                        div()
-                            .flex_none()
-                            .flex()
-                            .justify_end()
-                            .gap(px(space::SM))
-                            .child(
-                                Button::new("rename-cancel")
-                                    .outline()
-                                    .label("Cancel (Esc)")
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.cancel_rename(window, cx)
-                                    })),
-                            )
-                            .child(
-                                Button::new("rename-apply")
-                                    .primary()
-                                    .disabled(!ready)
-                                    .label("Rename (Enter)")
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.apply_rename(window, cx)
-                                    })),
-                            ),
+                        Scrollbar::vertical(&self.scroll)
+                            .mode(ScrollbarMode::Always)
+                            .styles(|styles| {
+                                styles
+                                    .track(|style| style.bg(gpui_kit::transparent_black()))
+                                    .thumb(|style| {
+                                        style.bg(theme.text_muted).radius(px(size::RADIUS))
+                                    })
+                                    .thumb_hover(|style| style.bg(theme.accent))
+                                    .thumb_active(|style| style.bg(theme.accent))
+                            }),
                     ),
-            )
+            ),
+        )
+        .child(
+            dialog::actions(theme)
+                .child(
+                    dialog::button("rename-cancel", "Cancel (Esc)")
+                        .outline()
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.cancel_rename(window, cx)
+                        })),
+                )
+                .child(
+                    dialog::button("rename-apply", "Rename (Enter)")
+                        .primary()
+                        .disabled(!ready)
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.apply_rename(window, cx)
+                        })),
+                ),
+        );
+        dialog::scrim(panel, theme)
     }
 
-    fn modes(&self, cx: &mut Context<Workspace>) -> impl IntoElement {
+    /// The three modes as one segmented row, the chosen one filled.
+    fn modes(&self, theme: Theme, cx: &mut Context<Workspace>) -> impl IntoElement {
         div()
             .flex_none()
             .flex()
-            .gap(px(space::SM))
+            .w_auto()
+            .self_start()
+            .rounded(px(size::RADIUS))
+            .border_1()
+            .border_color(theme.border_strong)
+            .overflow_hidden()
             .child(self.mode_button("mode-replace", "Replace", Mode::Replace, cx))
             .child(self.mode_button("mode-pattern", "Pattern", Mode::Pattern, cx))
             .child(self.mode_button("mode-case", "Case", Mode::Case, cx))
@@ -373,11 +351,11 @@ impl RenameDialog {
         mode: Mode,
         cx: &mut Context<Workspace>,
     ) -> impl IntoElement {
-        let button = Button::new(id).label(label);
+        let button = dialog::button(id, label);
         let button = if self.mode == mode {
             button.primary()
         } else {
-            button.outline()
+            button.ghost()
         };
         button.on_click(cx.listener(move |this, _, window, cx| {
             if let Some(dialog) = &mut this.rename {
@@ -448,7 +426,7 @@ impl RenameDialog {
         case: CaseChange,
         cx: &mut Context<Workspace>,
     ) -> impl IntoElement {
-        let button = Button::new(id).label(label);
+        let button = dialog::button(id, label);
         let button = if self.case == case {
             button.primary()
         } else {
@@ -463,7 +441,17 @@ impl RenameDialog {
         }))
     }
 
+    /// Old and new names side by side, an arrow between, unusable new
+    /// names in the error colour with the reason under them.
     fn preview(&self, preview: Option<&Preview>, theme: Theme) -> impl IntoElement {
+        let line = || {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(space::SM))
+                .min_h(px(size::MENU_ROW))
+                .px(px(space::MD))
+        };
         let rows = preview.map(|preview| {
             preview
                 .rows
@@ -475,6 +463,7 @@ impl RenameDialog {
                         .iter()
                         .map(|problem| problem.message())
                         .collect();
+                    let bad = !problems.is_empty();
                     div()
                         .id(("rename-preview-row", index))
                         .role(Role::ListItem)
@@ -487,47 +476,57 @@ impl RenameDialog {
                         .aria_position_in_set(index)
                         .flex()
                         .flex_col()
-                        .py(px(space::XS))
+                        .border_t_1()
+                        .border_color(theme.border)
+                        .font_family(text::FAMILY_DATA)
+                        .text_size(px(text::DATA))
                         .child(
-                            div()
-                                .flex()
-                                .gap(px(space::SM))
-                                .child(name_cell(&row.from, theme.text_muted))
-                                .child(div().text_color(theme.text_muted).child("→"))
+                            line()
+                                .child(name_cell(
+                                    &row.from,
+                                    if bad { theme.danger } else { theme.text },
+                                ))
+                                .child(
+                                    div()
+                                        .w(px(size::ICON + space::SM))
+                                        .flex_none()
+                                        .text_center()
+                                        .text_color(theme.text_muted)
+                                        .child("\u{2192}"),
+                                )
                                 .child(name_cell(
                                     &row.to,
-                                    if problems.is_empty() {
-                                        theme.text
-                                    } else {
-                                        theme.danger
-                                    },
+                                    if bad { theme.danger } else { theme.text },
                                 )),
                         )
-                        .children(
-                            problems
-                                .into_iter()
-                                .map(|message| note(theme.danger, message)),
-                        )
+                        .children(problems.into_iter().map(|message| {
+                            div()
+                                .px(px(space::MD))
+                                .pb(px(space::XS))
+                                .font_family(text::FAMILY_BODY)
+                                .text_size(px(text::BODY))
+                                .text_color(theme.danger)
+                                .child(message)
+                        }))
                 })
                 .collect::<Vec<_>>()
         });
         div()
             .flex()
             .flex_col()
-            .gap(px(space::XS))
             .flex_none()
             .id("rename-preview")
             .role(Role::List)
             .aria_label("Rename preview")
             .aria_size_of_set(self.selected.len())
+            .rounded(px(size::RADIUS))
+            .border_1()
+            .border_color(theme.border)
             .child(
-                div()
-                    .flex()
-                    .gap(px(space::SM))
+                line()
                     .text_color(theme.text_muted)
-                    .text_size(px(text::SMALL))
                     .child(div().flex_1().child("Current name"))
-                    .child(div().child(" "))
+                    .child(div().w(px(size::ICON + space::SM)).flex_none())
                     .child(div().flex_1().child("New name")),
             )
             .children(rows.into_iter().flatten())
@@ -547,14 +546,9 @@ fn field(
         .flex_none()
         .min_w_0()
         .gap(px(space::XS))
-        .child(
-            div()
-                .text_size(px(text::SMALL))
-                .text_color(theme.text_muted)
-                .child(label),
-        )
+        .child(div().text_color(theme.text_muted).child(label))
         .child(crate::input::named(
-            Input::new(state).small(),
+            Input::new(state).h(px(size::CONTROL)),
             state,
             label,
             window,
@@ -568,9 +562,48 @@ fn note(color: Rgba, message: String) -> impl IntoElement {
         .id(SharedString::from(message.clone()))
         .role(Role::Label)
         .aria_value(message.clone())
-        .text_size(px(text::SMALL))
         .text_color(color)
         .child(message)
+}
+
+/// A problem with the rule: error colours, an alert icon and an outline.
+fn problem_note(message: String, theme: Theme) -> impl IntoElement {
+    boxed_note(gpui_kit::assets::IconName::TriangleAlert, message)
+        .bg(theme.danger_surface)
+        .border_color(theme.danger_border)
+        .text_color(theme.danger)
+}
+
+/// Something worth knowing that is not wrong, such as nothing changing.
+fn neutral_note(message: &'static str, theme: Theme) -> impl IntoElement {
+    boxed_note(gpui_kit::assets::IconName::Info, message.to_owned())
+        .border_color(theme.border)
+        .text_color(theme.text_muted)
+}
+
+fn boxed_note(
+    icon: gpui_kit::assets::IconName,
+    message: String,
+) -> gpui_kit::Stateful<gpui_kit::Div> {
+    div()
+        .id(SharedString::from(message.clone()))
+        .role(Role::Label)
+        .aria_value(message.clone())
+        .flex()
+        .flex_none()
+        .items_start()
+        .gap(px(space::SM))
+        .px(px(space::MD))
+        .py(px(space::SM))
+        .rounded(px(size::RADIUS))
+        .border_1()
+        .child(
+            gpui_kit::component::Icon::new(icon)
+                .size(px(size::ICON))
+                .flex_none()
+                .mt(px(space::XS / 2.)),
+        )
+        .child(div().flex_1().min_w_0().child(message))
 }
 
 fn name_cell(name: &OsStr, color: Rgba) -> impl IntoElement {

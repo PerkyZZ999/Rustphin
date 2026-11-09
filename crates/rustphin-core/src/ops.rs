@@ -203,6 +203,9 @@ pub struct Conflict {
     pub source_info: FileInfo,
     /// The existing entry, as last read.
     pub target_info: FileInfo,
+    /// Where [`ConflictChoice::KeepBoth`] would put the entry: the first
+    /// free `name (1).ext`, `name (2).ext`… beside the existing one.
+    pub keep_both: PathBuf,
     /// Whether [`ConflictChoice::Overwrite`] is possible: file over file
     /// replaces it, folder into folder merges the contents. A file cannot
     /// replace a folder nor a folder a file.
@@ -1026,6 +1029,7 @@ impl Engine<'_> {
                         target: target.clone(),
                         source_info: node.info,
                         target_info,
+                        keep_both: self.free_name(&target),
                         can_overwrite,
                     });
                     if resolution.apply_to_all {
