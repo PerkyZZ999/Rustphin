@@ -37,6 +37,9 @@ png = "0.18"
 
 # UI toolkit, pinned exactly (decision D-001). Upgrade only as a planned work item.
 gpui-kit = "=0.7.3"
+# gpui-kit's Linux text system, used directly only by tests of the bundled
+# fonts. Pinned to the version gpui-kit 0.7.3 uses.
+gpui-pre-wgpu = "=0.3.9"
 
 # Direct Wayland access for the platform layer; versions match gpui-pre 0.3.9's lockfile.
 raw-window-handle = "0.6"

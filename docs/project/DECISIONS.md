@@ -235,3 +235,11 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Supersedes / superseded by:** amends the W-079 start condition in ROADMAP.md
 
 W-076e (patching the locked toolkit's focus registration) was not approved on 2026-11-08 ("Not yet"); it stays open until a planned toolkit upgrade.
+
+## D-025 — Bundle static faces of the design's fonts
+- **Status:** decided
+- **Date:** 2026-11-09
+- **Context:** the pinned GPUI ignores a variable font's `wght` axis, and the Inter, Space Grotesk and JetBrains Mono installed on Linux systems are usually variable, so the design's semibold headings rendered at the fonts' defaults (Regular, or Light for Space Grotesk). Forking GPUI is ruled out.
+- **Decision:** the UI crate bundles static instances of the three fonts at the weights docs/DESIGN.md uses (`crates/rustphin-ui/assets/fonts/`) and registers them at start. They are under the SIL OFL 1.1, which permits bundling with software of any licence; the licence texts ship beside them. They are font data, not linked code, so the GPL-compatibility rule for dependencies is not engaged.
+- **Confirmed by / date:** The maintainer, 2026-11-09 ("Yes, bundle them", for Inter and Space Grotesk); JetBrains Mono added by the agent for the same defect.
+- **Supersedes / superseded by:** none

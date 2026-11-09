@@ -888,10 +888,12 @@ except where the list below says otherwise; each W-079 step adds its line.
   `search-x`), spacing and 32 px buttons; the 44 px folder error banner with
   a dismiss icon; batch rename segments with icons, Find and Replace side by
   side in mono, and one problem note above the preview.
-- Not yet implemented: semibold weights. The installed Inter and Space
-  Grotesk are variable fonts and the pinned GPUI renders every weight at the
-  font's default, so headings show at regular (Inter) or light (Space
-  Grotesk) weight; static font files would fix it. Also: scrollbars on the
+- Font weights (W-088): the app bundles static faces of Inter (400, 500,
+  600), Space Grotesk (600) and JetBrains Mono (400, 500), because the pinned
+  GPUI ignores a variable font's weight axis. Headings render semibold as
+  drawn. Weights not listed in the typography tokens fall back to the
+  nearest bundled or installed face.
+- Not yet implemented: scrollbars on the
   list views (the compact view has none either); the volume name after the
   free space; per-command palette icons and application icons in "Open
   with"; icons and sizes in a question's list of names; tab overflow; the

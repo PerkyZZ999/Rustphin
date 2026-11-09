@@ -174,5 +174,5 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 - In kwin-mcp, spell punctuation keys literally (`ctrl+=`, `ctrl+-`); names like `equal` or `minus` are accepted but do nothing.
 - Isolated KWin sessions offer no blur protocol, so Rustphin shows its opaque theme there. Blur can only be reviewed on the real desktop. (In W-087 a session did offer blur and the glass tokens showed over a black background; pass `RUSTPHIN_OPAQUE=1` to compare colours with the opaque mockups.)
 - GPUI-Kit's `Input::h` only sizes multi-line fields; size a single-line field with `min_h`, or it stays 32 px. Text fields get the design's fill and focus ring in `input::named`.
-- The pinned GPUI does not apply a variable font's `wght` axis: with the system's variable Inter and Space Grotesk, every weight renders at the font's default (semibold headings look regular or light).
+- The pinned GPUI does not apply a variable font's `wght` axis: a variable font renders every weight at its default. The app therefore bundles static faces of the design's fonts (`crates/rustphin-ui/assets/fonts/`, registered by `fonts.rs`); a new weight in `docs/DESIGN.md` needs a new face there.
 - Compare the app with the mockups as in UI_SCENARIOS.md "Mockup comparison": `tests/ui/make-mockup-home.sh` builds the scene in an isolated home.

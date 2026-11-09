@@ -4,7 +4,7 @@
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 in progress; W-079 design pass started (D-024)
-- **Status:** active — W-079 design pass, W-086 compact columns and W-087 mockup comparison done; remaining S11 acceptance needs the maintainer
+- **Status:** active — W-079 design pass, W-086 compact columns, W-087 mockup comparison and W-088 fonts done; remaining S11 acceptance needs the maintainer
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-11-09
 
@@ -14,11 +14,11 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-09 — W-087 mockup comparison; full gate 504 tests
+- Latest validation entry: VALIDATION.md, 2026-11-09 — W-088 bundled static fonts
 
 ## Open loops
 - Task: W-079 design pass done 2026-11-08 (D-024, steps a–g) from the maintainer's HTML mockups; docs/DESIGN.md "Implementation status" lists what is left (list scrollbars, volume name, per-command palette icons, app icons, tab overflow, disabled toolbar colour, saved Devices fold). Glass look needs the real desktop.
-- Task: W-087 (2026-11-09) compared every main screen with its mockup render and fixed buttons, fields, columns, selection bar, grids, rename, Properties, states, banner and batch rename; open: semibold weights (variable fonts), in-place folder error state, per-command palette icons.
+- Task: W-087 (2026-11-09) compared every main screen with its mockup render and fixed buttons, fields, columns, selection bar, grids, rename, Properties, states, banner and batch rename; open: in-place folder error state, per-command palette icons. Semibold weights fixed by bundled static fonts (W-088).
 - Task: W-086 (2026-11-09) compact view fills columns and scrolls sideways with Dolphin's keys; the rubber-band outline now follows the pointer beside the places panel. Not verified: real-wheel distance, 500,000 entries in compact, drags and split panes in compact.
 - Task: W-078: 27 criteria ticked on evidence; 7 open in docs/project/ACCEPTANCE.md. Decided by the maintainer on 2026-11-08: D-019 (60 fps = ≤5% dropped frames, met in W-085), D-020 (startup batch recovery, done W-083), D-021 (Ctrl+D duplicate, done W-084); W-076e not approved. D-022 (startup outside R-101) closed R-101; R-105 opaque-mode contrast accepted on token tests; D-023 dropped the Orca pass and R-107 names/roles is ticked on W-074a–i. Still open for the maintainer: the 5 real-desktop/hardware checks (non-KDE drop, USB mount/busy, blur look and white-window contrast).
 - Task: W-076o–r add docs/project/KEYBOARD.md (Rustphin vs Dolphin defaults) and fix Backspace=Back, Alt+Home, Alt+D, Alt+1…0, Ctrl+P, Ctrl+Q, Shift+F5/F6 copy/move to the other view, Ctrl+Shift+T reopen closed tab, Ctrl+Alt+C copy location, Menu key. Ctrl+F3 is bound but KWin takes it by default (Dolphin too); Tab works. Not offered yet: redo (Duplicate added in W-084).
@@ -45,7 +45,7 @@
 - W-076e: complete reverse field traversal and native input focus conflict through duplicate registration in the pinned toolkit. Removing the wrapper tracking restores traversal but loses native focus; original code restored. DISCOVERY.md records a concrete deduplication candidate and required checks. The maintainer approved a bounded isolated experiment on 2026-11-05; its corrected latest-registration candidate passes seven focused tests and native reverse-field/Unicode checks. Production pins remain unchanged. Full published toolkit tests are unavailable; broader modal/performance assessment and adoption still require review. This blocks that acceptance item, not unrelated S11 work. The baseline gate passes.
 
 ## Next action
-- The maintainer to decide two W-087 follow-ups: bundle static Inter/Space Grotesk files for semibold headings (OFL), and whether a folder that cannot be opened shows the mockup's in-place state instead of N4's banner. The maintainer to review W-079/W-086/W-087 on the real desktop (glass look; compact view with a real wheel). The open S11 criteria still need the maintainer's desktop or hardware (5) or W-076e (2). Otherwise continue with the smaller W-079 leftovers listed in docs/DESIGN.md.
+- The maintainer to decide the remaining W-087 follow-up: whether a folder that cannot be opened shows the mockup's in-place state instead of N4's banner. The maintainer to review W-079/W-086/W-087 on the real desktop (glass look; compact view with a real wheel). The open S11 criteria still need the maintainer's desktop or hardware (5) or W-076e (2). Otherwise continue with the smaller W-079 leftovers listed in docs/DESIGN.md.
 
 ## Phase checklist
 - [x] 0 Intake

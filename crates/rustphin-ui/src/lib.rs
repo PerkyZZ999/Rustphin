@@ -9,6 +9,7 @@ mod controls;
 mod diagnostics;
 mod dialog;
 mod filetypes;
+mod fonts;
 mod format;
 mod groups;
 mod history;
@@ -120,6 +121,7 @@ pub fn run(options: Options) {
             // that work off-thread before the first view needs its fonts.
             let text_system = cx.text_system().clone();
             let warming = cx.background_executor().spawn(async move {
+                fonts::register(&text_system);
                 warm_fonts(&text_system);
             });
             cx.spawn(async move |cx| {
