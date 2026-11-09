@@ -25,6 +25,7 @@ The project follows a gated workflow. Its documents are the source of truth and 
 | `VALIDATION.md` | Evidence log. Append an entry for every gate or check you actually ran. |
 | `DISCOVERY.md` | Constraints, risks and measurements from the feasibility phase. |
 | `UI_SCENARIOS.md` | The UI checks to replay through kwin-mcp after UI changes. |
+| `DESIGN_BRIEF.md`, `INFORMATION_ARCHITECTURE.md`, `DESIGN.md` | The W-079 design pass: brief, screen structure and the **target** design. Not implemented yet; `docs/DESIGN.md` stays authoritative for the current build until W-079 adopts the target. |
 
 `docs/DESIGN.md` is the reference for the visual design (decision D-017). Its front-matter tokens are authoritative and `crates/rustphin-ui/src/theme.rs` implements them: change the document first, then the theme, and keep its "Implementation status" section true. After editing it, run `npx @google/design.md lint docs/DESIGN.md` and fix any errors.
 

@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-08 — W-079 design documents: brief, information architecture, target DESIGN.md
+- **Request:** The maintainer asked for DESIGN.md, DESIGN_BRIEF.md and INFORMATION_ARCHITECTURE.md, written with the design-brief, design-md-author and information-architecture skills, to produce an HTML mockup for W-079. Interview answers: documents in docs/project/; the mockup's roomier density; adopt free space in the status line, a thumbnail in Properties, "Details…" on the error banner, icons and shortcuts in menus; the mockup covers the main window in all views, split and narrow sizes, every dialog, states and opaque mode.
+- **Evidence used:** docs/DESIGN.md and theme.rs (the scanner found no other design sources); UI strings, menus, palette commands, layout and format code; docs/mockup.png measured with a script: row pitch about 39 px, name cap height 12 px, surface colours (`#0D1726` list, `#11192A` places, `#1B2035` tab strip, `#2744B5` selection, `#1D2E6A` current place, `#39D2F3` progress). Target sizes scale the reference so a row is 36 px.
+- **Checks run:** a contrast script mirroring `theme.rs`'s `assert_readable` on the target tokens, opaque and glass over white: every text pair ≥ 4.5:1 (lowest 4.92:1, muted text on window glass over white), indicators ≥ 3:1 (lowest 4.31:1). `npx @google/design.md lint docs/project/DESIGN.md`: 0 errors, 4 warnings (outline colours the format cannot reference). `docs/DESIGN.md` unchanged (0 errors, 8 warnings).
+- **Corrections while writing:** sizes stay IEC (MiB) as the app formats them; activity figures keep today's wording; several operations each have their own line; tab overflow is marked as proposed.
+- **Not done:** no code, token or docs/DESIGN.md change; the target is not implemented or tested in the app.
+
 ### 2026-11-08 — D-023 Orca pass dropped; R-107 names and roles ticked on W-074
 - **Decision:** The maintainer: "the Orca screen-reader can be forgotten and removed from the list of things todo". Recorded as D-023; R-107's criterion and S11's acceptance no longer ask for an Orca pass.
 - **Ticked on existing evidence:** R-107 "names and roles through AccessKit, with gaps listed", from W-074a–i (AT-SPI in isolated sessions). Listed gaps: native expanded and disabled flags, EditableText. 27 ticked, 7 open.
