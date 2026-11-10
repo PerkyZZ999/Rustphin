@@ -170,10 +170,6 @@ pub struct Sidebar {
     devices: Vec<Device>,
     /// A device-service failure, distinct from a successful empty inventory.
     devices_unavailable: bool,
-    /// Whether the Devices section is folded, for this run.
-    devices_folded: bool,
-    /// Whether the Remote section is folded, for this run.
-    remote_folded: bool,
     usage: HashMap<String, (u64, u64)>,
     device_service: Arc<dyn Devices>,
     /// The volume being mounted or unmounted, shown as busy.
@@ -315,6 +311,14 @@ fn device_name(device: &Device) -> String {
     }
 }
 
+/// The listed volume mounted at `mount`, if one is: a folder on a
+/// filesystem that is not a listed volume (tmpfs, a network mount) has none.
+fn volume_at<'a>(devices: &'a [Device], mount: &Path) -> Option<&'a Device> {
+    devices
+        .iter()
+        .find(|device| device.mount_point.as_deref() == Some(mount))
+}
+
 /// How full a volume is, in words short enough for the panel: "120.6 of
 /// 476.9 GiB free", or both units when they differ.
 fn usage_text(total: u64, free: u64) -> String {
@@ -410,8 +414,6 @@ impl Sidebar {
             current: None,
             devices: Vec::new(),
             devices_unavailable: false,
-            devices_folded: false,
-            remote_folded: false,
             usage: HashMap::new(),
             device_service: Arc::new(NoDevices),
             device_busy: None,
@@ -435,6 +437,12 @@ impl Sidebar {
     /// Whether the panel, or a field inside it, has the keyboard focus.
     pub fn is_focused(&self, window: &Window, cx: &App) -> bool {
         self.focus.contains_focused(window, cx)
+    }
+
+    /// The name of the volume mounted at `mount`, as the Devices section
+    /// names it, for the status line's free space.
+    pub fn volume_name(&self, mount: &Path) -> Option<String> {
+        volume_at(&self.devices, mount).map(device_name)
     }
 
     /// Tells the panel which folder the active pane shows.
@@ -620,12 +628,12 @@ impl Sidebar {
             &self.places,
             &self.groups,
             self.show_hidden,
-            self.remote_folded,
+            self.groups.remote_folded,
         );
         if !self.devices.is_empty() || self.devices_unavailable {
             rows.push(Row::Devices);
         }
-        if !self.devices_folded {
+        if !self.groups.devices_folded {
             rows.extend(
                 self.devices
                     .iter()
@@ -676,12 +684,15 @@ impl Sidebar {
                 self.set_collapsed(*index, !collapsed, cx);
             }
             Row::Device(id) => self.open_device(id, new_tab, cx),
+            // Kept with the groups, so the panel looks the same next time.
             Row::Devices => {
-                self.devices_folded = !self.devices_folded;
+                self.groups.devices_folded = !self.groups.devices_folded;
+                self.save_groups(cx);
                 cx.notify();
             }
             Row::Remote => {
-                self.remote_folded = !self.remote_folded;
+                self.groups.remote_folded = !self.groups.remote_folded;
+                self.save_groups(cx);
                 cx.notify();
             }
         }
@@ -1978,7 +1989,7 @@ impl Render for Sidebar {
             );
         }
         if !remote_places.is_empty() {
-            let folded = self.remote_folded;
+            let folded = self.groups.remote_folded;
             let row = Row::Remote;
             let click_row = row.clone();
             let heading = Self::section_heading(
@@ -2017,7 +2028,7 @@ impl Render for Sidebar {
         }
         let devices = self.devices.clone();
         if !devices.is_empty() || self.devices_unavailable {
-            let folded = self.devices_folded;
+            let folded = self.groups.devices_folded;
             let row = Row::Devices;
             let click_row = row.clone();
             let heading = Self::section_heading(
@@ -2328,6 +2339,18 @@ mod tests {
             removable,
             power_off: power_off.then(|| "/drive".to_owned()),
         }
+    }
+
+    #[test]
+    fn only_a_listed_volume_mounted_exactly_there_names_a_folders_filesystem() {
+        let mut data = device(Some("/mnt/data"), true, false);
+        data.label = Some("Data".into());
+        let devices = vec![device(Some("/"), false, false), data];
+        let name = |mount: &str| volume_at(&devices, Path::new(mount)).map(device_name);
+        assert_eq!(name("/mnt/data").as_deref(), Some("Data"));
+        assert_eq!(name("/").as_deref(), Some("System"));
+        // tmpfs under the root volume is not the root volume.
+        assert_eq!(name("/tmp"), None);
     }
 
     #[test]

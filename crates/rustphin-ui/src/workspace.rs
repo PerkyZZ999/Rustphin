@@ -299,6 +299,10 @@ pub struct Workspace {
     dialog_focus: FocusHandle,
     /// The question and facts scroll independently of their heading/actions.
     question_scroll: ScrollHandle,
+    /// The tab strip, which scrolls sideways when the tabs do not fit.
+    tab_scroll: ScrollHandle,
+    /// The tab last scrolled into view, to follow changes of tab.
+    tab_in_view: Option<usize>,
     /// Whether a dialog was open at the last redraw, to move the focus when
     /// one opens or the last one closes.
     dialog_open: bool,
@@ -407,6 +411,8 @@ impl Workspace {
             title: String::new(),
             dialog_focus: cx.focus_handle(),
             question_scroll: ScrollHandle::new(),
+            tab_scroll: ScrollHandle::new(),
+            tab_in_view: None,
             dialog_open: false,
             apply_to_all: false,
             zone: TimeZone::system(),
@@ -1402,8 +1408,24 @@ impl Workspace {
             .unwrap_or(gpui_kit::assets::IconName::Folder)
     }
 
-    fn tab_strip(&self, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement {
+    fn tab_strip(
+        &mut self,
+        theme: Theme,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let active = self.tabs.active_index();
+        let panel = if self.sidebar_visible {
+            size::SIDEBAR
+        } else {
+            0.
+        };
+        let width = tab_width(content_width(window) - panel, self.tabs.iter().count());
+        // A newly chosen or opened tab is scrolled into view, once.
+        if self.tab_in_view != Some(active) {
+            self.tab_in_view = Some(active);
+            self.tab_scroll.scroll_to_item(active);
+        }
         let tabs: Vec<_> = self
             .tabs
             .iter()
@@ -1425,7 +1447,7 @@ impl Workspace {
                     .items_center()
                     .gap(px(space::XS))
                     .h_full()
-                    .w(px(size::TAB))
+                    .w(px(width))
                     .pl(px(space::MD))
                     .pr(px(space::SM))
                     .cursor_pointer()
@@ -1462,19 +1484,24 @@ impl Workspace {
                             .child(Icon::new(icon).size(px(size::ICON)).flex_none())
                             .child(div().min_w_0().truncate().child(label.clone())),
                     )
-                    .child(
-                        Button::new(("close-tab", index))
-                            .ghost()
-                            .with_size(px(size::TAB_CLOSE))
-                            .size(px(size::TAB_CLOSE))
-                            .child(Icon::new(IconName::Close).size(px(size::ICON_SMALL)))
-                            .tooltip("Close tab (Ctrl+W)")
-                            .accessibility_label(format!("Close {label} tab (Ctrl+W)"))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.close_tab(index, window, cx);
-                            })),
-                    )
+                    // Narrow tabs keep the room for their names: only the
+                    // active one shows its close button (Ctrl+W and the middle
+                    // button close the others).
+                    .when(is_active || width >= size::TAB_CLOSE_SHOWN, |tab| {
+                        tab.child(
+                            Button::new(("close-tab", index))
+                                .ghost()
+                                .with_size(px(size::TAB_CLOSE))
+                                .size(px(size::TAB_CLOSE))
+                                .child(Icon::new(IconName::Close).size(px(size::ICON_SMALL)))
+                                .tooltip("Close tab (Ctrl+W)")
+                                .accessibility_label(format!("Close {label} tab (Ctrl+W)"))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    this.close_tab(index, window, cx);
+                                })),
+                        )
+                    })
                     .on_click(
                         cx.listener(move |this, _, window, cx| this.activate(index, window, cx)),
                     )
@@ -1538,21 +1565,32 @@ impl Workspace {
                         .aria_size_of_set(tabs.len())
                         .aria_orientation(gpui_kit::Orientation::Horizontal)
                         .flex()
+                        .flex_shrink(1.)
+                        .min_w_0()
                         .items_center()
                         .h_full()
+                        .overflow_x_scroll()
+                        .track_scroll(&self.tab_scroll)
                         .children(tabs),
                 )
                 .child(
-                    div().flex_1().h_full().child(
-                        Button::new("new-tab")
-                            .ghost()
-                            .w(px(size::TAB_ADD))
-                            .h_full()
-                            .icon(Icon::new(IconName::Plus).size(px(size::ICON)))
-                            .tooltip("New tab (Ctrl+T)")
-                            .accessibility_label("New tab (Ctrl+T)")
-                            .on_click(cx.listener(|this, _, window, cx| this.new_tab(window, cx))),
-                    ),
+                    div()
+                        .flex_1()
+                        .flex_none()
+                        .min_w(px(size::TAB_ADD))
+                        .h_full()
+                        .child(
+                            Button::new("new-tab")
+                                .ghost()
+                                .w(px(size::TAB_ADD))
+                                .h_full()
+                                .icon(Icon::new(IconName::Plus).size(px(size::ICON)))
+                                .tooltip("New tab (Ctrl+T)")
+                                .accessibility_label("New tab (Ctrl+T)")
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.new_tab(window, cx)),
+                                ),
+                        ),
                 ),
         )
     }
@@ -1657,7 +1695,13 @@ impl Render for Workspace {
         for tab in self.tabs.iter() {
             for pane in &tab.panes {
                 let admin = self.admin_fs.clone();
+                let volume = pane
+                    .browser
+                    .read(cx)
+                    .volume_mount()
+                    .and_then(|mount| self.sidebar.read(cx).volume_name(&mount));
                 pane.browser.update(cx, |browser, cx| {
+                    browser.set_volume(volume, cx);
                     browser.set_filesystem(admin, cx);
                     if reread {
                         browser.reload(cx);
@@ -1667,7 +1711,7 @@ impl Render for Workspace {
         }
         let toolbar = self.toolbar(theme, window, cx);
         let admin_bar = self.admin_bar(theme, cx);
-        let tab_strip = self.tab_strip(theme, cx).into_any_element();
+        let tab_strip = self.tab_strip(theme, window, cx).into_any_element();
         let tab = self.tabs.active();
         let split = tab.panes.len() > 1;
         // Panes share equally the width the places panel leaves.
@@ -1676,8 +1720,7 @@ impl Render for Workspace {
         } else {
             0.
         };
-        let pane_width =
-            (f32::from(window.viewport_size().width) - panel_width) / tab.panes.len() as f32;
+        let pane_width = (content_width(window) - panel_width) / tab.panes.len() as f32;
         for (index, pane) in tab.panes.iter().enumerate() {
             let side = split.then_some(index == tab.active);
             pane.browser.update(cx, |browser, _| {
@@ -1879,7 +1922,7 @@ impl Workspace {
     /// button and Split are the window's; the rest act on the active pane,
     /// which draws them.
     fn toolbar(&mut self, theme: Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        let layout = ToolbarLayout::for_width(f32::from(window.viewport_size().width));
+        let layout = ToolbarLayout::for_width(content_width(window));
         let split = self.tabs.active().panes.len() > 1;
         let parts = self.tabs.active().browser().update(cx, |browser, cx| {
             browser.toolbar_parts(layout, theme, window, cx)
@@ -2481,7 +2524,9 @@ impl Workspace {
             dialog::fact(id, label, size::FACT_LABEL, value, theme)
         };
         // The names of a few entries, one per row, as the question is about them.
-        let name_list = |paths: &[PathBuf]| {
+        // Each name with its icon and, for a file, its size, when the
+        // listing the question came from knew them (mockups 19 and 22).
+        let name_list = |paths: &[PathBuf], listed: &[operations::Listed]| {
             div()
                 .flex()
                 .flex_col()
@@ -2489,20 +2534,45 @@ impl Workspace {
                 .border_1()
                 .border_color(theme.border)
                 .children(paths.iter().enumerate().map(|(index, path)| {
+                    let known = listed.get(index).copied();
                     div()
                         .flex()
                         .items_center()
+                        .gap(px(space::SM))
                         .px(px(space::MD))
                         .min_h(px(size::CONTROL))
                         .when(index > 0, |row| row.border_t_1().border_color(theme.border))
+                        .when_some(known, |row, known| {
+                            row.child(
+                                Icon::new(if known.folder {
+                                    gpui_kit::assets::IconName::Folder
+                                } else {
+                                    gpui_kit::assets::IconName::File
+                                })
+                                .size(px(size::ICON))
+                                .flex_none()
+                                .text_color(theme.text_muted),
+                            )
+                        })
                         .child(
                             div()
+                                .flex_1()
                                 .min_w_0()
                                 .truncate()
                                 .font_family(text::FAMILY_DATA)
                                 .text_size(px(text::DATA))
                                 .child(folder_label(path)),
                         )
+                        .when_some(known.and_then(|known| known.size), |row, bytes| {
+                            row.child(
+                                div()
+                                    .flex_none()
+                                    .font_family(text::FAMILY_DATA)
+                                    .text_size(px(text::SMALL))
+                                    .text_color(theme.text_muted)
+                                    .child(format::size(bytes)),
+                            )
+                        })
                 }))
                 .into_any_element()
         };
@@ -2654,7 +2724,7 @@ impl Workspace {
                     folder_label(into)
                 ),
                 vec![
-                    name_list(sources),
+                    name_list(sources, &[]),
                     div()
                         .text_color(theme.text_muted)
                         .child(
@@ -2680,14 +2750,14 @@ impl Workspace {
                     .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
-            Question::ConfirmDelete { paths } => (
+            Question::ConfirmDelete { paths, listed } => (
                 I::CircleX,
                 "Delete for good?".to_owned(),
                 format!(
                     "Delete {} for good? This does not use the trash. It cannot be undone.",
                     operations::what(paths)
                 ),
-                vec![name_list(paths)],
+                vec![name_list(paths, listed)],
                 vec![
                     cancel("Cancel (Esc)"),
                     dialog::button_with_icon(
@@ -2952,8 +3022,41 @@ fn folder_label(path: &Path) -> String {
     }
 }
 
+/// How wide the window's content is. With client-side decorations the
+/// toolkit keeps a shadow band inside the window on each side, unless the
+/// window is tiled against every edge.
+fn content_width(window: &Window) -> f32 {
+    let width = f32::from(window.viewport_size().width);
+    match window.window_decorations() {
+        gpui_kit::Decorations::Client { tiling }
+            if !(tiling.top && tiling.bottom && tiling.left && tiling.right) =>
+        {
+            width - 2. * window.client_inset().map_or(0., f32::from)
+        }
+        _ => width,
+    }
+}
+
+/// How wide each of `count` tabs is in a strip `available` pixels wide:
+/// 160 while they fit beside the "+", shrinking evenly to 96, never less
+/// (past that the strip scrolls).
+fn tab_width(available: f32, count: usize) -> f32 {
+    let room = (available - size::TAB_ADD).max(0.) / count.max(1) as f32;
+    room.clamp(size::TAB_MIN, size::TAB)
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn tabs_keep_their_width_shrink_evenly_then_stop_at_the_narrowest() {
+        use super::{size, tab_width};
+        assert_eq!(tab_width(1000., 3), size::TAB);
+        // 10 tabs beside the "+" in 1000 px: 96.4 px each.
+        assert_eq!(tab_width(1000., 10), (1000. - size::TAB_ADD) / 10.);
+        assert_eq!(tab_width(1000., 40), size::TAB_MIN);
+        assert_eq!(tab_width(0., 1), size::TAB_MIN);
+    }
 
     #[test]
     fn the_error_list_names_every_entry_left_out_with_its_reason() {

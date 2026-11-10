@@ -86,6 +86,81 @@ fn category_icon(category: &str) -> gpui_kit::assets::IconName {
     }
 }
 
+/// Commands with an icon of their own: the same as their toolbar button or
+/// menu row. Other results show their category's icon.
+const COMMAND_ICONS: &[(&str, gpui_kit::assets::IconName)] = {
+    use gpui_kit::assets::IconName as I;
+    &[
+        ("Navigation: Back", I::ArrowLeft),
+        ("Navigation: Forward", I::ArrowRight),
+        ("Navigation: Up one folder", I::ArrowUp),
+        ("Navigation: Home folder", I::House),
+        ("Navigation: Enter a location", I::TextCursorInput),
+        ("Navigation: Reload folder", I::RefreshCw),
+        ("Navigation: Open selected folder", I::SquareArrowOutUpRight),
+        ("View: Icons", I::LayoutGrid),
+        ("View: Compact", I::Columns3),
+        ("View: Details", I::List),
+        ("View: Show or hide hidden files", I::Eye),
+        ("View: Filter by name", I::Funnel),
+        ("View: Zoom in", I::ZoomIn),
+        ("View: Zoom out", I::ZoomOut),
+        ("View: Reset zoom", I::Search),
+        ("View: Sort by name (toggle direction)", I::ArrowDownAZ),
+        (
+            "View: Sort by size (toggle direction)",
+            I::ArrowDownWideNarrow,
+        ),
+        (
+            "View: Sort by modified date (toggle direction)",
+            I::CalendarClock,
+        ),
+        ("View: Sort by type (toggle direction)", I::FileType),
+        ("Files: New folder", I::FolderPlus),
+        ("Files: New file", I::FilePlus),
+        ("Files: Rename selection", I::Pencil),
+        ("Files: Properties", I::Info),
+        ("Files: Copy selection", I::Copy),
+        ("Files: Cut selection", I::Scissors),
+        ("Files: Paste into this folder", I::ClipboardPaste),
+        ("Files: Duplicate here", I::CopyPlus),
+        ("Files: Copy location", I::Link),
+        ("Files: Undo last operation", I::Undo2),
+        ("Files: Move selection to trash", I::Trash),
+        ("Files: Delete selection permanently…", I::CircleX),
+        ("Files: Stop running operations", I::CircleStop),
+        ("Files: Copy selection to the other view", I::ArrowLeftRight),
+        ("Files: Move selection to the other view", I::ArrowLeftRight),
+        ("Trash: Restore selection", I::ArchiveRestore),
+        ("Workspace: New tab", I::Plus),
+        ("Workspace: Reopen closed tab", I::RotateCcw),
+        ("Workspace: Close tab or window", I::X),
+        ("Workspace: Toggle split view", I::SquareSplitHorizontal),
+        ("Workspace: Show or hide places", I::PanelLeft),
+        ("Workspace: Quit", I::Power),
+        ("Places: New group", I::ListPlus),
+        ("Places: Add current folder", I::BookmarkPlus),
+        ("Places: Rename selected place or group", I::Pencil),
+        ("Places: Remove selected place or group", I::BookmarkMinus),
+        ("Places: Hide or show selected place", I::EyeOff),
+        ("Places: Move selected place to next group", I::FolderInput),
+        ("Places: Collapse selected group", I::ChevronsDownUp),
+        ("Places: Expand selected group", I::ChevronsUpDown),
+        (
+            "Places: Unmount or safely remove selected device",
+            I::ArrowUpFromLine,
+        ),
+    ]
+};
+
+/// The icon of one result.
+fn result_icon(label: &str) -> gpui_kit::assets::IconName {
+    COMMAND_ICONS
+        .iter()
+        .find(|(command, _)| *command == label)
+        .map_or_else(|| category_icon(split_label(label).0), |(_, icon)| *icon)
+}
+
 pub enum PaletteEvent {
     Chosen(Target),
     Closed,
@@ -302,7 +377,7 @@ impl Palette {
                 })
             })
             .child(
-                gpui_kit::component::Icon::new(category_icon(category))
+                gpui_kit::component::Icon::new(result_icon(&candidate.label))
                     .size(px(size::PALETTE_ICON))
                     .flex_none()
                     .text_color(quiet),
@@ -522,7 +597,29 @@ impl Render for Palette {
 
 #[cfg(test)]
 mod tests {
-    use super::{Results, split_label};
+    use super::{Results, result_icon, split_label};
+    use crate::commands;
+    use gpui_kit::assets::IconName as I;
+
+    #[test]
+    fn a_command_shows_its_toolbar_or_menu_icon_and_others_their_category() {
+        assert_eq!(result_icon("Navigation: Back"), I::ArrowLeft);
+        assert_eq!(result_icon("Files: New folder"), I::FolderPlus);
+        assert_eq!(result_icon("View: Show or hide hidden files"), I::Eye);
+        assert_eq!(result_icon("Places: New group"), I::ListPlus);
+        // No icon of its own: the category's.
+        assert_eq!(result_icon("Selection: Invert"), I::SquareCheck);
+        assert_eq!(result_icon("Recent: projects"), I::Clock);
+    }
+
+    #[test]
+    fn every_command_with_its_own_icon_is_a_real_command() {
+        // A renamed command must not silently lose its icon.
+        let labels: Vec<&str> = commands::commands().iter().map(|c| c.label).collect();
+        for (command, _) in super::COMMAND_ICONS {
+            assert!(labels.contains(command), "{command} is not a command");
+        }
+    }
 
     #[test]
     fn a_result_shows_its_name_and_names_its_category_in_the_trail() {

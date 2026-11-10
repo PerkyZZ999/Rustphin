@@ -56,6 +56,10 @@ pub mod size {
     pub const TABS: f32 = 36.;
     /// Width of a tab.
     pub const TAB: f32 = 160.;
+    /// The narrowest a tab gets when many share the strip.
+    pub const TAB_MIN: f32 = 96.;
+    /// Below this width only the active tab shows its close button.
+    pub const TAB_CLOSE_SHOWN: f32 = 128.;
     /// A tab's close button.
     pub const TAB_CLOSE: f32 = 24.;
     /// Width of the new-tab button after the last tab.

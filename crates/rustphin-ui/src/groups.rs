@@ -30,7 +30,11 @@ pub struct Group {
 #[serde(default)]
 pub struct Groups {
     version: u32,
-    /// The groups, top to bottom.
+    /// Whether the Devices section is folded away.
+    pub devices_folded: bool,
+    /// Whether the Remote section is folded away.
+    pub remote_folded: bool,
+    /// The groups, top to bottom. Last: TOML writes tables after values.
     pub groups: Vec<Group>,
 }
 
@@ -60,6 +64,8 @@ impl Groups {
     pub fn to_toml(&self) -> String {
         let stored = Self {
             version: VERSION,
+            devices_folded: self.devices_folded,
+            remote_folded: self.remote_folded,
             groups: self.groups.clone(),
         };
         toml::to_string(&stored).unwrap_or_default()
@@ -235,6 +241,8 @@ mod tests {
     fn groups(spec: &[(&str, &[&str])]) -> Groups {
         Groups {
             version: VERSION,
+            devices_folded: false,
+            remote_folded: false,
             groups: spec
                 .iter()
                 .map(|(name, places)| Group {
@@ -256,6 +264,18 @@ mod tests {
 
     fn expected(spec: &[(&str, &[&str])]) -> Vec<(String, Vec<String>)> {
         shape(&groups(spec))
+    }
+
+    #[test]
+    fn the_folded_sections_are_kept_with_the_groups_and_older_files_still_load() {
+        let mut groups = Groups::parse("version = 1\n");
+        assert!(!groups.devices_folded && !groups.remote_folded);
+        groups.devices_folded = true;
+        groups.remote_folded = true;
+        groups.add("Work");
+        let again = Groups::parse(&groups.to_toml());
+        assert!(again.devices_folded && again.remote_folded);
+        assert_eq!(again.groups[0].name, "Work");
     }
 
     #[test]

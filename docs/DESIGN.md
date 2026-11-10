@@ -122,6 +122,8 @@ components:
     typography: "{typography.body-md}"
     padding: "{spacing.md}"
     width: 160px
+  tab-narrowest:
+    width: 96px
   tab-active:
     backgroundColor: "{colors.chrome-solid}"
     textColor: "{colors.text}"
@@ -591,8 +593,11 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   lines first, then the window lines.
 - **Tab strip:** tabs with a 16 px type icon, the label and a 24 px close
   button (12 px icon); "+" after the last tab; the rest of the strip is
-  `chrome-raised`. Proposed: past the window width tabs shrink to 96 px and
-  the strip scrolls.
+  `chrome-raised`. When the tabs do not fit, they shrink evenly down to
+  96 px; past that the tabs scroll sideways, the "+" stays in view after
+  them, and the active tab is scrolled into view (W-103). Tabs narrower
+  than 128 px show the close button on the active tab only, so the names
+  keep their room; Ctrl+W and the middle button still close any tab.
 - **Toolbar:** plain 32 px icon buttons (`toolbar-button`, no outline, the
   hover fill under the pointer), in groups separated by 20 px hairlines: Act
   as administrator · Back, Forward, Up, Reload · the location field (fills
@@ -931,7 +936,7 @@ except where the list below says otherwise; each W-079 step adds its line.
 - W-086 (2026-11-09): compact view fills columns top to bottom and scrolls
   sideways, with Dolphin's keys in that view.
 - W-079e (2026-11-08): the two-zone status line with free space and its
-  600/440 px rules (no volume name yet), the filter bar's 32 px field, the
+  600/440 px rules (the volume name came with W-103), the filter bar's 32 px field, the
   activity line, the result line with Undo, Details… and dismiss, the error
   details dialog (opened from the result line), the blur status line.
 - W-079f (2026-11-08): menu icons, shortcuts and the selection bar; the
@@ -976,10 +981,16 @@ except where the list below says otherwise; each W-079 step adds its line.
   nearest bundled or installed face.
 - Places menu and the "New group" button (W-102), and second menus that
   line up with the row that opens them.
-- Not yet implemented: the volume name after the
-  free space; per-command palette icons; icons and sizes in a question's list of names; tab overflow; the
-  design's offset focus ring on buttons (the library draws its own); saving
-  whether Devices is folded. "Details…" sits on the result line, since
+- W-103 (2026-11-10): the volume's name after the free space (only for a
+  listed volume mounted exactly where the folder's filesystem is: tmpfs
+  and network mounts have none); an icon per command in the palette (the
+  same as its toolbar button or menu row; other results keep their
+  category's); icons, and sizes for files, in the delete question's list
+  of names; tab overflow; Devices and Remote stay folded between runs
+  (kept with the place groups).
+- Not yet implemented: the design's offset focus ring on buttons (the
+  library draws its own); icons in the move-or-copy question's list (a drop
+  does not say which entries are folders). "Details…" sits on the result line, since
   operation results are window-level here.
 - A folder that cannot be opened (W-089): the view goes into it and says so
   in place, as mockup 28 draws it: a lock icon (`folder-x` when the reason is

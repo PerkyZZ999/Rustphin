@@ -94,6 +94,8 @@ pub enum Question {
     ConfirmDelete {
         /// What would be deleted.
         paths: Vec<PathBuf>,
+        /// What the listing knew of each, in the same order.
+        listed: Vec<Listed>,
     },
     /// Entries were dropped without a key saying whether to copy or move.
     Drop {
@@ -139,6 +141,16 @@ pub struct Problems {
     pub title: String,
     /// The entries left out and why.
     pub entries: Vec<rustphin_core::ops::Skipped>,
+}
+
+/// What a question's list of names shows beside a name, from the folder
+/// listing the question came from (nothing is read for it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Listed {
+    /// It is a folder.
+    pub folder: bool,
+    /// Its size, for a file.
+    pub size: Option<u64>,
 }
 
 /// The application's file operations and their state.
@@ -332,9 +344,15 @@ impl Hub {
     }
 
     /// Asks for confirmation, then deletes `paths` for good.
-    pub fn delete_after_confirming(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+    pub fn delete_after_confirming(
+        &mut self,
+        paths: Vec<PathBuf>,
+        listed: Vec<Listed>,
+        cx: &mut Context<Self>,
+    ) {
         if !paths.is_empty() {
-            self.questions.push_back(Question::ConfirmDelete { paths });
+            self.questions
+                .push_back(Question::ConfirmDelete { paths, listed });
             cx.notify();
         }
     }
@@ -366,7 +384,7 @@ impl Hub {
     /// Answers the delete confirmation being shown.
     pub fn confirm_delete(&mut self, confirmed: bool, cx: &mut Context<Self>) {
         if let Some(Question::ConfirmDelete { .. }) = self.questions.front()
-            && let Some(Question::ConfirmDelete { paths }) = self.questions.pop_front()
+            && let Some(Question::ConfirmDelete { paths, .. }) = self.questions.pop_front()
             && confirmed
         {
             self.start(Request::Delete { paths });

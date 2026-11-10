@@ -338,7 +338,7 @@ impl Trash for FreedesktopTrash {
 }
 
 /// The mount points listed in the text of `/proc/self/mountinfo`.
-fn mount_points(mountinfo: &[u8]) -> Vec<PathBuf> {
+pub(crate) fn mount_points(mountinfo: &[u8]) -> Vec<PathBuf> {
     mountinfo
         .split(|&byte| byte == b'\n')
         // Fields: id, parent id, device, root, mount point, …

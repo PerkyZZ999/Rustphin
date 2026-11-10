@@ -1,5 +1,18 @@
 # Validation evidence
 
+### 2026-11-10 — W-103 design leftovers
+- **Code:**
+  - Status line: `devices::mount_point_of` (the deepest mount in `/proc/self/mountinfo`, through the trash module's parser) is read with the free space in the background; the places panel names the listed volume mounted exactly there (`volume_at`), and the workspace hands the name to each pane.
+  - Palette: `COMMAND_ICONS` gives 50 commands their own icon; others keep their category's.
+  - Delete question: `Listed` (folder, size) comes from the listing the selection was made in; nothing is read for it.
+  - Tabs: `tab_width` shrinks tabs evenly from 160 to 96 px, then the strip scrolls (`overflow_x_scroll`, active tab scrolled into view once per change); below 128 px only the active tab shows its close button.
+  - `place-groups.toml` keeps `devices_folded` and `remote_folded`.
+  - Found on the way: widths measured from `viewport_size()` included the toolkit's client-side shadow band (920 px drawn in a 960 px viewport); `content_width` leaves it out, for the tabs, the panes' widths and the toolbar breakpoints.
+- **Tests:** `a_path_belongs_to_the_deepest_mount_above_it_with_escaped_names_decoded`, `the_running_system_has_a_mount_for_its_root`, `only_a_listed_volume_mounted_exactly_there_names_a_folders_filesystem`, `free_space_names_its_volume_when_the_places_panel_knows_it`, `a_command_shows_its_toolbar_or_menu_icon_and_others_their_category`, `every_command_with_its_own_icon_is_a_real_command` (failed with one entry renamed), `tabs_keep_their_width_shrink_evenly_then_stop_at_the_narrowest`, `the_folded_sections_are_kept_with_the_groups_and_older_files_still_load` (failed with the fold left out of the saved text). An earlier "deepest device above the folder" rule was replaced after it would have called tmpfs "System".
+- **On screen (DL1–DL5):** isolated session: tmpfs folder without a name, `/usr` with "(System)"; eight tabs at 96 px with the strip scrolling and "+" in view, Ctrl+Shift+Tab brought the last into view, only the active tab had a close button; the palette's "files" results each had their own icon; the delete question listed `sub` with a folder icon, `big.bin` 4.8 MiB and `note.txt` 3 B; Devices stayed folded after a restart.
+- **Not done:** the offset focus ring (drawn by the toolkit); icons in the move-or-copy list.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-097 icons on buttons
 - **Rule (DESIGN.md, Dialogs):** a button whose action has a clear picture leads with a 16 px Lucide icon, 8 px before its words, the same icon the action has in menus and the toolbar; Cancel, Close and Stop stay words only (their picture would be the close cross). Chosen with the iconography skill: icon plus text, icon left, one library, no icon without a clear metaphor.
 - **Code:** `dialog::button_with_icon` (the accessible name stays the words); used for Rename, Apply, Open, Run, Skip, Replace or Merge, Keep both, Try again, Copy here, Copy list, Move here, Delete for good, Empty the trash, Back, Up, Show hidden, Clear filter and Stop acting as administrator; the notice's Undo has `undo-2`.

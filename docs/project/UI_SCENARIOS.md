@@ -408,3 +408,13 @@ Isolated home with a places file holding Home (a system item) and three folders.
 | ID | Steps | Expected |
 |---|---|---|
 | BI1 | Select a file, Shift+Del; Escape; select two, F2; Escape; select one, Delete | "Delete for good (Enter)" leads with `circle-x`, "Cancel (Esc)" has no icon; "Rename (Enter)" leads with `pencil` and dims with the button while disabled; the notice's "Undo" leads with `undo-2` |
+
+## Design leftovers (W-103)
+
+| ID | Steps | Expected |
+|---|---|---|
+| DL1 | Open a folder in the isolated home (tmpfs) and `/usr` in a second tab | The first status line reads "Free: … of …" without a name; `/usr` reads "Free: … of … (System)" |
+| DL2 | Open eight tabs in a 960 × 640 window | Tabs shrink to 96 px, the strip scrolls, "+" stays at its end, only the active tab has a close button; Ctrl+Shift+Tab to the last tab scrolls it into view |
+| DL3 | Ctrl+Shift+P, type "files" | Each result has its own icon (file-plus, folder-plus, info, scissors, link, copy, copy-plus) |
+| DL4 | Select a folder and two files, Shift+Del | The list shows a folder icon for the folder, file icons and sizes for the files |
+| DL5 | Fold Devices, quit, start again | Devices is still folded ("Devices (n)"); `place-groups.toml` has `devices_folded = true` |

@@ -360,7 +360,11 @@ pub struct Browser {
     trash_dir: Option<PathBuf>,
     /// The size and free space of the volume holding the folder shown, and
     /// the folder it was read for.
-    free_space: Option<(PathBuf, u64, u64)>,
+    /// The folder, its volume's size and free space, and where that
+    /// volume is mounted.
+    free_space: Option<(PathBuf, u64, u64, Option<PathBuf>)>,
+    /// The name of the volume holding the folder, from the places panel.
+    volume: Option<String>,
     /// What the status line last derived from a snapshot and selection.
     status_sizes: std::cell::RefCell<Option<StatusSizes>>,
     /// Whether something in the folder shown is cut; refreshed every redraw.
@@ -487,6 +491,7 @@ impl Browser {
             refocus: false,
             trash_dir: None,
             free_space: None,
+            volume: None,
             status_sizes: std::cell::RefCell::new(None),
             has_cut: false,
             press_on_entry: false,
@@ -1463,6 +1468,22 @@ impl Browser {
         }
     }
 
+    /// Where the volume holding the folder shown is mounted, once measured.
+    pub(crate) fn volume_mount(&self) -> Option<PathBuf> {
+        self.free_space
+            .as_ref()
+            .filter(|(path, ..)| self.location().as_deref() == Some(path.as_path()))
+            .and_then(|(.., mount)| mount.clone())
+    }
+
+    /// Names the volume holding the folder, for the free space.
+    pub(crate) fn set_volume(&mut self, name: Option<String>, cx: &mut Context<Self>) {
+        if self.volume != name {
+            self.volume = name;
+            cx.notify();
+        }
+    }
+
     /// Reads the folder shown again, as F5 does.
     pub(crate) fn reload(&mut self, cx: &mut Context<Self>) {
         self.navigate(DirectoryModel::reload, cx);
@@ -1924,13 +1945,21 @@ impl Browser {
         cx.spawn(async move |view, cx| {
             let folder = path.clone();
             let usage = cx
-                .background_spawn(async move { rustphin_platform::devices::usage(&folder) })
+                .background_spawn(async move {
+                    rustphin_platform::devices::usage(&folder).map(|(total, free)| {
+                        (
+                            total,
+                            free,
+                            rustphin_platform::devices::mount_point_of(&folder),
+                        )
+                    })
+                })
                 .await;
             let _ = view.update(cx, |view, cx| {
-                if let Some((total, free)) = usage
+                if let Some((total, free, mount)) = usage
                     && view.location().as_deref() == Some(path.as_path())
                 {
-                    view.free_space = Some((path, total, free));
+                    view.free_space = Some((path, total, free, mount));
                     cx.notify();
                 }
             });
@@ -2269,7 +2298,23 @@ impl Browser {
 
     fn delete_selected(&mut self, cx: &mut Context<Self>) {
         let paths = self.selected_paths();
-        hub(cx).update(cx, |hub, cx| hub.delete_after_confirming(paths, cx));
+        // The question lists each with its icon and size, from the listing.
+        let listed = self.current_snapshot().map_or_else(Vec::new, |snapshot| {
+            self.selection
+                .rows(snapshot)
+                .into_iter()
+                .map(|row| {
+                    let folder = snapshot.is_container(row);
+                    operations::Listed {
+                        folder,
+                        size: (!folder)
+                            .then(|| snapshot.metadata(row).map(|metadata| metadata.size))
+                            .flatten(),
+                    }
+                })
+                .collect()
+        });
+        hub(cx).update(cx, |hub, cx| hub.delete_after_confirming(paths, listed, cx));
     }
 
     fn pick_up_selected(&mut self, cut: bool, cx: &mut Context<Self>) {
@@ -3903,9 +3948,7 @@ impl Browser {
             .free_space
             .as_ref()
             .filter(|(path, ..)| self.location().as_deref() == Some(path.as_path()))
-            .map(|(_, total, free)| {
-                format!("Free: {} of {}", format::size(*free), format::size(*total))
-            });
+            .map(|(_, total, free, _)| free_text(*total, *free, self.volume.as_deref()));
         // Read in full by assistive technology, whatever fits on screen.
         let spoken = [
             parts.selection.clone(),
@@ -5062,6 +5105,16 @@ impl Entry {
     }
 }
 
+/// The status line's free space: "Free: 1.8 TiB of 3.6 TiB (Data)", the
+/// volume's name when the places panel knows it.
+fn free_text(total: u64, free: u64, volume: Option<&str>) -> String {
+    let text = format!("Free: {} of {}", format::size(free), format::size(total));
+    match volume {
+        Some(name) => format!("{text} ({name})"),
+        None => text,
+    }
+}
+
 /// How faded an entry is drawn, if at all. Cut entries are on their way
 /// out: half opacity until pasted. Hidden ones are faded as in Dolphin,
 /// except while selected, where the selection's own contrast must hold.
@@ -5184,6 +5237,16 @@ impl Columns {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn free_space_names_its_volume_when_the_places_panel_knows_it() {
+        let gib = 1024 * 1024 * 1024;
+        assert_eq!(
+            free_text(4 * gib, gib, Some("Data")),
+            "Free: 1.0 GiB of 4.0 GiB (Data)"
+        );
+        assert_eq!(free_text(4 * gib, gib, None), "Free: 1.0 GiB of 4.0 GiB");
+    }
 
     #[test]
     fn a_field_is_wholly_selected_only_from_its_start_to_its_end() {

@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-10 — W-097 icons on buttons
+- Latest validation entry: VALIDATION.md, 2026-11-10 — W-103 design leftovers
 
 ## Open loops
 - Task: W-079 design pass done 2026-11-08 (D-024, steps a–g) from the maintainer's HTML mockups; docs/DESIGN.md "Implementation status" lists what is left (list scrollbars, volume name, per-command palette icons, app icons, tab overflow, disabled toolbar colour, saved Devices fold). Glass look needs the real desktop.
@@ -45,7 +45,7 @@
 - W-076e: complete reverse field traversal and native input focus conflict through duplicate registration in the pinned toolkit. Removing the wrapper tracking restores traversal but loses native focus; original code restored. DISCOVERY.md records a concrete deduplication candidate and required checks. The maintainer approved a bounded isolated experiment on 2026-11-05; its corrected latest-registration candidate passes seven focused tests and native reverse-field/Unicode checks. Production pins remain unchanged. Full published toolkit tests are unavailable; broader modal/performance assessment and adoption still require review. This blocks that acceptance item, not unrelated S11 work. The baseline gate passes.
 
 ## Next action
-- Act as Administrator (D-028): W-098a–d done (browsing and changes through KDE's helper, verified with the stand-in); W-098e is the maintainer's real-desktop check (checklist at the end of ADMIN_MODE.md). W-100 (hover fill), W-101 (places marked for Dolphin) and W-102 (places menu, New group button) done. W-097 (icons on buttons) done. Next the DESIGN.md leftovers (volume name, palette icons, tab overflow, saved Devices fold).
+- Act as Administrator (D-028): W-098a–d done (browsing and changes through KDE's helper, verified with the stand-in); W-098e is the maintainer's real-desktop check (checklist at the end of ADMIN_MODE.md). W-100 (hover fill), W-101 (places marked for Dolphin) and W-102 (places menu, New group button) done. W-097 (icons on buttons) and W-103 (DESIGN.md leftovers) done. What remains needs the maintainer (W-098e, the W-078 real-desktop checks) or a toolkit upgrade (reverse focus traversal, offset focus ring).
 - The maintainer to review W-079/W-086/W-087 on the real desktop (glass look; compact view with a real wheel). The open S11 criteria still need the maintainer's desktop or hardware (5) or W-076e (2). Otherwise continue with the smaller W-079 leftovers listed in docs/DESIGN.md.
 
 ## Phase checklist
