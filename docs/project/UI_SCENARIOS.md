@@ -245,6 +245,17 @@ The test binary comes from `rust-tc test`; its filename contains a build hash.
 | T5 | Right-click the title bar, Escape | KWin's window menu (Maximize, Minimize, Keep Above Others, More Actions, Close) opens and closes |
 | T6 | Click Close | The window closes and the session is saved, as with Ctrl+Q |
 
+## Toolbar across the window (W-096b/c)
+
+| ID | Steps | Expected |
+|---|---|---|
+| TB1 | Start in the scene at 920 px | One toolbar under the title bar: shield (dimmed), Back, Forward, Up, Reload, location, New folder, view mode with Details lit, Split, Show hidden, Filter, Actions; the tab strip ("Pictures", "+") over the files beside Places, whose title row lines up with it |
+| TB2 | Point at Split | Tooltip "Split view (F3)" |
+| TB3 | Click Show hidden | The eye lights up (`primary-subtle` fill, bright icon) and hidden entries show faded; Ctrl+H turns it off again from the keyboard |
+| TB4 | Click Split; click the left path bar; double-click a folder | Two sides, each with a path bar; the 2 px line and the toolbar's location follow the side last clicked; Back lights up for it |
+| TB5 | Ctrl+L, Escape | The toolbar's location becomes a field with the path selected; Escape returns to the segments |
+| TB6 | Click Back in the toolbar | The active side goes back; Forward lights up |
+
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.

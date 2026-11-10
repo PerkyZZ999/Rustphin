@@ -29,8 +29,9 @@ use rustphin_core::{
 };
 
 use crate::{
-    browser::{Browser, BrowserEvent, DraggedEntries, EditLocation},
+    browser::{Browser, BrowserEvent, DraggedEntries, EditLocation, ToolbarLayout},
     commands::{self, Scope},
+    controls::tool_button,
     dialog, format,
     history::history,
     location::Location,
@@ -1582,6 +1583,8 @@ impl Render for Workspace {
         // Without the compositor's frame, a hairline marks the window's edge.
         let framed = crate::titlebar::client_decorated(window) && !window.is_maximized();
 
+        let toolbar = self.toolbar(theme, window, cx);
+        let tab_strip = self.tab_strip(theme, cx).into_any_element();
         let tab = self.tabs.active();
         let split = tab.panes.len() > 1;
         // Panes share equally the width the places panel leaves.
@@ -1592,9 +1595,12 @@ impl Render for Workspace {
         };
         let pane_width =
             (f32::from(window.viewport_size().width) - panel_width) / tab.panes.len() as f32;
-        for pane in &tab.panes {
-            pane.browser
-                .update(cx, |browser, _| browser.set_width(pane_width));
+        for (index, pane) in tab.panes.iter().enumerate() {
+            let side = split.then_some(index == tab.active);
+            pane.browser.update(cx, |browser, _| {
+                browser.set_width(pane_width);
+                browser.set_split(side);
+            });
         }
         let panes = tab.panes.iter().enumerate().map(|(index, pane)| {
             div()
@@ -1742,17 +1748,23 @@ impl Render for Workspace {
                 workspace.border_1().border_color(theme.border_strong)
             })
             .children(title_bar)
-            // A single tab needs no tab strip: fewer things on screen by default.
-            .when(self.tabs.len() > 1, |workspace| {
-                workspace.child(self.tab_strip(theme, cx))
-            })
+            .child(toolbar)
+            // The places panel beside the tabs over the panes, as in Dolphin.
             .child(
                 div()
                     .flex()
                     .flex_1()
                     .min_h_0()
                     .when(self.sidebar_visible, |row| row.child(self.sidebar.clone()))
-                    .children(panes),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_w_0()
+                            .child(tab_strip)
+                            .child(div().flex().flex_1().min_h_0().children(panes)),
+                    ),
             )
             // Window lines under the panes' status lines: activity and
             // results first, the blur status last.
@@ -1779,6 +1791,81 @@ impl Render for Workspace {
 }
 
 impl Workspace {
+    /// The toolbar across the window (W-096, mockup 35): the administrator
+    /// button and Split are the window's; the rest act on the active pane,
+    /// which draws them.
+    fn toolbar(&mut self, theme: Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let layout = ToolbarLayout::for_width(f32::from(window.viewport_size().width));
+        let split = self.tabs.active().panes.len() > 1;
+        let parts = self.tabs.active().browser().update(cx, |browser, cx| {
+            browser.toolbar_parts(layout, theme, window, cx)
+        });
+        let separator = || {
+            div()
+                .flex_none()
+                .w(px(size::HAIRLINE))
+                .h(px(size::TOOL_SEPARATOR))
+                .mx(px(space::XS))
+                .bg(theme.border_strong)
+        };
+        div()
+            .id("toolbar")
+            .role(Role::Toolbar)
+            .aria_label("Toolbar")
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(space::XS))
+            .h(px(size::TOOLBAR))
+            .px(px(space::SM))
+            .bg(theme.chrome)
+            .border_b_1()
+            .border_color(theme.border)
+            // Acting as administrator comes with W-098.
+            .child(tool_button(
+                "act-as-administrator",
+                gpui_kit::assets::IconName::Shield,
+                "Act as administrator (not available yet)",
+                false,
+                None,
+                &theme,
+            ))
+            .child(separator())
+            .child(parts.navigation)
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_w_0()
+                    .mx(px(space::XS))
+                    .child(parts.location),
+            )
+            .children(parts.new_folder)
+            .when(layout.tools, |bar| bar.child(separator()))
+            .children(parts.view_mode)
+            .when(layout.tools, |bar| {
+                bar.child(
+                    tool_button(
+                        "split",
+                        gpui_kit::assets::IconName::SquareSplitHorizontal,
+                        if split {
+                            "Close split view (F3)"
+                        } else {
+                            "Split view (F3)"
+                        },
+                        true,
+                        Some(split),
+                        &theme,
+                    )
+                    .on_click(cx.listener(|this, _, window, cx| this.toggle_split(window, cx))),
+                )
+            })
+            .children(parts.toggles)
+            .child(separator())
+            .child(parts.actions)
+            .into_any_element()
+    }
+
     /// What file operations are doing and what they last did, as lines under
     /// the panes. Nothing is shown while there is nothing to say.
     fn activity(

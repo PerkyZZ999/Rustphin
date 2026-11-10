@@ -2,11 +2,52 @@
 //! docs/DESIGN.md draws them.
 
 use gpui_kit::{
-    Styled as _,
-    component::button::{Button, ButtonVariants as _},
+    ElementId, ParentElement as _, SharedString, Styled as _,
+    assets::IconName,
+    component::{
+        Disableable as _, Icon, Sizable as _,
+        button::{Button, ButtonVariants as _},
+    },
+    prelude::FluentBuilder as _,
+    px,
 };
 
-use crate::theme::Theme;
+use crate::theme::{Theme, size};
+
+/// A plain toolbar button (`toolbar-button`): an icon on no fill, the hover
+/// fill under the pointer. `on` marks a toggle that is switched on with
+/// `toolbar-toggle-on`; screen readers hear it as pressed.
+pub fn tool_button(
+    id: impl Into<ElementId>,
+    icon: IconName,
+    label: impl Into<SharedString>,
+    enabled: bool,
+    on: Option<bool>,
+    theme: &Theme,
+) -> Button {
+    let label = label.into();
+    let lit = on == Some(true);
+    Button::new(id)
+        .ghost()
+        .with_size(px(size::TOOL_BUTTON))
+        .size(px(size::TOOL_BUTTON))
+        .when(lit, |button| button.bg(theme.current))
+        .when_some(on, Button::toggled)
+        .child(
+            Icon::new(icon)
+                .size(px(size::ICON))
+                .text_color(if !enabled {
+                    theme.text_disabled
+                } else if lit {
+                    theme.accent
+                } else {
+                    theme.text
+                }),
+        )
+        .disabled(!enabled)
+        .tooltip(label.clone())
+        .accessibility_label(label)
+}
 
 /// The design's outlined button.
 pub trait Outlined {

@@ -29,16 +29,16 @@ pub mod size {
     pub const RENAME_FIELD: f32 = 28.;
     /// The drag chip.
     pub const DRAG_CHIP: f32 = 28.;
-    /// Height of the toolbar.
-    pub const TOOLBAR: f32 = 52.;
+    /// Height of the toolbar across the window (`toolbar`).
+    pub const TOOLBAR: f32 = 44.;
     /// Toolbar buttons, the location field and Actions: 36 pixels square or
     /// tall.
     pub const CONTROL: f32 = 36.;
-    /// Minimum pane width for the shortcut hint beside Actions.
-    pub const TOOLBAR_HINT_MIN: f32 = 640.;
-    /// Minimum pane width for Forward, Up and the labelled Actions button.
+    /// Minimum window width for the shortcut hint beside Actions.
+    pub const TOOLBAR_HINT_MIN: f32 = 1000.;
+    /// Minimum window width for Forward, Up and the labelled Actions button.
     pub const TOOLBAR_FULL_MIN: f32 = 560.;
-    /// Minimum pane width for the Back button.
+    /// Minimum window width for the Back button.
     pub const TOOLBAR_BACK_MIN: f32 = 300.;
     /// Height of the status line.
     pub const STATUS: f32 = 32.;
@@ -53,13 +53,13 @@ pub mod size {
     /// Widest the filter field grows.
     pub const FILTER_FIELD_MAX: f32 = 360.;
     /// Height of the tab strip.
-    pub const TABS: f32 = 40.;
+    pub const TABS: f32 = 36.;
     /// Width of a tab.
-    pub const TAB: f32 = 168.;
+    pub const TAB: f32 = 160.;
     /// A tab's close button.
     pub const TAB_CLOSE: f32 = 24.;
     /// Width of the new-tab button after the last tab.
-    pub const TAB_ADD: f32 = 40.;
+    pub const TAB_ADD: f32 = 36.;
     /// Icons in toolbars and banners.
     pub const ICON: f32 = 16.;
     /// Sort arrows and other inline indicators.
@@ -143,6 +143,15 @@ pub mod size {
     pub const WINDOW_BUTTON: f32 = 44.;
     /// Thickness of the bands along the window's edges that resize it.
     pub const RESIZE_EDGE: f32 = 4.;
+    /// Height of the hairlines between the toolbar's groups.
+    pub const TOOL_SEPARATOR: f32 = 20.;
+    /// A split pane's path bar (`path-bar`).
+    pub const PATH_BAR: f32 = 28.;
+    /// A plain toolbar button and the view-mode segments (`toolbar-button`).
+    pub const TOOL_BUTTON: f32 = 32.;
+    /// Window width from which the toolbar shows its view tools (New
+    /// folder, view mode, Split, Show hidden, Filter) and Reload.
+    pub const TOOLBAR_TOOLS_MIN: f32 = 760.;
     /// Width of a scrollbar's track.
     pub const SCROLLBAR: f32 = 8.;
     /// Gap between a scrollbar's thumb and the edge of its track.

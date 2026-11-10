@@ -32,8 +32,8 @@ S11 — Hardening for daily use (in progress)
 - [x] W-095 — Smaller type scale (D-026): 12 px text and names, 11 px data, 10 px labels, 15 px headings, with their line heights. Row and control heights go to the W-096 mockup. Done 2026-11-10 (see VALIDATION.md).
 - [ ] W-096 — Top bar redesign: custom title bar in the app's style above the toolbar; toolbar above the tab strip; one toolbar for both panes of a split, acting on the focused pane (Dolphin); toolbar buttons Reload, New folder, View mode, Split, Show hidden, Filter and the administrator button. Mockup first, approved by the maintainer before building. 2026-11-10: mockup drawn (docs/mockup/35-top-bar-redesign.html) and approved by the maintainer ("looks perfect"): 32 px rows (24 px allowed at the smallest zoom), plain toolbar buttons, a path bar per side in split view as Dolphin, Minimise/Maximise/Close on the right.
   - [x] W-096a — Title bar drawn by Rustphin (client-side decorations): logo, centred title, window buttons, drag, double-click, window menu, resize edges, hairline frame. Done 2026-11-10.
-  - [ ] W-096b — Toolbar across the window above the places panel and tabs; new buttons; tab strip always shown, over the files.
-  - [ ] W-096c — Split view: one toolbar for the active side, a path bar above each side.
+  - [x] W-096b — Toolbar across the window above the places panel and tabs; new buttons; tab strip always shown, over the files. Done 2026-11-10.
+  - [x] W-096c — Split view: one toolbar for the active side, a path bar above each side. Done 2026-11-10.
   - [ ] W-096d — Density: rows, places, tabs, headings and status line to the new sizes.
 - [ ] W-097 — Icons on buttons wherever they help recognition (iconography skill).
 - [ ] W-098 — Act as Administrator as in Dolphin (D-027): KDE's polkit prompt, file operations through kio-admin's privileged helper, a clearly marked mode, switched off the same way. Design and threat model first, approved by the maintainer before building.

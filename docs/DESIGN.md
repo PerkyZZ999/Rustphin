@@ -148,7 +148,9 @@ components:
   toolbar-button-disabled:
     textColor: "{colors.text-disabled}"
   toolbar-shortcut-hint-min:
-    width: 640px
+    width: 1000px
+  toolbar-tools-min:
+    width: 760px
   toolbar-full-navigation-min:
     width: 560px
   toolbar-back-navigation-min:
@@ -566,35 +568,54 @@ the system interface font stands in when one is missing.
 
 Everything sits on a 4-pixel grid; use only the `spacing` tokens.
 
-- **Window, top to bottom:** the tab strip (40 px, only with two or more
-  tabs); the body, which is the places panel beside one or two panes; then the
+- **Window, top to bottom (W-096, mockup 35):** the title bar (36 px) when
+  the compositor leaves decorations to Rustphin; the toolbar (44 px) across
+  the whole window; the body, which is the places panel beside a column made
+  of the tab strip (36 px, always shown) over one or two panes; then the
   window lines across the full width: activity lines (44 px each) while
   operations run, the result line (44 px) after one ends, and the blur status
-  (32 px) when blur is unavailable. The places panel runs from under the tab
-  strip to the window lines. Hairline `border` lines separate them.
-- **Each pane, top to bottom:** its toolbar (52 px), the error or trash banner
-  when present (44 px, inset 8 px from the pane's edges), the column headings
-  and the list, the filter bar (40 px) when open, and the status line (32 px).
-  So at the bottom of the window come the panes' status lines first, then the
-  window lines.
-- **Tab strip:** tabs 168 px wide with a 16 px type icon, the label and a
-  24 px close button (12 px icon); "+" (40 px wide) after the last tab; the
-  rest of the strip is `chrome-raised`. Proposed: past the window width tabs
-  shrink to 96 px and the strip scrolls.
-- **Toolbar:** Back, Forward and Up as outlined 36 px buttons with 8 px gaps;
-  the location field fills the middle; then "Actions ⌄" with the shortcut
-  "Ctrl+Shift+P" in `data-sm` beside it, inside one outlined group. By pane
-  width: below 640 px the shortcut hint leaves; below 560 px Forward and Up
-  leave and Actions becomes an icon button (Lucide `menu`, tooltip "Actions
-  (Ctrl+Shift+P)"); below 300 px Back leaves. They remain in Actions and on
-  their keys.
+  (32 px) when blur is unavailable. The places panel runs from under the
+  toolbar to the window lines; its title row lines up with the tab strip.
+  Hairline `border` lines separate them. Without the compositor's frame a
+  hairline `border-strong` frame marks the window's edge.
+- **Title bar:** the small logo (16 px) on the left, the window title
+  centred in `body-md` `text-muted`, then Minimise, Maximise (Restore when
+  maximised) and Close as 44 × 36 px plain buttons. Dragging it moves the
+  window, a double click maximises or restores, a right click opens the
+  compositor's window menu; 4 px bands (16 px corners) along the edges
+  resize the window.
+- **Each pane, top to bottom:** in split view, its path bar (28 px); the
+  error or trash banner when present (44 px, inset 8 px from the pane's
+  edges), the column headings and the list, the filter bar (40 px) when open,
+  and the status line. So at the bottom of the window come the panes' status
+  lines first, then the window lines.
+- **Tab strip:** tabs with a 16 px type icon, the label and a 24 px close
+  button (12 px icon); "+" after the last tab; the rest of the strip is
+  `chrome-raised`. Proposed: past the window width tabs shrink to 96 px and
+  the strip scrolls.
+- **Toolbar:** plain 32 px icon buttons (`toolbar-button`, no outline, the
+  hover fill under the pointer), in groups separated by 20 px hairlines: Act
+  as administrator · Back, Forward, Up, Reload · the location field (fills
+  the middle) · New folder · the view mode (Icons, Compact, Details as one
+  outlined segmented control) · Split, Show hidden, Filter · "Actions ⌄"
+  with the shortcut "Ctrl+Shift+P" in `data-sm` beside it, in one outlined
+  group. Toggles that are on take `toolbar-toggle-on` and are announced as
+  pressed; their tooltips name the key. In split view the toolbar acts on
+  the active pane. By window width: below 1000 px the shortcut hint leaves;
+  below 760 px Reload, New folder, the view mode and the three toggles leave;
+  below 560 px Forward and Up leave and Actions becomes an icon button
+  (Lucide `menu`, tooltip "Actions (Ctrl+Shift+P)"); below 300 px Back
+  leaves. They remain in Actions and on their keys.
+- **Path bar (split view):** the side's location as clickable segments in
+  `data-md`, `text` on the active side and `text-muted` on the other, under
+  the 2 px `primary-bright` line that marks the active side.
 - **Location field:** a 16 px folder icon, then the path in `data-md` as
   clickable segments; leading segments collapse into "…" when space runs out.
   Trash shows as "Trash", the way Places names it, not `trash:/`; Ctrl+L
   still edits the address as text.
-- **Places panel:** 240 px on the left (F9 hides it); a 52 px title row
-  "Places", so its hairline lines up with the toolbar's; rows 32 px with 20 px icons and a 12 px inset; section headings
-  32 px; device rows 56 px. The panel scrolls on its own.
+- **Places panel:** 240 px on the left (F9 hides it); a 36 px title row
+  "Places", so its hairline lines up with the tab strip's; rows 28 px with
+  16 px icons and a 12 px inset; section headings 28 px; device rows 48 px. The panel scrolls on its own.
 - **Details view:** 32 px heading row; columns name (fills), size (96 px,
   right-aligned), modified (168 px), type (160 px); 8 px side gutter; rows
   36 px with 24 px icons or 24 × 16 px thumbnails. Below 820 px of pane width

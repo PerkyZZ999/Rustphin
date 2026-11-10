@@ -1696,7 +1696,8 @@ impl Render for Sidebar {
             .flex_none()
             .items_center()
             .gap(px(space::XS))
-            .h(px(size::TOOLBAR))
+            // Lines up with the tab strip beside it.
+            .h(px(size::TABS))
             .px(px(space::SM))
             .border_b_1()
             .border_color(theme.border)
