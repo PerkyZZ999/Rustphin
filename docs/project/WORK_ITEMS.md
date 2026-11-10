@@ -43,7 +43,8 @@ S11 — Hardening for daily use (in progress)
   - [x] W-098a — Helper client (`rustphin-platform::admin`): bounded `UDSEntry` decoder, safe `file://` URLs, KIO error mapping, list/stat/read/write/mkdir/rename/copy/delete/chmod/chown with timeouts; fake helper tests; `admin_entry` fuzz target. Done 2026-11-10.
   - [x] W-098b — Read-only mode: `AdminFs` listing and describing, shield, bar, title, prompt and refusal. Done 2026-11-10.
   - [x] W-098c — Changes through the helper: new folder or file, rename, copy, move, delete for good, undo, Properties owner and permissions.
-  - [ ] W-098d — Replay, docs (ARCHITECTURE trust boundary, DESIGN), the maintainer's real-desktop check.
+  - [x] W-098d — Replay, docs (ARCHITECTURE trust boundary, DESIGN, ADMIN_MODE as built), calls marked as allowed to ask for the password.
+  - [ ] W-098e — the maintainer's check with the real helper and KDE's password dialog (the checklist at the end of ADMIN_MODE.md).
 
 ## Design pass (W-079, started 2026-11-08 under D-024)
 

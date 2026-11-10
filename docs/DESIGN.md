@@ -940,10 +940,15 @@ except where the list below says otherwise; each W-079 step adds its line.
   a dismiss icon; batch rename segments with icons, Find and Replace side by
   side in mono, and one problem note above the preview.
 - Top bar redesign (W-096, mockup 35): the window's own title bar with
-  resize edges, one toolbar across the window with the new buttons (the
-  administrator shield is dimmed until W-098), the tab strip always shown
+  resize edges, one toolbar across the window with the new buttons, the tab strip always shown
   over the files, a path bar per side in split view, and the denser rows,
   places, headings and status line.
+- Acting as administrator (W-098, mockup 35c): the shield toggles the
+  window's mode (`error` on `error-surface` while on, dimmed with a reason
+  when kio-admin is missing), the 36 px bar under the toolbar with "Stop
+  acting as administrator", and "(administrator)" in the title. Seen only
+  in the isolated session with the stand-in helper; KDE's real password
+  dialog is the maintainer's check.
 - Font weights (W-088): the app bundles static faces of Inter (400, 500,
   600), Space Grotesk (600) and JetBrains Mono (400, 500), because the pinned
   GPUI ignores a variable font's weight axis. Headings render semibold as

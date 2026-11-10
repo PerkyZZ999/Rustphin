@@ -118,3 +118,46 @@ for the password; the view is marked; the same button switches it off.
 2. Per-window mode (recommended) or per-pane like Dolphin?
 3. Accept the changes in the table: permanent delete with confirmation, no
    live updates, no thumbnails, no batch rename in the mode.
+
+## As built (W-098a–c, 2026-11-10)
+
+Built as designed, per window. Differences and limits found on the way:
+
+- **New folders take the user's umask.** KIO sets the mode it is given
+  exactly, where `mkdir(2)` filters it; without this a new folder made as
+  root was world-writable. Covered by a regression test.
+- **Moves across filesystems keep the original.** The helper cannot `fsync`,
+  so the engine cannot prove the copy is safe on disk and leaves the source
+  where it was (D-011), with the usual notice. Moves within one filesystem
+  are renames and work.
+- **Owner and group are shown, not changed.** Properties has never offered
+  changing the owner; the helper's `chown` is wired in `AdminHelper` for
+  when it does.
+- **Switching the mode starts each pane's history afresh**, so Back is
+  unavailable right after switching.
+- **Opening a file** in the mode starts its application as the maintainer, as
+  planned.
+
+## the maintainer's check on the real desktop (W-098d)
+
+Agents must not type passwords, and the isolated session shares the real
+system bus, so only this check uses the real helper. With the installed
+build:
+
+1. Open `/etc`; click the shield. KDE's own dialog should ask for the
+   password ("Manage files as administrator"). Cancel it: the line should
+   say access was not granted, and the mode stays off.
+2. Click the shield again and enter the password: red shield, red bar,
+   "(administrator)" in the title; `/etc` lists as before.
+3. Open `/opt` (or another root-owned folder you do not mind touching).
+   New folder, name it `rustphin-test`; it should appear at once, owned by
+   root, `rwxr-xr-x`.
+4. Rename it to `rustphin-test-2`; open Properties (owner root); tick Group
+   › Write, Apply, then Undo.
+5. Delete it: "Delete for good?" should ask; confirm, and it disappears.
+6. Click "Stop acting as administrator": the bar goes and `/opt` lists as
+   you.
+7. Wait about five minutes with the mode on, then make another change:
+   the password should be asked again (polkit's memory ran out), not fail.
+
+Note anything that differs in TEST_RUN.md.

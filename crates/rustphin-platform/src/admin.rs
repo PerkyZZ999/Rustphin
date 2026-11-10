@@ -712,14 +712,21 @@ impl AdminHelper {
         let _one_at_a_time = self.busy.lock().unwrap_or_else(PoisonError::into_inner);
         // Signals of earlier commands are of no use any more.
         self.signals.drain();
-        let reply = self.connection.call_method(
-            Some(SERVICE),
-            ROOT_PATH,
-            Some(INTERFACE),
+        // The call may make KDE's polkit agent ask for the password: say so,
+        // as the D-Bus specification asks of such calls.
+        let helper =
+            zbus::blocking::proxy::Builder::<zbus::blocking::Proxy<'_>>::new(&self.connection)
+                .destination(SERVICE)?
+                .path(ROOT_PATH)?
+                .interface(INTERFACE)?
+                .cache_properties(zbus::proxy::CacheProperties::No)
+                .build()?;
+        let path: Option<OwnedObjectPath> = helper.call_with_flags(
             method,
+            zbus::proxy::MethodFlags::AllowInteractiveAuth.into(),
             arguments,
         )?;
-        let path: OwnedObjectPath = reply.body().deserialize()?;
+        let path = path.unwrap_or_default();
         if path.as_str().len() <= 1 {
             // The helper answers a refused authorisation with no object.
             return Err(AdminError::Denied);
@@ -1164,8 +1171,19 @@ mod tests {
             &self,
             url: String,
             #[zbus(object_server)] server: &zbus::ObjectServer,
+            #[zbus(header)] header: zbus::message::Header<'_>,
         ) -> zbus::fdo::Result<OwnedObjectPath> {
-            self.asked.lock().unwrap().push(format!("stat {url}"));
+            // Only a call that lets polkit ask for the password is plain.
+            let interactive = header
+                .primary()
+                .flags()
+                .contains(zbus::message::Flags::AllowInteractiveAuth);
+            let note = if interactive {
+                ""
+            } else {
+                " (not interactive)"
+            };
+            self.asked.lock().unwrap().push(format!("stat {url}{note}"));
             self.command(server, "stat", Stat).await
         }
 
@@ -1430,6 +1448,13 @@ mod tests {
         // root "/", which no listed name may be.
         assert_eq!(found.name, "systemd");
         assert_eq!(setup.helper.stat(Path::new("/")).unwrap().name, "/");
+    }
+
+    #[test]
+    fn calls_to_the_helper_let_polkit_ask_for_the_password() {
+        let setup = working();
+        setup.helper.stat(Path::new("/etc")).unwrap();
+        assert_eq!(*setup.asked.lock().unwrap(), ["stat file:///etc"]);
     }
 
     #[test]

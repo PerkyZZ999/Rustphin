@@ -110,7 +110,8 @@ Stale results are discarded by generation number, so a fast navigation never sho
 
 ## Trust & boundaries
 
-- **Authn/z:** none of its own. Rustphin runs with the user's permissions and never elevates (L-014 is later work).
+- **Authn/z:** none of its own. Rustphin runs with the user's permissions and never elevates itself.
+- **Acting as administrator (W-098, D-028; design and threat model in ADMIN_MODE.md):** the one privileged path is KDE's own `kio-admin` helper on the system bus. Rustphin never asks for, sees or stores a password: polkit (`org.kde.kio.admin.commands`, `auth_admin_keep`) authorises Rustphin's own bus connection, and KDE's agent asks. The mode belongs to one window, is marked (red shield, bar, title) and is never saved. `AdminFs` (platform) is the only code that talks to the helper; the core sees it as one more `Fs`, so every change still goes through the operation engine (temporary name, verify, no silent overwrite, D-011). Data from the helper is untrusted: `UDSEntry` parsing is bounded and fuzzed (`admin_entry`); only plain absolute UTF-8 paths that round-trip exactly are sent, as percent-encoded `file://` URLs. KIO applies modes exactly, so new folders get the user's umask first. The helper offers no trash, watching, locks or `fsync`: delete is always permanent and confirmed, panes re-read after each change, batch rename is off, and a move across filesystems keeps its source.
 - **Untrusted input:** directory contents (names with control characters or invalid UTF-8), file contents handed to thumbnailers, `.desktop` files, the shared places file, clipboard and drag payloads from other applications, and `FileManager1` requests from any local process. All are parsed defensively; none can trigger execution. Activating an executable or `.desktop` file asks first.
 - **Thumbnailing:** uses memory-safe decoders with size and time limits, on workers isolated from the UI thread; failures yield a placeholder.
 - **Data sensitivity:** paths and names of the user's files. They stay on the machine: no network use, no telemetry (R-108). Warnings/errors can include paths at the default log level; see PRIVACY.md for retention and clearing.
@@ -132,6 +133,7 @@ Stale results are discarded by generation number, so a fast navigation never sho
 | UDisks2 absent or unresponsive | D-Bus error or timeout | Devices section hidden with a notice; rest of the app unaffected |
 | Thumbnail decoder fails or exceeds limits | Error or timeout on worker | Placeholder icon; entry marked failed in the shared cache per the spec |
 | Worker panic | Panic caught at pool boundary | Task reported failed; pool keeps running; error logged |
+| Administrator helper missing, refuses, or times out | Service file check; polkit refusal (empty command path); 120 s limit per command | Shield dimmed with how to install kio-admin; "not granted" notice and the mode stays off; a timed-out operation fails with its reason |
 | Toolkit upgrade breaks borrowed Wayland connection | Regression ui-tests from the spike scenarios | Stay on the pinned version until fixed (D-001) |
 
 ## Test strategy
