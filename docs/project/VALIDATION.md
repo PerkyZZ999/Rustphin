@@ -1,5 +1,11 @@
 # Validation evidence
 
+### 2026-11-10 — W-091 hidden entries faded
+- **Code:** the core snapshot says whether a row's entry is hidden (`Snapshot::is_hidden`, the store's dot-name rule through the sort order). Entries draw at `HIDDEN_OPACITY` (60%) when hidden and not selected; cut entries keep 50%, and both multiply.
+- **Tests:** the core resort test checks the hidden flag follows the sort order (failed when the row was used as the store index); `hidden_entries_are_faded_unless_selected_and_cut_ones_fade_further` (failed when selection no longer cancelled the fade); the opaque and glass contrast tests now include a hidden name on content and under the pointer (4.5:1) and its size and date (3:1); at 30% the name fell to 2.4:1 and the test failed.
+- **On screen:** isolated session, `RUSTPHIN_OPAQUE=1`, Pictures with `.cache-folder` and `.hidden-notes`, Ctrl+H: both faded, names readable; `.hidden-notes` selected shows at full strength on the selection fill.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-090 list scrollbars
 - **Code:** the details and icons views get a vertical scrollbar on their list scroll handle, the compact view a horizontal one on its column scroll handle, styled as docs/DESIGN.md (8 px track, 2 px inset, half-opaque `text-muted` thumb, `primary-bright` on hover and drag), always shown. In details it is laid over the list below the headings. The empty-state scrollbar uses the same style.
 - **On screen:** isolated KWin session, 2,000 empty files, `RUSTPHIN_OPAQUE=1`. Details: thumb at the right edge below the headings; dragging it from y 200 to 450 moved the list to file-1044. Icons: thumb at the matching position. Compact: horizontal thumb along the bottom above the status line.

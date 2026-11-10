@@ -25,7 +25,7 @@ S11 — Hardening for daily use (in progress)
 ## Test-run refinements (the maintainer's findings, 2026-11-10; docs/project/TEST_RUN.md)
 
 - [x] W-090 — Scrollbars on the details, icons and compact views (vertical; horizontal in compact). Done 2026-11-10 (see VALIDATION.md).
-- [ ] W-091 — Hidden entries drawn faded, as Dolphin does.
+- [x] W-091 — Hidden entries drawn faded, as Dolphin does. Done 2026-11-10 (see VALIDATION.md).
 - [ ] W-092 — Applications' own icons in "Open with", not folder icons.
 - [ ] W-093 — "Run this file?": the safe button reads "Cancel" (was "Keep") and stays the Enter default.
 - [ ] W-094 — A Remote section in Places (Network and network bookmarks), as Dolphin's.

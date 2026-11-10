@@ -27,18 +27,17 @@
       Q172,256 184,267 Q198,256 212,266 Q226,255 240,264 Q254,254 268,262 Q282,253 295,260
       C314,256 332,250 350,232
       C346,268 306,310 238,328
-      C190,341 118,370 60,338
-      C30,312 26,252 54,222
-      C82,194 130,196 150,222 Z"/>
+      C190,341 140,358 100,342
+      C70,328 62,272 84,242
+      C102,218 134,210 150,222 Z"/>
     <clipPath id="onFolder"><use href="#frontPanel"/></clipPath>
   </defs>
 
+  <g transform="translate(-14 0)">
   <!-- Contact shadow under the whole mark -->
   <ellipse cx="262" cy="404" rx="220" ry="14" fill="#000" opacity="0.18" filter="url(#softer)"/>
 
   <g stroke="#9A1B21" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round">
-    <!-- Wrist -->
-    <path fill="url(#claw)" d="M44,312 C20,322 10,350 22,370 C34,388 62,386 80,366 C92,352 92,336 84,326 Z"/>
     <!-- Movable (upper) finger: hooks behind the folder -->
     <path fill="url(#claw)" d="M118,226 C140,170 220,150 290,175 C320,186 340,208 346,232 C322,216 290,206 255,210 C220,214 190,228 165,258 Z"/>
   </g>
@@ -55,6 +54,7 @@
   <use href="#palm" fill="url(#claw)" stroke="#9A1B21" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/>
 
   <!-- Soft highlights for gentle depth -->
-  <ellipse cx="86" cy="250" rx="34" ry="18" transform="rotate(-25 86 250)" fill="#FFFFFF" opacity="0.25" filter="url(#soft)"/>
+  <ellipse cx="106" cy="254" rx="24" ry="13" transform="rotate(-25 106 254)" fill="#FFFFFF" opacity="0.25" filter="url(#soft)"/>
   <path d="M190,290 C240,288 290,276 326,256" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="5" stroke-linecap="round" fill="none"/>
+  </g>
 </svg>

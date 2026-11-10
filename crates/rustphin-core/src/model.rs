@@ -217,6 +217,12 @@ impl Snapshot {
         self.store.is_container(self.order[row])
     }
 
+    /// Whether the entry shown in `row` is hidden (its name starts with a
+    /// dot); shown only while hidden entries are.
+    pub fn is_hidden(&self, row: usize) -> bool {
+        self.store.is_hidden(self.order[row])
+    }
+
     /// The full path of the entry shown in `row`.
     pub fn entry_path(&self, row: usize) -> PathBuf {
         self.path.join(OsStr::from_bytes(self.name(row)))
@@ -1011,6 +1017,9 @@ mod tests {
                 "Zeta.md"
             ]
         );
+        // Rows report whether their own entry is hidden, through the sort order.
+        let hidden: Vec<bool> = (0..shown.len()).map(|row| shown.is_hidden(row)).collect();
+        assert_eq!(hidden, [true, false, false, false, false, false]);
         assert_eq!(model.set_options(options), None);
 
         let reloaded = snapshot(&events, model.reload().unwrap());

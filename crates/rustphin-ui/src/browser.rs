@@ -2701,6 +2701,7 @@ impl Browser {
             focused: self.focus_row == Some(row) || renaming,
             renaming,
             cut: self.has_cut && hub(cx).read(cx).is_cut(&rows.entry_path(row)),
+            hidden: rows.is_hidden(row),
             info: self.type_info_for(&type_name, container, cx),
             thumb: self.thumbnail_for(rows, row, container, cx),
         }
@@ -4691,6 +4692,8 @@ struct Entry {
     renaming: bool,
     /// Cut and waiting to be pasted.
     cut: bool,
+    /// Hidden (a dot name), shown because hidden entries are.
+    hidden: bool,
     /// Its thumbnail, shown in place of the type icon.
     thumb: Option<Arc<Path>>,
     info: Option<TypeInfo>,
@@ -4822,10 +4825,29 @@ impl Entry {
             .when(!self.selected && !self.renaming, |surface| {
                 surface.hover(|surface| surface.bg(theme.hover))
             })
-            // Cut entries are on their way out: drawn faded until pasted.
-            .when(self.cut, |surface| surface.opacity(0.5))
+            .when_some(
+                entry_opacity(self.hidden, self.cut, self.selected),
+                |surface, opacity| surface.opacity(opacity),
+            )
     }
 }
+
+/// How faded an entry is drawn, if at all. Cut entries are on their way
+/// out: half opacity until pasted. Hidden ones are faded as in Dolphin,
+/// except while selected, where the selection's own contrast must hold.
+fn entry_opacity(hidden: bool, cut: bool, selected: bool) -> Option<f32> {
+    let hidden = if hidden && !selected {
+        crate::theme::HIDDEN_OPACITY
+    } else {
+        1.
+    };
+    let cut = if cut { CUT_OPACITY } else { 1. };
+    let opacity = hidden * cut;
+    (opacity < 1.).then_some(opacity)
+}
+
+/// Opacity of an entry that was cut and is waiting to be pasted.
+const CUT_OPACITY: f32 = 0.5;
 
 fn select_names(selection: &mut Selection, snapshot: &Snapshot, names: &[Vec<u8>]) {
     let mut selected = false;
@@ -5009,6 +5031,17 @@ mod tests {
         assert_eq!(status(LoadError::NotFound), "Does not exist");
         assert_eq!(status(LoadError::NotADirectory), "Not a folder");
         assert_eq!(status(LoadError::Io("broken".into())), "Could not be read");
+    }
+
+    #[test]
+    fn hidden_entries_are_faded_unless_selected_and_cut_ones_fade_further() {
+        let hidden = crate::theme::HIDDEN_OPACITY;
+        assert_eq!(entry_opacity(false, false, false), None);
+        assert_eq!(entry_opacity(false, false, true), None);
+        assert_eq!(entry_opacity(true, false, false), Some(hidden));
+        assert_eq!(entry_opacity(true, false, true), None);
+        assert_eq!(entry_opacity(false, true, true), Some(CUT_OPACITY));
+        assert_eq!(entry_opacity(true, true, false), Some(hidden * CUT_OPACITY));
     }
 
     #[test]

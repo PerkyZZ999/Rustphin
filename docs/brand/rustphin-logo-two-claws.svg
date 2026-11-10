@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Rustphin</title>
+  <defs>
+    <!-- One shared gradient for every claw part, so overlapping parts merge without seams. -->
+    <linearGradient id="claw" x1="0" y1="200" x2="0" y2="350" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F45D50"/>
+      <stop offset="0.5" stop-color="#E53935"/>
+      <stop offset="1" stop-color="#B42229"/>
+    </linearGradient>
+    <linearGradient id="folderFront" x1="0" y1="168" x2="0" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3D4047"/>
+      <stop offset="1" stop-color="#2B2D31"/>
+    </linearGradient>
+    <linearGradient id="folderBack" x1="0" y1="118" x2="0" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2F3136"/>
+      <stop offset="1" stop-color="#232529"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <filter id="softer" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+    <path id="frontPanel" d="M156,168 H356 Q376,168 376,188 V380 Q376,400 356,400 H156 Q136,400 136,380 V188 Q136,168 156,168 Z"/>
+    <clipPath id="onFolder"><use href="#frontPanel"/></clipPath>
+
+    <!-- Left claw; the right claw is its mirror image. No fills here, so each <use> sets its own. -->
+    <!-- Movable (upper) finger: hooks down to a point -->
+    <path id="upper" d="M150,264
+      L160,256 L166,262 L176,252 L182,258 L194,248 L200,254 L212,246 L218,251 L230,246
+      C238,248 245,254 248,266
+      C252,240 240,214 210,204
+      C178,194 140,204 118,236 Z"/>
+    <!-- Palm and fixed (lower) finger, one piece: hooks up to a point -->
+    <path id="body" d="M150,300
+      L162,306 L168,300 L180,310 L186,304 L198,312 L204,306 L216,312 L222,306 L232,308
+      C238,304 243,298 246,288
+      C247,318 226,340 196,346
+      C170,352 150,346 136,334
+      C120,338 88,332 76,306
+      C64,282 70,250 96,238
+      C116,230 140,236 150,252 Z"/>
+    <g id="pincer">
+      <use href="#upper"/>
+      <use href="#body"/>
+    </g>
+    <g id="highlights" fill="none">
+      <ellipse cx="100" cy="262" rx="18" ry="10" transform="rotate(-30 100 262)" fill="#FFFFFF" opacity="0.25" filter="url(#soft)"/>
+      <path d="M168,216 C196,208 226,220 240,242" stroke="#FFFFFF" stroke-opacity="0.2" stroke-width="4" stroke-linecap="round"/>
+      <path d="M176,330 C204,330 226,318 238,302" stroke="#FFFFFF" stroke-opacity="0.15" stroke-width="4" stroke-linecap="round"/>
+    </g>
+    <g id="clawFront" stroke="#9A1B21" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round">
+      <use href="#upper" fill="url(#claw)"/>
+      <use href="#body" fill="url(#claw)"/>
+      <use href="#highlights" stroke="none"/>
+    </g>
+  </defs>
+
+  <!-- Contact shadow under the whole mark -->
+  <ellipse cx="256" cy="412" rx="190" ry="14" fill="#000" opacity="0.18" filter="url(#softer)"/>
+
+  <!-- Folder -->
+  <path fill="url(#folderBack)" d="M156,118 H218 C227,118 232,121 237,127 L246,138 C249,141 253,142 258,142 H356 Q376,142 376,162 V380 Q376,400 356,400 H156 Q136,400 136,380 V138 Q136,118 156,118 Z"/>
+  <use href="#frontPanel" fill="url(#folderFront)"/>
+  <path d="M156,169 H356" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Shadows the claws cast on the folder -->
+  <g clip-path="url(#onFolder)" fill="#000" opacity="0.42" filter="url(#soft)">
+    <use href="#pincer" transform="translate(3 9)"/>
+    <use href="#pincer" transform="translate(512 0) scale(-1 1) translate(3 9)"/>
+  </g>
+
+  <!-- Pincers, in front of the folder -->
+  <use href="#clawFront"/>
+  <use href="#clawFront" transform="translate(512 0) scale(-1 1)"/>
+</svg>

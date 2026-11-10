@@ -334,6 +334,10 @@ impl Theme {
     }
 }
 
+/// Opacity of a hidden entry (a name starting with a dot), shown faded as in
+/// Dolphin so it reads as hidden at a glance; the leading dot says so too.
+pub const HIDDEN_OPACITY: f32 = 0.6;
+
 /// `top` composited over an opaque `bottom`.
 fn over(top: Rgba, bottom: Rgba) -> Rgba {
     let mix = |t: f32, b: f32| t * top.a + b * (1. - top.a);
@@ -348,6 +352,14 @@ fn over(top: Rgba, bottom: Rgba) -> Rgba {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `color` drawn at `opacity`, as an element with that opacity draws it.
+    fn faded(color: Rgba, opacity: f32) -> Rgba {
+        Rgba {
+            a: color.a * opacity,
+            ..color
+        }
+    }
 
     /// Relative luminance of an opaque sRGB colour (WCAG 2.x).
     fn luminance(color: Rgba) -> f32 {
@@ -431,6 +443,16 @@ mod tests {
             ),
             ("muted text on a dialog", theme.text_muted, theme.raised),
             ("danger text on a dialog", theme.danger, theme.raised),
+            (
+                "a hidden entry's name on content",
+                over(faded(theme.text, HIDDEN_OPACITY), content),
+                content,
+            ),
+            (
+                "a hidden entry's name under the pointer",
+                over(faded(theme.text, HIDDEN_OPACITY), hover),
+                hover,
+            ),
         ] {
             let ratio = contrast(foreground, background);
             assert!(
@@ -453,6 +475,11 @@ mod tests {
             ("success on chrome", theme.success, chrome),
             ("disabled text on chrome", theme.text_disabled, chrome),
             ("disabled text on content", theme.text_disabled, content),
+            (
+                "a hidden entry's size and date on content",
+                over(faded(theme.text_muted, HIDDEN_OPACITY), content),
+                content,
+            ),
             (
                 "disabled text on a dialog",
                 theme.text_disabled,
