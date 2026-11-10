@@ -1,5 +1,9 @@
 # Validation evidence
 
+### 2026-11-10 — W-096 top-bar mockup drawn
+- **What:** docs/mockup/35-top-bar-redesign.html, three 1280 × 800 scenes in the mockups' stylesheet at the D-026 type sizes: custom title bar, full-width toolbar with the new buttons and the administrator shield, tabs over the files, split view with one toolbar, administrator mode.
+- **Checked:** rendered with headless Chromium and looked at each scene; fixed the missing file-type icons and the tooltip's place. Nothing is built; the design waits for the maintainer's answers.
+
 ### 2026-11-10 — W-095 smaller type scale
 - **Code:** DESIGN.md typography tokens and `theme::text` set to D-026: body, names and strong 12 px (16 px lines), data 11 px (16 px lines), labels 10 px (14 px lines), both headings 15 px (20 px lines). The component library's root size (16 px) is left alone, since it also sets its control heights; its checkboxes, which sized their labels from it, now take `text::BODY` (Properties, batch rename, "apply to all").
 - **On screen:** isolated session, `RUSTPHIN_OPAQUE=1`: details view, places panel, Remote and Devices, status line, Properties (title, facts, capital labels, checkbox labels) and the palette all draw at the new sizes; after the fix no 14 px library text was seen in these screens. Rows (36 px) and controls keep their heights, which now look airy; their density is for the W-096 mockup.

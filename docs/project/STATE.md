@@ -6,7 +6,7 @@
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 in progress; W-079 design pass started (D-024)
 - **Status:** active — W-079 design pass, W-086 compact columns, W-087 mockup comparison, W-088 fonts and W-089 in-place folder error done; remaining S11 acceptance needs the maintainer
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
-- **Last updated:** 2026-11-09
+- **Last updated:** 2026-11-10
 
 ## Authority boundaries
 - Agent may decide: stack-local, reversible implementation details consistent with locked decisions; document structure; disposable spike code.
@@ -45,6 +45,7 @@
 - W-076e: complete reverse field traversal and native input focus conflict through duplicate registration in the pinned toolkit. Removing the wrapper tracking restores traversal but loses native focus; original code restored. DISCOVERY.md records a concrete deduplication candidate and required checks. The maintainer approved a bounded isolated experiment on 2026-11-05; its corrected latest-registration candidate passes seven focused tests and native reverse-field/Unicode checks. Production pins remain unchanged. Full published toolkit tests are unavailable; broader modal/performance assessment and adoption still require review. This blocks that acceptance item, not unrelated S11 work. The baseline gate passes.
 
 ## Next action
+- The maintainer to review the W-096 top-bar mockup (docs/mockup/35-top-bar-redesign.html) and answer its four questions (row density, outlined or plain toolbar buttons, per-side path bars in split view, window-button order). W-090–W-095 from his test run are done (scrollbars, faded hidden entries, app icons in Open with, Cancel instead of Keep, Remote section, smaller type). Then W-096 build, W-097 icons on buttons, W-098 administrator mode (design and threat model first).
 - The maintainer to review W-079/W-086/W-087 on the real desktop (glass look; compact view with a real wheel). The open S11 criteria still need the maintainer's desktop or hardware (5) or W-076e (2). Otherwise continue with the smaller W-079 leftovers listed in docs/DESIGN.md.
 
 ## Phase checklist

@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>35 · Top bar redesign (W-096) · Rustphin mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/rp.css">
+<style>
+/* ds-allow-hardcode:start. W-096 proposal. Sizes follow D-026 (12 px text,
+   11 px data, 10 px labels, 15 px headings) and the denser controls this
+   page proposes; colours are the rp.css tokens. */
+body { margin: 0; background: #05080f; color: #E6E9F2; font: 400 14px/20px Inter, system-ui, sans-serif; }
+.page { width: 1280px; margin: 0 auto; padding: 32px 0 64px; }
+.page > h1 { font: 600 24px/32px "Space Grotesk", sans-serif; margin: 0 0 8px; }
+.page > p, .scene-note { color: #AEB8CC; max-width: 860px; margin: 0 0 16px; }
+.scene-title { font: 600 17px/24px "Space Grotesk", sans-serif; margin: 40px 0 4px; }
+.notes { margin-top: 40px; max-width: 900px; }
+.notes h2 { font: 600 17px/24px "Space Grotesk", sans-serif; margin: 24px 0 8px; }
+.notes li { margin: 4px 0; color: #C9D0DE; }
+.notes code { font: 12px "JetBrains Mono", monospace; color: #8FA8FF; }
+
+/* new icons (Lucide outlines) */
+.i-shield { --m: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'/></svg>"); }
+.i-shield-alert { --m: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'/><path d='M12 8v4'/><path d='M12 16h.01'/></svg>"); }
+.i-minus { --m: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12h14'/></svg>"); }
+.i-maximize { --m: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='14' height='14' x='5' y='5' rx='1'/></svg>"); }
+.i-compact { --m: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2'/><path d='M9 3v18'/><path d='M15 3v18'/></svg>"); }
+.i-split { --m: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3'/><path d='M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3'/><path d='M12 4v16'/></svg>"); }
+
+/* density of this proposal */
+.v2 { --typography-body-md: 400 12px/16px var(--f-ui); font: var(--typography-body-md); }
+.v2 .titlebar { height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding-left: 12px; background: var(--s-chrome); border-bottom: 1px solid var(--border); }
+.v2 .titlebar .logo { width: 16px; height: 16px; flex: none; }
+.v2 .titlebar .wtitle { flex: 1; min-width: 0; text-align: center; font: 500 12px/16px var(--f-ui); color: var(--text-muted); padding-left: 96px; }
+.v2 .wbtn { width: 44px; height: 35px; flex: none; display: grid; place-items: center; color: var(--text-muted); }
+.v2 .wbtn.is-close-hover { background: #C42B2B; color: #fff; }
+.v2 .tb2 { height: 44px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 8px; background: var(--s-chrome); border-bottom: 1px solid var(--border); }
+.v2 .ib { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 2px; color: var(--text); }
+.v2 .ib.is-dis { color: var(--text-disabled); }
+.v2 .ib.is-hover { background: var(--hover); }
+.v2 .ib.is-on { background: var(--primary-subtle); color: var(--primary-bright); }
+.v2 .ib.is-admin-on { background: var(--error-surface); color: var(--error); box-shadow: inset 0 0 0 1px var(--error-border); }
+.v2 .vsep { width: 1px; height: 20px; flex: none; background: var(--border-strong); margin: 0 4px; }
+.v2 .seg3 { display: flex; flex: none; height: 32px; border: 1px solid var(--border-strong); border-radius: 2px; overflow: hidden; }
+.v2 .seg3 .ib { width: 30px; height: 30px; border-radius: 0; }
+.v2 .seg3 .ib + .ib { border-left: 1px solid var(--border-strong); }
+.v2 .loc { height: 32px; font: 400 11px/16px var(--f-mono); padding: 0 10px; margin: 0 4px; }
+.v2 .actions { height: 32px; font: 400 12px/16px var(--f-ui); padding: 0 10px; }
+.v2 .act-key { font: 400 11px/16px var(--f-mono); color: var(--text-muted); padding-left: 8px; border-left: 1px solid var(--border-strong); }
+
+.v2 .places-title { height: 36px; padding: 0 12px; }
+.v2 .t-hsm { font: 600 15px/20px var(--f-head); }
+.v2 .pl { height: 28px; gap: 10px; padding: 0 10px; font: 400 12px/16px var(--f-ui); }
+.v2 .pl .ic20 { width: 16px; height: 16px; }
+.v2 .sec { height: 28px; font: 600 12px/16px var(--f-ui); }
+.v2 .dev { min-height: 48px; }
+.v2 .dev-name { font: 400 12px/16px var(--f-ui); }
+.v2 .dev-fig { font: 400 11px/14px var(--f-mono); }
+.v2 .right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.v2 .tabstrip { height: 36px; }
+.v2 .tab { width: 160px; font: 400 12px/16px var(--f-ui); }
+.v2 .tab-add { width: 36px; height: 35px; }
+.v2 .panes { flex: 1; min-height: 0; display: flex; }
+.v2 .cols { height: 28px; }
+.v2 .ch { font: 400 12px/16px var(--f-ui); }
+.v2 .row { height: 32px; }
+.v2 .row > .c-name { gap: 10px; font: 400 12px/16px var(--f-ui); }
+.v2 .row .ft, .v2 .row .th { transform: scale(0.84); }
+.v2 .cell-d { font: 400 11px/16px var(--f-mono); }
+.v2 .status { height: 28px; font: 400 11px/16px var(--f-mono); }
+.v2 .pathbar { height: 28px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--s-chrome); border-bottom: 1px solid var(--border); font: 400 11px/16px var(--f-mono); color: var(--text-muted); }
+.v2 .pane.is-active .pathbar { color: var(--text); }
+.v2 .admin-bar { height: 36px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 12px; background: var(--error-surface); border-bottom: 1px solid var(--error-border); color: var(--error); font: 400 12px/16px var(--f-ui); }
+.v2 .admin-bar .grow { flex: 1; }
+.v2 .admin-bar .btn-err { height: 28px; padding: 0 10px; border: 1px solid var(--error-border); border-radius: 2px; color: var(--error); font: 500 12px/16px var(--f-ui); }
+.tip { position: absolute; z-index: 9; padding: 4px 8px; border-radius: 2px; background: var(--surface-raised); border: 1px solid var(--border-strong); font: 400 11px/16px var(--f-ui); color: var(--text); white-space: nowrap; }
+.tip kbd { font: 400 11px/16px var(--f-mono); color: var(--text-muted); margin-left: 6px; }
+</style>
+</head>
+<body>
+<!-- "&#x2014;" is app text, not prose: the size shown for a folder and the
+     separator in the window title, both defined in docs/DESIGN.md. -->
+<div class="page">
+<h1>35 · Top bar redesign (W-096), for the maintainer's review</h1>
+<p>Three scenes at 1280 × 800 with the D-026 type scale. Top to bottom: the window's own title bar, one full-width toolbar, then the places panel beside the tabs and the files, as in Dolphin. Rows, controls and the places panel are denser than the W-079 mockups (numbers in the notes at the end).</p>
+
+<!-- ============================ 35a ============================ -->
+<h2 class="scene-title">35a · One pane: the title bar, the toolbar on top, the tabs over the files</h2>
+<p class="scene-note">The pointer rests on Show hidden files to show a tooltip; every icon-only button has one with its shortcut.</p>
+<div class="rp v2 desk" style="width: 1280px; height: 800px;">
+<div class="rp win glass">
+  <div class="titlebar">
+    <img class="logo" src="../../assets/rustphin-small.svg" alt="">
+    <div class="wtitle">Pictures &#x2014; Rustphin</div>
+    <button class="wbtn" aria-label="Minimise"><span class="ic i-minus"></span></button>
+    <button class="wbtn" aria-label="Maximise"><span class="ic ic12 i-maximize"></span></button>
+    <button class="wbtn" aria-label="Close window"><span class="ic i-x"></span></button>
+  </div>
+  <div class="tb2">
+    <button class="ib" aria-label="Act as administrator"><span class="ic i-shield"></span></button>
+    <span class="vsep"></span>
+    <button class="ib" aria-label="Back (Alt+Left)"><span class="ic i-left"></span></button>
+    <button class="ib is-dis" aria-disabled="true" aria-label="Forward (Alt+Right)"><span class="ic i-right"></span></button>
+    <button class="ib" aria-label="Up one folder (Alt+Up)"><span class="ic i-up"></span></button>
+    <button class="ib" aria-label="Reload (F5)"><span class="ic i-refresh"></span></button>
+    <div aria-label="Folder location" class="loc"><span class="ic i-folder"></span><span class="segs"><span class="seg-sep">/</span><span class="seg">home</span><span class="seg-sep">/</span><span class="seg">alex</span><span class="seg-sep">/</span><span class="seg seg-last">Pictures</span></span></div>
+    <button class="ib" aria-label="New folder (F10)"><span class="ic i-folder-plus"></span></button>
+    <span class="vsep"></span>
+    <div class="seg3" role="radiogroup" aria-label="View mode">
+      <button class="ib" aria-label="Icons (Ctrl+1)"><span class="ic i-grid"></span></button>
+      <button class="ib" aria-label="Compact (Ctrl+2)"><span class="ic i-compact"></span></button>
+      <button class="ib is-on" aria-checked="true" aria-label="Details (Ctrl+3)"><span class="ic i-list"></span></button>
+    </div>
+    <button class="ib" aria-label="Split view (F3)"><span class="ic i-split"></span></button>
+    <button class="ib is-hover" aria-label="Show hidden files (Ctrl+H)"><span class="ic i-eye"></span></button>
+    <button class="ib" aria-label="Filter (Ctrl+I)"><span class="ic i-filter"></span></button>
+    <span class="vsep"></span>
+    <button class="actions">Actions<span class="ic i-chev-down"></span><span class="act-key">Ctrl+Shift+P</span></button>
+  </div>
+  <div class="tip" style="left: 962px; top: 84px;">Show hidden files<kbd>Ctrl+H</kbd></div>
+  <div class="wbody">
+    <nav aria-label="Places" class="places">
+      <div class="places-title"><h2 class="t-hsm">Places</h2></div>
+      <div class="places-scroll">
+        <button class="pl"><span class="ic ic20 i-home"></span><span class="nm">Home</span></button>
+        <button class="pl"><span class="ic ic20 i-monitor"></span><span class="nm">Desktop</span></button>
+        <button class="pl"><span class="ic ic20 i-file-text"></span><span class="nm">Documents</span></button>
+        <button class="pl"><span class="ic ic20 i-download"></span><span class="nm">Downloads</span></button>
+        <button class="pl is-current"><span class="ic ic20 i-image"></span><span class="nm">Pictures</span></button>
+        <button class="pl"><span class="ic ic20 i-music"></span><span class="nm">Music</span></button>
+        <button class="pl"><span class="ic ic20 i-film"></span><span class="nm">Videos</span></button>
+        <button class="pl"><span class="ic ic20 i-trash"></span><span class="nm">Trash</span></button>
+        <button class="sec"><span class="ic i-chev-down"></span><span>Remote</span></button>
+        <button class="pl"><span class="ic ic20 i-server"></span><span class="nm">NAS</span></button>
+        <button class="pl"><span class="ic ic20 i-server"></span><span class="nm">VPS-HOSTINGER</span></button>
+        <button class="sec"><span class="ic i-chev-down"></span><span>Devices</span></button>
+        <div class="dev"><span class="ic ic20 i-drive"></span><div class="dev-main"><div class="dev-name">System (/)</div><div aria-hidden="true" class="usage"><div class="usage-fill" style="width: 75%;"></div></div><div class="dev-fig">120.6 of 476.9 GiB free</div></div></div>
+        <div class="dev"><span class="ic ic20 i-drive"></span><div class="dev-main"><div class="dev-name">Data (/data)</div><div aria-hidden="true" class="usage"><div class="usage-fill" style="width: 50%;"></div></div><div class="dev-fig">1.8 of 3.6 TiB free</div></div><button aria-label="Safely remove (E)" class="btn-eject"><span class="ic i-eject"></span></button></div>
+      </div>
+    </nav>
+    <div class="right">
+      <div class="tabstrip">
+        <div class="tab"><button class="tab-btn"><span class="ic i-home"></span><span class="tab-label">Home</span></button><button aria-label="Close tab (Ctrl+W)" class="tab-close"><span class="ic ic12 i-x"></span></button></div>
+        <div class="tab is-active"><button class="tab-btn"><span class="ic i-image"></span><span class="tab-label">Pictures</span></button><button aria-label="Close tab (Ctrl+W)" class="tab-close"><span class="ic ic12 i-x"></span></button></div>
+        <div class="tab"><button class="tab-btn"><span class="ic i-download"></span><span class="tab-label">Downloads</span></button><button aria-label="Close tab (Ctrl+W)" class="tab-close"><span class="ic ic12 i-x"></span></button></div>
+        <div class="tab-fill"><button aria-label="New tab (Ctrl+T)" class="tab-add"><span class="ic i-plus"></span></button></div>
+      </div>
+      <section aria-label="Files in /home/alex/Pictures" class="pane">
+        <div class="content">
+          <div class="cols"><button class="ch c-name is-sorted">Name<span aria-label="Sorted ascending">↑</span></button><button class="ch c-size">Size</button><button class="ch c-mod">Modified</button><button class="ch c-type">Type</button></div>
+          <div class="rows">
+            <div class="row"><span class="c-name"><span class="ft ft-folder"></span><span class="nm">Projects</span></span><span class="cell-d c-size">&#x2014;</span><span class="cell-d c-mod">2026-11-05 14:21</span><span class="cell-d c-type">Folder</span></div>
+            <div class="row"><span class="c-name"><span class="ft ft-folder"></span><span class="nm">Screenshots</span></span><span class="cell-d c-size">&#x2014;</span><span class="cell-d c-mod">2026-11-05 09:17</span><span class="cell-d c-type">Folder</span></div>
+            <div class="row"><span class="c-name"><span class="ft ft-folder"></span><span class="nm">Wallpapers</span></span><span class="cell-d c-size">&#x2014;</span><span class="cell-d c-mod">2026-10-28 18:06</span><span class="cell-d c-type">Folder</span></div>
+            <div class="row"><span class="c-name"><span class="th th1"></span><span class="nm">IMG_4819.jpg</span></span><span class="cell-d c-size">4.8 MiB</span><span class="cell-d c-mod">2026-10-27 16:41</span><span class="cell-d c-type">JPEG image</span></div>
+            <div class="row is-sel"><span class="c-name"><span class="th th2"></span><span class="nm">IMG_4820.jpg</span></span><span class="cell-d c-size">5.1 MiB</span><span class="cell-d c-mod">2026-10-27 16:42</span><span class="cell-d c-type">JPEG image</span></div>
+            <div class="row"><span class="c-name"><span class="th th3"></span><span class="nm">IMG_4821.jpg</span></span><span class="cell-d c-size">4.6 MiB</span><span class="cell-d c-mod">2026-10-27 16:43</span><span class="cell-d c-type">JPEG image</span></div>
+            <div class="row"><span class="c-name"><span class="th th4"></span><span class="nm">IMG_4822.jpg</span></span><span class="cell-d c-size">4.9 MiB</span><span class="cell-d c-mod">2026-10-27 16:44</span><span class="cell-d c-type">JPEG image</span></div>
+            <div class="row"><span class="c-name"><span class="th th5"></span><span class="nm">IMG_4823.jpg</span></span><span class="cell-d c-size">5.0 MiB</span><span class="cell-d c-mod">2026-10-27 16:45</span><span class="cell-d c-type">JPEG image</span></div>
+            <div class="row"><span class="c-name"><span class="ft ft-text"></span><span class="nm">notes.txt</span></span><span class="cell-d c-size">2.1 KiB</span><span class="cell-d c-mod">2026-10-30 11:02</span><span class="cell-d c-type">Plain text</span></div>
+            <div class="row"><span class="c-name"><span class="ft ft-pdf"></span><span class="nm">presentation.pdf</span></span><span class="cell-d c-size">3.4 MiB</span><span class="cell-d c-mod">2026-10-18 15:09</span><span class="cell-d c-type">PDF document</span></div>
+            <div class="row"><span class="c-name"><span class="ft ft-image"></span><span class="nm">rustphin-design.png</span></span><span class="cell-d c-size">812 KiB</span><span class="cell-d c-mod">2026-11-04 20:18</span><span class="cell-d c-type">PNG image</span></div>
+          </div>
+        </div>
+        <div class="status"><span class="st-part">1 item selected (5.1 MiB)</span><span class="st-part">11 items (32.7 MiB)</span><span style="margin-left: auto;">Free: 1.8 TiB of 3.6 TiB (Data)</span></div>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============================ 35b ============================ -->
+<h2 class="scene-title">35b · Split view: one toolbar, acting on the side last clicked</h2>
+<p class="scene-note">The right side is active (2 px line along its top). The toolbar's location, Back/Forward/Up, view mode and Show hidden all describe and act on it; each side shows its own path in a thin bar so both stay visible, as Dolphin does in split view.</p>
+<div class="rp v2 desk" style="width: 1280px; height: 800px;">
+<div class="rp win glass">
+  <div class="titlebar">
+    <img class="logo" src="../../assets/rustphin-small.svg" alt="">
+    <div class="wtitle">Downloads &#x2014; Rustphin</div>
+    <button class="wbtn" aria-label="Minimise"><span class="ic i-minus"></span></button>
+    <button class="wbtn" aria-label="Maximise"><span class="ic ic12 i-maximize"></span></button>
+    <button class="wbtn" aria-label="Close window"><span class="ic i-x"></span></button>
+  </div>
+  <div class="tb2">
+    <button class="ib" aria-label="Act as administrator"><span class="ic i-shield"></span></button>
+    <span class="vsep"></span>
+    <button class="ib" aria-label="Back (Alt+Left)"><span class="ic i-left"></span></button>
+    <button class="ib is-dis" aria-disabled="true" aria-label="Forward (Alt+Right)"><span class="ic i-right"></span></button>
+    <button class="ib" aria-label="Up one folder (Alt+Up)"><span class="ic i-up"></span></button>
+    <button class="ib" aria-label="Reload (F5)"><span class="ic i-refresh"></span></button>
+    <div aria-label="Folder location" class="loc"><span class="ic i-folder"></span><span class="segs"><span class="seg-sep">/</span><span class="seg">home</span><span class="seg-sep">/</span><span class="seg">alex</span><span class="seg-sep">/</span><span class="seg seg-last">Downloads</span></span></div>
+    <button class="ib" aria-label="New folder (F10)"><span class="ic i-folder-plus"></span></button>
+    <span class="vsep"></span>
+    <div class="seg3" role="radiogroup" aria-label="View mode">
+      <button class="ib" aria-label="Icons (Ctrl+1)"><span class="ic i-grid"></span></button>
+      <button class="ib" aria-label="Compact (Ctrl+2)"><span class="ic i-compact"></span></button>
+      <button class="ib is-on" aria-checked="true" aria-label="Details (Ctrl+3)"><span class="ic i-list"></span></button>
+    </div>
+    <button class="ib is-on" aria-pressed="true" aria-label="Close split view (F3)"><span class="ic i-split"></span></button>
+    <button class="ib" aria-label="Show hidden files (Ctrl+H)"><span class="ic i-eye"></span></button>
+    <button class="ib" aria-label="Filter (Ctrl+I)"><span class="ic i-filter"></span></button>
+    <span class="vsep"></span>
+    <button class="actions">Actions<span class="ic i-chev-down"></span><span class="act-key">Ctrl+Shift+P</span></button>
+  </div>
+  <div class="wbody">
+    <nav aria-label="Places" class="places">
+      <div class="places-title"><h2 class="t-hsm">Places</h2></div>
+      <div class="places-scroll">
+        <button class="pl"><span class="ic ic20 i-home"></span><span class="nm">Home</span></button>
+        <button class="pl"><span class="ic ic20 i-monitor"></span><span class="nm">Desktop</span></button>
+        <button class="pl"><span class="ic ic20 i-file-text"></span><span class="nm">Documents</span></button>
+        <button class="pl is-current"><span class="ic ic20 i-download"></span><span class="nm">Downloads</span></button>
+        <button class="pl"><span class="ic ic20 i-image"></span><span class="nm">Pictures</span></button>
+        <button class="pl"><span class="ic ic20 i-music"></span><span class="nm">Music</span></button>
+        <button class="pl"><span class="ic ic20 i-film"></span><span class="nm">Videos</span></button>
+        <button class="pl"><span class="ic ic20 i-trash"></span><span class="nm">Trash</span></button>
+        <button class="sec"><span class="ic i-chev-right"></span><span>Remote (2)</span></button>
+        <button class="sec"><span class="ic i-chev-right"></span><span>Devices (2)</span></button>
+      </div>
+    </nav>
+    <div class="right">
+      <div class="tabstrip">
+        <div class="tab"><button class="tab-btn"><span class="ic i-home"></span><span class="tab-label">Home</span></button><button aria-label="Close tab (Ctrl+W)" class="tab-close"><span class="ic ic12 i-x"></span></button></div>
+        <div class="tab is-active"><button class="tab-btn"><span class="ic i-columns"></span><span class="tab-label">Pictures | Downloads</span></button><button aria-label="Close tab (Ctrl+W)" class="tab-close"><span class="ic ic12 i-x"></span></button></div>
+        <div class="tab-fill"><button aria-label="New tab (Ctrl+T)" class="tab-add"><span class="ic i-plus"></span></button></div>
+      </div>
+      <div class="panes">
+        <section aria-label="Files in /home/alex/Pictures" class="pane is-split no-type">
+          <div class="pathbar"><span class="ic ic12 i-folder"></span>/home/alex/Pictures</div>
+          <div class="content">
+            <div class="cols"><button class="ch c-name is-sorted">Name<span aria-label="Sorted ascending">↑</span></button><button class="ch c-size">Size</button><button class="ch c-mod">Modified</button></div>
+            <div class="rows">
+              <div class="row"><span class="c-name"><span class="ft ft-folder"></span><span class="nm">Projects</span></span><span class="cell-d c-size">&#x2014;</span><span class="cell-d c-mod">2026-11-05 14:21</span></div>
+              <div class="row"><span class="c-name"><span class="ft ft-folder"></span><span class="nm">Screenshots</span></span><span class="cell-d c-size">&#x2014;</span><span class="cell-d c-mod">2026-11-05 09:17</span></div>
+              <div class="row"><span class="c-name"><span class="th th1"></span><span class="nm">IMG_4819.jpg</span></span><span class="cell-d c-size">4.8 MiB</span><span class="cell-d c-mod">2026-10-27 16:41</span></div>
+              <div class="row"><span class="c-name"><span class="th th2"></span><span class="nm">IMG_4820.jpg</span></span><span class="cell-d c-size">5.1 MiB</span><span class="cell-d c-mod">2026-10-27 16:42</span></div>
+              <div class="row"><span class="c-name"><span class="th th3"></span><span class="nm">IMG_4821.jpg</span></span><span class="cell-d c-size">4.6 MiB</span><span class="cell-d c-mod">2026-10-27 16:43</span></div>
+            </div>
+          </div>
+          <div class="status"><span class="st-part">7 items (28.1 MiB)</span></div>
+        </section>
+        <section aria-label="Files in /home/alex/Downloads" class="pane is-split is-active has-divider no-type">
+          <div class="pathbar"><span class="ic ic12 i-folder"></span>/home/alex/Downloads</div>
+          <div class="content">
+            <div class="cols"><button class="ch c-name is-sorted">Name<span aria-label="Sorted ascending">↑</span></button><button class="ch c-size">Size</button><button class="ch c-mod">Modified</button></div>
+            <div class="rows">
+              <div class="row"><span class="c-name"><span class="ft ft-folder"></span><span class="nm">Installers</span></span><span class="cell-d c-size">&#x2014;</span><span class="cell-d c-mod">2026-11-02 10:04</span></div>
+              <div class="row is-sel"><span class="c-name"><span class="ft ft-pdf"></span><span class="nm">invoice-2026-10.pdf</span></span><span class="cell-d c-size">212 KiB</span><span class="cell-d c-mod">2026-11-01 09:30</span></div>
+              <div class="row"><span class="c-name"><span class="ft ft-tar"></span><span class="nm">rustphin-0.1.tar.zst</span></span><span class="cell-d c-size">9.8 MiB</span><span class="cell-d c-mod">2026-10-31 22:12</span></div>
+            </div>
+          </div>
+          <div class="status"><span class="st-part">1 item selected (212 KiB)</span><span class="st-part">3 items (10.0 MiB)</span></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============================ 35c ============================ -->
+<h2 class="scene-title">35c · Acting as administrator</h2>
+<p class="scene-note">After KDE's own password dialog (not Rustphin's) accepted the password. The shield turns red, a bar under the toolbar says what the mode means and how to leave it, and the title says so too. Clicking the shield again, or Stop, ends it. The pointer rests on Close, which is why it is red. Design detail of the mode is W-098.</p>
+<div class="rp v2 desk" style="width: 1280px; height: 800px;">
+<div class="rp win glass">
+  <div class="titlebar">
+    <img class="logo" src="../../assets/rustphin-small.svg" alt="">
+    <div class="wtitle">etc &#x2014; Rustphin (administrator)</div>
+    <button class="wbtn" aria-label="Minimise"><span class="ic i-minus"></span></button>
+    <button class="wbtn" aria-label="Maximise"><span class="ic ic12 i-maximize"></span></button>
+    <button class="wbtn is-close-hover" aria-label="Close window"><span class="ic i-x"></span></button>
+  </div>
+  <div class="tb2">
+    <button class="ib is-admin-on" aria-pressed="true" aria-label="Stop acting as administrator"><span class="ic i-shield-alert"></span></button>
+    <span class="vsep"></span>
+    <button class="ib" aria-label="Back (Alt+Left)"><span class="ic i-left"></span></button>
+    <button class="ib is-dis" aria-disabled="true" aria-label="Forward (Alt+Right)"><span class="ic i-right"></span></button>
+    <button class="ib" aria-label="Up one folder (Alt+Up)"><span class="ic i-up"></span></button>
+    <button class="ib" aria-label="Reload (F5)"><span class="ic i-refresh"></span></button>
+    <div aria-label="Folder location" class="loc"><span class="ic i-folder"></span><span class="segs"><span class="seg-sep">/</span><span class="seg seg-last">etc</span></span></div>
+    <button class="ib" aria-label="New folder (F10)"><span class="ic i-folder-plus"></span></button>
+    <span class="vsep"></span>
+    <div class="seg3" role="radiogroup" aria-label="View mode">
+      <button class="ib" aria-label="Icons (Ctrl+1)"><span class="ic i-grid"></span></button>
+      <button class="ib" aria-label="Compact (Ctrl+2)"><span class="ic i-compact"></span></button>
+      <button class="ib is-on" aria-checked="true" aria-label="Details (Ctrl+3)"><span class="ic i-list"></span></button>
+    </div>
+    <button class="ib" aria-label="Split view (F3)"><span class="ic i-split"></span></button>
+    <button class="ib" aria-label="Show hidden files (Ctrl+H)"><span class="ic i-eye"></span></button>
+    <button class="ib" aria-label="Filter (Ctrl+I)"><span class="ic i-filter"></span></button>
+    <span class="vsep"></span>
+    <button class="actions">Actions<span class="ic i-chev-down"></span><span class="act-key">Ctrl+Shift+P</span></button>
+  </div>
+  <div class="admin-bar" role="status">
+    <span class="ic i-shield-alert"></span>
+    <span class="grow">Acting as administrator. Changes you make here can affect the whole system; be careful.</span>
+    <button class="btn-err">Stop acting as administrator</button>
+  </div>
+  <div class="wbody">
+    <nav aria-label="Places" class="places">
+      <div class="places-title"><h2 class="t-hsm">Places</h2></div>
+      <div class="places-scroll">
+        <button class="pl"><span class="ic ic20 i-home"></span><span class="nm">Home</span></button>
+        <button class="pl"><span class="ic ic20 i-monitor"></span><span class="nm">Desktop</span></button>
+        <button class="pl"><span class="ic ic20 i-file-text"></span><span class="nm">Documents</span></button>
+        <button class="pl"><span class="ic ic20 i-download"></span><span class="nm">Downloads</span></button>
+        <button class="pl"><span class="ic ic20 i-image"></span><span class="nm">Pictures</span></button>
+        <button class="pl"><span class="ic ic20 i-trash"></span><span class="nm">Trash</span></button>
+        <button class="sec"><span class="ic i-chev-right"></span><span>Remote (2)</span></button>
+        <button class="sec"><span class="ic i-chev-down"></span><span>Devices</span></button>
+        <div class="dev"><span class="ic ic20 i-drive"></span><div class="dev-main"><div class="dev-name">System (/)</div><div aria-hidden="true" class="usage"><div class="usage-fill" style="width: 75%;"></div></div><div class="dev-fig">120.6 of 476.9 GiB free</div></div></div>
+      </div>
+    </nav>
+    <div class="right">
+      <div class="tabstrip">
+        <div class="tab is-active"><button class="tab-btn"><span class="ic i-folder"></span><span class="tab-label">etc</span></button><button aria-label="Close tab (Ctrl+W)" class="tab-close"><span class="ic ic12 i-x"></span></button></div>
+        <div class="tab-fill"><button aria-label="New tab (Ctrl+T)" class="tab-add"><span class="ic i-plus"></span></button></div>
+      </div>
+      <section aria-label="Files in /etc" class="pane">
+        <div class="content">
+          <div class="cols"><button class="ch c-name is-sorted">Name<span aria-label="Sorted ascending">↑</span></button><button class="ch c-size">Size</button><button class="ch c-mod">Modified</button><button class="ch c-type">Type</button></div>
+          <div class="rows">
+            <div class="row"><span class="c-name"><span class="ft ft-folder"></span><span class="nm">NetworkManager</span></span><span class="cell-d c-size">&#x2014;</span><span class="cell-d c-mod">2026-10-12 08:40</span><span class="cell-d c-type">Folder</span></div>
+            <div class="row"><span class="c-name"><span class="ft ft-folder"></span><span class="nm">pacman.d</span></span><span class="cell-d c-size">&#x2014;</span><span class="cell-d c-mod">2026-11-08 19:02</span><span class="cell-d c-type">Folder</span></div>
+            <div class="row"><span class="c-name"><span class="ft ft-folder"></span><span class="nm">systemd</span></span><span class="cell-d c-size">&#x2014;</span><span class="cell-d c-mod">2026-11-01 12:15</span><span class="cell-d c-type">Folder</span></div>
+            <div class="row is-sel"><span class="c-name"><span class="ft ft-text"></span><span class="nm">fstab</span></span><span class="cell-d c-size">1.2 KiB</span><span class="cell-d c-mod">2026-09-30 17:48</span><span class="cell-d c-type">Plain text</span></div>
+            <div class="row"><span class="c-name"><span class="ft ft-text"></span><span class="nm">hostname</span></span><span class="cell-d c-size">12 B</span><span class="cell-d c-mod">2026-08-14 10:02</span><span class="cell-d c-type">Plain text</span></div>
+            <div class="row"><span class="c-name"><span class="ft ft-text"></span><span class="nm">pacman.conf</span></span><span class="cell-d c-size">3.1 KiB</span><span class="cell-d c-mod">2026-11-08 19:02</span><span class="cell-d c-type">Plain text</span></div>
+          </div>
+        </div>
+        <div class="status"><span class="st-part">1 item selected (1.2 KiB)</span><span class="st-part">6 items</span><span style="margin-left: auto;">Free: 120.6 GiB of 476.9 GiB (System)</span></div>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="notes">
+<h2>What changes, in numbers</h2>
+<ul>
+<li>Title bar 36 px, drawn by Rustphin: logo, centred window title in <code>body-md</code> muted, Minimise / Maximise / Close at 44 × 36 px; Close turns red under the pointer. Drag to move, double-click to maximise, right-click for KDE's window menu, edges resize.</li>
+<li>Toolbar 44 px, full width (was 52 px above each pane): 32 px icon buttons without outlines (hover fill), separated into groups by 20 px hairlines: administrator · Back, Forward, Up, Reload · location · New folder · view mode (one segmented control) · Split, Show hidden, Filter · Actions.</li>
+<li>Toggles that are on (Split, Show hidden, the current view mode) take <code>primary-subtle</code> with a <code>primary-bright</code> icon; their tooltips and accessible state say "on" too, so state is not shown by colour alone.</li>
+<li>Tab strip 36 px, now above the files only, beside the places panel; the places title row is 36 px to line up with it.</li>
+<li>Rows 32 px (was 36), headings 28 px, places rows 28 px with 16 px icons, device rows 48 px, status line 28 px.</li>
+<li>Split view: one toolbar for the active side; a 28 px path bar above each side.</li>
+<li>Administrator mode: red shield, a 36 px error-coloured bar with a Stop button, "(administrator)" in the title.</li>
+</ul>
+<h2>Questions for the maintainer</h2>
+<ul>
+<li>Is this density right with the smaller text, or should rows stay 36 px?</li>
+<li>Toolbar buttons without outlines (as here) or with them (as the W-079 toolbar)?</li>
+<li>In split view, are the per-side path bars wanted, or should the toolbar's location be the only one?</li>
+<li>Window buttons: minimise, maximise and close as drawn, or follow KDE's button order setting?</li>
+</ul>
+</div>
+</div>
+</body>
+</html>
