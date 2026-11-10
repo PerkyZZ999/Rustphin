@@ -143,7 +143,7 @@ pub mod size {
     pub const SCROLLBAR_INSET: f32 = 2.;
 }
 
-/// Type scale in pixels.
+/// Type scale in pixels (D-026).
 pub mod text {
     /// Interface and file-name text (`body-md`, `body-sm`).
     pub const FAMILY_BODY: &str = "Inter";
@@ -152,25 +152,25 @@ pub mod text {
     /// Headings in empty and error states (`headline-sm`).
     pub const FAMILY_HEADING: &str = "Space Grotesk";
     /// Data cells (`data-md`).
-    pub const DATA: f32 = 14.;
+    pub const DATA: f32 = 11.;
     /// Secondary information: status line, captions.
-    pub const SMALL: f32 = 12.;
+    pub const SMALL: f32 = 11.;
     /// Body text and list rows.
-    pub const BODY: f32 = 14.;
+    pub const BODY: f32 = 12.;
     /// Short capital labels such as OWNER (`label-sm`).
-    pub const LABEL: f32 = 11.;
+    pub const LABEL: f32 = 10.;
     /// File and place names (`body-lg`).
-    pub const NAME: f32 = 15.;
+    pub const NAME: f32 = 12.;
     /// Headings of empty, loading and error states (`headline-md`).
-    pub const TITLE: f32 = 20.;
+    pub const TITLE: f32 = 15.;
     /// Panel and dialog titles (`headline-sm`).
-    pub const HEADING: f32 = 17.;
+    pub const HEADING: f32 = 15.;
     /// Line height of `headline-sm`.
-    pub const HEADING_LINE: f32 = 24.;
+    pub const HEADING_LINE: f32 = 20.;
     /// Line height of `headline-md`.
-    pub const TITLE_LINE: f32 = 28.;
+    pub const TITLE_LINE: f32 = 20.;
     /// Line height for body text.
-    pub const LINE: f32 = 20.;
+    pub const LINE: f32 = 16.;
 }
 
 /// The colours of the active theme.

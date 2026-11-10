@@ -513,6 +513,7 @@ impl PropertiesDialog {
         // 28-pixel rows, as the design's checkbox rows.
         div().flex().items_center().h(px(size::CHECK_ROW)).child(
             Checkbox::new(format!("perm-{class}-{label}"))
+                .text_size(px(text::BODY))
                 .label(label)
                 .accessibility_label(format!("{} {label}", PERMISSION_CLASSES[class as usize]))
                 .checked(checked)

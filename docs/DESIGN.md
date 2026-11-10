@@ -41,45 +41,45 @@ colors:
 typography:
   headline-md:
     fontFamily: Space Grotesk
-    fontSize: 20px
+    fontSize: 15px
     fontWeight: 600
-    lineHeight: 28px
+    lineHeight: 20px
     letterSpacing: -0.01em
   headline-sm:
     fontFamily: Space Grotesk
-    fontSize: 17px
+    fontSize: 15px
     fontWeight: 600
-    lineHeight: 24px
+    lineHeight: 20px
   body-lg:
     fontFamily: Inter
-    fontSize: 15px
+    fontSize: 12px
     fontWeight: 400
-    lineHeight: 20px
+    lineHeight: 16px
   body-md:
     fontFamily: Inter
-    fontSize: 14px
+    fontSize: 12px
     fontWeight: 400
-    lineHeight: 20px
+    lineHeight: 16px
   body-strong:
     fontFamily: Inter
-    fontSize: 14px
+    fontSize: 12px
     fontWeight: 600
-    lineHeight: 20px
+    lineHeight: 16px
   data-md:
     fontFamily: JetBrains Mono
-    fontSize: 14px
+    fontSize: 11px
     fontWeight: 400
-    lineHeight: 20px
+    lineHeight: 16px
   data-sm:
     fontFamily: JetBrains Mono
-    fontSize: 12px
+    fontSize: 11px
     fontWeight: 400
     lineHeight: 16px
   label-sm:
     fontFamily: JetBrains Mono
-    fontSize: 11px
+    fontSize: 10px
     fontWeight: 500
-    lineHeight: 16px
+    lineHeight: 14px
     letterSpacing: 0.06em
 rounded:
   sm: 2px
@@ -516,9 +516,9 @@ out reaches 28-pixel rows.
 
 Three families, each with one job:
 
-- **Inter** for names and interface text. `body-lg` (15 px, measured from the
-  reference's 12 px cap height scaled to the target) for file names, place
-  names, menu items and palette result names; `body-md` (14 px) for tabs,
+- **Inter** for names and interface text. `body-lg` (12 px since D-026, which
+  made the whole scale smaller after the maintainer's test run) for file names, place
+  names, menu items and palette result names; `body-md` (12 px) for tabs,
   buttons, banners, column headings and dialog text; `body-strong` for section
   headings in the places panel ("Devices", group names).
 - **JetBrains Mono** for data compared down a column or read character by
@@ -526,9 +526,13 @@ Three families, each with one job:
   dialog facts; `data-sm` for the status line, shortcuts, palette trails,
   activity figures and device figures; `label-sm` in capitals for short labels
   (OWNER, GROUP, OTHERS; a SYMLINK tag).
-- **Space Grotesk** for the few headings: `headline-sm` for panel and dialog
-  titles ("Places", "Actions", "Delete for good?", the name in Properties),
-  `headline-md` for empty and error states.
+- **Space Grotesk** for the few headings, all 15 px: `headline-sm` for panel
+  and dialog titles ("Places", "Actions", "Delete for good?", the name in
+  Properties), `headline-md` for empty and error states.
+- Sizes (D-026): 12 px text and names, 11 px data, 10 px capital labels, 15 px
+  headings; 16 px lines for text and data, 14 px for labels, 20 px for
+  headings. Row and control heights are unchanged until the W-096 top-bar
+  mockup reviews the window's density.
 
 Nothing is smaller than 11 px. Dates are `YYYY-MM-DD HH:MM` in the list and
 `YYYY-MM-DD HH:MM:SS` in Properties. Sizes use one decimal and IEC units
@@ -795,7 +799,7 @@ stands unless he changes it. There are no pills and no circles.
 - Do use JetBrains Mono only for data that is aligned or read exactly.
 - Don't blur, or rely on blurring, anything inside the window.
 - Don't introduce a second accent, gradients, or soft drop shadows.
-- Don't put text on bare `window-glass`, and don't go below 11 px.
+- Don't put text on bare `window-glass`, and don't go below 10 px (capital labels only; other text at least 11 px).
 - Don't add a radius other than 2 px.
 - Don't use `primary` fills for location (that is `primary-subtle`) or for
   decoration.

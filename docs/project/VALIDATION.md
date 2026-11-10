@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-10 — W-095 smaller type scale
+- **Code:** DESIGN.md typography tokens and `theme::text` set to D-026: body, names and strong 12 px (16 px lines), data 11 px (16 px lines), labels 10 px (14 px lines), both headings 15 px (20 px lines). The component library's root size (16 px) is left alone, since it also sets its control heights; its checkboxes, which sized their labels from it, now take `text::BODY` (Properties, batch rename, "apply to all").
+- **On screen:** isolated session, `RUSTPHIN_OPAQUE=1`: details view, places panel, Remote and Devices, status line, Properties (title, facts, capital labels, checkbox labels) and the palette all draw at the new sizes; after the fix no 14 px library text was seen in these screens. Rows (36 px) and controls keep their heights, which now look airy; their density is for the W-096 mockup.
+- **Not checked on screen:** batch rename, the operation dialogs and the menus at the new size (they use the same constants).
+- **Tests:** none added; the contrast tests do not depend on size and still pass.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-094 Remote section in Places
 - **Code:** platform `network_folder_name` reads Dolphin's network-folder bookmarks (`remote:/NAME`, percent-decoded, one safe path segment; not the `remote:/` Network view) and `network_folder_address` reads the address KDE keeps for each (`URL=` of a `Type=Link` entry in `$XDG_DATA_HOME/remoteview/NAME.desktop`, at most 64 KiB, network schemes only). `xdg::data_home` added. The places panel puts network places outside groups in a Remote section after the groups and before Devices, foldable for the run; grouped network places stay in their group. Opening a network folder reads its address off the UI thread and mounts it through kio-fuse as W-080 does; a folder with no usable address says so and what to do.
 - **the maintainer's setup (read only):** his places file holds `remote:/NAS`, `remote:/LAPTOP-CACHYOS`, `remote:/VPS-HOSTINGER` and `remote:/OVHCloud%20VPS`, each with an `sftp://` address in `remoteview/`; these were hidden before because only bookmarks with a network scheme were shown.

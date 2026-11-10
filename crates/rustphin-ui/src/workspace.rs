@@ -2231,6 +2231,7 @@ impl Workspace {
                         )
                         .into_any_element(),
                         Checkbox::new("apply-to-all")
+                            .text_size(px(text::BODY))
                             .label("Do the same for all other conflicts (A)")
                             .checked(all)
                             .on_click(cx.listener(|this, checked: &bool, _, cx| {

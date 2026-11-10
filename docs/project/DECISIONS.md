@@ -248,7 +248,7 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Status:** decided
 - **Date:** 2026-11-10
 - **Context:** after a day of use the maintainer found the text too large (TEST_RUN.md). The W-079 scale was 14 px body, 15 px names, 14 px data, 12 px small, 11 px labels, 17/20 px headings.
-- **Decision:** 12 px for interface text and file names, 11 px for sizes, dates and other data, 10 px for small labels, 15 px for headings. Line heights, row heights and control sizes shrink to keep the same rhythm on the 4 px grid. Contrast is unchanged and stays covered by the token tests.
+- **Decision:** 12 px for interface text and file names, 11 px for sizes, dates and other data, 10 px for small labels, 15 px for headings. Line heights follow (16 px for text and data, 14 px for labels, 20 px for headings). Row and control heights are reviewed with the W-096 top-bar mockup, which shows the whole window's density. Contrast is unchanged and stays covered by the token tests.
 - **Confirmed by / date:** The maintainer, 2026-11-10 ("12 px for text and file names; 11 px for sizes and dates; 10 px for small labels; 15 px for headings")
 - **Supersedes / superseded by:** amends the typography tokens adopted in W-079 (D-024)
 

@@ -425,6 +425,7 @@ impl RenameDialog {
                     .child(div().flex_1().min_w_0().child(field(theme, "Replace with", &self.replace, window, cx)))
                     .into_any_element(),
                 div().flex_none().child(Checkbox::new("rename-regex")
+                .text_size(px(text::BODY))
                     .label("Regular expression")
                     .checked(self.regex)
                     .on_click(cx.listener(|this, checked: &bool, _, cx| {
