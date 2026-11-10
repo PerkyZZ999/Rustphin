@@ -257,6 +257,7 @@ The test binary comes from `rust-tc test`; its filename contains a build hash.
 | TB6 | Click Back in the toolbar | The active side goes back; Forward lights up |
 | TB7 | Look at the default zoom, then Ctrl+- twice, Ctrl+0 | 32 px rows, 28 px places rows with 16 px icons, 48 px device rows, 28 px status line; the smallest zoom gives 24 px rows |
 | TB8 | Drag the bottom-right corner to the minimum size | At 480 px the toolbar keeps the shield, Back, the location and the Actions icon |
+| TB9 | On Maximise, then Restore, then Close: press, move the pointer 3 px, release (`mouse_button_down`, `mouse_move`, `mouse_button_up`) | Each acts on the first click: the window maximises, restores, closes; no button stays pressed. Dragging the bar elsewhere still moves the window |
 
 ## Not covered by these scenarios
 

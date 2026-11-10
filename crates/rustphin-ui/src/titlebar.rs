@@ -53,6 +53,16 @@ pub fn title_bar(
     }
     let maximized = window.is_maximized();
     let state = window.use_state(cx, |_, _| DragState { pressed: false });
+    // A press on a window button is the button's alone. If it reached the
+    // bar, the smallest movement before the release would hand the pointer
+    // to the compositor as a window move, and the button would never see
+    // its release: it stayed pressed and did nothing (W-104).
+    let keep_press = |button: Button| {
+        div()
+            .flex_none()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(button)
+    };
     let window_button = |id: &'static str, icon: IconName, label: &'static str| {
         Button::new(id)
             .ghost()
@@ -96,11 +106,14 @@ pub fn title_bar(
             }),
         )
         .on_mouse_move(
-            window.listener_for(&state, |state, _: &MouseMoveEvent, window, _| {
-                if state.pressed {
-                    state.pressed = false;
+            window.listener_for(&state, |state, event: &MouseMoveEvent, window, _| {
+                // Only a drag that is still going on moves the window: a
+                // release outside the bar never reached it.
+                let dragging = event.pressed_button == Some(MouseButton::Left);
+                if state.pressed && dragging {
                     window.start_window_move();
                 }
+                state.pressed = false;
             }),
         )
         .on_mouse_down(MouseButton::Right, |event, window, _| {
@@ -120,11 +133,11 @@ pub fn title_bar(
                 .text_color(theme.text_muted)
                 .child(SharedString::from(title.to_owned())),
         )
-        .child(
+        .child(keep_press(
             window_button("window-minimize", IconName::Minus, "Minimise")
                 .on_click(|_, window, _| window.minimize_window()),
-        )
-        .child(
+        ))
+        .child(keep_press(
             window_button(
                 "window-maximize",
                 if maximized {
@@ -135,11 +148,11 @@ pub fn title_bar(
                 if maximized { "Restore" } else { "Maximise" },
             )
             .on_click(|_, window, _| window.zoom_window()),
-        )
-        .child(
+        ))
+        .child(keep_press(
             window_button("window-close", IconName::X, "Close window")
                 .on_click(|_, window, _| window.remove_window()),
-        );
+        ));
     Some(bar.into_any_element())
 }
 

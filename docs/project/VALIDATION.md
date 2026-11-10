@@ -1,5 +1,14 @@
 # Validation evidence
 
+### 2026-11-10 — W-104 window buttons that stayed pressed
+- **Report:** The maintainer: Minimise, Maximise and Close sometimes stay pressed and need a second click.
+- **Cause:** the title bar armed its drag on any left press inside it, the window buttons' included; the first pointer movement before the release then called `start_window_move`, the compositor took the pointer, and the button never received its release. A perfectly still click worked, hence "sometimes".
+- **Reproduced:** isolated session, old build: press on Maximise, move 3 px, release: the window stayed as it was and the button kept its pressed fill.
+- **Code:** each window button sits in a wrapper that stops its left press from reaching the bar; the bar starts a move only while the left button is still held (`pressed_button`), and forgets a press on any movement, so a release outside the bar cannot leave it armed.
+- **On screen (TB9):** with the fix, the same press-move-release maximised the window, then restored it, then closed it, each on the first click; dragging the bar 100 px still moved the window.
+- **Tests:** none automated: the behaviour lives in the compositor's pointer grab, which unit tests cannot drive; TB9 records the check. Minimise uses the same wrapper but was not pressed in the session (it hides the only window).
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-103 design leftovers
 - **Code:**
   - Status line: `devices::mount_point_of` (the deepest mount in `/proc/self/mountinfo`, through the trash module's parser) is read with the free space in the background; the places panel names the listed volume mounted exactly there (`volume_at`), and the workspace hands the name to each pane.
