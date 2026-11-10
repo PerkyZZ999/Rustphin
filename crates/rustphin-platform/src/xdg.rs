@@ -9,18 +9,19 @@ pub fn home() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// The user's own data directory (`$XDG_DATA_HOME`, else `~/.local/share`).
+pub fn data_home() -> Option<PathBuf> {
+    env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .filter(|dir| dir.is_absolute())
+        .or_else(|| home().map(|home| home.join(".local/share")))
+}
+
 /// Directories searched for shared data, most important first: the user's own
 /// data directory, then the system ones.
 pub fn data_dirs() -> Vec<PathBuf> {
     let absolute = |path: PathBuf| path.is_absolute().then_some(path);
-    let mut dirs = Vec::new();
-    match env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .and_then(absolute)
-    {
-        Some(dir) => dirs.push(dir),
-        None => dirs.extend(home().map(|home| home.join(".local/share"))),
-    }
+    let mut dirs: Vec<PathBuf> = data_home().into_iter().collect();
     let system = env::var_os("XDG_DATA_DIRS")
         .filter(|dirs| !dirs.is_empty())
         .unwrap_or_else(|| "/usr/local/share:/usr/share".into());

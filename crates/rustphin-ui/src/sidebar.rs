@@ -31,7 +31,8 @@ use rustphin_platform::{
     config,
     devices::{self, Device, Devices, NoDevices, UDisks2},
     places::{EMPTY, Place, Places, PlacesError},
-    remote::RemoteAddress,
+    remote::{RemoteAddress, network_folder_address, network_folder_name},
+    xdg,
 };
 
 use crate::{
@@ -113,6 +114,8 @@ enum Row {
     Device(String),
     /// The Devices heading, which folds the volumes away.
     Devices,
+    /// The Remote heading, which folds the network places away.
+    Remote,
 }
 
 /// A place being dragged within the panel.
@@ -166,6 +169,8 @@ pub struct Sidebar {
     devices_unavailable: bool,
     /// Whether the Devices section is folded, for this run.
     devices_folded: bool,
+    /// Whether the Remote section is folded, for this run.
+    remote_folded: bool,
     usage: HashMap<String, (u64, u64)>,
     device_service: Arc<dyn Devices>,
     /// The volume being mounted or unmounted, shown as busy.
@@ -183,12 +188,22 @@ fn network_address(place: &Place) -> Option<RemoteAddress> {
     RemoteAddress::parse(&place.href).filter(RemoteAddress::is_network_folder)
 }
 
+/// A network folder made in Dolphin (`remote:/NAME`), whose address KDE
+/// keeps in a file of its own.
+fn is_network_folder(place: &Place) -> bool {
+    network_folder_name(&place.href).is_some()
+}
+
+/// Whether `place` is somewhere else on the network: it goes in the Remote
+/// section, as in Dolphin, unless the user put it in a group.
+fn is_remote(place: &Place) -> bool {
+    network_address(place).is_some() || is_network_folder(place)
+}
+
 /// Whether the panel shows `place`: local folders, network folders and the
 /// trash, unless another application keeps the bookmark to itself.
 fn is_shown(place: &Place, show_hidden: bool) -> bool {
-    let reachable = place.path.is_some()
-        || place.href.starts_with("trash:")
-        || network_address(place).is_some();
+    let reachable = place.path.is_some() || place.href.starts_with("trash:") || is_remote(place);
     let ours = place
         .only_in_app
         .as_deref()
@@ -196,14 +211,19 @@ fn is_shown(place: &Place, show_hidden: bool) -> bool {
     reachable && ours && (show_hidden || !place.hidden)
 }
 
-/// The rows of the panel, top to bottom: places outside groups, then each
-/// group's heading followed by its places unless it is collapsed.
-fn rows(places: &[Place], groups: &Groups, show_hidden: bool) -> Vec<Row> {
+/// The rows of the panel, top to bottom: local places outside groups, then
+/// each group's heading followed by its places unless it is collapsed, then
+/// the Remote heading and the network places outside groups unless folded.
+fn rows(places: &[Place], groups: &Groups, show_hidden: bool, remote_folded: bool) -> Vec<Row> {
     let layout = groups.layout(places);
-    let mut rows: Vec<Row> = layout
+    let (remote, local): (Vec<&Place>, Vec<&Place>) = layout
         .ungrouped
         .iter()
+        .copied()
         .filter(|place| is_shown(place, show_hidden))
+        .partition(|place| is_remote(place));
+    let mut rows: Vec<Row> = local
+        .iter()
         .map(|place| Row::Place(place.id.clone()))
         .collect();
     for (index, (group, members)) in layout.groups.iter().enumerate() {
@@ -217,6 +237,12 @@ fn rows(places: &[Place], groups: &Groups, show_hidden: bool) -> Vec<Row> {
             );
         }
     }
+    if !remote.is_empty() {
+        rows.push(Row::Remote);
+        if !remote_folded {
+            rows.extend(remote.iter().map(|place| Row::Place(place.id.clone())));
+        }
+    }
     rows
 }
 
@@ -227,7 +253,7 @@ fn icon_for(place: &Place) -> gpui_kit::assets::IconName {
     let has = |part: &str| name.contains(part);
     if place.href.starts_with("trash:") || has("trash") {
         I::Trash
-    } else if network_address(place).is_some() {
+    } else if is_remote(place) {
         I::Server
     } else if has("home") {
         I::House
@@ -357,6 +383,7 @@ impl Sidebar {
             devices: Vec::new(),
             devices_unavailable: false,
             devices_folded: false,
+            remote_folded: false,
             usage: HashMap::new(),
             device_service: Arc::new(NoDevices),
             device_busy: None,
@@ -559,7 +586,12 @@ impl Sidebar {
     }
 
     fn rows(&self) -> Vec<Row> {
-        let mut rows = rows(&self.places, &self.groups, self.show_hidden);
+        let mut rows = rows(
+            &self.places,
+            &self.groups,
+            self.show_hidden,
+            self.remote_folded,
+        );
         if !self.devices.is_empty() || self.devices_unavailable {
             rows.push(Row::Devices);
         }
@@ -604,15 +636,9 @@ impl Sidebar {
                 } else if place.href.starts_with("trash:") {
                     cx.emit(SidebarEvent::OpenTrash);
                 } else if let Some(address) = network_address(place) {
-                    remote::open(address, cx, move |_, mounted, cx| {
-                        if let Some(path) = mounted {
-                            cx.emit(if new_tab {
-                                SidebarEvent::OpenInNewTab(path)
-                            } else {
-                                SidebarEvent::Open(path)
-                            });
-                        }
-                    });
+                    Self::open_remote(address, new_tab, cx);
+                } else if let Some(name) = network_folder_name(&place.href) {
+                    self.open_network_folder(name, new_tab, cx);
                 }
             }
             Row::Group(index) => {
@@ -624,7 +650,47 @@ impl Sidebar {
                 self.devices_folded = !self.devices_folded;
                 cx.notify();
             }
+            Row::Remote => {
+                self.remote_folded = !self.remote_folded;
+                cx.notify();
+            }
         }
+    }
+
+    /// Mounts `address` through kio-fuse and shows the folder it gives.
+    fn open_remote(address: RemoteAddress, new_tab: bool, cx: &mut Context<Self>) {
+        remote::open(address, cx, move |_, mounted, cx| {
+            if let Some(path) = mounted {
+                cx.emit(if new_tab {
+                    SidebarEvent::OpenInNewTab(path)
+                } else {
+                    SidebarEvent::Open(path)
+                });
+            }
+        });
+    }
+
+    /// Opens a network folder made in Dolphin: its address is read from
+    /// KDE's file for it, off the UI thread, then mounted like any other.
+    fn open_network_folder(&mut self, name: String, new_tab: bool, cx: &mut Context<Self>) {
+        cx.spawn(async move |panel, cx| {
+            let lookup = name.clone();
+            let address = cx
+                .background_spawn(async move {
+                    network_folder_address(&xdg::data_home()?, &lookup)
+                })
+                .await;
+            let _ = panel.update(cx, |_, cx| match address {
+                Some(address) => Self::open_remote(address, new_tab, cx),
+                None => {
+                    let text = format!(
+                        "The network folder \u{201c}{name}\u{201d} has no address Rustphin can open. Check it in Dolphin's Network view, or add its sftp:// or smb:// address to Places."
+                    );
+                    hub(cx).update(cx, |hub, cx| hub.say(text, true, cx));
+                }
+            });
+        })
+        .detach();
     }
 
     /// Connects to the device service in the background and starts
@@ -949,7 +1015,7 @@ impl Sidebar {
             Row::Place(id) => self.place(id).map(|place| place.title.clone()),
             Row::Group(index) => self.groups.groups.get(*index).map(|g| g.name.clone()),
             // A volume's label belongs to its filesystem.
-            Row::Device(_) | Row::Devices => None,
+            Row::Device(_) | Row::Devices | Row::Remote => None,
         };
         let Some(name) = name else { return };
         let len = name.len();
@@ -982,7 +1048,7 @@ impl Sidebar {
                     self.groups.rename(index, &typed);
                     self.save_groups(cx);
                 }
-                Row::Device(_) | Row::Devices => {}
+                Row::Device(_) | Row::Devices | Row::Remote => {}
             }
         }
         if self
@@ -1031,7 +1097,7 @@ impl Sidebar {
                 cx.notify();
             }
             // A volume is not removed from the list; `E` unmounts it.
-            Some(Row::Device(_) | Row::Devices) | None => {}
+            Some(Row::Device(_) | Row::Devices | Row::Remote) | None => {}
         }
     }
 
@@ -1099,7 +1165,7 @@ impl Sidebar {
                     |_, (), _| {},
                 );
             }
-            Some(Row::Device(_) | Row::Devices) | None => {}
+            Some(Row::Device(_) | Row::Devices | Row::Remote) | None => {}
         }
     }
 
@@ -1147,7 +1213,7 @@ impl Sidebar {
     fn drop_place(&mut self, id: &str, target: &Row, cx: &mut Context<Self>) {
         match target {
             Row::Group(index) => self.move_to_group(id, Some(*index), None, cx),
-            Row::Device(_) | Row::Devices => {}
+            Row::Device(_) | Row::Devices | Row::Remote => {}
             Row::Place(other) if other == id => {}
             Row::Place(other) => match self.groups.group_of(other) {
                 Some(index) => self.move_to_group(id, Some(index), Some(other), cx),
@@ -1176,7 +1242,7 @@ impl Sidebar {
         let group = match target {
             Some(Row::Group(index)) => Some(*index),
             Some(Row::Place(id)) => self.groups.group_of(id),
-            Some(Row::Device(_) | Row::Devices) | None => None,
+            Some(Row::Device(_) | Row::Devices | Row::Remote) | None => None,
         };
         for folder in folders {
             self.add_place(folder, group, cx);
@@ -1507,11 +1573,13 @@ impl Render for Sidebar {
         let groups = self.groups.clone();
         let layout = groups.layout(&places);
         let mut lines: Vec<AnyElement> = Vec::new();
-        for place in layout
+        let (remote_places, local_places): (Vec<&Place>, Vec<&Place>) = layout
             .ungrouped
             .iter()
+            .copied()
             .filter(|place| is_shown(place, self.show_hidden))
-        {
+            .partition(|place| is_remote(place));
+        for place in local_places {
             lines.push(self.place_row(place, false, theme, window, cx));
         }
         for (index, (group, members)) in layout.groups.iter().enumerate() {
@@ -1531,6 +1599,44 @@ impl Render for Sidebar {
                 )
                 .into_any_element(),
             );
+        }
+        if !remote_places.is_empty() {
+            let folded = self.remote_folded;
+            let row = Row::Remote;
+            let click_row = row.clone();
+            let heading = Self::section_heading(
+                self.row_surface(&row, false, theme, window, cx)
+                    .id("remote-heading"),
+                folded,
+                theme,
+            )
+            .child(div().flex_1().min_w_0().truncate().child(if folded {
+                format!("Remote ({})", remote_places.len())
+            } else {
+                "Remote".to_owned()
+            }))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.focused = Some(click_row.clone());
+                this.focus.focus(window, cx);
+                this.open(&click_row.clone(), false, cx);
+            }));
+            lines.push(Self::section_rule(theme).into_any_element());
+            lines.push(
+                self.row_semantics(heading, &row, "Remote".into(), false, window, cx)
+                    .aria_level(1)
+                    .aria_expanded(!folded)
+                    .aria_description(if folded {
+                        "Collapsed section. Activate to expand."
+                    } else {
+                        "Expanded section. Activate to collapse."
+                    })
+                    .into_any_element(),
+            );
+            if !folded {
+                for place in remote_places {
+                    lines.push(self.place_row(place, false, theme, window, cx));
+                }
+            }
         }
         let devices = self.devices.clone();
         if !devices.is_empty() || self.devices_unavailable {
@@ -1715,12 +1821,52 @@ mod tests {
         assert!(is_shown(&ours, false));
         assert!(is_shown(&place("ssh", "sftp://me@host/srv"), false));
         assert!(is_shown(&place("nas", "smb://nas/share"), false));
+        assert!(is_shown(&place("lab", "remote:/NAS"), false));
         assert!(!is_shown(&place("n", "remote:/"), false));
         assert!(!is_shown(&place("s", "recentlyused:/files"), false));
         assert!(!is_shown(&place("web", "https://example.org/"), false));
         assert!(!is_shown(&restricted, false));
         assert!(!is_shown(&hidden, false));
         assert!(is_shown(&hidden, true));
+    }
+
+    #[test]
+    fn network_places_follow_the_groups_under_their_own_foldable_heading() {
+        let places = [
+            place("lab", "remote:/NAS"),
+            place("home", "file:///home/u"),
+            place("nas", "smb://nas/share"),
+            place("vps", "sftp://me@host/"),
+            place("network", "remote:/"),
+            place("docs", "file:///d"),
+        ];
+        let mut groups = Groups::default();
+        groups.groups = vec![Group {
+            name: "Servers".into(),
+            collapsed: false,
+            places: vec!["vps".into()],
+        }];
+        let p = |id: &str| Row::Place(id.to_owned());
+
+        assert_eq!(
+            rows(&places, &groups, false, false),
+            [
+                p("home"),
+                p("docs"),
+                Row::Group(0),
+                p("vps"),
+                Row::Remote,
+                p("lab"),
+                p("nas"),
+            ]
+        );
+        assert_eq!(
+            rows(&places, &groups, false, true),
+            [p("home"), p("docs"), Row::Group(0), p("vps"), Row::Remote]
+        );
+        // No network places outside groups: no Remote heading.
+        let local = [place("home", "file:///home/u")];
+        assert_eq!(rows(&local, &Groups::default(), false, false), [p("home")]);
     }
 
     #[test]
@@ -1751,7 +1897,7 @@ mod tests {
         let p = |id: &str| Row::Place(id.to_owned());
 
         assert_eq!(
-            rows(&places, &groups, false),
+            rows(&places, &groups, false, false),
             [
                 p("home"),
                 Row::Group(0),
@@ -1761,7 +1907,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            rows(&places, &groups, true),
+            rows(&places, &groups, true, false),
             [
                 p("home"),
                 Row::Group(0),

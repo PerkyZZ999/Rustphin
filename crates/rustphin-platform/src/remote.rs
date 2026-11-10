@@ -17,7 +17,7 @@ use std::{
 
 use zbus::blocking::Connection;
 
-use crate::uri::percent_encode;
+use crate::uri::{percent_decode, percent_encode};
 
 const SERVICE: &str = "org.kde.KIOFuse";
 const PATH: &str = "/org/kde/KIOFuse";
@@ -33,6 +33,53 @@ pub const MOUNT_TIMEOUT: Duration = Duration::from_secs(120);
 const NETWORK_SCHEMES: &[&str] = &[
     "sftp", "fish", "smb", "ftp", "ftps", "webdav", "webdavs", "nfs",
 ];
+
+/// Largest network-folder file that is read; anything bigger is ignored.
+const MAX_NETWORK_FOLDER_BYTES: u64 = 65_536;
+
+/// The name of a network folder made in Dolphin ("Add Network Folder"),
+/// from its `remote:/NAME` bookmark: `remote:/OVHCloud%20VPS` gives
+/// `OVHCloud VPS`. `None` for the Network view itself (`remote:/`), other
+/// addresses and names that could reach outside the folders' directory.
+pub fn network_folder_name(href: &str) -> Option<String> {
+    let encoded = href.strip_prefix("remote:/")?.trim_end_matches('/');
+    let name = String::from_utf8(percent_decode(encoded.as_bytes())).ok()?;
+    let safe = !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\0']);
+    safe.then_some(name)
+}
+
+/// The address a network folder leads to, as KDE keeps it:
+/// `URL=` in `<data_home>/remoteview/<name>.desktop`. Reads a file:
+/// call off the UI thread. `None` when the file is missing, too large, not a
+/// link or does not name a network address.
+pub fn network_folder_address(data_home: &Path, name: &str) -> Option<RemoteAddress> {
+    if network_folder_name(&format!("remote:/{}", percent_encode(name.as_bytes()))).as_deref()
+        != Some(name)
+    {
+        return None;
+    }
+    let path = data_home.join("remoteview").join(format!("{name}.desktop"));
+    let metadata = std::fs::metadata(&path).ok()?;
+    if !metadata.is_file() || metadata.len() > MAX_NETWORK_FOLDER_BYTES {
+        return None;
+    }
+    let text = std::fs::read_to_string(&path).ok()?;
+    let mut in_entry = false;
+    let (mut link, mut url) = (false, None);
+    for line in text.lines().map(str::trim) {
+        if let Some(group) = line.strip_prefix('[') {
+            in_entry = group.strip_suffix(']') == Some("Desktop Entry");
+        } else if in_entry && let Some((key, value)) = line.split_once('=') {
+            match key.trim() {
+                "Type" => link = value.trim() == "Link",
+                "URL" => url = Some(value.trim().to_owned()),
+                _ => {}
+            }
+        }
+    }
+    let address = RemoteAddress::parse(&url.filter(|_| link)?)?;
+    address.is_network_folder().then_some(address)
+}
 
 /// An address typed by the user or read from a bookmark that names a
 /// folder somewhere other than this machine's file system.
@@ -446,6 +493,64 @@ mod tests {
         assert!(!format!("{typed:?}").contains("hunter2"));
         assert_eq!(address("smb://:secret@nas/").to_string(), "smb://@nas/");
         assert_eq!(address("tar:/a:b@c").to_string(), "tar:/a:b@c");
+    }
+
+    #[test]
+    fn a_network_folder_is_named_by_its_remote_bookmark() {
+        assert_eq!(
+            network_folder_name("remote:/OVHCloud%20VPS").as_deref(),
+            Some("OVHCloud VPS")
+        );
+        assert_eq!(
+            network_folder_name("remote:/NAS/").as_deref(),
+            Some("NAS")
+        );
+        for not_one in [
+            "remote:/",
+            "remote:",
+            "sftp://host/",
+            "remote:/a/b",
+            "remote:/a%2Fb",
+            "remote:/..",
+            "remote:/%FF",
+        ] {
+            assert_eq!(network_folder_name(not_one), None, "{not_one}");
+        }
+    }
+
+    #[test]
+    fn a_network_folder_leads_to_the_address_kde_keeps_for_it() {
+        let data = tempfile::tempdir().unwrap();
+        let folders = data.path().join("remoteview");
+        std::fs::create_dir_all(&folders).unwrap();
+        let entry = |url: &str, kind: &str| {
+            format!("[Desktop Entry]\nIcon=folder-remote\nName=X\nType={kind}\nURL={url}\n")
+        };
+        std::fs::write(
+            folders.join("Home lab.desktop"),
+            entry("sftp://me@192.0.2.10:22/", "Link"),
+        )
+        .unwrap();
+        std::fs::write(
+            folders.join("web.desktop"),
+            entry("https://example.org/", "Link"),
+        )
+        .unwrap();
+        std::fs::write(
+            folders.join("app.desktop"),
+            entry("sftp://host/", "Application"),
+        )
+        .unwrap();
+
+        let found = network_folder_address(data.path(), "Home lab").unwrap();
+        assert_eq!(found.to_string(), "sftp://me@192.0.2.10:22/");
+        assert_eq!(network_folder_address(data.path(), "web"), None);
+        assert_eq!(network_folder_address(data.path(), "app"), None);
+        assert_eq!(network_folder_address(data.path(), "missing"), None);
+        assert_eq!(
+            network_folder_address(data.path(), "../remoteview/Home lab"),
+            None
+        );
     }
 
     #[test]

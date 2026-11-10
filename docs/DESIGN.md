@@ -859,6 +859,9 @@ except where the list below says otherwise; each W-079 step adds its line.
   field, the drag chip with its icon, 20 px state headings with reason
   lines. List views have their scrollbar (W-090): vertical in details
   (below the headings) and icons, horizontal along the bottom in compact.
+  The places panel has a Remote section (W-094) between the groups and
+  Devices, with a foldable heading like Devices ("Remote (n)" when folded)
+  and the `server` icon for each network place.
   Hidden entries (W-091), shown with Ctrl+H, are drawn at 60% opacity
   except while selected, as in Dolphin; their text stays at 4.5:1 or more.
 - W-086 (2026-11-09): compact view fills columns top to bottom and scrolls
