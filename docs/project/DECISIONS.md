@@ -243,3 +243,19 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** the UI crate bundles static instances of the three fonts at the weights docs/DESIGN.md uses (`crates/rustphin-ui/assets/fonts/`) and registers them at start. They are under the SIL OFL 1.1, which permits bundling with software of any licence; the licence texts ship beside them. They are font data, not linked code, so the GPL-compatibility rule for dependencies is not engaged.
 - **Confirmed by / date:** The maintainer, 2026-11-09 ("Yes, bundle them", for Inter and Space Grotesk); JetBrains Mono added by the agent for the same defect.
 - **Supersedes / superseded by:** none
+
+## D-026 — A smaller type scale
+- **Status:** decided
+- **Date:** 2026-11-10
+- **Context:** after a day of use the maintainer found the text too large (TEST_RUN.md). The W-079 scale was 14 px body, 15 px names, 14 px data, 12 px small, 11 px labels, 17/20 px headings.
+- **Decision:** 12 px for interface text and file names, 11 px for sizes, dates and other data, 10 px for small labels, 15 px for headings. Line heights, row heights and control sizes shrink to keep the same rhythm on the 4 px grid. Contrast is unchanged and stays covered by the token tests.
+- **Confirmed by / date:** The maintainer, 2026-11-10 ("12 px for text and file names; 11 px for sizes and dates; 10 px for small labels; 15 px for headings")
+- **Supersedes / superseded by:** amends the typography tokens adopted in W-079 (D-024)
+
+## D-027 — Act as Administrator, as Dolphin does
+- **Status:** decided
+- **Date:** 2026-11-10
+- **Context:** The maintainer asked for a toolbar button to act as administrator. L-014 (elevated operations) was later work, and ARCHITECTURE.md said Rustphin never elevates. Running a graphical application as root, or collecting the root password in Rustphin's own window, would put the whole application and the password inside the trust boundary.
+- **Decision:** L-014 moves into scope. Rustphin never asks for or handles a password and never runs as root. Switching the mode on asks KDE's polkit agent to authenticate; file operations in the mode go through kio-admin's privileged helper, as Dolphin's "Act as Administrator". The mode is always visibly marked and switched off the same way. A design and threat model (W-098) come before any code, for the maintainer's approval.
+- **Confirmed by / date:** The maintainer, 2026-11-10 ("yes let's do exactly like Dolphin does, that is what I first meant")
+- **Supersedes / superseded by:** moves L-014 into scope; amends ARCHITECTURE.md's "never elevates" once W-098 is designed

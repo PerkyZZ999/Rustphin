@@ -2929,9 +2929,15 @@ impl Browser {
     }
 
     /// The selectable collection excludes sibling controls such as sort headings.
-    fn entry_list(&self, snapshot: &Snapshot, list: impl IntoElement) -> impl IntoElement {
+    fn entry_list(
+        &self,
+        snapshot: &Snapshot,
+        list: impl IntoElement,
+        scrollbar: Option<Scrollbar>,
+    ) -> impl IntoElement {
         div()
             .id("file-list")
+            .relative()
             .role(Role::ListBox)
             .aria_size_of_set(snapshot.len())
             .aria_label(format!(
@@ -2944,6 +2950,7 @@ impl Browser {
             .flex_1()
             .min_h_0()
             .child(list)
+            .children(scrollbar)
     }
 
     /// The details view: column headings over a virtualised list of entries.
@@ -3125,7 +3132,11 @@ impl Browser {
             .flex_col()
             .min_h_0()
             .child(headings)
-            .child(self.entry_list(snapshot, list))
+            .child(self.entry_list(
+                snapshot,
+                list,
+                Some(styled_scrollbar(Scrollbar::vertical(&self.scroll), theme)),
+            ))
     }
 
     /// One entry of the icons or compact view: a large icon over its name, or
@@ -3245,7 +3256,8 @@ impl Browser {
         .track_scroll(&self.scroll)
         .flex_1()
         .py(px(space::SM));
-        self.entry_list(snapshot, list)
+        let scrollbar = styled_scrollbar(Scrollbar::vertical(&self.scroll), theme);
+        self.entry_list(snapshot, list, Some(scrollbar))
     }
 
     /// The compact view: entries fill columns from top to bottom and the
@@ -3293,7 +3305,8 @@ impl Browser {
             .overflow_x_scroll()
             .track_scroll(&self.columns_scroll)
             .child(content);
-        self.entry_list(snapshot, scroller)
+        let scrollbar = styled_scrollbar(Scrollbar::horizontal(&self.columns_scroll), theme);
+        self.entry_list(snapshot, scroller, Some(scrollbar))
     }
 
     /// Shown instead of the list when it has no rows: says why and what to do.
@@ -3415,17 +3428,10 @@ impl Browser {
                     .track_scroll(&self.folder_state_scroll)
                     .child(content),
             )
-            .child(
-                Scrollbar::vertical(&self.folder_state_scroll)
-                    .mode(ScrollbarMode::Always)
-                    .styles(|styles| {
-                        styles
-                            .track(|style| style.bg(gpui_kit::transparent_black()))
-                            .thumb(|style| style.bg(theme.text_muted).radius(px(size::RADIUS)))
-                            .thumb_hover(|style| style.bg(theme.accent))
-                            .thumb_active(|style| style.bg(theme.accent))
-                    }),
-            )
+            .child(styled_scrollbar(
+                Scrollbar::vertical(&self.folder_state_scroll),
+                theme,
+            ))
             .into_any_element()
     }
 
@@ -4327,9 +4333,11 @@ impl Render for Browser {
                                 content.child(self.grid(snapshot, layout, per_row, theme, cx))
                             }
                         }
-                        Some(snapshot) => content.child(
-                            self.entry_list(snapshot, self.empty_state(snapshot, theme, cx)),
-                        ),
+                        Some(snapshot) => content.child(self.entry_list(
+                            snapshot,
+                            self.empty_state(snapshot, theme, cx),
+                            None,
+                        )),
                         None => content.children(failed_here),
                     }),
             )
@@ -4342,6 +4350,34 @@ impl Render for Browser {
         self.frames.end(frame_started);
         view
     }
+}
+
+/// docs/DESIGN.md's scrollbar: 8 px, 2 px in from the edge, a half-opaque
+/// `text-muted` thumb on a clear track, `primary-bright` while hovered or
+/// dragged. Always shown, as Breeze does, so the length of a list is seen
+/// before scrolling it.
+fn styled_scrollbar(scrollbar: Scrollbar, theme: Theme) -> Scrollbar {
+    let resting = gpui_kit::Rgba {
+        a: theme.text_muted.a * 0.5,
+        ..theme.text_muted
+    };
+    scrollbar.mode(ScrollbarMode::Always).styles(|styles| {
+        styles
+            .track(|style| {
+                style
+                    .bg(gpui_kit::transparent_black())
+                    .width(px(size::SCROLLBAR))
+            })
+            .thumb(|style| {
+                style
+                    .bg(resting)
+                    .width(px(size::SCROLLBAR - 2. * size::SCROLLBAR_INSET))
+                    .inset(px(size::SCROLLBAR_INSET))
+                    .radius(px(size::RADIUS))
+            })
+            .thumb_hover(|style| style.bg(theme.accent))
+            .thumb_active(|style| style.bg(theme.accent))
+    })
 }
 
 /// Entries being dragged out of a view. What they are is looked up when

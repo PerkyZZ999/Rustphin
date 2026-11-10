@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Rustphin</title>
+  <defs>
+    <!-- One shared gradient for every claw part, so overlapping parts merge without seams. -->
+    <linearGradient id="claw" x1="0" y1="150" x2="0" y2="370" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F45D50"/>
+      <stop offset="0.5" stop-color="#E53935"/>
+      <stop offset="1" stop-color="#B42229"/>
+    </linearGradient>
+    <linearGradient id="folderFront" x1="0" y1="160" x2="0" y2="392" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3D4047"/>
+      <stop offset="1" stop-color="#2B2D31"/>
+    </linearGradient>
+    <linearGradient id="folderBack" x1="0" y1="112" x2="0" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2F3136"/>
+      <stop offset="1" stop-color="#232529"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <filter id="softer" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+    <path id="frontPanel" d="M216,160 H456 Q476,160 476,180 V372 Q476,392 456,392 H216 Q196,392 196,372 V180 Q196,160 216,160 Z"/>
+    <!-- Palm and fixed (lower) finger: one piece, in front of the folder -->
+    <path id="palm" d="M150,222 L160,266
+      Q172,256 184,267 Q198,256 212,266 Q226,255 240,264 Q254,254 268,262 Q282,253 295,260
+      C314,256 332,250 350,232
+      C346,268 306,310 238,328
+      C190,341 118,370 60,338
+      C30,312 26,252 54,222
+      C82,194 130,196 150,222 Z"/>
+    <clipPath id="onFolder"><use href="#frontPanel"/></clipPath>
+  </defs>
+
+  <!-- Contact shadow under the whole mark -->
+  <ellipse cx="262" cy="404" rx="220" ry="14" fill="#000" opacity="0.18" filter="url(#softer)"/>
+
+  <g stroke="#9A1B21" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round">
+    <!-- Wrist -->
+    <path fill="url(#claw)" d="M44,312 C20,322 10,350 22,370 C34,388 62,386 80,366 C92,352 92,336 84,326 Z"/>
+    <!-- Movable (upper) finger: hooks behind the folder -->
+    <path fill="url(#claw)" d="M118,226 C140,170 220,150 290,175 C320,186 340,208 346,232 C322,216 290,206 255,210 C220,214 190,228 165,258 Z"/>
+  </g>
+
+  <!-- Folder -->
+  <path fill="url(#folderBack)" d="M216,112 H292 C301,112 306,115 311,121 L320,132 C323,135 327,136 332,136 H456 Q476,136 476,156 V372 Q476,392 456,392 H216 Q196,392 196,372 V132 Q196,112 216,112 Z"/>
+  <use href="#frontPanel" fill="url(#folderFront)"/>
+  <path d="M216,161 H456" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Shadow the front piece casts on the folder -->
+  <g clip-path="url(#onFolder)">
+    <use href="#palm" transform="translate(3 9)" fill="#000" opacity="0.42" filter="url(#soft)"/>
+  </g>
+  <use href="#palm" fill="url(#claw)" stroke="#9A1B21" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <!-- Soft highlights for gentle depth -->
+  <ellipse cx="86" cy="250" rx="34" ry="18" transform="rotate(-25 86 250)" fill="#FFFFFF" opacity="0.25" filter="url(#soft)"/>
+  <path d="M190,290 C240,288 290,276 326,256" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="5" stroke-linecap="round" fill="none"/>
+</svg>

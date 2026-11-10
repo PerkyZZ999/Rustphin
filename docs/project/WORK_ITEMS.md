@@ -22,6 +22,18 @@ S11 — Hardening for daily use (in progress)
 - [x] W-085 — Count dropped frames (interval > 1.5 × refresh period) in the frame log and re-measure the three views of 500,000 entries against D-019 (≤ 5%). Refresh period from `Window::refresh_interval` (60 Hz assumed and logged when unknown); per-summary counts and a whole-run "scroll benchmark result" verdict. All three views pass.
 - [x] W-076s — Ctrl+L selects the whole location so typing replaces it, and Ctrl+L again with everything selected returns to the view, as Dolphin's replaceLocation (found while timing W-073g; K19).
 
+## Test-run refinements (the maintainer's findings, 2026-11-10; docs/project/TEST_RUN.md)
+
+- [x] W-090 — Scrollbars on the details, icons and compact views (vertical; horizontal in compact). Done 2026-11-10 (see VALIDATION.md).
+- [ ] W-091 — Hidden entries drawn faded, as Dolphin does.
+- [ ] W-092 — Applications' own icons in "Open with", not folder icons.
+- [ ] W-093 — "Run this file?": the safe button reads "Cancel" (was "Keep") and stays the Enter default.
+- [ ] W-094 — A Remote section in Places (Network and network bookmarks), as Dolphin's.
+- [ ] W-095 — Smaller type scale (D-026): 12 px text and names, 11 px data, 10 px labels, 15 px headings; rows and controls follow.
+- [ ] W-096 — Top bar redesign: custom title bar in the app's style above the toolbar; toolbar above the tab strip; one toolbar for both panes of a split, acting on the focused pane (Dolphin); toolbar buttons Reload, New folder, View mode, Split, Show hidden, Filter and the administrator button. Mockup first, approved by the maintainer before building.
+- [ ] W-097 — Icons on buttons wherever they help recognition (iconography skill).
+- [ ] W-098 — Act as Administrator as in Dolphin (D-027): KDE's polkit prompt, file operations through kio-admin's privileged helper, a clearly marked mode, switched off the same way. Design and threat model first, approved by the maintainer before building.
+
 ## Design pass (W-079, started 2026-11-08 under D-024)
 
 - [x] W-079 — Match the maintainer's HTML mockups (docs/mockup/, 34 screens) through a UI/UX/design pass, adapting to Rustphin's features. docs/DESIGN.md is the adopted target; each step updates its "Implementation status", replays the matching mockup screens in an isolated KWin session and compares screenshots. Requested by the maintainer on 2026-11-06.

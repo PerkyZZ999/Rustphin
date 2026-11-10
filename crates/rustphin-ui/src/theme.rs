@@ -137,6 +137,10 @@ pub mod size {
     pub const DIALOG_TITLE: f32 = 48.;
     /// Corner radius shared by controls, rows and panels.
     pub const RADIUS: f32 = 2.;
+    /// Width of a scrollbar's track.
+    pub const SCROLLBAR: f32 = 8.;
+    /// Gap between a scrollbar's thumb and the edge of its track.
+    pub const SCROLLBAR_INSET: f32 = 2.;
 }
 
 /// Type scale in pixels.

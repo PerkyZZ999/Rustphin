@@ -856,7 +856,8 @@ except where the list below says otherwise; each W-079 step adds its line.
   240 px compact columns, column widths and pane-width rules, the mono type
   column, "—" for folder sizes, thumbnails from 24 px, the 28 px rename
   field, the drag chip with its icon, 20 px state headings with reason
-  lines. List views have no scrollbar to move below the headings.
+  lines. List views have their scrollbar (W-090): vertical in details
+  (below the headings) and icons, horizontal along the bottom in compact.
 - W-086 (2026-11-09): compact view fills columns top to bottom and scrolls
   sideways, with Dolphin's keys in that view.
 - W-079e (2026-11-08): the two-zone status line with free space and its
@@ -893,8 +894,7 @@ except where the list below says otherwise; each W-079 step adds its line.
   GPUI ignores a variable font's weight axis. Headings render semibold as
   drawn. Weights not listed in the typography tokens fall back to the
   nearest bundled or installed face.
-- Not yet implemented: scrollbars on the
-  list views (the compact view has none either); the volume name after the
+- Not yet implemented: the volume name after the
   free space; per-command palette icons and application icons in "Open
   with"; icons and sizes in a question's list of names; tab overflow; the
   design's offset focus ring on buttons (the library draws its own); saving

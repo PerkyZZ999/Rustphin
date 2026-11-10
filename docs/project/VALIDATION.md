@@ -1,5 +1,11 @@
 # Validation evidence
 
+### 2026-11-10 — W-090 list scrollbars
+- **Code:** the details and icons views get a vertical scrollbar on their list scroll handle, the compact view a horizontal one on its column scroll handle, styled as docs/DESIGN.md (8 px track, 2 px inset, half-opaque `text-muted` thumb, `primary-bright` on hover and drag), always shown. In details it is laid over the list below the headings. The empty-state scrollbar uses the same style.
+- **On screen:** isolated KWin session, 2,000 empty files, `RUSTPHIN_OPAQUE=1`. Details: thumb at the right edge below the headings; dragging it from y 200 to 450 moved the list to file-1044. Icons: thumb at the matching position. Compact: horizontal thumb along the bottom above the status line.
+- **Tests:** none added; the change is drawing only (no logic of its own).
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-09 — W-089 could not open a folder, in place
 - **Code:** core `DirectoryModel` no longer rolls its history back when an open, Back or Forward fails: it stays at the requested folder and reports `Failed` (the `restore` copy of the history is gone). Re-reads the user did not ask for are unchanged (a vanished folder still moves to its nearest ancestor). The browser shows a failure in place when it is for the folder now shown and nothing is listed for it; otherwise (a shown folder that failed to re-read, a vanished folder, a stopped selection worker) the banner stays. The state has a lock icon for permission and `folder-x` otherwise, "Could not open this folder", an explanation by reason, and Back (Alt+Left), or Up (Alt+Up) without history, or no button at a root with no history. The status line names the reason; free space is measured for the folder.
 - **Tests:** core `a_failed_open_stays_at_the_requested_folder` (Back returns, Forward then available) and `permission_errors_are_reported` (location kept) failed against the old roll-back before the change. UI: `a_folder_that_could_not_be_opened_is_explained_in_place`, `the_in_place_error_says_why_and_where_its_button_leads`, `the_status_line_names_the_failure_while_it_is_shown_in_place`; four mutations (ignore the listing, ignore `moved`, Up worded as Back, wrong status) each failed a test.
