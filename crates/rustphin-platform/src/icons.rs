@@ -115,6 +115,26 @@ impl IconTheme {
         names.iter().find_map(|name| self.find_one(name, size))
     }
 
+    /// Finds an application's icon from its desktop file's `Icon` key: an
+    /// absolute path to an existing file is used as it is; otherwise it is
+    /// an icon name, looked up like any other (a file extension some desktop
+    /// files add is ignored). A relative path is not an icon name and finds
+    /// nothing.
+    pub fn find_app_icon(&self, icon: &str, size: u32) -> Option<PathBuf> {
+        let path = Path::new(icon);
+        if path.is_absolute() {
+            return path.is_file().then(|| path.to_path_buf());
+        }
+        if icon.contains('/') {
+            return None;
+        }
+        let name = EXTENSIONS
+            .iter()
+            .find_map(|extension| icon.strip_suffix(&format!(".{extension}")))
+            .unwrap_or(icon);
+        self.find_one(name, size)
+    }
+
     fn find_one(&self, name: &str, size: u32) -> Option<PathBuf> {
         let key = (name.to_owned(), size);
         let mut cache = self
@@ -127,8 +147,11 @@ impl IconTheme {
         let found = (0..self.themes).find_map(|theme| {
             let mut candidates: Vec<&ThemeDir> =
                 self.dirs.iter().filter(|dir| dir.theme == theme).collect();
-            // Closest size first; among equals, the larger directory scales down better.
-            candidates.sort_by_key(|dir| (dir.distance(size), u32::MAX - dir.size));
+            // Closest size first; among equals, a directory of exactly that
+            // size (as the specification's first match would be), then the
+            // larger one, which scales down better.
+            candidates
+                .sort_by_key(|dir| (dir.distance(size), dir.size != size, u32::MAX - dir.size));
             candidates
                 .into_iter()
                 .find_map(|dir| icon_file(&dir.path, name))
@@ -272,6 +295,47 @@ mod tests {
         assert_eq!(find(16).as_deref(), Some("base/mime/16/text.svg"));
         assert_eq!(find(32).as_deref(), Some("base/mime/32/text.svg"));
         assert_eq!(find(128).as_deref(), Some("base/mime/scalable/text.svg"));
+    }
+
+    #[test]
+    fn an_application_icon_is_a_theme_name_or_an_absolute_path() {
+        let root = tempfile::tempdir().unwrap();
+        theme(
+            root.path(),
+            "base",
+            BASE,
+            &["mime/16/org.example.viewer.svg"],
+        );
+        let own = root.path().join("icons").join("own-icon.png");
+        fs::write(&own, b"png").unwrap();
+        let icons = IconTheme::load("base", &[root.path().to_path_buf()]);
+
+        let find = |icon: &str| relative(root.path(), icons.find_app_icon(icon, 16));
+        let themed = Some("base/mime/16/org.example.viewer.svg");
+        assert_eq!(find("org.example.viewer").as_deref(), themed);
+        assert_eq!(find("org.example.viewer.png").as_deref(), themed);
+        assert_eq!(find(own.to_str().unwrap()).as_deref(), Some("own-icon.png"));
+        assert_eq!(find("/no/such/icon.png"), None);
+        assert_eq!(find("base/mime/16/org.example.viewer.svg"), None);
+    }
+
+    #[test]
+    fn an_icon_drawn_for_the_size_beats_a_scalable_one_that_also_fits() {
+        let root = tempfile::tempdir().unwrap();
+        let index = "[Icon Theme]\nDirectories=apps/16,apps/scalable\n\
+            [apps/16]\nSize=16\nType=Fixed\n\
+            [apps/scalable]\nSize=128\nType=Scalable\nMinSize=1\nMaxSize=256\n";
+        theme(
+            root.path(),
+            "base",
+            index,
+            &["apps/16/app.png", "apps/scalable/app.svg"],
+        );
+        let icons = IconTheme::load("base", &[root.path().to_path_buf()]);
+
+        let find = |size| relative(root.path(), icons.find(&names(&["app"]), size));
+        assert_eq!(find(16).as_deref(), Some("base/apps/16/app.png"));
+        assert_eq!(find(48).as_deref(), Some("base/apps/scalable/app.svg"));
     }
 
     #[test]

@@ -32,6 +32,8 @@ pub struct Application {
     pub id: String,
     /// The application's name, as shown in a menu.
     pub name: String,
+    /// Its `Icon` key: an icon name from the theme, or an absolute path.
+    pub icon: Option<String>,
 }
 
 /// What activating a file should do.
@@ -107,6 +109,7 @@ impl Associations {
                     Application {
                         id,
                         name: parsed.name,
+                        icon: parsed.icon,
                     },
                 );
             }
@@ -122,6 +125,11 @@ impl Associations {
             }
         }
         index
+    }
+
+    /// Every indexed application, in no particular order.
+    pub fn all(&self) -> impl Iterator<Item = &Application> {
+        self.apps.values()
     }
 
     /// Applications for `mime`, the default first, then added associations,
@@ -294,6 +302,7 @@ struct ParsedDesktop {
     name: String,
     exec: String,
     mimes: Vec<String>,
+    icon: Option<String>,
 }
 
 fn read_desktop(path: &Path) -> Option<ParsedDesktop> {
@@ -313,6 +322,7 @@ fn parse_desktop(text: &str) -> Option<ParsedDesktop> {
     let mut name = None;
     let mut exec = None;
     let mut mimes = Vec::new();
+    let mut icon = None;
     let mut hidden = false;
     let mut no_display = false;
     let mut terminal = false;
@@ -340,6 +350,7 @@ fn parse_desktop(text: &str) -> Option<ParsedDesktop> {
             "Type" => is_application = value == "Application",
             "Name" => name = clean_name(value),
             "Exec" => exec = Some(value.to_owned()),
+            "Icon" => icon = Some(value.trim().to_owned()).filter(|icon| !icon.is_empty()),
             "MimeType" => {
                 mimes.extend(
                     value
@@ -366,7 +377,12 @@ fn parse_desktop(text: &str) -> Option<ParsedDesktop> {
     }
     let name = name?;
     let exec = exec.filter(|exec| !exec.is_empty())?;
-    Some(ParsedDesktop { name, exec, mimes })
+    Some(ParsedDesktop {
+        name,
+        exec,
+        mimes,
+        icon,
+    })
 }
 
 /// True when the file name ends in `.desktop`, even if the rest is not UTF-8.
@@ -787,8 +803,33 @@ mod tests {
             vec![Application {
                 id: "writer.desktop".into(),
                 name: "Writer".into(),
+                icon: None,
             }]
         );
+    }
+
+    #[test]
+    fn an_application_keeps_its_icon() {
+        let root = tempfile::tempdir().unwrap();
+        let data = root.path().join("data");
+        let with_icon = format!(
+            "{}Icon=org.example.viewer\n",
+            desktop("Viewer", "viewer %f", "image/png")
+        );
+        write(&data.join("applications"), "viewer.desktop", &with_icon);
+        write(
+            &data.join("applications"),
+            "plain.desktop",
+            &format!("{}Icon=\n", desktop("Plain", "plain %f", "image/png")),
+        );
+        let index = Associations::load(&[], &[data]);
+        let icons: HashMap<_, _> = index
+            .for_type("image/png")
+            .into_iter()
+            .map(|app| (app.name, app.icon))
+            .collect();
+        assert_eq!(icons["Viewer"].as_deref(), Some("org.example.viewer"));
+        assert_eq!(icons["Plain"], None);
     }
 
     #[test]

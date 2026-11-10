@@ -971,6 +971,7 @@ impl Browser {
                         .applications(types.mime_type(snapshot.name(rows[0]), false))
                         .into_iter()
                         .map(|app| menu::AppChoice {
+                            icon: types.app_icon(&app.id),
                             id: app.id,
                             name: app.name,
                         })
@@ -3853,7 +3854,7 @@ impl Browser {
                 .into_any_element(),
             menu::MenuEntry::Submenu { label, .. } => Self::menu_button(
                 label,
-                gpui_kit::assets::IconName::AppWindow,
+                menu::RowIcon::Symbol(gpui_kit::assets::IconName::AppWindow),
                 None,
                 true,
                 true,
@@ -3894,7 +3895,7 @@ impl Browser {
                 let enabled = *enabled;
                 Self::menu_button(
                     label,
-                    command.icon(),
+                    command.row_icon(),
                     command.shortcut(),
                     enabled,
                     false,
@@ -3957,7 +3958,7 @@ impl Browser {
 
     fn menu_button(
         label: &str,
-        icon: gpui_kit::assets::IconName,
+        icon: menu::RowIcon,
         key: Option<&'static str>,
         enabled: bool,
         submenu: bool,
@@ -4004,7 +4005,25 @@ impl Browser {
             })
             .when(!current && enabled, |row| row.text_color(theme.text))
             .when(!enabled, |row| row.text_color(theme.text_disabled))
-            .child(Icon::new(icon).size(px(size::ICON)).flex_none())
+            .child(match icon {
+                menu::RowIcon::Symbol(icon) => Icon::new(icon)
+                    .size(px(size::ICON))
+                    .flex_none()
+                    .into_any_element(),
+                // A file the renderer cannot draw falls back to the outline.
+                menu::RowIcon::Image(path) => {
+                    use gpui_kit::StyledImage as _;
+                    img(path)
+                        .size(px(size::ICON))
+                        .flex_none()
+                        .with_fallback(|| {
+                            Icon::new(gpui_kit::assets::IconName::AppWindow)
+                                .size(px(size::ICON))
+                                .into_any_element()
+                        })
+                        .into_any_element()
+                }
+            })
             .child(div().flex_1().min_w_0().truncate().child(label.to_owned()))
             .when_some(key, |row, key| {
                 row.child(

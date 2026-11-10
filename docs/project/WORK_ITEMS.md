@@ -26,7 +26,7 @@ S11 — Hardening for daily use (in progress)
 
 - [x] W-090 — Scrollbars on the details, icons and compact views (vertical; horizontal in compact). Done 2026-11-10 (see VALIDATION.md).
 - [x] W-091 — Hidden entries drawn faded, as Dolphin does. Done 2026-11-10 (see VALIDATION.md).
-- [ ] W-092 — Applications' own icons in "Open with", not folder icons.
+- [x] W-092 — Applications' own icons in "Open with", not folder icons. Done 2026-11-10 (see VALIDATION.md).
 - [ ] W-093 — "Run this file?": the safe button reads "Cancel" (was "Keep") and stays the Enter default.
 - [ ] W-094 — A Remote section in Places (Network and network bookmarks), as Dolphin's.
 - [ ] W-095 — Smaller type scale (D-026): 12 px text and names, 11 px data, 10 px labels, 15 px headings; rows and controls follow.

@@ -1,5 +1,11 @@
 # Validation evidence
 
+### 2026-11-10 — W-092 application icons in "Open with"
+- **Code:** the platform reads each desktop file's `Icon` key (`Application::icon`); `IconTheme::find_app_icon` takes an absolute path to an existing file as it is, or looks the name up (ignoring a file extension), and refuses a relative path. The type database resolves every application's icon at 16 px when it loads, off the UI thread, and the menu draws it in colour, falling back to the `app-window` outline when there is none or the file cannot be drawn. Icon lookup now prefers a directory of exactly the requested size over a scalable one that also fits, as the specification's first-match rule does: hicolor's scalable Firefox and PhotoCraft SVGs did not draw, their 16 px PNGs do. This also applies to file-type icons.
+- **Tests:** `an_application_keeps_its_icon` (failed with the `Icon` key ignored), `an_application_icon_is_a_theme_name_or_an_absolute_path`, `an_icon_drawn_for_the_size_beats_a_scalable_one_that_also_fits` (failed with the old tie-break), `an_application_shows_its_own_icon_and_falls_back_to_the_outline` (failed with images disabled).
+- **On screen:** isolated session, right-click a JPEG, Open with: FigCraft, PhotoCraft, Chromium, Fog Panther, Rnote, Firefox, GIMP, Chrome, Helium, LibreSprite, Gwenview and Zen each show their own icon. (Before: the generic outline for all; with the old lookup Firefox and PhotoCraft were blank.)
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-091 hidden entries faded
 - **Code:** the core snapshot says whether a row's entry is hidden (`Snapshot::is_hidden`, the store's dot-name rule through the sort order). Entries draw at `HIDDEN_OPACITY` (60%) when hidden and not selected; cut entries keep 50%, and both multiply.
 - **Tests:** the core resort test checks the hidden flag follows the sort order (failed when the row was used as the store index); `hidden_entries_are_faded_unless_selected_and_cut_ones_fade_further` (failed when selection no longer cancelled the fade); the opaque and glass contrast tests now include a hidden name on content and under the pointer (4.5:1) and its size and date (3:1); at 30% the name fell to 2.4:1 and the test failed.

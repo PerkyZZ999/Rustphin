@@ -3,7 +3,10 @@
 //! The list is decided here, away from drawing, so a missing operation fails a
 //! test rather than only disappearing on screen.
 
-use std::path::PathBuf;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 /// One application that can open the selected file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -12,6 +15,17 @@ pub struct AppChoice {
     pub id: String,
     /// The name shown in the menu.
     pub name: String,
+    /// The application's own icon file, if it has one.
+    pub icon: Option<Arc<Path>>,
+}
+
+/// What a menu row shows before its words.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowIcon {
+    /// One of the interface's Lucide outlines.
+    Symbol(gpui_kit::assets::IconName),
+    /// An application's own icon, in colour.
+    Image(Arc<Path>),
 }
 
 /// An operation the menu can run.
@@ -96,6 +110,17 @@ impl MenuCommand {
                 return None;
             }
         })
+    }
+
+    /// What the row shows before its words: an application's own icon
+    /// where there is one, else the operation's outline.
+    pub fn row_icon(&self) -> RowIcon {
+        match self {
+            Self::OpenWith(AppChoice {
+                icon: Some(icon), ..
+            }) => RowIcon::Image(Arc::clone(icon)),
+            _ => RowIcon::Symbol(self.icon()),
+        }
     }
 
     /// The Lucide icon of the row.
@@ -477,6 +502,7 @@ mod tests {
             applications: vec![AppChoice {
                 id: "org.kde.kate.desktop".into(),
                 name: "Kate".into(),
+                icon: None,
             }],
             types_ready: true,
         };
@@ -548,6 +574,30 @@ mod tests {
         assert_eq!(
             labels(&entries),
             ["Restore", "Empty trash…", "", "Volume A", "Byte name"]
+        );
+    }
+
+    #[test]
+    fn an_application_shows_its_own_icon_and_falls_back_to_the_outline() {
+        let kate = |icon: Option<Arc<Path>>| {
+            MenuCommand::OpenWith(AppChoice {
+                id: "org.kde.kate.desktop".into(),
+                name: "Kate".into(),
+                icon,
+            })
+        };
+        let file: Arc<Path> = Arc::from(Path::new("/icons/kate.svg"));
+        assert_eq!(
+            kate(Some(Arc::clone(&file))).row_icon(),
+            RowIcon::Image(file)
+        );
+        assert_eq!(
+            kate(None).row_icon(),
+            RowIcon::Symbol(gpui_kit::assets::IconName::AppWindow)
+        );
+        assert_eq!(
+            MenuCommand::Copy.row_icon(),
+            RowIcon::Symbol(gpui_kit::assets::IconName::Copy)
         );
     }
 
@@ -719,6 +769,7 @@ mod tests {
             MenuEffect::Run(MenuCommand::OpenWith(AppChoice {
                 id: "org.kde.kate.desktop".into(),
                 name: "Kate".into(),
+                icon: None,
             }))
         );
     }

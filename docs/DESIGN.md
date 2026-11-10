@@ -897,8 +897,7 @@ except where the list below says otherwise; each W-079 step adds its line.
   drawn. Weights not listed in the typography tokens fall back to the
   nearest bundled or installed face.
 - Not yet implemented: the volume name after the
-  free space; per-command palette icons and application icons in "Open
-  with"; icons and sizes in a question's list of names; tab overflow; the
+  free space; per-command palette icons; icons and sizes in a question's list of names; tab overflow; the
   design's offset focus ring on buttons (the library draws its own); saving
   whether Devices is folded. "Details…" sits on the result line, since
   operation results are window-level here.
