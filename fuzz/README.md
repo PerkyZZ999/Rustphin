@@ -7,6 +7,7 @@ rust-tc fuzz uri
 rust-tc fuzz places
 rust-tc fuzz desktop
 rust-tc fuzz images
+rust-tc fuzz admin_entry
 ```
 
 Each campaign defaults to 30 seconds after compilation, a 4,096-byte input
@@ -22,6 +23,11 @@ optional second argument changes the campaign duration, for example
 - `desktop`: shortcut classification and Exec argument parsing. Uses only a
   generated temporary `.desktop` file; never invokes a launch API. Command
   arguments must be NUL-free, and parsing must preserve the source bytes.
+- `admin_entry`: entries from KDE's kio-admin helper (KIO `UDSEntry` in Qt's
+  `QDataStream` layout, W-098). Any input must decode or be refused without a
+  panic; an accepted entry must have a plain name (not empty, no `/`),
+  permission bits only, and valid nanoseconds. Seeds are entries KIO 6.31
+  itself wrote.
 - `images`: thumbnail generation and malformed image handling in a fresh
   temporary source/cache. Success must be discoverable through cache lookup;
   failure must create a failure marker; source bytes must remain unchanged.

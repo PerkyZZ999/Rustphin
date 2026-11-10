@@ -1,7 +1,7 @@
 # Act as Administrator: design and threat model (W-098)
 
-Status: **proposal, waiting for the maintainer's approval** (D-027 requires it before
-any code). Written 2026-11-10.
+Status: **approved by the maintainer on 2026-11-10 (D-028)**, as D-027 required
+before any code. Written 2026-11-10.
 
 ## What the maintainer asked for
 

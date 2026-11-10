@@ -259,3 +259,11 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** L-014 moves into scope. Rustphin never asks for or handles a password and never runs as root. Switching the mode on asks KDE's polkit agent to authenticate; file operations in the mode go through kio-admin's privileged helper, as Dolphin's "Act as Administrator". The mode is always visibly marked and switched off the same way. A design and threat model (W-098) come before any code, for the maintainer's approval.
 - **Confirmed by / date:** The maintainer, 2026-11-10 ("yes let's do exactly like Dolphin does, that is what I first meant")
 - **Supersedes / superseded by:** moves L-014 into scope; amends ARCHITECTURE.md's "never elevates" once W-098 is designed
+
+## D-028 — Act as Administrator through KDE's kio-admin helper, per window
+- **Status:** decided
+- **Date:** 2026-11-10
+- **Context:** D-027 asked for a design and threat model before building administrator mode; docs/project/ADMIN_MODE.md is that design.
+- **Decision:** as ADMIN_MODE.md proposes. Rustphin talks to KDE's `org.kde.kio.admin` helper directly over the system bus, as Dolphin's admin worker does, behind an `AdminFs` implementation of the core's `Fs` trait (not kio-fuse, not a helper of its own). The mode covers the whole window and is never saved. In the mode delete is always permanent with confirmation, there are no live updates, no thumbnails and no batch rename; names that do not round-trip as UTF-8 are refused.
+- **Confirmed by / date:** The maintainer, 2026-11-10 ("Approve as written")
+- **Supersedes / superseded by:** completes D-027

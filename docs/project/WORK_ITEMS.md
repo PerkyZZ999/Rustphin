@@ -36,8 +36,14 @@ S11 — Hardening for daily use (in progress)
   - [x] W-096c — Split view: one toolbar for the active side, a path bar above each side. Done 2026-11-10.
   - [x] W-096d — Density: rows (icon + 8 px, at least 24: 24/28/32/40/56), 28 px headings and places rows with 16 px icons, 48 px device rows, 28 px status line. Done 2026-11-10.
 - [x] W-099 — Rustphin's own logo and app icon (the maintainer chose a charcoal folder held by two red crab claws): `assets/rustphin.svg` and `assets/rustphin-small.svg`, hicolor PNGs 16–512 px, the desktop entry naming `Icon=rustphin`, the README's install step, the title bar's logo (W-096a). Logo set committed in a0ad77f by another session; the wiring finished 2026-11-10 (see VALIDATION.md).
+- [ ] W-100 — Hover feedback on entries in the details, icons and compact views. On the maintainer's desktop the 7% `hover` fill shows only while the mouse button is pressed, not on plain hovering (his screenshot, 2026-11-10): find why, then make hovering visible.
+- [ ] W-101 — the maintainer has three network folders in Dolphin but Rustphin's Remote section shows two; NAS is missing (2026-11-10).
 - [ ] W-097 — Icons on buttons wherever they help recognition (iconography skill).
-- [ ] W-098 — Act as Administrator as in Dolphin (D-027): KDE's polkit prompt, file operations through kio-admin's privileged helper, a clearly marked mode, switched off the same way. Design and threat model first, approved by the maintainer before building. 2026-11-10: design written (docs/project/ADMIN_MODE.md: talk to KDE's kio-admin helper directly as Dolphin does, `AdminFs` behind the core's `Fs` trait, threat model, slices W-098a–d); waiting for the maintainer's three decisions.
+- [ ] W-098 — Act as Administrator as in Dolphin (D-027): KDE's polkit prompt, file operations through kio-admin's privileged helper, a clearly marked mode, switched off the same way. Design and threat model first, approved by the maintainer before building. 2026-11-10: design written (docs/project/ADMIN_MODE.md: talk to KDE's kio-admin helper directly as Dolphin does, `AdminFs` behind the core's `Fs` trait, threat model, slices W-098a–d). Approved by the maintainer on 2026-11-10 (D-028).
+  - [x] W-098a — Helper client (`rustphin-platform::admin`): bounded `UDSEntry` decoder, safe `file://` URLs, KIO error mapping, list/stat/read/write/mkdir/rename/copy/delete/chmod/chown with timeouts; fake helper tests; `admin_entry` fuzz target. Done 2026-11-10.
+  - [ ] W-098b — Read-only mode: `AdminFs` listing and describing, shield, bar, title, prompt and refusal.
+  - [ ] W-098c — Changes through the helper: new folder or file, rename, copy, move, delete for good, undo, Properties owner and permissions.
+  - [ ] W-098d — Replay, docs (ARCHITECTURE trust boundary, DESIGN), the maintainer's real-desktop check.
 
 ## Design pass (W-079, started 2026-11-08 under D-024)
 

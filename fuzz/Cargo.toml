@@ -44,3 +44,10 @@ path = "fuzz_targets/images.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "admin_entry"
+path = "fuzz_targets/admin_entry.rs"
+test = false
+doc = false
+bench = false
