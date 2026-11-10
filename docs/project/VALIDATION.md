@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-10 — W-101 places Dolphin keeps to itself
+- **Cause:** The maintainer's places file (read, not changed) marks NAS `<OnlyInApp>dolphin</OnlyInApp>`; Dolphin adds this to places created inside it. The panel showed only places with no such mark or marked `rustphin`. LAPTOP and OVHCloud VPS carry no mark, which is why they showed.
+- **Code:** `sidebar::is_shown` also accepts places marked `dolphin`, since Rustphin stands in for Dolphin (as Dolphin does, it shows them). Places kept by any other application stay hidden.
+- **Tests:** `local_and_network_folders_and_the_trash_are_shown_and_other_places_are_not` now has a `remote:/NAS` place marked `dolphin` (shown) and one marked `gwenview` (hidden); it failed before the change.
+- **On screen:** isolated home with a places file holding Work, NAS marked `dolphin`, LAPTOP, and a place marked `gwenview`: the panel showed Work, and under Remote NAS and LAPTOP; the Gwenview place was not shown.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-100 hover fill on entries
 - **Cause:** the entry's surface (the element with the `hover` fill) had no element id. In the pinned GPUI an element keeps its hover state, and asks for a redraw when the pointer enters or leaves, only when it has an id; without one the fill was computed only when something else redrew the list, such as a press. Every other hover in the app (places, tabs, crumbs, headings, palette) already had an id.
 - **Code:** `Entry::surface` takes the row and gives the surface the id `("entry-surface", row)`; used by the details rows and the icons and compact cells.

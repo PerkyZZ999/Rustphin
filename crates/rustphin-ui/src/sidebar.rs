@@ -201,13 +201,15 @@ fn is_remote(place: &Place) -> bool {
 }
 
 /// Whether the panel shows `place`: local folders, network folders and the
-/// trash, unless another application keeps the bookmark to itself.
+/// trash, unless another application keeps the bookmark to itself. Dolphin
+/// marks the places added in it as its own; Rustphin stands in for Dolphin,
+/// so it shows those as Dolphin does (W-101).
 fn is_shown(place: &Place, show_hidden: bool) -> bool {
     let reachable = place.path.is_some() || place.href.starts_with("trash:") || is_remote(place);
     let ours = place
         .only_in_app
         .as_deref()
-        .is_none_or(|app| app == "rustphin");
+        .is_none_or(|app| app == "rustphin" || app == "dolphin");
     reachable && ours && (show_hidden || !place.hidden)
 }
 
@@ -1811,7 +1813,11 @@ mod tests {
     #[test]
     fn local_and_network_folders_and_the_trash_are_shown_and_other_places_are_not() {
         let mut restricted = place("r", "file:///x");
-        restricted.only_in_app = Some("dolphin".into());
+        restricted.only_in_app = Some("gwenview".into());
+        // Dolphin marks the places added in it as its own; Rustphin stands
+        // in for Dolphin, so they are its too (W-101: the maintainer's NAS).
+        let mut dolphins = place("d", "remote:/NAS");
+        dolphins.only_in_app = Some("dolphin".into());
         let mut ours = place("o", "file:///x");
         ours.only_in_app = Some("rustphin".into());
         let mut hidden = place("h", "file:///x");
@@ -1820,6 +1826,7 @@ mod tests {
         assert!(is_shown(&place("a", "file:///home/u"), false));
         assert!(is_shown(&place("t", "trash:/"), false));
         assert!(is_shown(&ours, false));
+        assert!(is_shown(&dolphins, false));
         assert!(is_shown(&place("ssh", "sftp://me@host/srv"), false));
         assert!(is_shown(&place("nas", "smb://nas/share"), false));
         assert!(is_shown(&place("lab", "remote:/NAS"), false));
