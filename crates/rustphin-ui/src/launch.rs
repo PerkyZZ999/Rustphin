@@ -101,4 +101,12 @@ mod tests {
         assert!(text.contains("Exec=rustphin %U"));
         assert!(text.contains("StartupWMClass=rustphin"));
     }
+
+    #[test]
+    fn the_desktop_entry_names_the_bundled_icon() {
+        // KWin finds the window's icon through the entry matching the app id `rustphin`;
+        // the theme icon of that name is installed from assets/icons and assets/rustphin.svg.
+        let text = include_str!("../../../assets/rustphin.desktop");
+        assert!(text.lines().any(|line| line == "Icon=rustphin"));
+    }
 }

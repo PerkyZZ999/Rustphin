@@ -1,5 +1,11 @@
 # Validation evidence
 
+### 2026-11-10 — W-099 app icon wired in
+- **Code:** `assets/rustphin.desktop` names `Icon=rustphin`; the README says how to install the entry and the icons for one user. The logo set itself is a0ad77f.
+- **Tests:** `the_desktop_entry_names_the_bundled_icon` (written by the session that drew the logo) failed with the entry set back to `system-file-manager`.
+- **Checked:** `desktop-file-validate` passes; every hicolor size from 16 to 512 px has `apps/rustphin.png`.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-096d density
 - **Code:** list rows are the icon plus 8 px, at least 24 px (24, 28, 32, 40, 56 by zoom; 32 at the default), column headings 28 px, places rows 28 px with 16 px icons (section headings follow), device rows 48 px, the status line 28 px; palette results keep their 20 px icon and the blur status its 32 px through their own sizes. The context menu's height estimate now uses the menu row, not the heading row.
 - **Tests:** the zoom-table test expects the new rows; three compact-view tests had 36 px rows written in and now state them through the layout's row height (they failed on the first run with the new table).

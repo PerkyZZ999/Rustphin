@@ -35,6 +35,7 @@ S11 — Hardening for daily use (in progress)
   - [x] W-096b — Toolbar across the window above the places panel and tabs; new buttons; tab strip always shown, over the files. Done 2026-11-10.
   - [x] W-096c — Split view: one toolbar for the active side, a path bar above each side. Done 2026-11-10.
   - [x] W-096d — Density: rows (icon + 8 px, at least 24: 24/28/32/40/56), 28 px headings and places rows with 16 px icons, 48 px device rows, 28 px status line. Done 2026-11-10.
+- [x] W-099 — Rustphin's own logo and app icon (the maintainer chose a charcoal folder held by two red crab claws): `assets/rustphin.svg` and `assets/rustphin-small.svg`, hicolor PNGs 16–512 px, the desktop entry naming `Icon=rustphin`, the README's install step, the title bar's logo (W-096a). Logo set committed in a0ad77f by another session; the wiring finished 2026-11-10 (see VALIDATION.md).
 - [ ] W-097 — Icons on buttons wherever they help recognition (iconography skill).
 - [ ] W-098 — Act as Administrator as in Dolphin (D-027): KDE's polkit prompt, file operations through kio-admin's privileged helper, a clearly marked mode, switched off the same way. Design and threat model first, approved by the maintainer before building.
 

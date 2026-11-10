@@ -1,5 +1,7 @@
 # Rustphin
 
+<img src="assets/rustphin.svg" alt="Rustphin logo: a charcoal folder held by two red crab claws" width="128">
+
 A file manager for KDE Plasma on Wayland, written in Rust: a re-architecture of
 KDE's Dolphin with a dark frosted-glass interface.
 
@@ -41,6 +43,20 @@ rust-tc run ~/Documents
 ```
 
 Several folders, or `file://` URLs, open as separate tabs. A path that names a file opens the folder that contains it. `assets/rustphin.desktop` registers Rustphin as a handler for folders.
+
+To add Rustphin to the application menu with its icon, put the binary on your
+`PATH` (the desktop entry runs `rustphin`), then install the entry and the icons
+for your user:
+
+```bash
+install -Dm644 assets/rustphin.desktop ~/.local/share/applications/rustphin.desktop && cp -r assets/icons/hicolor ~/.local/share/icons/ && install -Dm644 assets/rustphin.svg ~/.local/share/icons/hicolor/scalable/apps/rustphin.svg
+```
+
+The taskbar, task switcher and window title bar take the same icon: KWin finds
+it through the desktop entry, which matches the window's application id
+`rustphin`. The logo's sources are `assets/rustphin.svg` (64 px and up) and
+`assets/rustphin-small.svg` (16–48 px); the PNGs in `assets/icons` are exported
+from them.
 
 Set `RUSTPHIN_OPAQUE=1` to turn off window translucency.
 
