@@ -149,6 +149,8 @@ pub mod size {
     pub const BLUR_STATUS: f32 = 32.;
     /// Height of the hairlines between the toolbar's groups.
     pub const TOOL_SEPARATOR: f32 = 20.;
+    /// The bar under the toolbar while acting as administrator.
+    pub const ADMIN_BAR: f32 = 36.;
     /// A split pane's path bar (`path-bar`).
     pub const PATH_BAR: f32 = 28.;
     /// A plain toolbar button and the view-mode segments (`toolbar-button`).

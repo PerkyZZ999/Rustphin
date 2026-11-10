@@ -37,6 +37,26 @@ const SERVICE: &str = "org.kde.kio.admin";
 const ROOT_PATH: &str = "/";
 const INTERFACE: &str = "org.kde.kio.admin";
 
+/// For interface tests only: set to `session` to look for the helper on
+/// the session bus, where a fake helper can serve a sandbox as the user.
+/// Never needed in use: the real helper is on the system bus.
+pub const TEST_BUS_VARIABLE: &str = "RUSTPHIN_ADMIN_BUS";
+
+fn test_bus() -> bool {
+    std::env::var_os(TEST_BUS_VARIABLE).is_some_and(|bus| bus == "session")
+}
+
+/// Whether KDE's helper is installed (its D-Bus service file is present),
+/// so the toolbar can say so before anything is asked. Reads a few file
+/// names; call off the UI thread.
+pub fn installed() -> bool {
+    test_bus()
+        || crate::xdg::data_dirs().iter().any(|dir| {
+            dir.join("dbus-1/system-services/org.kde.kio.admin.service")
+                .is_file()
+        })
+}
+
 /// How long an operation may take, including the time spent in KDE's
 /// password dialog, before Rustphin stops waiting.
 pub const ADMIN_TIMEOUT: Duration = Duration::from_secs(120);
@@ -82,6 +102,7 @@ const KIO_OVERWRITE: i32 = 4;
 /// KIO's error numbers (`KIO::Error`) Rustphin tells apart.
 mod kio_error {
     pub const USER_CANCELED: i32 = 1;
+    pub const UNSUPPORTED_ACTION: i32 = 108;
     pub const IS_DIRECTORY: i32 = 109;
     pub const IS_FILE: i32 = 110;
     pub const DOES_NOT_EXIST: i32 = 111;
@@ -324,6 +345,8 @@ pub struct AdminEntry {
     pub identity: Option<(u64, u64)>,
     /// Where a symbolic link points.
     pub link_target: Option<String>,
+    /// Whether it is a folder, following a symbolic link.
+    pub leads_to_directory: bool,
 }
 
 impl AdminEntry {
@@ -335,6 +358,20 @@ impl AdminEntry {
             .filter(|name| !name.is_empty() && !name.contains('/'))
             .ok_or_else(|| AdminError::Protocol("an entry without a usable name".into()))?
             .to_owned();
+        Ok(Self::with_name(entry, name))
+    }
+
+    /// Reads a description of `path`: its name is the path's own, whatever
+    /// KIO calls it (it calls `/` "/"), since it is never joined to a folder.
+    pub fn described(entry: &UdsEntry, path: &Path) -> Self {
+        let name = path.file_name().map_or_else(
+            || "/".to_owned(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        Self::with_name(entry, name)
+    }
+
+    fn with_name(entry: &UdsEntry, name: String) -> Self {
         let link_target = entry.text(field::LINK_DEST).map(str::to_owned);
         let file_type = entry.number(field::FILE_TYPE).unwrap_or(0) as u32 & 0o170_000;
         // KIO gives a link the type of what it points to; the target marks it.
@@ -358,7 +395,7 @@ impl AdminEntry {
             })
         };
         let id = |field: u32| entry.number(field).and_then(|id| u32::try_from(id).ok());
-        Ok(Self {
+        Self {
             name,
             kind,
             size: entry
@@ -383,7 +420,8 @@ impl AdminEntry {
                         .and_then(|inode| u64::try_from(inode).ok()),
                 ),
             link_target,
-        })
+            leads_to_directory: file_type == 0o040_000,
+        }
     }
 }
 
@@ -443,9 +481,32 @@ impl AdminHelper {
         Self::on(connection, ADMIN_TIMEOUT)
     }
 
+    /// The helper where it lives: the system bus (or, for interface tests,
+    /// the session bus named by [`TEST_BUS_VARIABLE`]).
+    pub fn connect() -> Result<Self, AdminError> {
+        if !test_bus() {
+            return Self::system();
+        }
+        let connection = zbus::blocking::connection::Builder::session()
+            .and_then(|builder| builder.method_timeout(ADMIN_TIMEOUT).build())
+            .map_err(|_| AdminError::Unavailable)?;
+        Self::on(connection, ADMIN_TIMEOUT)
+    }
+
     /// Uses the helper reachable over `connection`; `timeout` bounds each
     /// wait for a signal. Fails only when the reader thread cannot start.
     pub fn on(connection: Connection, timeout: Duration) -> Result<Self, AdminError> {
+        // kio-admin addresses its signals to the caller, which needs no
+        // subscription; should a version broadcast them instead, this
+        // subscription still brings them. A private connection has no bus
+        // to ask, which is fine.
+        if let Ok(builder) = zbus::MatchRule::builder()
+            .msg_type(Type::Signal)
+            .sender(SERVICE)
+            && let Ok(bus) = zbus::blocking::fdo::DBusProxy::new(&connection)
+        {
+            let _ = bus.add_match_rule(builder.build());
+        }
         let (send, signals) = flume::unbounded();
         let incoming = MessageIterator::from(connection.clone());
         // One reader for the connection's lifetime: it forwards the
@@ -509,7 +570,7 @@ impl AdminHelper {
         self.run("stat", "StatCommand", &(admin_url(path)?,), |signal| {
             if signal.member == "statEntry" {
                 let (bytes,): (Vec<u8>,) = signal.message.body().deserialize()?;
-                found = Some(AdminEntry::from_uds(&decode_entry(&bytes)?)?);
+                found = Some(AdminEntry::described(&decode_entry(&bytes)?, path));
             }
             Ok(())
         })?;
@@ -680,6 +741,230 @@ impl AdminHelper {
             }
             each(&signal)?;
         }
+    }
+}
+
+/// The core's view of the filesystem through the helper (D-028): every
+/// read and change Rustphin makes while acting as administrator goes
+/// through here, and through the operation engine above it.
+///
+/// What the helper cannot do stays unsupported rather than pretended:
+/// watching folders, symbolic links, directory locks and syncing.
+pub struct AdminFs {
+    helper: std::sync::Arc<AdminHelper>,
+    /// Entries from the latest listing of each folder, so describing every
+    /// entry of a listing costs no further calls.
+    known: Mutex<std::collections::HashMap<std::path::PathBuf, AdminEntry>>,
+}
+
+impl AdminFs {
+    /// Works through `helper`.
+    pub fn new(helper: std::sync::Arc<AdminHelper>) -> Self {
+        Self {
+            helper,
+            known: Mutex::default(),
+        }
+    }
+
+    fn known(
+        &self,
+    ) -> std::sync::MutexGuard<'_, std::collections::HashMap<std::path::PathBuf, AdminEntry>> {
+        self.known.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The entry at `path`: from the latest listing when there is one,
+    /// otherwise asked of the helper.
+    fn entry(&self, path: &Path) -> std::io::Result<AdminEntry> {
+        if let Some(entry) = self.known().get(path) {
+            return Ok(entry.clone());
+        }
+        Ok(self.helper.stat(path)?)
+    }
+
+    /// Forgets what is known about `path` after a change to it.
+    fn forget(&self, path: &Path) {
+        self.known().remove(path);
+    }
+}
+
+fn entry_kind(entry: &AdminEntry) -> rustphin_core::EntryKind {
+    use rustphin_core::EntryKind as K;
+    match entry.kind {
+        AdminKind::File => K::File,
+        AdminKind::Directory => K::Directory,
+        AdminKind::Symlink => K::Symlink,
+        AdminKind::Other => K::Other,
+    }
+}
+
+impl rustphin_core::Fs for AdminFs {
+    fn read_dir(
+        &self,
+        path: &Path,
+    ) -> std::io::Result<Box<dyn Iterator<Item = std::io::Result<rustphin_core::RawEntry>> + '_>>
+    {
+        let entries = self.helper.list_dir(path)?;
+        let mut known = self.known();
+        known.retain(|known_path, _| known_path.parent() != Some(path));
+        let raw: Vec<_> = entries
+            .into_iter()
+            .map(|entry| {
+                let raw = rustphin_core::RawEntry {
+                    name: entry.name.as_bytes().to_vec(),
+                    kind: entry_kind(&entry),
+                };
+                known.insert(path.join(&entry.name), entry);
+                Ok(raw)
+            })
+            .collect();
+        Ok(Box::new(raw.into_iter()))
+    }
+
+    fn is_dir(&self, path: &Path) -> bool {
+        self.entry(path).is_ok_and(|entry| entry.leads_to_directory)
+    }
+
+    fn metadata(&self, path: &Path) -> std::io::Result<rustphin_core::Metadata> {
+        let entry = self.entry(path)?;
+        Ok(rustphin_core::Metadata {
+            size: entry.size,
+            modified: entry.modified.map_or(0, |(seconds, _)| seconds),
+        })
+    }
+
+    /// The helper cannot watch: folders re-read after Rustphin's own
+    /// changes and on F5 (the mode's documented limit).
+    fn watch(
+        &self,
+        _path: &Path,
+        _on_change: Box<dyn Fn() + Send + Sync>,
+    ) -> std::io::Result<rustphin_core::WatchGuard> {
+        Ok(Box::new(()))
+    }
+
+    fn info(&self, path: &Path) -> std::io::Result<rustphin_core::FileInfo> {
+        let entry = self.helper.stat(path)?;
+        let (device, inode) = entry.identity.unwrap_or((0, 0));
+        Ok(rustphin_core::FileInfo {
+            kind: entry_kind(&entry),
+            size: entry.size,
+            modified_ns: entry.modified.map_or(0, |(seconds, nanos)| {
+                i128::from(seconds) * 1_000_000_000 + i128::from(nanos)
+            }),
+            device,
+            inode,
+            mode: entry.permissions,
+        })
+    }
+
+    fn create_dir(&self, path: &Path, mode: u32) -> std::io::Result<()> {
+        self.forget(path);
+        Ok(self.helper.create_dir(path, mode)?)
+    }
+
+    fn create_file(&self, path: &Path) -> std::io::Result<()> {
+        self.forget(path);
+        Ok(self.helper.write_new(path, &[], 0o644)?)
+    }
+
+    /// KIO copies the content, permission bits and modification time as
+    /// root; it reports no progress until the end and cannot be synced.
+    fn copy_file(
+        &self,
+        from: &Path,
+        to: &Path,
+        progress: &mut dyn FnMut(u64) -> std::ops::ControlFlow<()>,
+    ) -> std::io::Result<()> {
+        let size = self.entry(from)?.size;
+        self.forget(to);
+        self.helper.copy_file(from, to)?;
+        let _ = progress(size);
+        Ok(())
+    }
+
+    fn read_link(&self, path: &Path) -> std::io::Result<std::path::PathBuf> {
+        self.entry(path)?
+            .link_target
+            .map(std::path::PathBuf::from)
+            .ok_or_else(|| std::io::ErrorKind::InvalidInput.into())
+    }
+
+    fn rename_new(&self, from: &Path, to: &Path) -> std::io::Result<()> {
+        self.forget(from);
+        self.forget(to);
+        self.helper
+            .rename(from, to, false)
+            .map_err(|error| match error {
+                // KIO's file worker reports a rename across filesystems as an
+                // unsupported action; the engine then copies and deletes.
+                AdminError::Failed {
+                    code: kio_error::UNSUPPORTED_ACTION,
+                    ..
+                } => std::io::ErrorKind::CrossesDevices.into(),
+                other => other.into(),
+            })
+    }
+
+    fn rename_over(&self, from: &Path, to: &Path) -> std::io::Result<()> {
+        self.forget(from);
+        self.forget(to);
+        Ok(self.helper.rename(from, to, true)?)
+    }
+
+    fn remove_file(&self, path: &Path) -> std::io::Result<()> {
+        if self.helper.stat(path)?.kind == AdminKind::Directory {
+            return Err(std::io::ErrorKind::IsADirectory.into());
+        }
+        self.forget(path);
+        Ok(self.helper.delete(path)?)
+    }
+
+    /// KIO deletes a folder with everything in it; this removes only an
+    /// empty one, as the engine expects.
+    fn remove_dir(&self, path: &Path) -> std::io::Result<()> {
+        if self.helper.stat(path)?.kind != AdminKind::Directory {
+            return Err(std::io::ErrorKind::NotADirectory.into());
+        }
+        if !self.helper.list_dir(path)?.is_empty() {
+            return Err(std::io::ErrorKind::DirectoryNotEmpty.into());
+        }
+        self.forget(path);
+        Ok(self.helper.delete(path)?)
+    }
+
+    /// Only the permission bits: the helper cannot set times.
+    fn set_attributes(&self, path: &Path, info: &rustphin_core::FileInfo) -> std::io::Result<()> {
+        self.forget(path);
+        Ok(self.helper.set_permissions(path, info.mode)?)
+    }
+
+    fn read(&self, path: &Path) -> std::io::Result<Vec<u8>> {
+        Ok(self.helper.read(path)?)
+    }
+
+    fn read_bounded(&self, path: &Path, limit: usize) -> std::io::Result<Vec<u8>> {
+        let entry = self.helper.stat(path)?;
+        if entry.kind != AdminKind::File {
+            return Err(std::io::ErrorKind::InvalidInput.into());
+        }
+        if entry.size > limit as u64 {
+            return Err(std::io::ErrorKind::FileTooLarge.into());
+        }
+        let data = self.helper.read(path)?;
+        if data.len() > limit {
+            return Err(std::io::ErrorKind::FileTooLarge.into());
+        }
+        Ok(data)
+    }
+
+    fn write_new(&self, path: &Path, content: &[u8]) -> std::io::Result<()> {
+        self.forget(path);
+        Ok(self.helper.write_new(path, content, 0o600)?)
+    }
+
+    fn set_mode(&self, path: &Path, mode: u32) -> std::io::Result<()> {
+        self.forget(path);
+        Ok(self.helper.set_permissions(path, mode)?)
     }
 }
 
@@ -1093,6 +1378,10 @@ mod tests {
         let setup = working();
         let found = setup.helper.stat(Path::new("/etc/systemd")).unwrap();
         assert_eq!(found.kind, AdminKind::Directory);
+        // A description is named after the path asked about: KIO calls the
+        // root "/", which no listed name may be.
+        assert_eq!(found.name, "systemd");
+        assert_eq!(setup.helper.stat(Path::new("/")).unwrap().name, "/");
     }
 
     #[test]
@@ -1194,5 +1483,71 @@ mod tests {
             Err(AdminError::Unaddressable(_))
         ));
         assert!(setup.asked.lock().unwrap().is_empty());
+    }
+
+    fn admin_fs(setup: &Setup) -> AdminFs {
+        // The fake's listings and descriptions come from one helper object
+        // shared with the test, through an `Arc`.
+        AdminFs::new(std::sync::Arc::new(AdminHelper {
+            connection: setup.helper.connection.clone(),
+            signals: setup.helper.signals.clone(),
+            busy: Mutex::new(()),
+            timeout: setup.helper.timeout,
+        }))
+    }
+
+    #[test]
+    fn a_listing_describes_its_entries_without_further_calls() {
+        use rustphin_core::{EntryKind, Fs as _};
+        let setup = working();
+        let fs = admin_fs(&setup);
+        let listed: Vec<_> = fs
+            .read_dir(Path::new("/etc"))
+            .unwrap()
+            .map(|entry| entry.unwrap())
+            .map(|entry| (String::from_utf8(entry.name).unwrap(), entry.kind))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                ("fstab".to_owned(), EntryKind::File),
+                ("systemd".to_owned(), EntryKind::Directory)
+            ]
+        );
+        let fstab = fs.metadata(Path::new("/etc/fstab")).unwrap();
+        assert_eq!((fstab.size, fstab.modified), (1234, 1_730_000_000));
+        assert!(fs.is_dir(Path::new("/etc/systemd")));
+        assert!(!fs.is_dir(Path::new("/etc/fstab")));
+        assert_eq!(*setup.asked.lock().unwrap(), ["listDir file:///etc"]);
+    }
+
+    #[test]
+    fn a_folder_with_something_in_it_is_never_handed_to_kios_delete() {
+        use rustphin_core::Fs as _;
+        let setup = working();
+        let fs = admin_fs(&setup);
+        let error = fs.remove_dir(Path::new("/etc/systemd")).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::DirectoryNotEmpty);
+        let asked = setup.asked.lock().unwrap();
+        assert!(
+            asked.iter().all(|call| !call.starts_with("del")),
+            "{asked:?}"
+        );
+    }
+
+    #[test]
+    fn a_rename_across_filesystems_asks_the_engine_to_copy_instead() {
+        use rustphin_core::Fs as _;
+        let setup = helper(
+            false,
+            kio_error::UNSUPPORTED_ACTION,
+            false,
+            Duration::from_secs(10),
+        );
+        let fs = admin_fs(&setup);
+        let error = fs
+            .rename_new(Path::new("/etc/a"), Path::new("/mnt/b"))
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::CrossesDevices);
     }
 }

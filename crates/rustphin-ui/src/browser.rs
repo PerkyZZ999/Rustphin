@@ -29,7 +29,7 @@ use gpui_kit::{
 };
 use jiff::tz::TimeZone;
 use rustphin_core::{
-    DirectoryModel, EntryKind, LoadError, ModelEvent, NameFilter, RealFs, Selection, Snapshot,
+    DirectoryModel, EntryKind, Fs, LoadError, ModelEvent, NameFilter, RealFs, Selection, Snapshot,
     SortKey, ViewOptions, display_name, ops::Request,
 };
 use rustphin_platform::{remote::RemoteAddress, uri::path_from_uri};
@@ -429,6 +429,12 @@ pub struct Browser {
     columns_folder: Option<PathBuf>,
     /// In split view, whether this pane is the active side; `None` alone.
     in_split: Option<bool>,
+    /// KDE's administrator helper while the window acts as administrator
+    /// (W-098); `None` reads the filesystem as the user.
+    admin_fs: Option<Arc<dyn Fs>>,
+    /// Which model events belong to: a new model (a switch into or out of
+    /// administrator mode) ignores what the old one still sends.
+    model_epoch: u64,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -525,6 +531,8 @@ impl Browser {
             columns_height: 0.,
             columns_folder: None,
             in_split: None,
+            admin_fs: None,
+            model_epoch: 0,
             _subscriptions: subscriptions,
         };
         match DirectoryModel::new(Arc::new(RealFs)) {
@@ -532,7 +540,7 @@ impl Browser {
                 model.set_options(settings.options());
                 this.model = Some(model);
                 this.load_file_types(cx);
-                cx.spawn(async move |view, cx| Self::receive_events(view, events, cx).await)
+                cx.spawn(async move |view, cx| Self::receive_events(view, events, 0, cx).await)
                     .detach();
                 this.open(start);
             }
@@ -551,9 +559,17 @@ impl Browser {
     async fn receive_events(
         view: WeakEntity<Self>,
         events: flume::Receiver<ModelEvent>,
+        epoch: u64,
         cx: &mut AsyncApp,
     ) {
         'events: while let Ok(event) = events.recv_async().await {
+            // A replaced model's late events must not reach the new one.
+            if !view
+                .read_with(cx, |view, _| view.model_epoch == epoch)
+                .unwrap_or(false)
+            {
+                break;
+            }
             loop {
                 let Ok(work) = view.update(cx, |view, _| view.selection_work(&event)) else {
                     break 'events;
@@ -1652,6 +1668,54 @@ impl Browser {
             self.save_settings(cx);
             cx.notify();
         }
+    }
+
+    /// Reads the filesystem through `admin` (KDE's administrator helper,
+    /// W-098) or, with `None`, as the user. A change starts a new model at
+    /// the same folder; asking for what is already in use does nothing.
+    pub(crate) fn set_filesystem(&mut self, admin: Option<Arc<dyn Fs>>, cx: &mut Context<Self>) {
+        let same = match (&self.admin_fs, &admin) {
+            (None, None) => true,
+            (Some(current), Some(wanted)) => Arc::ptr_eq(current, wanted),
+            _ => false,
+        };
+        if same {
+            return;
+        }
+        let location = self.location();
+        let options = self
+            .model
+            .as_ref()
+            .map(DirectoryModel::options)
+            .unwrap_or_default();
+        self.admin_fs = admin.clone();
+        let fs: Arc<dyn Fs> = admin.unwrap_or_else(|| Arc::new(RealFs));
+        match DirectoryModel::new(fs) {
+            Ok((mut model, events)) => {
+                model.set_options(options);
+                self.model = Some(model);
+                self.model_epoch += 1;
+                self.generation = 0;
+                self.snapshot = None;
+                self.visited = None;
+                self.selection = Selection::default();
+                self.selection_revision += 1;
+                self.focus_row = None;
+                self.failure = None;
+                let epoch = self.model_epoch;
+                cx.spawn(async move |view, cx| {
+                    Self::receive_events(view, events, epoch, cx).await;
+                })
+                .detach();
+                if let Some(location) = location {
+                    self.open(location);
+                }
+            }
+            Err(error) => {
+                tracing::error!(%error, "could not start the directory model");
+            }
+        }
+        cx.notify();
     }
 
     /// Tells the view whether it is one side of a split, and the active
@@ -2949,7 +3013,13 @@ impl Browser {
         cx: &mut Context<Self>,
     ) -> Option<Arc<Path>> {
         let edge = self.mode.layout(self.zoom).icon;
-        if container || edge < MIN_THUMBNAIL_EDGE || self.trash_dir.is_some() {
+        // No previews as administrator: they would read every picture as
+        // root (docs/project/ADMIN_MODE.md).
+        if container
+            || edge < MIN_THUMBNAIL_EDGE
+            || self.trash_dir.is_some()
+            || self.admin_fs.is_some()
+        {
             return None;
         }
         let type_name = rows.link_target_name(row).unwrap_or(rows.name(row));

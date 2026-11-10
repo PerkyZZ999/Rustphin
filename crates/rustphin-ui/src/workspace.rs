@@ -7,6 +7,8 @@ use std::{
     sync::{Arc, atomic::Ordering},
 };
 
+use rustphin_platform::admin::{AdminError, AdminFs, AdminHelper};
+
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, FocusHandle, Global,
     InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
@@ -306,6 +308,15 @@ pub struct Workspace {
     zone: TimeZone,
     sidebar: Entity<Sidebar>,
     sidebar_visible: bool,
+    /// Acting as administrator (W-098, D-028): every pane of the window
+    /// reads and changes files through KDE's helper while this is set.
+    admin_fs: Option<Arc<dyn rustphin_core::Fs>>,
+    /// The connection to the helper, kept between switches.
+    admin_helper: Option<Arc<AdminHelper>>,
+    /// Waiting for KDE's password dialog.
+    admin_pending: bool,
+    /// Whether KDE's helper is installed.
+    admin_installed: bool,
     _hub: Subscription,
     _sidebar: Subscription,
     palette: Option<Entity<Palette>>,
@@ -401,6 +412,10 @@ impl Workspace {
             _hub: cx.observe(&hub(cx), |_, _, cx| cx.notify()),
             sidebar: sidebar.clone(),
             sidebar_visible: true,
+            admin_fs: None,
+            admin_helper: None,
+            admin_pending: false,
+            admin_installed: rustphin_platform::admin::installed(),
             _sidebar: sidebar_events,
             palette: None,
             palette_subscription: None,
@@ -1573,7 +1588,15 @@ impl Render for Workspace {
         self.sidebar
             .update(cx, |sidebar, cx| sidebar.set_current(location, cx));
 
-        let title = format!("{} \u{2014} Rustphin", Self::label(self.tabs.active(), cx));
+        let title = format!(
+            "{} \u{2014} Rustphin{}",
+            Self::label(self.tabs.active(), cx),
+            if self.admin_fs.is_some() {
+                " (administrator)"
+            } else {
+                ""
+            }
+        );
         if title != self.title {
             window.set_window_title(&title);
             self.title = title;
@@ -1583,7 +1606,17 @@ impl Render for Workspace {
         // Without the compositor's frame, a hairline marks the window's edge.
         let framed = crate::titlebar::client_decorated(window) && !window.is_maximized();
 
+        // Every pane of the window reads as the window does: as the user, or
+        // through the administrator helper. New tabs and splits follow.
+        for tab in self.tabs.iter() {
+            for pane in &tab.panes {
+                let admin = self.admin_fs.clone();
+                pane.browser
+                    .update(cx, |browser, cx| browser.set_filesystem(admin, cx));
+            }
+        }
         let toolbar = self.toolbar(theme, window, cx);
+        let admin_bar = self.admin_bar(theme, cx);
         let tab_strip = self.tab_strip(theme, cx).into_any_element();
         let tab = self.tabs.active();
         let split = tab.panes.len() > 1;
@@ -1749,6 +1782,7 @@ impl Render for Workspace {
             })
             .children(title_bar)
             .child(toolbar)
+            .children(admin_bar)
             // The places panel beside the tabs over the panes, as in Dolphin.
             .child(
                 div()
@@ -1821,15 +1855,7 @@ impl Workspace {
             .bg(theme.chrome)
             .border_b_1()
             .border_color(theme.border)
-            // Acting as administrator comes with W-098.
-            .child(tool_button(
-                "act-as-administrator",
-                gpui_kit::assets::IconName::Shield,
-                "Act as administrator (not available yet)",
-                false,
-                None,
-                &theme,
-            ))
+            .child(self.admin_button(theme, cx))
             .child(separator())
             .child(parts.navigation)
             .child(
@@ -1864,6 +1890,153 @@ impl Workspace {
             .child(separator())
             .child(parts.actions)
             .into_any_element()
+    }
+
+    /// The shield before Back: red while acting as administrator.
+    fn admin_button(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+        let on = self.admin_fs.is_some();
+        let label = if on {
+            "Stop acting as administrator"
+        } else if self.admin_pending {
+            "Waiting for the password\u{2026}"
+        } else if self.admin_installed {
+            "Act as administrator"
+        } else {
+            "Act as administrator (needs KDE's kio-admin package)"
+        };
+        let enabled = on || (self.admin_installed && !self.admin_pending);
+        let button = if on {
+            Button::new("act-as-administrator")
+                .ghost()
+                .with_size(px(size::TOOL_BUTTON))
+                .size(px(size::TOOL_BUTTON))
+                .bg(theme.danger_surface)
+                .border_1()
+                .border_color(theme.danger_border)
+                .toggled(true)
+                .child(
+                    Icon::new(gpui_kit::assets::IconName::ShieldAlert)
+                        .size(px(size::ICON))
+                        .text_color(theme.danger),
+                )
+                .tooltip(label)
+                .accessibility_label(label)
+        } else {
+            tool_button(
+                "act-as-administrator",
+                gpui_kit::assets::IconName::Shield,
+                label,
+                enabled,
+                Some(false),
+                &theme,
+            )
+        };
+        button
+            .on_click(cx.listener(|this, _, _, cx| this.toggle_admin(cx)))
+            .into_any_element()
+    }
+
+    /// Mockup 35c: what the mode means and how to leave it, under the
+    /// toolbar while the window acts as administrator.
+    fn admin_bar(&self, theme: Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.admin_fs.as_ref()?;
+        const TEXT: &str = "Acting as administrator. Changes you make here can affect the whole system; be careful.";
+        Some(
+            div()
+                .id("admin-bar")
+                .role(Role::Status)
+                .aria_label(TEXT)
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap(px(space::MD))
+                .h(px(size::ADMIN_BAR))
+                .pl(px(space::MD))
+                .pr(px(space::SM))
+                .bg(theme.danger_surface)
+                .border_b_1()
+                .border_color(theme.danger_border)
+                .text_color(theme.danger)
+                .text_size(px(text::BODY))
+                .child(
+                    Icon::new(gpui_kit::assets::IconName::ShieldAlert)
+                        .size(px(size::ICON))
+                        .flex_none(),
+                )
+                .child(div().flex_1().min_w_0().truncate().child(TEXT))
+                .child(
+                    dialog::button("stop-admin", "Stop acting as administrator")
+                        .outlined()
+                        .text_color(theme.danger)
+                        .border_color(theme.danger_border)
+                        .h(px(size::SMALL_BUTTON))
+                        .on_click(cx.listener(|this, _, _, cx| this.toggle_admin(cx))),
+                )
+                .into_any_element(),
+        )
+    }
+
+    /// Switches administrator mode. Switching on asks KDE's helper about
+    /// `/`, which makes KDE's polkit agent ask for the password; Rustphin
+    /// never sees it. Switching off needs nothing.
+    fn toggle_admin(&mut self, cx: &mut Context<Self>) {
+        let hub = operations::hub(cx);
+        if self.admin_fs.take().is_some() {
+            hub.update(cx, |hub, cx| {
+                hub.say("No longer acting as administrator.".into(), false, cx);
+            });
+            cx.notify();
+            return;
+        }
+        if self.admin_pending || !self.admin_installed {
+            return;
+        }
+        self.admin_pending = true;
+        let ticket = hub.update(cx, |hub, cx| {
+            hub.say_until_withdrawn(
+                "Asking for administrator access\u{2026} Enter your password in KDE's dialog."
+                    .into(),
+                cx,
+            )
+        });
+        let helper = self.admin_helper.clone();
+        cx.spawn(async move |this, cx| {
+            let granted = cx
+                .background_spawn(async move {
+                    let helper = match helper {
+                        Some(helper) => helper,
+                        None => Arc::new(AdminHelper::connect()?),
+                    };
+                    helper.stat(std::path::Path::new("/"))?;
+                    Ok::<_, AdminError>(helper)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                this.admin_pending = false;
+                let hub = operations::hub(cx);
+                hub.update(cx, |hub, cx| hub.withdraw(ticket, cx));
+                match granted {
+                    Ok(helper) => {
+                        this.admin_fs = Some(Arc::new(AdminFs::new(Arc::clone(&helper))));
+                        this.admin_helper = Some(helper);
+                    }
+                    Err(error) => {
+                        let text = match error {
+                            AdminError::Denied => {
+                                "Administrator access was not granted: the password was not given."
+                                    .to_owned()
+                            }
+                            AdminError::Unavailable => "KDE's administrator helper could not be reached. Install the kio-admin package, then try again.".to_owned(),
+                            other => format!("Could not act as administrator: {other}."),
+                        };
+                        hub.update(cx, |hub, cx| hub.say(text, true, cx));
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
     }
 
     /// What file operations are doing and what they last did, as lines under

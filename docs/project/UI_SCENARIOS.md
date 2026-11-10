@@ -362,3 +362,20 @@ Private session bus only. Use a generated stand-in for `org.kde.KIOFuse` (target
 | W9 | With the stand-in: open the sftp bookmark, enter `sub dir`; read session.toml; click the first crumb; re-enter, close, relaunch without arguments | Crumbs read `sftp://me@fixture-host/projects / sub dir`; session.toml stores `sftp://me@fixture-host/projects/sub dir`; the first crumb opens the mount root; on relaunch the tab shows the fallback briefly, then the remote subfolder |
 | W10 | Restart the stand-in with `fail`, relaunch; then open a local folder in that tab; then type `sftp://me:hunter2@fixture-host/projects` | Fallback folder with an error notice naming the address; session.toml is unchanged until the tab is moved, then holds the local folder; the failed typed address is not saved and `hunter2` appears in no state file or log |
 | W11 | With the stand-in: open the sftp bookmark and `sub dir`, then Local; read recent-locations.toml; close, relaunch, Ctrl+Shift+P, `recent sub`, Return | The file lists `sftp://me@fixture-host/projects/sub dir` and `…/projects` by address; the palette offers "Recent: sub dir" with the address as detail; Return mounts it and shows its rows |
+
+## Acting as administrator (W-098)
+
+Never with the real helper: the isolated session shares the real system bus,
+so the real helper would ask for the maintainer's password on his desktop. Run the
+stand-in on the session's own bus, over a sandbox in the isolated home:
+`target/debug/examples/fake_admin_helper <home>/sandbox` (add
+`FAKE_ADMIN_REFUSE=1` to refuse everything), and start Rustphin with
+`RUSTPHIN_ADMIN_BUS=session`. The stand-in logs every request to its log.
+
+| ID | Steps | Expected |
+|---|---|---|
+| AD1 | Open the sandbox's `etc`, click the shield | The helper is asked about `/` ("Asking for administrator access…" meanwhile); then the shield is red, a red bar says "Acting as administrator…" with Stop, the title ends "(administrator)", and the folder is listed again through the helper (`listDir` in its log) |
+| AD2 | Double-click a folder | It is listed through the helper |
+| AD3 | Click Stop | Bar and red shield gone, "No longer acting as administrator.", the same folder read as the user |
+| AD4 | With the refusing stand-in, click the shield | "Administrator access was not granted: the password was not given."; the mode stays off |
+
