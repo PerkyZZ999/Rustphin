@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Simplified Rustphin icon for 16-48 px: same layout as rustphin.svg, without teeth,
+       highlights or shadows, with a larger folder and claws so they hold up when tiny. -->
+  <title>Rustphin</title>
+  <defs>
+    <path id="folderShape" d="M128,72 H222 C232,72 238,76 244,84 L254,98 C258,104 264,108 272,108 H386 Q412,108 412,134 V412 Q412,438 386,438 H126 Q100,438 100,412 V98 Q100,72 128,72 Z"/>
+    <path id="arm" d="M80,250 C72,214 92,184 126,172 L170,178 L170,240 Z"/>
+    <path id="body" d="M154,276 C184,252 226,234 258,244 C250,212 204,190 152,194 C110,198 72,222 64,266 C58,312 86,346 124,346 C136,349 150,342 156,334 C150,316 148,296 154,276 Z"/>
+    <path id="lower" d="M150,292 C176,302 204,304 226,288 C220,318 190,338 150,340 C132,336 130,300 150,292 Z"/>
+    <!-- Shifted outward by 20 so the tips of the two claws stay apart. -->
+    <g id="clawBack" transform="translate(-20 0) translate(150 280) scale(1.02) translate(-150 -280)" fill="#E53935">
+      <use href="#arm"/>
+    </g>
+    <g id="clawFront" transform="translate(-20 0) translate(150 280) scale(1.02) translate(-150 -280)" fill="#E53935">
+      <use href="#lower"/>
+      <use href="#body"/>
+    </g>
+  </defs>
+
+  <use href="#clawBack"/>
+  <use href="#clawBack" transform="translate(512 0) scale(-1 1)"/>
+  <use href="#folderShape" fill="#2B2D31" stroke="#5A5E66" stroke-width="10"/>
+  <use href="#clawFront"/>
+  <use href="#clawFront" transform="translate(512 0) scale(-1 1)"/>
+</svg>

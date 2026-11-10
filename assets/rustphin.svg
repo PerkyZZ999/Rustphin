@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Rustphin</title>
+  <defs>
+    <!-- One shared gradient for every claw part, so overlapping parts merge without seams. -->
+    <linearGradient id="claw" x1="0" y1="140" x2="0" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F65E50"/>
+      <stop offset="0.5" stop-color="#E53935"/>
+      <stop offset="1" stop-color="#B42229"/>
+    </linearGradient>
+    <linearGradient id="folderBack" x1="0" y1="70" x2="0" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2F3237"/>
+      <stop offset="1" stop-color="#222428"/>
+    </linearGradient>
+    <linearGradient id="folderFront" x1="0" y1="128" x2="0" y2="442" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#41444B"/>
+      <stop offset="1" stop-color="#2B2D31"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <filter id="softer" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+
+    <path id="folderShape" d="M150,96 H226 C235,96 240,99 245,105 L254,118 C258,124 263,128 270,128 H362 Q384,128 384,150 V398 Q384,420 362,420 H150 Q128,420 128,398 V118 Q128,96 150,96 Z"/>
+    <clipPath id="onFolder"><use href="#folderShape"/></clipPath>
+
+    <!-- Left claw; the right claw is its mirror image. -->
+    <!-- Arm: rises from the palm and goes behind the folder -->
+    <path id="arm" d="M80,250 C72,214 92,184 126,172 L170,178 L170,240 Z"/>
+    <!-- Palm and fixed (upper) finger, one piece -->
+    <path id="body" d="M154,276
+      C184,252 226,234 258,244
+      C250,212 204,190 152,194
+      C110,198 72,222 64,266
+      C58,312 86,346 124,346
+      C136,349 150,342 156,334
+      C150,316 148,296 154,276 Z"/>
+    <!-- Movable (lower) finger -->
+    <path id="lower" d="M150,292 C176,302 204,304 226,288 C220,318 190,338 150,340 C132,336 130,300 150,292 Z"/>
+    <!-- Low bumps along the inner edges -->
+    <g id="teeth">
+      <circle cx="181" cy="259" r="4.5"/><circle cx="205.5" cy="248.5" r="4.5"/><circle cx="227" cy="243.5" r="3.5"/>
+      <circle cx="174" cy="296" r="4"/><circle cx="197" cy="297" r="4"/>
+    </g>
+
+    <g id="clawBack" transform="translate(150 280) scale(0.86) translate(-150 -280)" fill="url(#claw)" stroke="#9A1B21" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round">
+      <use href="#arm"/>
+    </g>
+    <g id="clawShadow" transform="translate(150 280) scale(0.86) translate(-150 -280)">
+      <use href="#body"/>
+      <use href="#lower"/>
+    </g>
+    <g id="clawFront" transform="translate(150 280) scale(0.86) translate(-150 -280)">
+      <g fill="url(#claw)" stroke="#9A1B21" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round">
+        <use href="#lower"/>
+        <use href="#body"/>
+      </g>
+      <use href="#teeth" fill="url(#claw)"/>
+      <!-- Seam where the arm meets the palm -->
+      <path d="M94,214 C76,242 76,298 100,332" fill="none" stroke="#9A1B21" stroke-opacity="0.35" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- Soft highlights for gentle depth -->
+      <ellipse cx="108" cy="236" rx="20" ry="10" transform="rotate(-30 108 236)" fill="#FFFFFF" opacity="0.25" filter="url(#soft)"/>
+      <path d="M164,206 C206,202 238,214 250,232" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="4" stroke-linecap="round"/>
+      <path d="M166,328 C190,328 208,318 218,304" fill="none" stroke="#FFFFFF" stroke-opacity="0.15" stroke-width="4" stroke-linecap="round"/>
+    </g>
+  </defs>
+
+  <!-- Contact shadow under the whole mark -->
+  <ellipse cx="256" cy="428" rx="160" ry="12" fill="#000" opacity="0.2" filter="url(#softer)"/>
+
+  <!-- Arms, behind the folder -->
+  <use href="#clawBack"/>
+  <use href="#clawBack" transform="translate(512 0) scale(-1 1)"/>
+
+  <!-- Folder: back sheet with the tab, front sheet over it. Light rims keep it visible on dark panels. -->
+  <use href="#folderShape" fill="url(#folderBack)" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2"/>
+  <path d="M128,172 Q128,152 148,152 H364 Q384,152 384,172 V398 Q384,420 362,420 H150 Q128,420 128,398 Z" fill="url(#folderFront)"/>
+  <path d="M148,153 H364" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Shadows the claws cast on the folder -->
+  <g clip-path="url(#onFolder)" fill="#000" opacity="0.42" filter="url(#soft)">
+    <use href="#clawShadow" transform="translate(3 9)"/>
+    <use href="#clawShadow" transform="translate(512 0) scale(-1 1) translate(3 9)"/>
+  </g>
+
+  <!-- Pincers, in front of the folder -->
+  <use href="#clawFront"/>
+  <use href="#clawFront" transform="translate(512 0) scale(-1 1)"/>
+</svg>

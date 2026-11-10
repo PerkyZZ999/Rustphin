@@ -26,32 +26,37 @@
 
     <!-- Left claw; the right claw is its mirror image. No fills here, so each <use> sets its own. -->
     <!-- Movable (upper) finger: hooks down to a point -->
-    <path id="upper" d="M150,264
-      L160,256 L166,262 L176,252 L182,258 L194,248 L200,254 L212,246 L218,251 L230,246
-      C238,248 245,254 248,266
-      C252,240 240,214 210,204
-      C178,194 140,204 118,236 Z"/>
+    <path id="upper" d="M150,262
+      C178,240 228,232 254,262
+      C256,226 208,194 154,204
+      C136,210 124,220 118,232 Z"/>
+    <g id="upperTeeth"><circle cx="174" cy="250" r="4.5"/><circle cx="203" cy="244" r="4.5"/><circle cx="231" cy="248" r="4.5"/></g>
     <!-- Palm and fixed (lower) finger, one piece: hooks up to a point -->
-    <path id="body" d="M150,300
-      L162,306 L168,300 L180,310 L186,304 L198,312 L204,306 L216,312 L222,306 L232,308
-      C238,304 243,298 246,288
-      C247,318 226,340 196,346
-      C170,352 150,346 136,334
-      C120,338 88,332 76,306
-      C64,282 70,250 96,238
-      C116,230 140,236 150,252 Z"/>
-    <g id="pincer">
+    <path id="body" d="M150,298
+      C178,318 218,322 238,302
+      C242,334 210,356 160,350
+      C140,350 96,342 80,312
+      C66,288 72,250 98,238
+      C118,229 140,234 150,250
+      L150,262 C140,272 140,288 150,298 Z"/>
+    <g id="lowerTeeth"><circle cx="173" cy="308" r="4.5"/><circle cx="197" cy="313" r="4.5"/><circle cx="220" cy="311" r="4.5"/></g>
+    <g id="pincer" transform="translate(100 285) scale(0.9) translate(-100 -285)">
       <use href="#upper"/>
+      <use href="#upperTeeth"/>
       <use href="#body"/>
+      <use href="#lowerTeeth"/>
     </g>
     <g id="highlights" fill="none">
       <ellipse cx="100" cy="262" rx="18" ry="10" transform="rotate(-30 100 262)" fill="#FFFFFF" opacity="0.25" filter="url(#soft)"/>
-      <path d="M168,216 C196,208 226,220 240,242" stroke="#FFFFFF" stroke-opacity="0.2" stroke-width="4" stroke-linecap="round"/>
-      <path d="M176,330 C204,330 226,318 238,302" stroke="#FFFFFF" stroke-opacity="0.15" stroke-width="4" stroke-linecap="round"/>
+      <path d="M162,212 C192,204 222,214 236,234" stroke="#FFFFFF" stroke-opacity="0.2" stroke-width="4" stroke-linecap="round"/>
+      <path d="M178,338 C206,338 228,326 240,308" stroke="#FFFFFF" stroke-opacity="0.15" stroke-width="4" stroke-linecap="round"/>
     </g>
-    <g id="clawFront" stroke="#9A1B21" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round">
+    <!-- Teeth go on top of the fingers without an outline, so they read as bumps on the edge. -->
+    <g id="clawFront" stroke="#9A1B21" stroke-opacity="0.55" stroke-width="2.5" stroke-linejoin="round" transform="translate(100 285) scale(0.9) translate(-100 -285)">
       <use href="#upper" fill="url(#claw)"/>
+      <use href="#upperTeeth" fill="url(#claw)" stroke="none"/>
       <use href="#body" fill="url(#claw)"/>
+      <use href="#lowerTeeth" fill="url(#claw)" stroke="none"/>
       <use href="#highlights" stroke="none"/>
     </g>
   </defs>
