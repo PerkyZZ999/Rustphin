@@ -148,6 +148,30 @@ pub fn button(id: &'static str, label: impl Into<SharedString>) -> Button {
         .child(div().text_size(px(text::BODY)).child(label))
 }
 
+/// A dialog button that leads with the action's 16-pixel icon, 8 pixels
+/// before its words (W-097). The icon repeats the words, so the button's
+/// accessible name stays the words alone.
+pub fn button_with_icon(
+    id: &'static str,
+    icon: gpui_kit::assets::IconName,
+    label: impl Into<SharedString>,
+) -> Button {
+    let label = label.into();
+    Button::new(id)
+        .with_size(px(space::LG * 5.))
+        .h(px(size::BUTTON))
+        .accessibility_label(label.clone())
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(space::SM))
+                .text_size(px(text::BODY))
+                .child(Icon::new(icon).size(px(size::ICON)).flex_none())
+                .child(label),
+        )
+}
+
 /// The fixed label column beside a fact in a question or Properties.
 pub fn fact(
     id: &'static str,

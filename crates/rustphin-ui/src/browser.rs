@@ -2821,16 +2821,24 @@ impl Browser {
         };
         let button = match way {
             Way::Back => Some(
-                crate::dialog::button("folder-error-back", "Back (Alt+Left)")
-                    .accessibility_label("Back to the previous folder")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.navigate(DirectoryModel::back, cx);
-                    })),
+                crate::dialog::button_with_icon(
+                    "folder-error-back",
+                    gpui_kit::assets::IconName::ArrowLeft,
+                    "Back (Alt+Left)",
+                )
+                .accessibility_label("Back to the previous folder")
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.navigate(DirectoryModel::back, cx);
+                })),
             ),
             Way::Up => Some(
-                crate::dialog::button("folder-error-up", "Up (Alt+Up)")
-                    .accessibility_label("Up to the folder that contains it")
-                    .on_click(cx.listener(|this, _, _, cx| this.go_up(cx))),
+                crate::dialog::button_with_icon(
+                    "folder-error-up",
+                    gpui_kit::assets::IconName::ArrowUp,
+                    "Up (Alt+Up)",
+                )
+                .accessibility_label("Up to the folder that contains it")
+                .on_click(cx.listener(|this, _, _, cx| this.go_up(cx))),
             ),
             Way::Nowhere => None,
         };
@@ -3692,14 +3700,20 @@ impl Browser {
                             .track_focus(&self.folder_action_focus)
                             .key_context(FOLDER_ACTION_CONTEXT)
                             .child(
-                                crate::dialog::button("show-hidden", "Show hidden")
-                                    .primary()
-                                    .max_w_full()
-                                    .accessibility_label("Show hidden files")
-                                    .tooltip("Show hidden files (Ctrl+H)")
-                                    .on_click(cx.listener(|this, _, window, cx| {
+                                crate::dialog::button_with_icon(
+                                    "show-hidden",
+                                    gpui_kit::assets::IconName::Eye,
+                                    "Show hidden",
+                                )
+                                .primary()
+                                .max_w_full()
+                                .accessibility_label("Show hidden files")
+                                .tooltip("Show hidden files (Ctrl+H)")
+                                .on_click(cx.listener(
+                                    |this, _, window, cx| {
                                         this.show_hidden(window, cx);
-                                    })),
+                                    },
+                                )),
                             ),
                     )
             });
@@ -3779,11 +3793,15 @@ impl Browser {
                     .child(advice),
             )
             .child(
-                crate::dialog::button("clear-filter", "Clear filter")
-                    .primary()
-                    .mt(px(space::MD))
-                    .tooltip("Clear the filter (Esc in the filter bar)")
-                    .on_click(cx.listener(|this, _, window, cx| this.close_filter(window, cx))),
+                crate::dialog::button_with_icon(
+                    "clear-filter",
+                    gpui_kit::assets::IconName::FunnelX,
+                    "Clear filter",
+                )
+                .primary()
+                .mt(px(space::MD))
+                .tooltip("Clear the filter (Esc in the filter bar)")
+                .on_click(cx.listener(|this, _, window, cx| this.close_filter(window, cx))),
             )
     }
 

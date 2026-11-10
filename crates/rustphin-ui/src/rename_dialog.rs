@@ -331,7 +331,7 @@ impl RenameDialog {
                         })),
                 )
                 .child(
-                    dialog::button("rename-apply", "Rename (Enter)")
+                    dialog::button_with_icon("rename-apply", gpui_kit::assets::IconName::Pencil, "Rename (Enter)")
                         .primary()
                         .disabled(!ready)
                         .on_click(cx.listener(|this, _, window, cx| {

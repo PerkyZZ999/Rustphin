@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-10 — W-097 icons on buttons
+- **Rule (DESIGN.md, Dialogs):** a button whose action has a clear picture leads with a 16 px Lucide icon, 8 px before its words, the same icon the action has in menus and the toolbar; Cancel, Close and Stop stay words only (their picture would be the close cross). Chosen with the iconography skill: icon plus text, icon left, one library, no icon without a clear metaphor.
+- **Code:** `dialog::button_with_icon` (the accessible name stays the words); used for Rename, Apply, Open, Run, Skip, Replace or Merge, Keep both, Try again, Copy here, Copy list, Move here, Delete for good, Empty the trash, Back, Up, Show hidden, Clear filter and Stop acting as administrator; the notice's Undo has `undo-2`.
+- **On screen (BI1):** isolated session: the delete confirmation showed `circle-x` before "Delete for good (Enter)" in the destructive colour and "Cancel (Esc)" without an icon; the batch rename dialog's disabled "Rename (Enter)" showed its pencil dimmed with it; after Delete the notice's Undo showed `undo-2`, and clicking it restored the file.
+- **Tests:** none new: which buttons carry which icon is a design choice checked on screen; the button's accessible name is unchanged.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-102 places menu and New group button
 - **Why:** The maintainer asked whether categories of places existed. They do (R-012 place groups, slice S6), but only Ctrl+Shift+G (with the panel focused) and the palette reached them.
 - **Code:** `menu` is generic over the command a row runs (`MenuEntry<C>`, `MenuEffect<C>`, the `Command` trait); the menu's look and keys moved to `menu_view` (shared by the file view and the panel). `place_menu` decides the panel's menus: on a place, on a group heading, on empty space. The panel draws it with the same keys (Up, Down, Left, Right, Enter, Escape), closes it when it loses focus, and runs each row through the panel's existing operations. The title row has a ghost "New group" button (`list-plus`). Second menus, here and in "Open with", now start level with the row that opens them.

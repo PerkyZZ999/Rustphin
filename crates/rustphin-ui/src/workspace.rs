@@ -917,19 +917,27 @@ impl Workspace {
             dialog::actions(theme)
                 .when(program, |row| {
                     row.child(
-                        dialog::button("launch-open", "Open (O)")
-                            .outlined()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.answer_launch(false, true, cx);
-                            })),
+                        dialog::button_with_icon(
+                            "launch-open",
+                            gpui_kit::assets::IconName::SquareArrowOutUpRight,
+                            "Open (O)",
+                        )
+                        .outlined()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.answer_launch(false, true, cx);
+                        })),
                     )
                 })
                 .child(
-                    dialog::button("launch-run", "Run (R)")
-                        .destructive(&theme)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.answer_launch(true, false, cx);
-                        })),
+                    dialog::button_with_icon(
+                        "launch-run",
+                        gpui_kit::assets::IconName::Play,
+                        "Run (R)",
+                    )
+                    .destructive(&theme)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.answer_launch(true, false, cx);
+                    })),
                 )
                 .child(
                     // Cancel leads, as in Dolphin: Enter never runs anything.
@@ -2007,12 +2015,16 @@ impl Workspace {
                 )
                 .child(div().flex_1().min_w_0().truncate().child(TEXT))
                 .child(
-                    dialog::button("stop-admin", "Stop acting as administrator")
-                        .outlined()
-                        .text_color(theme.danger)
-                        .border_color(theme.danger_border)
-                        .h(px(size::SMALL_BUTTON))
-                        .on_click(cx.listener(|this, _, _, cx| this.toggle_admin(cx))),
+                    dialog::button_with_icon(
+                        "stop-admin",
+                        gpui_kit::assets::IconName::ShieldOff,
+                        "Stop acting as administrator",
+                    )
+                    .outlined()
+                    .text_color(theme.danger)
+                    .border_color(theme.danger_border)
+                    .h(px(size::SMALL_BUTTON))
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_admin(cx))),
                 )
                 .into_any_element(),
         )
@@ -2123,6 +2135,7 @@ impl Workspace {
     /// in `data-sm` after the label.
     fn line_button(
         id: &'static str,
+        icon: gpui_kit::assets::IconName,
         label: &'static str,
         key: Option<&'static str>,
         theme: Theme,
@@ -2139,6 +2152,7 @@ impl Workspace {
                     .items_center()
                     .gap(px(space::SM))
                     .text_size(px(text::BODY))
+                    .child(Icon::new(icon).size(px(size::ICON)).flex_none())
                     .child(label)
                     .when_some(key, |button, key| {
                         button.child(
@@ -2290,8 +2304,14 @@ impl Workspace {
             })
             .when(notice.offers_undo, |line| {
                 line.child(
-                    Self::line_button("undo-notice", "Undo", Some("Ctrl+Z"), theme)
-                        .on_click(|_, _, cx| hub(cx).update(cx, Hub::undo)),
+                    Self::line_button(
+                        "undo-notice",
+                        gpui_kit::assets::IconName::Undo2,
+                        "Undo",
+                        Some("Ctrl+Z"),
+                        theme,
+                    )
+                    .on_click(|_, _, cx| hub(cx).update(cx, Hub::undo)),
                 )
             })
             .child(
@@ -2414,13 +2434,17 @@ impl Workspace {
         .child(
             dialog::actions(theme)
                 .child(
-                    dialog::button("error-details-copy", "Copy list (C)")
-                        .outlined()
-                        .on_click(move |_, _, cx| {
-                            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
-                                list_text.clone(),
-                            ));
-                        }),
+                    dialog::button_with_icon(
+                        "error-details-copy",
+                        gpui_kit::assets::IconName::Copy,
+                        "Copy list (C)",
+                    )
+                    .outlined()
+                    .on_click(move |_, _, cx| {
+                        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                            list_text.clone(),
+                        ));
+                    }),
                 )
                 .child(
                     dialog::button("error-details-done", "Close (Esc)")
@@ -2557,21 +2581,32 @@ impl Workspace {
                     ],
                     vec![
                         cancel("Stop (Esc)"),
-                        dialog::button("dialog-skip", "Skip (S)")
-                            .outlined()
-                            .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Skip, cx))),
-                        dialog::button(
+                        dialog::button_with_icon(
+                            "dialog-skip",
+                            gpui_kit::assets::IconName::SkipForward,
+                            "Skip (S)",
+                        )
+                        .outlined()
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Skip, cx))),
+                        dialog::button_with_icon(
                             "dialog-replace",
+                            if folder {
+                                gpui_kit::assets::IconName::Merge
+                            } else {
+                                gpui_kit::assets::IconName::Replace
+                            },
                             if folder { "Merge (R)" } else { "Replace (R)" },
                         )
                         .outlined()
                         .disabled(!conflict.can_overwrite)
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Replace, cx))),
-                        dialog::button("dialog-accept", "Keep both (Enter)")
-                            .primary()
-                            .on_click(
-                                cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx)),
-                            ),
+                        dialog::button_with_icon(
+                            "dialog-accept",
+                            gpui_kit::assets::IconName::CopyPlus,
+                            "Keep both (Enter)",
+                        )
+                        .primary()
+                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                     ],
                 )
             }
@@ -2594,12 +2629,20 @@ impl Workspace {
                     .collect(),
                 vec![
                     cancel("Stop (Esc)"),
-                    dialog::button("dialog-skip", "Skip (S)")
-                        .outlined()
-                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Skip, cx))),
-                    dialog::button("dialog-accept", "Try again (Enter)")
-                        .primary()
-                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
+                    dialog::button_with_icon(
+                        "dialog-skip",
+                        gpui_kit::assets::IconName::SkipForward,
+                        "Skip (S)",
+                    )
+                    .outlined()
+                    .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Skip, cx))),
+                    dialog::button_with_icon(
+                        "dialog-accept",
+                        gpui_kit::assets::IconName::RotateCw,
+                        "Try again (Enter)",
+                    )
+                    .primary()
+                    .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
             Question::Drop { sources, into } => (
@@ -2621,12 +2664,20 @@ impl Workspace {
                 ],
                 vec![
                     cancel("Cancel (Esc)"),
-                    dialog::button("dialog-copy", "Copy here (C)")
-                        .outlined()
-                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Copy, cx))),
-                    dialog::button("dialog-accept", "Move here (Enter)")
-                        .primary()
-                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
+                    dialog::button_with_icon(
+                        "dialog-copy",
+                        gpui_kit::assets::IconName::Copy,
+                        "Copy here (C)",
+                    )
+                    .outlined()
+                    .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Copy, cx))),
+                    dialog::button_with_icon(
+                        "dialog-accept",
+                        gpui_kit::assets::IconName::FolderInput,
+                        "Move here (Enter)",
+                    )
+                    .primary()
+                    .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
             Question::ConfirmDelete { paths } => (
@@ -2639,9 +2690,13 @@ impl Workspace {
                 vec![name_list(paths)],
                 vec![
                     cancel("Cancel (Esc)"),
-                    dialog::button("dialog-accept", "Delete for good (Enter)")
-                        .destructive(&theme)
-                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
+                    dialog::button_with_icon(
+                        "dialog-accept",
+                        gpui_kit::assets::IconName::CircleX,
+                        "Delete for good (Enter)",
+                    )
+                    .destructive(&theme)
+                    .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
             Question::ConfirmEmpty { entries, .. } => (
@@ -2655,9 +2710,13 @@ impl Workspace {
                 Vec::new(),
                 vec![
                     cancel("Cancel (Esc)"),
-                    dialog::button("dialog-accept", "Empty the trash (Enter)")
-                        .destructive(&theme)
-                        .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
+                    dialog::button_with_icon(
+                        "dialog-accept",
+                        gpui_kit::assets::IconName::Trash,
+                        "Empty the trash (Enter)",
+                    )
+                    .destructive(&theme)
+                    .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
         };

@@ -402,3 +402,9 @@ Isolated home with a places file holding Home (a system item) and three folders.
 | PM3 | Right-click another place, Move to group › the group | The second menu starts level with "Move to group"; the place joins the group, the group's own entry is greyed for its members |
 | PM4 | Right-click the group heading, Enter | Collapse, Move up/down, Rename group, Delete group; Enter folds it to "Name (2)" |
 | PM5 | Right-click empty space in the panel | New group (Ctrl+Shift+G), Add to places (Ctrl+Shift+D), Show hidden places |
+
+## Button icons (W-097)
+
+| ID | Steps | Expected |
+|---|---|---|
+| BI1 | Select a file, Shift+Del; Escape; select two, F2; Escape; select one, Delete | "Delete for good (Enter)" leads with `circle-x`, "Cancel (Esc)" has no icon; "Rename (Enter)" leads with `pencil` and dims with the button while disabled; the notice's "Undo" leads with `undo-2` |

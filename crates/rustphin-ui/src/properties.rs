@@ -543,10 +543,14 @@ impl PropertiesDialog {
             )
             .when(self.error.is_none(), |row| {
                 row.child(
-                    dialog::button("properties-apply", "Apply (Enter)")
-                        .primary()
-                        .disabled(!dirty)
-                        .on_click(cx.listener(|this, _, _, cx| this.apply_properties(cx))),
+                    dialog::button_with_icon(
+                        "properties-apply",
+                        gpui_kit::assets::IconName::Check,
+                        "Apply (Enter)",
+                    )
+                    .primary()
+                    .disabled(!dirty)
+                    .on_click(cx.listener(|this, _, _, cx| this.apply_properties(cx))),
                 )
             })
     }

@@ -757,7 +757,16 @@ stands unless he changes it. There are no pills and no circles.
   `button-primary`; a destructive default uses `button-destructive`; the
   others are `button-outlined`. Every button shows its key ("Close (Esc)",
   "Apply (Enter)"). A disabled primary button keeps its fill at half opacity
-  with `text-disabled` text.
+  with `text-disabled` text. A button whose action has a clear picture leads
+  with a 16 px Lucide icon 8 px before its words, the same icon the action
+  has in menus and the toolbar (W-097): Rename `pencil`, Apply `check`, Open
+  `square-arrow-out-up-right`, Run `play`, Skip `skip-forward`, Replace
+  `replace`, Merge `merge`, Keep both `copy-plus`, Try again `rotate-cw`,
+  Copy here and Copy list `copy`, Move here `folder-input`, Delete for good
+  `circle-x`, Empty the trash `trash`, Undo `undo-2`, Back `arrow-left`, Up
+  `arrow-up`, Show hidden `eye`, Clear filter `funnel-x`, Stop acting as
+  administrator `shield-off`. Cancel, Close and Stop stay words only: their
+  picture would be the close cross, which already means closing the dialog.
 - **Properties:** title row "<name> — Properties". Header: a 96 × 64 thumbnail
   (or the 48 px type icon), the name in `headline-sm` and the type in
   `data-md`. Facts as label (`text-muted`, 128 px column) and value
