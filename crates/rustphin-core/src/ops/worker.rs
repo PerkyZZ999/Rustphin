@@ -124,6 +124,16 @@ pub struct Operations {
 impl Operations {
     /// Creates the runner and the channel its events arrive on.
     pub fn new(fs: Arc<dyn Fs>, trash: Arc<dyn Trash>) -> (Self, flume::Receiver<OpEvent>) {
+        Self::with_first_id(fs, trash, 0)
+    }
+
+    /// As [`Self::new`], numbering operations from `first`, so the ids of two
+    /// runners that report to one consumer never meet.
+    pub fn with_first_id(
+        fs: Arc<dyn Fs>,
+        trash: Arc<dyn Trash>,
+        first: u64,
+    ) -> (Self, flume::Receiver<OpEvent>) {
         let (events, receiver) = flume::unbounded();
         let shared = Arc::new(Shared {
             fs,
@@ -135,7 +145,7 @@ impl Operations {
         (
             Self {
                 shared,
-                next_id: AtomicU64::new(0),
+                next_id: AtomicU64::new(first),
             },
             receiver,
         )
@@ -413,6 +423,23 @@ mod tests {
         assert_eq!((last.items_done, last.items_total), (1, 1));
         assert!(matches!(result, Finished::Done(outcome) if outcome.completed));
         assert_eq!(read(d.dst.join("a.txt")), "a");
+    }
+
+    #[test]
+    fn a_runner_numbers_its_operations_from_where_it_is_told() {
+        let d = dirs();
+        file(d.src.join("a.txt"), "a");
+        let (ops, events) = Operations::with_first_id(Arc::new(RealFs), Arc::new(NoTrash), 1 << 62);
+
+        let id = ops.start(copy(&[d.src.join("a.txt")], &d.dst));
+
+        assert_eq!(id.as_u64(), 1 << 62);
+        assert!(matches!(next(&events), OpEvent::Started { id: started, .. } if started == id));
+        assert!(matches!(finished(&events, id), Finished::Done(_)));
+        assert_eq!(
+            ops.start(copy(&[d.src.join("a.txt")], &d.src)).as_u64(),
+            (1 << 62) + 1
+        );
     }
 
     #[test]

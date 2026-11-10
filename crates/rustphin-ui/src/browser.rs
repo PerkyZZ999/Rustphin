@@ -1010,6 +1010,7 @@ impl Browser {
             count: rows.len(),
             single_container,
             in_trash: self.trash_dir.is_some(),
+            as_administrator: self.admin_fs.is_some(),
             can_paste,
             applications,
             types_ready: self.types.is_some(),
@@ -1476,6 +1477,11 @@ impl Browser {
             self.select_on_arrival = came_from.map(|name| vec![name]);
             cx.notify();
         }
+    }
+
+    /// Reads the folder shown again, as F5 does.
+    pub(crate) fn reload(&mut self, cx: &mut Context<Self>) {
+        self.navigate(DirectoryModel::reload, cx);
     }
 
     fn navigate(
@@ -2266,8 +2272,9 @@ impl Browser {
     }
 
     fn trash_selected(&mut self, cx: &mut Context<Self>) {
-        // What is already in the trash can only be deleted for good.
-        if self.trash_dir.is_some() {
+        // What is already in the trash can only be deleted for good, and
+        // so can anything as administrator: KDE's helper has no trash.
+        if self.trash_dir.is_some() || self.admin_fs.is_some() {
             return self.delete_selected(cx);
         }
         let paths = self.selected_paths();

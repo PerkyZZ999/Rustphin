@@ -378,4 +378,9 @@ stand-in on the session's own bus, over a sandbox in the isolated home:
 | AD2 | Double-click a folder | It is listed through the helper |
 | AD3 | Click Stop | Bar and red shield gone, "No longer acting as administrator.", the same folder read as the user |
 | AD4 | With the refusing stand-in, click the shield | "Administrator access was not granted: the password was not given."; the mode stays off |
+| AD5 | In the mode, New folder, type a name, Return | `mkdir` then `rename` in the log; the folder appears without F5, opens for naming, and has the mode a normal new folder gets (not `rwxrwxrwx`) |
+| AD6 | Select it, Delete | "Delete for good?" saying it does not use the trash; Enter removes it through `del`; the row goes |
+| AD7 | Right-click a file | No "Move to trash"; "Delete…" is there |
+| AD8 | Properties of a file, tick a permission, Apply; then Undo | Facts come from `stat`; `chmod` changes it; Undo restores it through `chmod` |
+| AD9 | Select two items, F2; select one file, Ctrl+D | "Batch rename is not available while acting as administrator…"; the copy goes through `copy` to a `.rustphin-part-` name, then `rename` |
 

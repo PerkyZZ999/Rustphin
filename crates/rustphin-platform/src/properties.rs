@@ -94,6 +94,45 @@ pub fn read(path: &Path) -> io::Result<Facts> {
     })
 }
 
+/// The same facts from KDE's administrator helper's description (W-098):
+/// for entries the user cannot read.
+pub fn described_as_administrator(entry: &crate::admin::AdminEntry) -> Facts {
+    use crate::admin::AdminKind;
+    let kind = match entry.kind {
+        AdminKind::File => Kind::File,
+        AdminKind::Directory => Kind::Directory,
+        AdminKind::Symlink => Kind::Symlink,
+        AdminKind::Other => Kind::Other,
+    };
+    let seconds = |time: Option<(i64, u32)>| time.map(|(seconds, _)| seconds);
+    let (uid, gid) = entry.owner.unwrap_or((u32::MAX, u32::MAX));
+    let owner = entry.owner_names.0.clone().unwrap_or_else(|| {
+        if uid == u32::MAX {
+            "unknown".to_owned()
+        } else {
+            account_name(&account_file("/etc/passwd"), uid)
+        }
+    });
+    let group = entry.owner_names.1.clone().unwrap_or_else(|| {
+        if gid == u32::MAX {
+            "unknown".to_owned()
+        } else {
+            account_name(&account_file("/etc/group"), gid)
+        }
+    });
+    Facts {
+        kind,
+        target: entry.link_target.as_ref().map(PathBuf::from),
+        size: (kind != Kind::Directory).then_some(entry.size),
+        modified: seconds(entry.modified),
+        accessed: seconds(entry.accessed),
+        created: seconds(entry.created),
+        mode: entry.permissions,
+        owner,
+        group,
+    }
+}
+
 /// The contents of an account file, or nothing when it cannot be read.
 fn account_file(path: &str) -> String {
     fs::read_to_string(path).unwrap_or_default()
@@ -195,6 +234,62 @@ mod tests {
     };
 
     use super::*;
+
+    fn helper_entry() -> crate::admin::AdminEntry {
+        crate::admin::AdminEntry {
+            name: "shadow".into(),
+            kind: crate::admin::AdminKind::File,
+            size: 1234,
+            permissions: 0o640,
+            modified: Some((1_700_000_000, 5)),
+            accessed: None,
+            created: Some((1_600_000_000, 0)),
+            owner: Some((0, 0)),
+            owner_names: (Some("root".into()), Some("shadow".into())),
+            identity: None,
+            link_target: None,
+            leads_to_directory: false,
+        }
+    }
+
+    #[test]
+    fn the_helpers_description_becomes_the_same_facts() {
+        let facts = described_as_administrator(&helper_entry());
+        assert_eq!(facts.kind, Kind::File);
+        assert_eq!(facts.size, Some(1234));
+        assert_eq!(facts.mode, 0o640);
+        assert_eq!(facts.modified, Some(1_700_000_000));
+        assert_eq!(facts.accessed, None);
+        assert_eq!(facts.created, Some(1_600_000_000));
+        assert_eq!(
+            (facts.owner.as_str(), facts.group.as_str()),
+            ("root", "shadow")
+        );
+    }
+
+    #[test]
+    fn a_folder_from_the_helper_has_no_size_and_a_link_keeps_its_target() {
+        let mut entry = helper_entry();
+        entry.kind = crate::admin::AdminKind::Directory;
+        assert_eq!(described_as_administrator(&entry).size, None);
+        entry.kind = crate::admin::AdminKind::Symlink;
+        entry.link_target = Some("/etc/passwd".into());
+        let facts = described_as_administrator(&entry);
+        assert_eq!(facts.kind, Kind::Symlink);
+        assert_eq!(facts.target, Some(PathBuf::from("/etc/passwd")));
+    }
+
+    #[test]
+    fn owners_without_names_are_looked_up_or_called_unknown() {
+        let mut entry = helper_entry();
+        entry.owner_names = (None, None);
+        entry.owner = None;
+        let facts = described_as_administrator(&entry);
+        assert_eq!(
+            (facts.owner.as_str(), facts.group.as_str()),
+            ("unknown", "unknown")
+        );
+    }
 
     #[test]
     fn owners_are_named_from_the_account_files_or_by_number() {

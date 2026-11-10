@@ -315,6 +315,8 @@ pub struct Workspace {
     admin_helper: Option<Arc<AdminHelper>>,
     /// Waiting for KDE's password dialog.
     admin_pending: bool,
+    /// The hub's count of finished administrator operations last seen.
+    admin_changes_seen: u64,
     /// Whether KDE's helper is installed.
     admin_installed: bool,
     _hub: Subscription,
@@ -415,6 +417,7 @@ impl Workspace {
             admin_fs: None,
             admin_helper: None,
             admin_pending: false,
+            admin_changes_seen: 0,
             admin_installed: rustphin_platform::admin::installed(),
             _sidebar: sidebar_events,
             palette: None,
@@ -587,6 +590,20 @@ impl Workspace {
                 if !hub(cx).read(cx).questions.is_empty() {
                     return;
                 }
+                if self.admin_fs.is_some() {
+                    // Its recovery journal needs a directory lock that KDE's
+                    // helper does not offer (ADMIN_MODE.md).
+                    hub(cx).update(cx, |hub, cx| {
+                        hub.say(
+                            "Batch rename is not available while acting as administrator. \
+                             Select one item at a time and press F2."
+                                .into(),
+                            true,
+                            cx,
+                        );
+                    });
+                    return;
+                }
                 self.palette = None;
                 self.palette_subscription = None;
                 self.rename = Some(crate::rename_dialog::RenameDialog::open(
@@ -629,9 +646,24 @@ impl Workspace {
             token,
         ));
         cx.notify();
+        // As administrator, the helper describes what the user may not read.
+        let helper = self
+            .admin_helper
+            .clone()
+            .filter(|_| self.admin_fs.is_some());
         cx.spawn(async move |this, cx| {
             let read = cx
-                .background_spawn(async move { rustphin_platform::properties::read(&path) })
+                .background_spawn(async move {
+                    match helper {
+                        Some(helper) => helper
+                            .stat(&path)
+                            .map(|entry| {
+                                rustphin_platform::properties::described_as_administrator(&entry)
+                            })
+                            .map_err(std::io::Error::from),
+                        None => rustphin_platform::properties::read(&path),
+                    }
+                })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 let Some(dialog) = this
@@ -1608,11 +1640,21 @@ impl Render for Workspace {
 
         // Every pane of the window reads as the window does: as the user, or
         // through the administrator helper. New tabs and splits follow.
+        // KDE's helper cannot watch folders: after each change made through
+        // it, every pane reads its folder again.
+        let admin_changes = hub.read(cx).admin_changes();
+        let reread = std::mem::replace(&mut self.admin_changes_seen, admin_changes)
+            != admin_changes
+            && self.admin_fs.is_some();
         for tab in self.tabs.iter() {
             for pane in &tab.panes {
                 let admin = self.admin_fs.clone();
-                pane.browser
-                    .update(cx, |browser, cx| browser.set_filesystem(admin, cx));
+                pane.browser.update(cx, |browser, cx| {
+                    browser.set_filesystem(admin, cx);
+                    if reread {
+                        browser.reload(cx);
+                    }
+                });
             }
         }
         let toolbar = self.toolbar(theme, window, cx);
@@ -1983,6 +2025,7 @@ impl Workspace {
         let hub = operations::hub(cx);
         if self.admin_fs.take().is_some() {
             hub.update(cx, |hub, cx| {
+                hub.set_admin(None, cx);
                 hub.say("No longer acting as administrator.".into(), false, cx);
             });
             cx.notify();
@@ -2017,7 +2060,10 @@ impl Workspace {
                 hub.update(cx, |hub, cx| hub.withdraw(ticket, cx));
                 match granted {
                     Ok(helper) => {
-                        this.admin_fs = Some(Arc::new(AdminFs::new(Arc::clone(&helper))));
+                        let fs: Arc<dyn rustphin_core::Fs> =
+                            Arc::new(AdminFs::new(Arc::clone(&helper)));
+                        hub.update(cx, |hub, cx| hub.set_admin(Some(Arc::clone(&fs)), cx));
+                        this.admin_fs = Some(fs);
                         this.admin_helper = Some(helper);
                     }
                     Err(error) => {

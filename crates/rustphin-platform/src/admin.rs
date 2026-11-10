@@ -57,6 +57,20 @@ pub fn installed() -> bool {
         })
 }
 
+/// The process's file-creation mask, from `/proc/self/status` (reading it
+/// any other way changes it). `0o022` when it cannot be read.
+fn process_umask() -> u32 {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|status| {
+            status.lines().find_map(|line| {
+                let value = line.strip_prefix("Umask:")?.trim();
+                u32::from_str_radix(value, 8).ok()
+            })
+        })
+        .unwrap_or(0o022)
+}
+
 /// How long an operation may take, including the time spent in KDE's
 /// password dialog, before Rustphin stops waiting.
 pub const ADMIN_TIMEOUT: Duration = Duration::from_secs(120);
@@ -857,9 +871,12 @@ impl rustphin_core::Fs for AdminFs {
         })
     }
 
+    /// KIO sets the mode it is given exactly, where `mkdir(2)` filters it
+    /// through the umask: the user's umask is applied here, so a new folder
+    /// gets the mode it would get without the helper, never `0o777`.
     fn create_dir(&self, path: &Path, mode: u32) -> std::io::Result<()> {
         self.forget(path);
-        Ok(self.helper.create_dir(path, mode)?)
+        Ok(self.helper.create_dir(path, mode & !process_umask())?)
     }
 
     fn create_file(&self, path: &Path) -> std::io::Result<()> {
@@ -1188,6 +1205,37 @@ mod tests {
             };
             self.command(server, "rename", Rename { command }).await
         }
+
+        #[zbus(name = "mkdir")]
+        async fn mkdir(
+            &self,
+            url: String,
+            permissions: i32,
+            #[zbus(object_server)] server: &zbus::ObjectServer,
+        ) -> zbus::fdo::Result<OwnedObjectPath> {
+            self.asked
+                .lock()
+                .unwrap()
+                .push(format!("mkdir {url} {permissions:o}"));
+            self.command(server, "mkdir", Mkdir).await
+        }
+    }
+
+    struct Mkdir;
+
+    #[interface(name = "org.kde.kio.admin.MkdirCommand")]
+    impl Mkdir {
+        #[zbus(name = "start")]
+        async fn start(&self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) {
+            Self::result(&emitter, 0, String::new()).await.unwrap();
+        }
+
+        #[zbus(signal, name = "result")]
+        async fn result(
+            emitter: &SignalEmitter<'_>,
+            error: i32,
+            message: String,
+        ) -> zbus::Result<()>;
     }
 
     /// The part every command shares: `start` ends with `result`.
@@ -1519,6 +1567,25 @@ mod tests {
         assert!(fs.is_dir(Path::new("/etc/systemd")));
         assert!(!fs.is_dir(Path::new("/etc/fstab")));
         assert_eq!(*setup.asked.lock().unwrap(), ["listDir file:///etc"]);
+    }
+
+    #[test]
+    fn a_new_folder_gets_the_mode_mkdir_would_give_it_not_a_world_writable_one() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        use rustphin_core::{Fs as _, RealFs};
+        let setup = working();
+        let fs = admin_fs(&setup);
+        fs.create_dir(Path::new("/etc/new"), 0o777).unwrap();
+        // What the same request gives without the helper, umask applied.
+        let scratch = tempfile::tempdir().unwrap();
+        let plain = scratch.path().join("new");
+        RealFs.create_dir(&plain, 0o777).unwrap();
+        let expected = std::fs::metadata(&plain).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(
+            *setup.asked.lock().unwrap(),
+            [format!("mkdir file:///etc/new {expected:o}")]
+        );
     }
 
     #[test]

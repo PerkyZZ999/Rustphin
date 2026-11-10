@@ -42,7 +42,7 @@ S11 — Hardening for daily use (in progress)
 - [ ] W-098 — Act as Administrator as in Dolphin (D-027): KDE's polkit prompt, file operations through kio-admin's privileged helper, a clearly marked mode, switched off the same way. Design and threat model first, approved by the maintainer before building. 2026-11-10: design written (docs/project/ADMIN_MODE.md: talk to KDE's kio-admin helper directly as Dolphin does, `AdminFs` behind the core's `Fs` trait, threat model, slices W-098a–d). Approved by the maintainer on 2026-11-10 (D-028).
   - [x] W-098a — Helper client (`rustphin-platform::admin`): bounded `UDSEntry` decoder, safe `file://` URLs, KIO error mapping, list/stat/read/write/mkdir/rename/copy/delete/chmod/chown with timeouts; fake helper tests; `admin_entry` fuzz target. Done 2026-11-10.
   - [x] W-098b — Read-only mode: `AdminFs` listing and describing, shield, bar, title, prompt and refusal. Done 2026-11-10.
-  - [ ] W-098c — Changes through the helper: new folder or file, rename, copy, move, delete for good, undo, Properties owner and permissions.
+  - [x] W-098c — Changes through the helper: new folder or file, rename, copy, move, delete for good, undo, Properties owner and permissions.
   - [ ] W-098d — Replay, docs (ARCHITECTURE trust boundary, DESIGN), the maintainer's real-desktop check.
 
 ## Design pass (W-079, started 2026-11-08 under D-024)

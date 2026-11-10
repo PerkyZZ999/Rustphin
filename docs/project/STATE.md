@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-09 — W-089 could not open a folder, in place
+- Latest validation entry: VALIDATION.md, 2026-11-10 — W-098c administrator mode, changes
 
 ## Open loops
 - Task: W-079 design pass done 2026-11-08 (D-024, steps a–g) from the maintainer's HTML mockups; docs/DESIGN.md "Implementation status" lists what is left (list scrollbars, volume name, per-command palette icons, app icons, tab overflow, disabled toolbar colour, saved Devices fold). Glass look needs the real desktop.
@@ -45,7 +45,7 @@
 - W-076e: complete reverse field traversal and native input focus conflict through duplicate registration in the pinned toolkit. Removing the wrapper tracking restores traversal but loses native focus; original code restored. DISCOVERY.md records a concrete deduplication candidate and required checks. The maintainer approved a bounded isolated experiment on 2026-11-05; its corrected latest-registration candidate passes seven focused tests and native reverse-field/Unicode checks. Production pins remain unchanged. Full published toolkit tests are unavailable; broader modal/performance assessment and adoption still require review. This blocks that acceptance item, not unrelated S11 work. The baseline gate passes.
 
 ## Next action
-- The maintainer to decide the three points at the end of docs/project/ADMIN_MODE.md (mechanism, per-window mode, the mode's limits); then W-098a–d. W-096 and W-099 are done and installed. W-097 (icons on buttons) is next otherwise.
+- Act as Administrator (D-028): W-098a–c done (browsing and changes through KDE's helper, verified with the stand-in); W-098d next (replay, docs, the maintainer's real-desktop check). Then W-100 (hover fill), W-101 (missing NAS place), W-097 (icons on buttons).
 - The maintainer to review W-079/W-086/W-087 on the real desktop (glass look; compact view with a real wheel). The open S11 criteria still need the maintainer's desktop or hardware (5) or W-076e (2). Otherwise continue with the smaller W-079 leftovers listed in docs/DESIGN.md.
 
 ## Phase checklist

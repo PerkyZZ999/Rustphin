@@ -175,6 +175,8 @@ pub struct MenuFacts {
     pub single_container: bool,
     /// The folder being shown is a trash.
     pub in_trash: bool,
+    /// The window acts as administrator: KDE's helper has no trash.
+    pub as_administrator: bool,
     /// The clipboard holds files that can be pasted here.
     pub can_paste: bool,
     /// Applications registered for the one selected file.
@@ -271,7 +273,7 @@ fn selection_menu(facts: &MenuFacts) -> Vec<MenuEntry> {
     entries.push(item("Rename", MenuCommand::Rename, one && !facts.in_trash));
     if facts.in_trash {
         entries.push(item("Restore", MenuCommand::Restore, true));
-    } else {
+    } else if !facts.as_administrator {
         entries.push(item("Move to trash", MenuCommand::MoveToTrash, true));
     }
     entries.push(item("Delete…", MenuCommand::Delete, true));
@@ -498,6 +500,7 @@ mod tests {
             count: 1,
             single_container: false,
             in_trash: false,
+            as_administrator: false,
             can_paste: true,
             applications: vec![AppChoice {
                 id: "org.kde.kate.desktop".into(),
@@ -721,6 +724,14 @@ mod tests {
             facts.in_trash = true;
         }));
         assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn acting_as_administrator_offers_no_trash() {
+        let entries = context_menu(&facts(|facts| facts.as_administrator = true));
+        let labels = labels(&entries);
+        assert!(!labels.contains(&"Move to trash"), "{labels:?}");
+        assert!(labels.contains(&"Delete…"), "{labels:?}");
     }
 
     #[test]

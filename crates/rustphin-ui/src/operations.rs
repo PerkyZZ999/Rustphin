@@ -144,6 +144,17 @@ pub struct Problems {
 /// The application's file operations and their state.
 pub struct Hub {
     ops: Operations,
+    /// While the window acts as administrator: the runner that works
+    /// through KDE's helper (W-098). Its operations are numbered from
+    /// [`ADMIN_FIRST_ID`] up, so the two runners' ids never meet.
+    admin_ops: Option<Operations>,
+    /// Whether new operations go to `admin_ops`.
+    admin_active: bool,
+    /// How many administrator runners there have been.
+    admin_runs: u64,
+    /// How many administrator operations have finished. KDE's helper
+    /// cannot watch folders, so views re-read when this changes.
+    admin_changes: u64,
     /// The desktop trash, when there is one.
     trash: Option<Arc<FreedesktopTrash>>,
     /// Wording for operations whose request does not describe them well:
@@ -219,6 +230,10 @@ pub fn init(cx: &mut App) {
         .detach();
         Hub {
             ops,
+            admin_ops: None,
+            admin_active: false,
+            admin_runs: 0,
+            admin_changes: 0,
             trash,
             labels: HashMap::new(),
             lasting: HashSet::new(),
@@ -241,31 +256,79 @@ pub fn hub(cx: &App) -> Entity<Hub> {
     cx.global::<GlobalHub>().0.clone()
 }
 
+/// Where administrator runners number their operations from.
+const ADMIN_FIRST_ID: u64 = 1 << 62;
+
 impl Hub {
+    /// Sends new operations through `admin` (KDE's helper, W-098) or, with
+    /// `None`, through the user's own filesystem. Operations already running
+    /// on the other runner carry on. As administrator there is no trash.
+    pub fn set_admin(&mut self, admin: Option<Arc<dyn rustphin_core::Fs>>, cx: &mut Context<Self>) {
+        match admin {
+            Some(fs) => {
+                self.admin_runs += 1;
+                let first = ADMIN_FIRST_ID + (self.admin_runs << 40);
+                let (ops, events) = Operations::with_first_id(fs, Arc::new(NoTrash), first);
+                cx.spawn(async move |hub, cx| {
+                    while let Ok(event) = events.recv_async().await {
+                        if hub.update(cx, |hub, cx| hub.on_event(event, cx)).is_err() {
+                            break;
+                        }
+                    }
+                })
+                .detach();
+                self.admin_ops = Some(ops);
+                self.admin_active = true;
+            }
+            None => self.admin_active = false,
+        }
+    }
+
+    /// The runner new operations go to.
+    fn active(&self) -> &Operations {
+        match &self.admin_ops {
+            Some(admin) if self.admin_active => admin,
+            _ => &self.ops,
+        }
+    }
+
+    /// The runner that numbered operation `id`.
+    /// How many administrator operations have finished so far.
+    pub fn admin_changes(&self) -> u64 {
+        self.admin_changes
+    }
+
+    fn runner_of(&self, id: OpId) -> &Operations {
+        match &self.admin_ops {
+            Some(admin) if id.as_u64() >= ADMIN_FIRST_ID => admin,
+            _ => &self.ops,
+        }
+    }
+
     /// Starts a file operation in the background.
     pub fn start(&mut self, request: Request) {
-        self.ops.start(request);
+        self.active().start(request);
     }
 
     /// Starts a file operation that the progress line and the final notice
     /// describe with `label` and, in lower case, `done`; that notice stays
     /// until dismissed.
     pub fn start_lasting(&mut self, request: Request, label: String, done: String) {
-        let id = self.ops.start(request);
+        let id = self.active().start(request);
         self.labels.insert(id, (label, done));
         self.lasting.insert(id);
     }
 
     /// Reverts the latest operation, or says that there is none.
     pub fn undo(&mut self, cx: &mut Context<Self>) {
-        if self.ops.undo().is_none() {
+        if self.active().undo().is_none() {
             self.say("There is nothing to undo.".to_owned(), false, cx);
         }
     }
 
     /// Asks operation `id` to stop.
     pub fn cancel(&mut self, id: OpId) {
-        self.ops.cancel(id);
+        self.runner_of(id).cancel(id);
     }
 
     /// Asks for confirmation, then deletes `paths` for good.
@@ -279,7 +342,7 @@ impl Hub {
     /// Answers the conflict being shown.
     pub fn resolve(&mut self, choice: ConflictChoice, apply_to_all: bool, cx: &mut Context<Self>) {
         if let Some(Question::Conflict { id, .. }) = self.questions.front() {
-            self.ops.resolve(
+            self.runner_of(*id).resolve(
                 *id,
                 Resolution {
                     choice,
@@ -294,7 +357,7 @@ impl Hub {
     /// Answers the failure being shown.
     pub fn recover(&mut self, recovery: Recovery, cx: &mut Context<Self>) {
         if let Some(Question::Failed { id, .. }) = self.questions.front() {
-            self.ops.recover(*id, recovery);
+            self.runner_of(*id).recover(*id, recovery);
             self.questions.pop_front();
             cx.notify();
         }
@@ -378,7 +441,7 @@ impl Hub {
             && let Some(Question::ConfirmEmpty { paths, .. }) = self.questions.pop_front()
             && confirmed
         {
-            let id = self.ops.start(Request::Delete { paths });
+            let id = self.active().start(Request::Delete { paths });
             self.labels.insert(
                 id,
                 (
@@ -644,6 +707,9 @@ impl Hub {
                     .push_back(Question::Failed { id, path, message });
             }
             OpEvent::Finished { id, result } => {
+                if id.as_u64() >= ADMIN_FIRST_ID {
+                    self.admin_changes += 1;
+                }
                 let finished = self
                     .running
                     .iter()
