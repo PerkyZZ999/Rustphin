@@ -3339,7 +3339,7 @@ impl Browser {
                         // Every column has 8 pixels of padding on each side,
                         // as the headings do.
                         let line = entry
-                            .surface(theme)
+                            .surface(row, theme)
                             .flex()
                             .items_center()
                             .size_full()
@@ -3463,7 +3463,7 @@ impl Browser {
         let cell_width = layout.cell_width.unwrap_or(layout.row_height);
         let entry = self.entry(rows, row, cx);
         let icon = entry.icon(layout.icon, theme);
-        let surface = entry.surface(theme).size_full();
+        let surface = entry.surface(row, theme).size_full();
         let cell = if stacked {
             // Icon above a centred name of up to two lines.
             surface
@@ -5127,8 +5127,12 @@ impl Entry {
     /// The entry's background and outline. Selection is a fill plus an accent
     /// bar, and keyboard focus without selection the bar alone, so neither is
     /// shown by colour only.
-    fn surface(&self, theme: Theme) -> gpui_kit::Div {
+    /// The entry's fill, selection bar and hover. It carries an id because
+    /// GPUI keeps an element's hover state, and redraws when the pointer
+    /// enters or leaves, only for elements with one (W-100).
+    fn surface(&self, row: usize, theme: Theme) -> gpui_kit::Stateful<gpui_kit::Div> {
         div()
+            .id(("entry-surface", row))
             .relative()
             .rounded(px(size::RADIUS))
             .text_color(theme.text)

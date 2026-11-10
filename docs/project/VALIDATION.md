@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-10 — W-100 hover fill on entries
+- **Cause:** the entry's surface (the element with the `hover` fill) had no element id. In the pinned GPUI an element keeps its hover state, and asks for a redraw when the pointer enters or leaves, only when it has an id; without one the fill was computed only when something else redrew the list, such as a press. Every other hover in the app (places, tabs, crumbs, headings, palette) already had an id.
+- **Code:** `Entry::surface` takes the row and gives the surface the id `("entry-surface", row)`; used by the details rows and the icons and compact cells.
+- **On screen (HV1):** before the fix, in an isolated session, the pointer resting on `app.conf` in Details showed no fill. After it: the fill appeared under the pointer in Details and moved to `hosts` when the pointer did; the same in Icons (`conf.d` cell) and Compact (`hosts`), with no button pressed.
+- **Tests:** none automated: the behaviour lives in GPUI's hover tracking, which the unit tests do not drive; HV1 in UI_SCENARIOS.md records the check.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-098d administrator mode, wrap-up
 - **Code:** each call to the helper's methods now carries D-Bus's "allow interactive authorization" flag (through a blocking proxy without property caching), as the D-Bus specification asks of calls that may make polkit prompt. Test `calls_to_the_helper_let_polkit_ask_for_the_password`: the fake notes calls without the flag; the test failed with the flags emptied.
 - **Docs:** ARCHITECTURE.md "Trust & boundaries" describes the privileged path and its limits, and the failure table has the helper's absence, refusal and timeout; DESIGN.md's implementation status lists the mode and no longer calls the shield dimmed; ADMIN_MODE.md has an "As built" section (umask, cross-filesystem moves keep the source, owner shown not changed, history restarts) and the maintainer's real-desktop checklist.

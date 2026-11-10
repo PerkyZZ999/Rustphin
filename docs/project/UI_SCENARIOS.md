@@ -384,3 +384,9 @@ stand-in on the session's own bus, over a sandbox in the isolated home:
 | AD8 | Properties of a file, tick a permission, Apply; then Undo | Facts come from `stat`; `chmod` changes it; Undo restores it through `chmod` |
 | AD9 | Select two items, F2; select one file, Ctrl+D | "Batch rename is not available while acting as administrator…"; the copy goes through `copy` to a `.rustphin-part-` name, then `rename` |
 
+
+## Hover (W-100)
+
+| ID | Steps | Expected |
+|---|---|---|
+| HV1 | In each of Details, Icons and Compact, move the pointer from outside the window onto an entry, then onto the next one, without pressing | The `hover` fill appears under the pointer and moves with it; nothing else changes |
