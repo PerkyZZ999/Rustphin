@@ -711,8 +711,9 @@ mod tests {
 
     #[test]
     fn scroll_keys_move_by_line_or_visible_page() {
-        assert_eq!(scroll_offset("down", 0., 300., 120.), Some(-20.));
-        assert_eq!(scroll_offset("up", -100., 300., 120.), Some(-80.));
+        let line = crate::theme::text::LINE;
+        assert_eq!(scroll_offset("down", 0., 300., 120.), Some(-line));
+        assert_eq!(scroll_offset("up", -100., 300., 120.), Some(-100. + line));
         assert_eq!(scroll_offset("pagedown", 0., 300., 120.), Some(-120.));
         assert_eq!(scroll_offset("pageup", -200., 300., 120.), Some(-80.));
         assert_eq!(scroll_offset("pagedown", 0., 0., 120.), Some(0.));
