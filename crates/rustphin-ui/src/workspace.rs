@@ -840,7 +840,7 @@ impl Workspace {
         .child(dialog::title_row(
             gpui_kit::assets::IconName::Terminal,
             format!("Run “{name}”?"),
-            "Keep (Esc)",
+            "Cancel (Esc)",
             cx.listener(|this, _, _, cx| this.answer_launch(false, false, cx)),
             theme,
         ))
@@ -884,7 +884,8 @@ impl Workspace {
                         })),
                 )
                 .child(
-                    dialog::button("launch-keep", "Keep (Enter)")
+                    // Cancel leads, as in Dolphin: Enter never runs anything.
+                    dialog::button("launch-cancel", "Cancel (Enter)")
                         .primary()
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.answer_launch(false, false, cx);
@@ -2179,8 +2180,8 @@ impl Workspace {
             ),
             Question::Failed { message, .. } => format!("{message}. Skip leaves this entry out and continues with the rest. Try again retries it; Stop cancels."),
             Question::Drop { .. } => "Choose move or copy, or Cancel to keep the files where they are.".to_owned(),
-            Question::ConfirmDelete { .. } => "This does not use the trash. It cannot be undone. Keep or Escape cancels.".to_owned(),
-            Question::ConfirmEmpty { .. } => "Everything in the trash is deleted for good. It cannot be undone. Keep or Escape cancels.".to_owned(),
+            Question::ConfirmDelete { .. } => "This does not use the trash. It cannot be undone. Cancel or Escape leaves it as it is.".to_owned(),
+            Question::ConfirmEmpty { .. } => "Everything in the trash is deleted for good. It cannot be undone. Cancel or Escape leaves it as it is.".to_owned(),
         };
         let cancel = |label: &'static str| {
             dialog::button("dialog-cancel", label)
@@ -2321,7 +2322,7 @@ impl Workspace {
                 ),
                 vec![name_list(paths)],
                 vec![
-                    cancel("Keep (Esc)"),
+                    cancel("Cancel (Esc)"),
                     dialog::button("dialog-accept", "Delete for good (Enter)")
                         .destructive(&theme)
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
@@ -2337,7 +2338,7 @@ impl Workspace {
                 ),
                 Vec::new(),
                 vec![
-                    cancel("Keep (Esc)"),
+                    cancel("Cancel (Esc)"),
                     dialog::button("dialog-accept", "Empty the trash (Enter)")
                         .destructive(&theme)
                         .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),

@@ -729,7 +729,8 @@ stands unless he changes it. There are no pills and no circles.
   `text-muted` column) scroll in the body. The name conflict lists the existing
   and incoming entries and a "Keep both" fact with the name the copy would get;
   its buttons are Stop, Skip, Replace and Keep both. "Run this file?" makes
-  Keep the default (Enter), as Dolphin focuses Cancel; Run has its own key.
+  Cancel the default (Enter), as Dolphin focuses Cancel; Run has its own key.
+  Cancel buttons say "Cancel" (W-093; they read "Keep" before).
 - **Error details dialog:** title says what the operation was; a summary
   sentence; one row per failed entry with the name (`body-md`), its folder
   (`data-sm` `text-muted`) and the reason in words; "Copy list" (outlined) and
@@ -871,7 +872,7 @@ except where the list below says otherwise; each W-079 step adds its line.
   trails, placed near the top. Results use one icon per category.
 - W-079g (2026-11-08): every dialog on the shared frame, title row and
   action row; question titles that state the question; the Keep both fact;
-  Keep as the run default; Properties' header, facts and permission columns;
+  Cancel as the run default; Properties' header, facts and permission columns;
   batch rename's segments, preview and notes.
 - Mockup comparison (2026-11-09): each screen was laid over its mockup
   render at the mockup's size. Fixed to match: outlined buttons clear until

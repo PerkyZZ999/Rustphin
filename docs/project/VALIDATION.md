@@ -1,5 +1,11 @@
 # Validation evidence
 
+### 2026-11-10 — W-093 Cancel instead of Keep
+- **Code:** the safe button of "Run this file?" reads "Cancel (Enter)" and stays the Enter default; its close button and the cancel buttons of "Delete for good?" and "Empty the trash?" read "Cancel (Esc)", and their spoken descriptions say "Cancel or Escape leaves it as it is". Behaviour is unchanged. The mockups (21, 22, 12b) still say Keep; DESIGN.md records the change.
+- **On screen:** isolated session, a harmless executable script on the Desktop: double-click shows Open (O), Run (R), Cancel (Enter); Enter closed the dialog and the script's marker file was not created.
+- **Tests:** none added (wording only).
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-092 application icons in "Open with"
 - **Code:** the platform reads each desktop file's `Icon` key (`Application::icon`); `IconTheme::find_app_icon` takes an absolute path to an existing file as it is, or looks the name up (ignoring a file extension), and refuses a relative path. The type database resolves every application's icon at 16 px when it loads, off the UI thread, and the menu draws it in colour, falling back to the `app-window` outline when there is none or the file cannot be drawn. Icon lookup now prefers a directory of exactly the requested size over a scalable one that also fits, as the specification's first-match rule does: hicolor's scalable Firefox and PhotoCraft SVGs did not draw, their 16 px PNGs do. This also applies to file-type icons.
 - **Tests:** `an_application_keeps_its_icon` (failed with the `Icon` key ignored), `an_application_icon_is_a_theme_name_or_an_absolute_path`, `an_icon_drawn_for_the_size_beats_a_scalable_one_that_also_fits` (failed with the old tie-break), `an_application_shows_its_own_icon_and_falls_back_to_the_outline` (failed with images disabled).
