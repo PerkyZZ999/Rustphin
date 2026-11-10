@@ -22,7 +22,7 @@ pub mod space {
 pub mod size {
     /// Height of the column headings. Entry rows take their height from the
     /// view layout.
-    pub const ROW: f32 = 32.;
+    pub const ROW: f32 = 28.;
     /// The gap between grid cells, split as half a gap around each cell.
     pub const CELL_GAP: f32 = 8.;
     /// Height of the rename field inside a row.
@@ -41,7 +41,7 @@ pub mod size {
     /// Minimum window width for the Back button.
     pub const TOOLBAR_BACK_MIN: f32 = 300.;
     /// Height of the status line.
-    pub const STATUS: f32 = 32.;
+    pub const STATUS: f32 = 28.;
     /// Narrowest pane whose status line still shows the free space.
     pub const STATUS_FREE_SPACE_MIN: f32 = 600.;
     /// Below this pane width, a status line with a selection shows only it.
@@ -82,11 +82,11 @@ pub mod size {
     pub const ICON_LARGE: f32 = 32.;
     /// Height of a volume's row in the places panel: a name, a usage bar
     /// and a line of numbers.
-    pub const DEVICE_ROW: f32 = 56.;
+    pub const DEVICE_ROW: f32 = 48.;
     /// Height of a place row and of a section heading in the places panel.
-    pub const PLACE_ROW: f32 = 32.;
+    pub const PLACE_ROW: f32 = 28.;
     /// Place and device icons in the places panel.
-    pub const PLACE_ICON: f32 = 20.;
+    pub const PLACE_ICON: f32 = 16.;
     /// Small icon buttons: eject on a device row, close in a bar.
     pub const SMALL_BUTTON: f32 = 28.;
     /// Widest line of text under a state's heading.
@@ -143,6 +143,10 @@ pub mod size {
     pub const WINDOW_BUTTON: f32 = 44.;
     /// Thickness of the bands along the window's edges that resize it.
     pub const RESIZE_EDGE: f32 = 4.;
+    /// The icon of a palette result (`palette-result`).
+    pub const PALETTE_ICON: f32 = 20.;
+    /// Height of the blur status line (`blur-status`).
+    pub const BLUR_STATUS: f32 = 32.;
     /// Height of the hairlines between the toolbar's groups.
     pub const TOOL_SEPARATOR: f32 = 20.;
     /// A split pane's path bar (`path-bar`).

@@ -109,7 +109,7 @@ impl Workspace {
                     .flex_none()
                     .items_center()
                     .gap(px(space::SM))
-                    .min_h(px(size::STATUS))
+                    .min_h(px(size::BLUR_STATUS))
                     .px(px(space::MD))
                     .py(px(space::XS))
                     .border_t_1()

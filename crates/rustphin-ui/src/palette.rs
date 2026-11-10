@@ -303,7 +303,7 @@ impl Palette {
             })
             .child(
                 gpui_kit::component::Icon::new(category_icon(category))
-                    .size(px(size::PLACE_ICON))
+                    .size(px(size::PALETTE_ICON))
                     .flex_none()
                     .text_color(quiet),
             )

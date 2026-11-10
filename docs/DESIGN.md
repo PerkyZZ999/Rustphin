@@ -616,17 +616,17 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
 - **Places panel:** 240 px on the left (F9 hides it); a 36 px title row
   "Places", so its hairline lines up with the tab strip's; rows 28 px with
   16 px icons and a 12 px inset; section headings 28 px; device rows 48 px. The panel scrolls on its own.
-- **Details view:** 32 px heading row; columns name (fills), size (96 px,
+- **Details view:** 28 px heading row; columns name (fills), size (96 px,
   right-aligned), modified (168 px), type (160 px); 8 px side gutter; rows
-  36 px with 24 px icons or 24 × 16 px thumbnails. Below 820 px of pane width
+  32 px with 24 px icons or 24 × 16 px thumbnails. Below 820 px of pane width
   the type column goes, below 600 px the modified column, below 360 px the
   size column. The scrollbar's track starts below the headings.
 - **Zoom:** five levels with 16, 20, 24, 32 and 48 px icons; rows are the icon
-  plus 12 px, at least 28 px (28, 32, 36, 44, 60). The default is the 24 px
+  plus 8 px, at least 24 px (24, 28, 32, 40, 56; W-096d). The default is the 24 px
   level. Icons view uses 48, 64, 96, 128 and 192 px icons as today; at the
   96 px level a cell is 128 × 152 px with 8 px gaps (cells scale with the
   level), the name wraps to two lines, centred. Compact view fills 240 px
-  columns, 8 px apart, top to bottom, with 36 px rows; as many rows as fit
+  columns, 8 px apart, top to bottom, with 32 px rows; as many rows as fit
   the pane's height, and the view scrolls sideways (the wheel too). Up and
   Down step through the entries, Left and Right change columns, Page Up and
   Page Down go to the ends of the column, as in Dolphin.
@@ -672,11 +672,12 @@ stands unless he changes it. There are no pills and no circles.
 - **Tabs:** inactive tabs `text-muted` on the strip; the hovered tab takes
   `hover`; the active tab takes the toolbar's surface, `text`, and a 2 px
   `primary-bright` underline. Each tab has a close button (tooltip "Close tab
-  (Ctrl+W)"). Tabs can be dragged to reorder. With one tab there is no strip.
-- **Toolbar buttons:** outlined (`border-strong`), 36 px, 16 px Lucide icons
-  (arrow-left, arrow-right, arrow-up); hover fills `hover`; unavailable buttons
-  use `text-disabled` and keep their outline. Each has a tooltip with its label
-  and key.
+  (Ctrl+W)"). Tabs can be dragged to reorder. The strip is shown with one tab too (W-096).
+- **Toolbar buttons:** plain 32 px buttons with 16 px Lucide icons
+  (shield, arrow-left, arrow-right, arrow-up, refresh-cw, folder-plus,
+  layout-grid, columns-3, list, square-split-horizontal, eye, funnel); hover
+  fills `hover`; unavailable buttons use `text-disabled`. Each has a tooltip
+  with its label and key.
 - **Location field:** outlined; hover shows `hover`; clicking a segment opens
   it; clicking empty space or Ctrl+L turns it into a text field with the whole
   path selected and a `primary-bright` ring; Ctrl+L again or Escape returns to
@@ -699,7 +700,7 @@ stands unless he changes it. There are no pills and no circles.
   when folded; a folded section shows its count ("Network (2)"). Places in a
   group are indented one step. Hidden places, when listed, are at half opacity.
   Network bookmarks use the `server` icon.
-- **Device rows:** 56 px: a drive icon, the name and mount point ("Data
+- **Device rows:** 48 px: a drive icon, the name and mount point ("Data
   (/data)") in `body-md`, a 4 px usage bar (`secondary` on `track`), and
   "1.8 of 3.6 TiB free" in `data-sm` `text-muted`; when the two units differ
   both are written ("512.0 MiB of 1.2 GiB free"), since the longer sentence
@@ -803,7 +804,7 @@ stands unless he changes it. There are no pills and no circles.
 - **Empty and loading states:** a 32 px icon, a `headline-md` line saying what
   is the case, a `text-muted` line saying why, and at most one action. Centred
   when it fits; otherwise a bounded scroller with a 16 px gutter.
-- **Rename field:** 28 px inside the 36 px row with 4 px padding,
+- **Rename field:** 28 px inside the 32 px row with 2 px padding,
   `surface-raised` with `text` in place of the name, the stem selected, ringed
   in `primary-bright`. Dialog inputs stay 36 px.
 - **Tooltips:** `surface-raised`, `body-md`, the label then the key in
@@ -938,6 +939,11 @@ except where the list below says otherwise; each W-079 step adds its line.
   `search-x`), spacing and 32 px buttons; the 44 px folder error banner with
   a dismiss icon; batch rename segments with icons, Find and Replace side by
   side in mono, and one problem note above the preview.
+- Top bar redesign (W-096, mockup 35): the window's own title bar with
+  resize edges, one toolbar across the window with the new buttons (the
+  administrator shield is dimmed until W-098), the tab strip always shown
+  over the files, a path bar per side in split view, and the denser rows,
+  places, headings and status line.
 - Font weights (W-088): the app bundles static faces of Inter (400, 500,
   600), Space Grotesk (600) and JetBrains Mono (400, 500), because the pinned
   GPUI ignores a variable font's weight axis. Headings render semibold as

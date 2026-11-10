@@ -255,6 +255,8 @@ The test binary comes from `rust-tc test`; its filename contains a build hash.
 | TB4 | Click Split; click the left path bar; double-click a folder | Two sides, each with a path bar; the 2 px line and the toolbar's location follow the side last clicked; Back lights up for it |
 | TB5 | Ctrl+L, Escape | The toolbar's location becomes a field with the path selected; Escape returns to the segments |
 | TB6 | Click Back in the toolbar | The active side goes back; Forward lights up |
+| TB7 | Look at the default zoom, then Ctrl+- twice, Ctrl+0 | 32 px rows, 28 px places rows with 16 px icons, 48 px device rows, 28 px status line; the smallest zoom gives 24 px rows |
+| TB8 | Drag the bottom-right corner to the minimum size | At 480 px the toolbar keeps the shield, Back, the location and the Actions icon |
 
 ## Not covered by these scenarios
 

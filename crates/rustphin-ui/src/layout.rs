@@ -33,8 +33,8 @@ const ICON_CELL_EXTRA_WIDTH: f32 = 40.;
 const ICON_CELL_EXTRA_HEIGHT: f32 = 64.;
 /// Rows are at least this tall, and otherwise the icon plus this padding:
 /// 28, 32, 36, 44 and 60 pixels.
-const MIN_ROW: f32 = 28.;
-const ROW_PADDING: f32 = 12.;
+const MIN_ROW: f32 = 24.;
+const ROW_PADDING: f32 = 8.;
 
 /// Sizes, in pixels, for drawing entries in one mode at one zoom level.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -382,7 +382,12 @@ mod tests {
         Grid::new(layout, Flow::Across, lanes, len)
     }
 
-    /// The compact view at the default zoom: 36-pixel rows in 248-pixel
+    /// The compact view's row height at the default zoom.
+    fn compact_row() -> f32 {
+        ViewMode::Compact.layout(DEFAULT_ZOOM).row_height
+    }
+
+    /// The compact view at the default zoom: its rows in 248-pixel
     /// columns, `lanes` rows to a column.
     fn down(lanes: usize, len: usize) -> Grid {
         Grid::new(
@@ -397,11 +402,11 @@ mod tests {
     fn details_rows_span_the_width_and_grow_with_the_icon() {
         let default = ViewMode::Details.layout(DEFAULT_ZOOM);
         assert_eq!(default.cell_width, None);
-        assert_eq!((default.icon, default.row_height), (24., 36.));
+        assert_eq!((default.icon, default.row_height), (24., 32.));
         let rows: Vec<f32> = (0..ZOOM_LEVELS)
             .map(|zoom| ViewMode::Details.layout(zoom).row_height)
             .collect();
-        assert_eq!(rows, [28., 32., 36., 44., 60.]);
+        assert_eq!(rows, [24., 28., 32., 40., 56.]);
         assert_eq!(default.columns(2000.), 1);
     }
 
@@ -544,31 +549,33 @@ mod tests {
         assert_eq!(grid.cell(6), (0, 2));
         assert_eq!(grid.lines(), 3);
         assert_eq!(grid.width(), 3. * 248.);
-        assert_eq!(grid.cell_bottom_left(4), (248., 72.));
+        assert_eq!(grid.cell_bottom_left(4), (248., 2. * compact_row()));
         assert_eq!(grid.column_span(5), (248., 496.));
     }
 
     #[test]
     fn the_rows_that_fit_a_height_make_a_column() {
-        let layout = ViewMode::Compact.layout(DEFAULT_ZOOM); // 36-pixel rows
-        assert_eq!(layout.rows(36. * 10. + 35.), 10);
+        let layout = ViewMode::Compact.layout(DEFAULT_ZOOM);
+        let row = layout.row_height;
+        assert_eq!(layout.rows(row * 10. + row - 1.), 10);
         assert_eq!(layout.rows(10.), 1);
     }
 
     #[test]
     fn a_band_over_compact_columns_selects_the_cells_it_touches() {
         // Ten rows to a column; rows 1-2 of the second and third columns.
+        let row = compact_row();
         let grid = down(10, 100);
-        let band = Rect::between((300., 40.), (500., 100.));
+        let band = Rect::between((300., row + 4.), (500., 3. * row - 4.));
         assert_eq!(grid.rows_in(band), [11, 12, 21, 22]);
         // Below the last row of a column there is nothing.
-        let below = Rect::between((0., 36. * 10. + 1.), (600., 900.));
+        let below = Rect::between((0., row * 10. + 1.), (600., 900.));
         assert!(grid.rows_in(below).is_empty());
         // Under a column's last row there is nothing, though later entries
         // exist: they are in the next columns.
         let tall = down(4, 30);
         assert!(
-            tall.rows_in(Rect::between((10., 4. * 36. + 1.), (300., 400.)))
+            tall.rows_in(Rect::between((10., 4. * row + 1.), (300., 400.)))
                 .is_empty()
         );
         // The last column holds only what is left: 23 entries fill two

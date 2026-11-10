@@ -3962,7 +3962,7 @@ impl Browser {
         let viewport = f32::from(window.viewport_size().height);
         let height = menu::column_height(
             &entries,
-            size::ROW,
+            size::MENU_ROW,
             1. + 2. * space::XS,
             2. * space::XS + 2.,
         )

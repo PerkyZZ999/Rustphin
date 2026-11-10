@@ -1,5 +1,11 @@
 # Validation evidence
 
+### 2026-11-10 — W-096d density
+- **Code:** list rows are the icon plus 8 px, at least 24 px (24, 28, 32, 40, 56 by zoom; 32 at the default), column headings 28 px, places rows 28 px with 16 px icons (section headings follow), device rows 48 px, the status line 28 px; palette results keep their 20 px icon and the blur status its 32 px through their own sizes. The context menu's height estimate now uses the menu row, not the heading row.
+- **Tests:** the zoom-table test expects the new rows; three compact-view tests had 36 px rows written in and now state them through the layout's row height (they failed on the first run with the new table).
+- **On screen:** isolated session (TB7, TB8): the details view at 32 px rows with every entry of the scene in view, places and devices at the new heights; Ctrl+- twice gave 24 px rows; at the minimum width the toolbar kept the shield, Back, the location and the Actions icon.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-096b/c toolbar across the window, split path bars
 - **Code:** the pane's toolbar becomes `Browser::toolbar_parts` (navigation with the new Reload, location, New folder, view-mode segments, Show hidden and Filter toggles, Actions), placed by the window in one 44 px toolbar across its width between its own buttons: the administrator shield (dimmed until W-098) and Split. Plain 32 px `tool_button`s (`controls.rs`); toggles report their state as pressed and say it in their tooltips. The location field carries the pane's key context, so Escape and Ctrl+L reach the pane while typing. Every toolbar click hands the keyboard back to the pane. Width rules now follow the window: hint from 1000 px, the view tools from 760 px, then the earlier 560/300 px rules. The tab strip (36 px) is always shown, over the panes and beside Places, whose title row now lines up with it. In split view each pane shows a 28 px path bar (its location, `text` when active); a click on it makes that side active. Breadcrumbs are sized by the space where they are drawn, not the pane's width.
 - **Tests:** `narrow_windows_drop_the_hint_then_the_tools_then_forward_and_up_then_back` replaces the pane-width test (failed with the tools rule moved to 560 px).
