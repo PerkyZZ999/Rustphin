@@ -234,6 +234,17 @@ The test binary comes from `rust-tc test`; its filename contains a build hash.
 | M6 | Empty, only hidden, filter with no match (25–27) | 32 px icon, heading, text, 32 px button, at 8/8/12 px spacing |
 | M7 | Could not open (28): `chmod 000` a folder in the scene and open it | As N4, laid out like M6 |
 
+## Window title bar (W-096a)
+
+| ID | Steps | Expected |
+|---|---|---|
+| T1 | Start in the scene | A 36 px title bar drawn by Rustphin: logo, centred "Pictures — Rustphin", Minimise, Maximise, Close; a hairline frame round the window |
+| T2 | Press on the title bar, move the pointer, release (`mouse_button_down`, two `mouse_move`, `mouse_button_up`) | The window moves with the pointer |
+| T3 | The same from the bottom-right corner | The window resizes |
+| T4 | Double-click the title bar, then click the middle button | Maximised without the frame, the middle button shows Restore; Restore brings the earlier size and place back |
+| T5 | Right-click the title bar, Escape | KWin's window menu (Maximize, Minimize, Keep Above Others, More Actions, Close) opens and closes |
+| T6 | Click Close | The window closes and the session is saved, as with Ctrl+Q |
+
 ## Not covered by these scenarios
 
 - Blur and the user's own icon theme: an isolated session cannot show them. They need the live desktop.

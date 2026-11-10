@@ -1577,6 +1577,10 @@ impl Render for Workspace {
             window.set_window_title(&title);
             self.title = title;
         }
+        let title_bar = crate::titlebar::title_bar(&self.title.clone(), theme, window, cx);
+        let resize_edges = crate::titlebar::resize_edges(window);
+        // Without the compositor's frame, a hairline marks the window's edge.
+        let framed = crate::titlebar::client_decorated(window) && !window.is_maximized();
 
         let tab = self.tabs.active();
         let split = tab.panes.len() > 1;
@@ -1734,6 +1738,10 @@ impl Render for Workspace {
             .size_full()
             // The one window background, so gaps and dividers between panes sit on it.
             .bg(theme.window)
+            .when(framed, |workspace| {
+                workspace.border_1().border_color(theme.border_strong)
+            })
+            .children(title_bar)
             // A single tab needs no tab strip: fewer things on screen by default.
             .when(self.tabs.len() > 1, |workspace| {
                 workspace.child(self.tab_strip(theme, cx))
@@ -1766,6 +1774,7 @@ impl Render for Workspace {
                 workspace.children(element)
             })
             .children(self.palette.clone())
+            .children(resize_edges)
     }
 }
 

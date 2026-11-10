@@ -30,6 +30,7 @@ mod sidebar;
 mod tabs;
 mod theme;
 mod thumbs;
+mod titlebar;
 mod workspace;
 
 use std::path::PathBuf;
@@ -148,6 +149,9 @@ fn open_window(
         window_min_size: Some(size(px(480.), px(320.))),
         window_background: WindowBackgroundAppearance::Opaque,
         app_id: Some("rustphin".into()),
+        // Rustphin draws its own title bar (W-096); a compositor that
+        // insists on its own frame still gets one, and the bar steps aside.
+        window_decorations: Some(gpui_kit::WindowDecorations::Client),
         ..Default::default()
     };
     let opened = cx.open_window(window_options, |window, cx| {

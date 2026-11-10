@@ -105,14 +105,23 @@ components:
     backgroundColor: "{colors.chrome-raised-glass}"
   modal-scrim:
     backgroundColor: "{colors.scrim}"
+  title-bar:
+    backgroundColor: "{colors.chrome-solid}"
+    textColor: "{colors.text-muted}"
+    typography: "{typography.body-md}"
+    height: 36px
+  window-button:
+    textColor: "{colors.text-muted}"
+    width: 44px
+    height: 36px
   tab-strip:
     backgroundColor: "{colors.chrome-raised-solid}"
-    height: 40px
+    height: 36px
   tab:
     textColor: "{colors.text-muted}"
     typography: "{typography.body-md}"
     padding: "{spacing.md}"
-    width: 168px
+    width: 160px
   tab-active:
     backgroundColor: "{colors.chrome-solid}"
     textColor: "{colors.text}"
@@ -122,15 +131,18 @@ components:
     size: 24px
   tab-add:
     textColor: "{colors.text-muted}"
-    width: 40px
+    width: 36px
   toolbar:
     backgroundColor: "{colors.chrome-solid}"
-    height: 52px
+    height: 44px
     padding: "{spacing.sm}"
   toolbar-button:
     textColor: "{colors.text}"
     rounded: "{rounded.sm}"
-    size: 36px
+    size: 32px
+  toolbar-toggle-on:
+    backgroundColor: "{colors.primary-subtle}"
+    textColor: "{colors.primary-bright}"
   toolbar-button-hover:
     backgroundColor: "{colors.hover}"
   toolbar-button-disabled:
@@ -146,13 +158,19 @@ components:
     textColor: "{colors.text}"
     typography: "{typography.data-md}"
     rounded: "{rounded.sm}"
-    height: 36px
+    height: 32px
+    padding: "{spacing.md}"
+  path-bar:
+    backgroundColor: "{colors.chrome-solid}"
+    textColor: "{colors.text-muted}"
+    typography: "{typography.data-md}"
+    height: 28px
     padding: "{spacing.md}"
   actions-button:
     textColor: "{colors.text}"
     typography: "{typography.body-md}"
     rounded: "{rounded.sm}"
-    height: 36px
+    height: 32px
     padding: "{spacing.md}"
   banner-error:
     backgroundColor: "{colors.error-surface}"
@@ -167,13 +185,13 @@ components:
   places-title:
     textColor: "{colors.text}"
     typography: "{typography.headline-sm}"
-    height: 52px
-    padding: "{spacing.lg}"
+    height: 36px
+    padding: "{spacing.md}"
   place-row:
     textColor: "{colors.text}"
     typography: "{typography.body-lg}"
     rounded: "{rounded.sm}"
-    height: 32px
+    height: 28px
     padding: "{spacing.md}"
   place-row-current:
     backgroundColor: "{colors.primary-subtle}"
@@ -181,11 +199,11 @@ components:
   section-heading:
     textColor: "{colors.text-muted}"
     typography: "{typography.body-strong}"
-    height: 32px
+    height: 28px
   device-row:
     textColor: "{colors.text}"
     typography: "{typography.body-md}"
-    height: 56px
+    height: 48px
   device-figures:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-sm}"
@@ -198,7 +216,7 @@ components:
   column-heading:
     textColor: "{colors.text-muted}"
     typography: "{typography.body-md}"
-    height: 32px
+    height: 28px
   column-heading-active:
     textColor: "{colors.text}"
   column-size:
@@ -217,7 +235,7 @@ components:
     textColor: "{colors.text}"
     typography: "{typography.body-lg}"
     rounded: "{rounded.sm}"
-    height: 36px
+    height: 32px
     padding: "{spacing.sm}"
   entry-icon:
     size: 24px
@@ -402,7 +420,7 @@ components:
     backgroundColor: "{colors.chrome-solid}"
     textColor: "{colors.text-muted}"
     typography: "{typography.data-sm}"
-    height: 32px
+    height: 28px
   status-free-space-min:
     width: 600px
   status-selection-only-max:

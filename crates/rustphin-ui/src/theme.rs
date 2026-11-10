@@ -137,6 +137,12 @@ pub mod size {
     pub const DIALOG_TITLE: f32 = 48.;
     /// Corner radius shared by controls, rows and panels.
     pub const RADIUS: f32 = 2.;
+    /// Height of the window's own title bar (`title-bar`).
+    pub const TITLE_BAR: f32 = 36.;
+    /// Width of a Minimise, Maximise or Close button (`window-button`).
+    pub const WINDOW_BUTTON: f32 = 44.;
+    /// Thickness of the bands along the window's edges that resize it.
+    pub const RESIZE_EDGE: f32 = 4.;
     /// Width of a scrollbar's track.
     pub const SCROLLBAR: f32 = 8.;
     /// Gap between a scrollbar's thumb and the edge of its track.

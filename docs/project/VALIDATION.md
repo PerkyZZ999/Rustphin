@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-10 — W-096a title bar drawn by Rustphin
+- **Code:** the window asks for client-side decorations. When the compositor agrees, `titlebar.rs` draws a 36 px bar (bundled small logo, centred window title, Minimise / Maximise-or-Restore / Close at 44 × 36 px): a press then a move hands the drag to the compositor, a double click maximises or restores, a right click opens the compositor's window menu. 4 px bands (16 px corners) along untiled edges resize the window while it is not maximised; a hairline frame marks the window's edge. With server-side decorations none of this is drawn.
+- **On screen:** isolated KWin session (KWin accepted client-side decorations), scenarios T1–T6: drag moved the window from (180,100) to (100,55); the bottom-right corner resized it from 920 × 600 to 1054 × 680; double click maximised (frame gone, Restore icon), Restore returned it; right click showed KWin's window menu; Close ended the process.
+- **Not seen:** behaviour under a compositor that refuses client-side decorations; tiling against a screen edge; the title bar over the real desktop's blur.
+- **Tests:** none added; the code is window-system calls with no logic of its own to test apart from the screen checks.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-096 top-bar mockup drawn
 - **What:** docs/mockup/35-top-bar-redesign.html, three 1280 × 800 scenes in the mockups' stylesheet at the D-026 type sizes: custom title bar, full-width toolbar with the new buttons and the administrator shield, tabs over the files, split view with one toolbar, administrator mode.
 - **Checked:** rendered with headless Chromium and looked at each scene; fixed the missing file-type icons and the tooltip's place. Nothing is built; the design waits for the maintainer's answers.
