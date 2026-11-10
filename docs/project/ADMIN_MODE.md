@@ -1,0 +1,120 @@
+# Act as Administrator: design and threat model (W-098)
+
+Status: **proposal, waiting for the maintainer's approval** (D-027 requires it before
+any code). Written 2026-11-10.
+
+## What the maintainer asked for
+
+A toolbar button, before Back, that lets him work on files he does not own
+(for example `/etc`), "exactly like Dolphin does". Dolphin's *Act as
+Administrator* switches the view to `admin:/…`; KDE's own polkit dialog asks
+for the password; the view is marked; the same button switches it off.
+
+## How Dolphin does it (read from kio-admin's source, 2026-11-10)
+
+- A root helper, `kio-admin-helper`, is started on demand on the **system**
+  D-Bus as `org.kde.kio.admin` (package `kio-admin`, installed here).
+- Every method call is checked against the polkit action
+  `org.kde.kio.admin.commands` ("Manage files as administrator",
+  `auth_admin_keep`). The subject is **the calling process's bus
+  connection**. KDE's polkit agent shows the password dialog; polkit then
+  remembers the answer for that process for a few minutes.
+- Each operation is a method on `/` (`listDir(s)`, `stat(s)`, `get(s)`,
+  `put(sii)`, `copy(ssii)`, `del(s)`, `mkdir(si)`, `chmod(si)`,
+  `chown(sss)`, `rename(ssi)`, `file(si)`) that returns the path of a
+  command object. The client calls `start()` on it and receives signals:
+  `entries`, `statEntry`, `data`, `dataRequest`, and finally
+  `result(int error, string message)`.
+- Directory entries are KIO's own `UDSEntry`, written with Qt's
+  `QDataStream` into a byte array inside a struct (`a(ay)` for a list).
+- The helper runs KIO's `file:` jobs as root. It checks nothing but polkit;
+  it does not canonicalise paths.
+
+## Proposed design
+
+### Mechanism
+
+1. **`rustphin-platform::admin`**: a client of `org.kde.kio.admin` over the
+   system bus with zbus (already a dependency, blocking API, off the UI
+   thread). It decodes `UDSEntry` byte arrays with a small bounded parser of
+   the `QDataStream` layout (field count, then id + 64-bit number or UTF-16
+   string per field).
+2. **`AdminFs`**, in the platform crate, implements the core's `Fs` trait on
+   top of that client. The browser and the operation engine use it in
+   place of `RealFs` while the mode is on, so every change still goes
+   through the engine and its rules (D-011), and the core keeps no
+   knowledge of D-Bus.
+3. Rustphin **never asks for, sees or stores a password** and never runs as
+   root. The only privileged code is KDE's helper.
+
+### The mode, as the user sees it (mockup 35c)
+
+- **Per window.** The shield turns the whole window into administrator
+  mode: every tab and both sides of a split. (Dolphin does it per view; one
+  window-wide state is easier to see and harder to forget. The maintainer to
+  confirm.)
+- Switching on: Rustphin makes a first harmless call (`stat` of the folder
+  shown); KDE's dialog asks for the password. Cancel or a wrong password
+  leaves the mode off with a line saying so.
+- While on: the shield is red (`error` on `error-surface`), a 36 px bar
+  under the toolbar says "Acting as administrator. Changes you make here can
+  affect the whole system; be careful." with **Stop acting as
+  administrator**, and the title says "(administrator)". When polkit's
+  memory runs out, the next operation simply asks again.
+- Switching off: the shield, Stop, or closing the window. The mode is
+  **never saved** in the session and never comes back on its own.
+
+### What works, and what changes, in the mode
+
+| Works through the helper | Changes or is off |
+|---|---|
+| Browsing any folder; hidden files, sorting, filter, views | **Delete is always permanent** (the helper has no trash): Delete asks "Delete for good?" every time |
+| New folder, new file, rename, copy, move, paste, duplicate, drag and drop within the window | **No live updates** (the helper cannot watch folders); a folder re-reads after Rustphin's own changes and on F5 |
+| Properties, including owner, group and permissions (`chmod`, `chown`) | **No thumbnails** (they would read every picture as root) |
+| Undo of renames and moves done in the mode | **Batch rename off** (its recovery journal needs a directory lock the helper does not offer) |
+| | **Opening a file** starts the normal application as the maintainer, not as root: it can read what he can read and cannot save into root-owned folders, as in Dolphin with non-KDE apps |
+| | Copies to or from the mode go through the helper (it reads and writes as root) |
+
+### Threat model
+
+| Threat | Mitigation | What remains |
+|---|---|---|
+| A bug in Rustphin damages system files while the mode is on | Every change goes through the operation engine (temporary name, verify, no silent overwrite); the mode is explicit, marked, per window, and never restored at start | Durability is weaker than normal: the helper cannot `fsync` or lock directories, so a power cut during a change can lose it |
+| Password captured or logged | Rustphin never handles it; KDE's polkit agent does | None in Rustphin |
+| Another program borrows Rustphin's authorisation | polkit authorises Rustphin's own bus connection only; nothing is mounted or exported (unlike mounting `admin:/` through kio-fuse, which would let every program of the user use root access through the mount, rejected for that reason) | Code injected into Rustphin's own process would have the access, as with Dolphin |
+| A file name that is not valid UTF-8 reaches the helper as a different name (the helper takes URLs as Qt strings) | Names are sent as percent-encoded `file://` URLs; any name that does not round-trip exactly is **refused** with a message, never sent | Such files cannot be changed in the mode |
+| Symlink races in folders other users can write (classic root-in-`/tmp` attacks) | Operations name the exact paths Rustphin listed; the mode marks folders not owned by root with a warning line | KIO, as root, follows symlinks the way `cp` would; Dolphin has the same exposure |
+| Malformed data from the helper | The `UDSEntry` parser is bounded (field count, string length) and rejects anything malformed; it gets unit tests from real samples and a fuzz target (a real parser, so a real target) | None expected |
+| KDE changes this private interface | Rustphin checks the helper exists and answers as expected; anything unexpected ends the mode with a message instead of guessing | The feature may need updating after a KDE upgrade |
+| The helper is missing (`kio-admin` not installed) | The shield explains how to install it | None |
+
+### Testing
+
+- Parser and URL round-trip: unit tests and a fuzz target.
+- `AdminFs` and the mode: against a **fake helper** on a private D-Bus (as
+  the device and kio-fuse tests already do), including denial, cancel,
+  expiry and every error path. No test ever runs anything as root.
+- On screen: the mode's look and flows in the isolated session with the
+  fake helper.
+- **the maintainer** does the real check on his desktop (the real password prompt
+  and a harmless change, for example a test folder under `/opt`), since
+  agents must not type passwords.
+
+### Slices
+
+1. W-098a: helper client, `UDSEntry` parser, URL round-trip, fake helper,
+   tests and fuzz target.
+2. W-098b: read-only mode: `AdminFs` listing and stat, shield, bar, title,
+   prompt and denial handling.
+3. W-098c: changes: new folder or file, rename, copy, move, delete for good,
+   undo, Properties with owner and permissions.
+4. W-098d: replay, docs (ARCHITECTURE trust boundary, DESIGN), the maintainer's
+   real-desktop check.
+
+## Decisions for the maintainer
+
+1. Approve the mechanism: Rustphin talks to KDE's kio-admin helper directly,
+   the way Dolphin does (not kio-fuse, not a root helper of our own).
+2. Per-window mode (recommended) or per-pane like Dolphin?
+3. Accept the changes in the table: permanent delete with confirmation, no
+   live updates, no thumbnails, no batch rename in the mode.

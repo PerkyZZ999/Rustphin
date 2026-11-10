@@ -37,7 +37,7 @@ S11 — Hardening for daily use (in progress)
   - [x] W-096d — Density: rows (icon + 8 px, at least 24: 24/28/32/40/56), 28 px headings and places rows with 16 px icons, 48 px device rows, 28 px status line. Done 2026-11-10.
 - [x] W-099 — Rustphin's own logo and app icon (the maintainer chose a charcoal folder held by two red crab claws): `assets/rustphin.svg` and `assets/rustphin-small.svg`, hicolor PNGs 16–512 px, the desktop entry naming `Icon=rustphin`, the README's install step, the title bar's logo (W-096a). Logo set committed in a0ad77f by another session; the wiring finished 2026-11-10 (see VALIDATION.md).
 - [ ] W-097 — Icons on buttons wherever they help recognition (iconography skill).
-- [ ] W-098 — Act as Administrator as in Dolphin (D-027): KDE's polkit prompt, file operations through kio-admin's privileged helper, a clearly marked mode, switched off the same way. Design and threat model first, approved by the maintainer before building.
+- [ ] W-098 — Act as Administrator as in Dolphin (D-027): KDE's polkit prompt, file operations through kio-admin's privileged helper, a clearly marked mode, switched off the same way. Design and threat model first, approved by the maintainer before building. 2026-11-10: design written (docs/project/ADMIN_MODE.md: talk to KDE's kio-admin helper directly as Dolphin does, `AdminFs` behind the core's `Fs` trait, threat model, slices W-098a–d); waiting for the maintainer's three decisions.
 
 ## Design pass (W-079, started 2026-11-08 under D-024)
 
