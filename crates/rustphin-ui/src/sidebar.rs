@@ -13,16 +13,16 @@ use std::{
 };
 
 use gpui_kit::{
-    AccessibleAction, AnyElement, App, AppContext as _, Context, Entity, EventEmitter, FocusHandle,
-    Focusable as _, InteractiveElement, IntoElement, KeyBinding, MouseButton, ParentElement as _,
-    Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window,
-    actions,
+    AccessibleAction, AnyElement, App, AppContext as _, Context, Edges, Entity, EventEmitter,
+    FocusHandle, Focusable as _, InteractiveElement, IntoElement, KeyBinding, MouseButton,
+    MouseDownEvent, ParentElement as _, Pixels, Point, Render, Role, ScrollHandle, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions, anchored,
     component::{
         Icon, Sizable as _,
-        button::Button,
+        button::{Button, ButtonVariants as _},
         input::{Input, InputEvent, InputState},
     },
-    div,
+    deferred, div,
     prelude::FluentBuilder as _,
     px,
 };
@@ -39,7 +39,10 @@ use crate::{
     browser::DraggedEntries,
     format,
     groups::Groups,
+    menu::{self, Command as _, MenuEffect, MenuEntry, MenuKey, MenuState},
+    menu_view::{self, MenuAccept, MenuClose, MenuDown, MenuLeft, MenuRight, MenuUp},
     operations::hub,
+    place_menu::{self, PlaceCommand, Target},
     remote,
     theme::{Theme, size, space, text},
 };
@@ -176,11 +179,25 @@ pub struct Sidebar {
     /// The volume being mounted or unmounted, shown as busy.
     device_busy: Option<String>,
     focus: FocusHandle,
+    /// The right-click menu, while open (W-102).
+    menu: Option<PlacesMenu>,
+    menu_focus: FocusHandle,
     _watch: Option<rustphin_core::WatchGuard>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl EventEmitter<SidebarEvent> for Sidebar {}
+
+/// The panel's open right-click menu.
+struct PlacesMenu {
+    /// Where it was asked for, in window coordinates.
+    at: Point<Pixels>,
+    /// The row it acts on; `None` for the panel's empty space.
+    row: Option<Row>,
+    entries: Vec<MenuEntry<PlaceCommand>>,
+    state: MenuState,
+    scroll: ScrollHandle,
+}
 
 /// The address of a network bookmark (`sftp://…`, `smb://…`), opened
 /// through kio-fuse.
@@ -341,7 +358,16 @@ impl Sidebar {
             .map(|dir| dir.join("user-places.xbel"));
         let groups_path = config::config_dir().map(|dir| dir.join("place-groups.toml"));
         let rename_input = cx.new(|cx| InputState::new(window, cx));
-        let subscriptions = vec![cx.subscribe_in(&rename_input, window, Self::on_rename_input)];
+        let menu_focus = cx.focus_handle();
+        let subscriptions = vec![
+            cx.subscribe_in(&rename_input, window, Self::on_rename_input),
+            // A click elsewhere takes the focus and closes the menu.
+            cx.on_blur(&menu_focus, window, |this, _, cx| {
+                if this.menu.take().is_some() {
+                    cx.notify();
+                }
+            }),
+        ];
 
         // Follow edits made by Dolphin and file dialogs.
         let (changed, changes) = flume::unbounded::<()>();
@@ -390,6 +416,8 @@ impl Sidebar {
             device_service: Arc::new(NoDevices),
             device_busy: None,
             focus: cx.focus_handle(),
+            menu: None,
+            menu_focus,
             _watch: watch,
             _subscriptions: subscriptions,
         };
@@ -1203,6 +1231,351 @@ impl Sidebar {
         cx.notify();
     }
 
+    /// What a right-click on `row` (or on empty space) is about.
+    fn menu_target(&self, row: Option<&Row>) -> Option<Vec<MenuEntry<PlaceCommand>>> {
+        let names: Vec<String> = self.groups.groups.iter().map(|g| g.name.clone()).collect();
+        let entries = match row {
+            Some(Row::Place(id)) => {
+                let place = self.place(id)?;
+                place_menu::place_menu(Target::Place {
+                    system: place.system,
+                    hidden: place.hidden,
+                    group: self.groups.group_of(id),
+                    groups: &names,
+                })
+            }
+            Some(Row::Group(index)) => place_menu::place_menu(Target::Group {
+                collapsed: self.groups.groups.get(*index)?.collapsed,
+            }),
+            // Volumes keep to their own button; headings fold.
+            Some(Row::Device(_) | Row::Devices | Row::Remote) => return None,
+            None => place_menu::place_menu(Target::Panel {
+                can_add_shown: self.current.is_some(),
+                showing_hidden: self.show_hidden,
+            }),
+        };
+        Some(entries)
+    }
+
+    /// Opens the right-click menu for `row`, or for empty space.
+    fn show_menu(
+        &mut self,
+        row: Option<Row>,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.renaming.is_some() {
+            return;
+        }
+        let Some(entries) = self.menu_target(row.as_ref()) else {
+            return;
+        };
+        let Some(state) = menu::initial(&entries) else {
+            return;
+        };
+        if row.is_some() {
+            self.focused = row.clone();
+        }
+        self.menu = Some(PlacesMenu {
+            at,
+            row,
+            entries,
+            state,
+            scroll: ScrollHandle::new(),
+        });
+        self.menu_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    fn on_menu_key(&mut self, key: MenuKey, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(effect) = self
+            .menu
+            .as_mut()
+            .map(|menu| menu::on_key(&menu.entries, &mut menu.state, key))
+        else {
+            return;
+        };
+        match effect {
+            MenuEffect::Stay => {
+                if let Some(menu) = &self.menu
+                    && !menu.state.submenu
+                {
+                    menu.scroll.scroll_to_item(menu.state.cursor);
+                }
+                cx.notify();
+            }
+            MenuEffect::Close => {
+                self.menu = None;
+                self.focus.focus(window, cx);
+                cx.notify();
+            }
+            MenuEffect::Run(command) => self.run_menu(command, window, cx),
+        }
+    }
+
+    fn hover_menu(
+        &mut self,
+        cursor: usize,
+        submenu: bool,
+        sub_cursor: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(menu) = &mut self.menu {
+            let state = MenuState {
+                cursor,
+                submenu,
+                sub_cursor,
+            };
+            if menu.state != state {
+                menu.state = state;
+                cx.notify();
+            }
+        }
+    }
+
+    fn run_menu(&mut self, command: PlaceCommand, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(menu) = self.menu.take() else { return };
+        self.focus.focus(window, cx);
+        let row = menu.row;
+        let place = match &row {
+            Some(Row::Place(id)) => Some(id.clone()),
+            _ => None,
+        };
+        match command {
+            PlaceCommand::Open | PlaceCommand::OpenInNewTab => {
+                if let Some(row) = &row {
+                    self.open(row, command == PlaceCommand::OpenInNewTab, cx);
+                }
+            }
+            PlaceCommand::MoveToGroup(index) => {
+                if let Some(id) = place {
+                    self.move_to_group(&id, Some(index), None, cx);
+                }
+            }
+            PlaceCommand::NewGroupWith => {
+                if let Some(id) = place {
+                    self.new_group(cx);
+                    let index = self.groups.groups.len().saturating_sub(1);
+                    self.groups.assign(&id, Some(index), None);
+                    self.save_groups(cx);
+                }
+            }
+            PlaceCommand::LeaveGroup => {
+                if let Some(id) = place {
+                    self.move_to_group(&id, None, None, cx);
+                }
+            }
+            PlaceCommand::MoveUp | PlaceCommand::MoveDown => {
+                self.shift_focused(command == PlaceCommand::MoveDown, cx);
+            }
+            PlaceCommand::Rename => {
+                if let Some(row) = row {
+                    self.begin_rename(row, window, cx);
+                }
+            }
+            PlaceCommand::Hide | PlaceCommand::Show => {
+                if let Some(id) = place {
+                    self.set_hidden(&id, command == PlaceCommand::Hide, cx);
+                }
+            }
+            PlaceCommand::Remove | PlaceCommand::DeleteGroup => self.remove_focused(cx),
+            PlaceCommand::Collapse | PlaceCommand::Expand => {
+                if let Some(Row::Group(index)) = row {
+                    self.set_collapsed(index, command == PlaceCommand::Collapse, cx);
+                }
+            }
+            PlaceCommand::NewGroup => self.new_group(cx),
+            PlaceCommand::AddShownFolder => {
+                if let Some(folder) = self.current.clone() {
+                    self.add_place(folder, None, cx);
+                }
+            }
+            PlaceCommand::ToggleHiddenPlaces => self.show_hidden = !self.show_hidden,
+        }
+        cx.notify();
+    }
+
+    /// A listener that opens the menu for `row` where the right button went
+    /// down.
+    fn menu_opener(
+        row: Option<Row>,
+        cx: &mut Context<Self>,
+    ) -> impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static {
+        cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+            cx.stop_propagation();
+            this.show_menu(row.clone(), event.position, window, cx);
+        })
+    }
+
+    /// The open menu, in window coordinates, or nothing.
+    fn menu_layer(
+        &self,
+        theme: Theme,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let menu = self.menu.as_ref()?;
+        let max_height = px(size::MENU_VISIBLE
+            .min((f32::from(window.viewport_size().height) - space::SM * 2.).max(0.)));
+        let state = menu.state;
+        let rows = menu
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| self.menu_row(entry, index, state.cursor, false, theme, cx))
+            .collect::<Vec<_>>();
+        let panel = menu_view::column("places-menu-column", theme)
+            .track_scroll(&menu.scroll)
+            .max_h(max_height)
+            .children(rows);
+        let submenu = state.submenu.then(|| {
+            menu.entries
+                .get(state.cursor)
+                .and_then(|entry| match entry {
+                    MenuEntry::Submenu { items, .. } => Some(
+                        menu_view::column("places-menu-groups", theme)
+                            .mt(px(menu_view::submenu_offset(&menu.entries, state.cursor)))
+                            .role(Role::Menu)
+                            .aria_label(place_menu::MOVE_TO_GROUP)
+                            .max_h(max_height)
+                            .children(
+                                items
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(index, entry)| {
+                                        self.menu_row(
+                                            entry,
+                                            index,
+                                            state.sub_cursor,
+                                            true,
+                                            theme,
+                                            cx,
+                                        )
+                                    })
+                                    .collect::<Vec<_>>(),
+                            ),
+                    ),
+                    _ => None,
+                })
+        });
+        Some(
+            deferred(
+                anchored()
+                    .position(menu.at)
+                    .snap_to_window_with_margin(Edges::all(px(space::SM)))
+                    .child(
+                        div()
+                            .id("places-menu")
+                            .role(Role::Menu)
+                            .aria_label("Place actions")
+                            .aria_description(
+                                "Up and Down choose an action. Enter runs it; Escape closes.",
+                            )
+                            .key_context(menu_view::CONTEXT)
+                            .track_focus(&self.menu_focus)
+                            .on_action(cx.listener(|this, _: &MenuUp, window, cx| {
+                                this.on_menu_key(MenuKey::Up, window, cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MenuDown, window, cx| {
+                                this.on_menu_key(MenuKey::Down, window, cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MenuLeft, window, cx| {
+                                this.on_menu_key(MenuKey::Left, window, cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MenuRight, window, cx| {
+                                this.on_menu_key(MenuKey::Right, window, cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MenuAccept, window, cx| {
+                                this.on_menu_key(MenuKey::Accept, window, cx);
+                            }))
+                            .on_action(cx.listener(|this, _: &MenuClose, window, cx| {
+                                this.on_menu_key(MenuKey::Close, window, cx);
+                            }))
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+                            .occlude()
+                            .flex()
+                            .items_start()
+                            .child(panel)
+                            .children(submenu.flatten()),
+                    ),
+            )
+            .into_any_element(),
+        )
+    }
+
+    /// One row of the menu; `nested` rows are the group list.
+    fn menu_row(
+        &self,
+        entry: &MenuEntry<PlaceCommand>,
+        index: usize,
+        cursor: usize,
+        nested: bool,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let current = index == cursor;
+        let open_submenu = self.menu.as_ref().is_some_and(|menu| menu.state.submenu);
+        let parent = self.menu.as_ref().map_or(0, |menu| menu.state.cursor);
+        match entry {
+            MenuEntry::Separator => div()
+                .h(px(size::HAIRLINE))
+                .my(px(space::XS))
+                .bg(theme.border)
+                .into_any_element(),
+            MenuEntry::Submenu { label, .. } => menu_view::row(
+                label,
+                menu::RowIcon::Symbol(gpui_kit::assets::IconName::FolderInput),
+                None,
+                true,
+                true,
+                current,
+                theme,
+            )
+            .aria_expanded(current && open_submenu)
+            .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                this.hover_menu(index, true, 0, cx);
+            }))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                cx.stop_propagation();
+                this.on_menu_key(MenuKey::Right, window, cx);
+            }))
+            .into_any_element(),
+            MenuEntry::Item {
+                label,
+                command,
+                enabled,
+            } => {
+                let command = command.clone();
+                let enabled = *enabled;
+                menu_view::row(
+                    label,
+                    command.row_icon(),
+                    command.shortcut(),
+                    enabled,
+                    false,
+                    current && enabled,
+                    theme,
+                )
+                .when(enabled, |row| {
+                    row.on_mouse_move(cx.listener(move |this, _, _, cx| {
+                        if nested {
+                            this.hover_menu(parent, true, index, cx);
+                        } else {
+                            this.hover_menu(index, false, 0, cx);
+                        }
+                    }))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.run_menu(command.clone(), window, cx);
+                    }))
+                })
+                .into_any_element()
+            }
+        }
+    }
+
     fn new_group(&mut self, cx: &mut Context<Self>) {
         let index = self.groups.add("");
         self.focused = Some(Row::Group(index));
@@ -1440,6 +1813,7 @@ impl Sidebar {
                 MouseButton::Middle,
                 cx.listener(move |this, _, _, cx| this.open(&middle_row.clone(), true, cx)),
             )
+            .on_mouse_down(MouseButton::Right, Self::menu_opener(Some(row.clone()), cx))
             .on_drag(dragged, |dragged, _, _, cx| {
                 cx.new(|_| DraggedPlace {
                     id: dragged.id.clone(),
@@ -1532,7 +1906,8 @@ impl Sidebar {
             this.focused = Some(click_row.clone());
             this.focus.focus(window, cx);
             this.open(&click_row.clone(), false, cx);
-        }));
+        }))
+        .on_mouse_down(MouseButton::Right, Self::menu_opener(Some(row.clone()), cx));
         let header = Self::drop_target(line, Some(row.clone()), theme, cx);
         let mut branch = div()
             .id(("group", index))
@@ -1714,9 +2089,25 @@ impl Render for Sidebar {
                     .line_height(px(text::HEADING_LINE))
                     .text_color(theme.text)
                     .child("Places"),
-            );
+            )
+            .child(
+                Button::new("new-group")
+                    .ghost()
+                    .with_size(px(size::SMALL_BUTTON))
+                    .size(px(size::SMALL_BUTTON))
+                    .child(
+                        Icon::new(gpui_kit::assets::IconName::ListPlus)
+                            .size(px(size::ICON))
+                            .text_color(theme.text_muted),
+                    )
+                    .accessibility_label("New group")
+                    .tooltip("New group (Ctrl+Shift+G)")
+                    .on_click(cx.listener(|this, _, _, cx| this.new_group(cx))),
+            )
+            .on_mouse_down(MouseButton::Right, Self::menu_opener(None, cx));
 
         let list = Self::drop_target(div().id("places-list"), None, theme, cx)
+            .on_mouse_down(MouseButton::Right, Self::menu_opener(None, cx))
             .flex()
             .flex_col()
             .flex_1()
@@ -1788,6 +2179,7 @@ impl Render for Sidebar {
             .line_height(px(text::LINE))
             .child(header)
             .child(list)
+            .children(self.menu_layer(theme, window, cx))
     }
 }
 

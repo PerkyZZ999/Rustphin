@@ -41,6 +41,7 @@ use crate::{
     layout::{self, Flow, Grid, Layout, Rect, Step, ViewMode},
     location::Location,
     menu::{self, MenuCommand, MenuEffect, MenuKey},
+    menu_view::{MenuAccept, MenuClose, MenuDown, MenuLeft, MenuRight, MenuUp},
     operations::{self, hub},
     remote,
     settings::Settings,
@@ -49,8 +50,6 @@ use crate::{
 };
 
 const KEY_CONTEXT: &str = "Browser";
-/// The selection's context menu, while it has the keyboard focus.
-const MENU_CONTEXT: &str = "ContextMenu";
 /// The only action inside an empty-folder message.
 const FOLDER_ACTION_CONTEXT: &str = "FolderStateAction";
 /// The browser while no text field inside it has focus.
@@ -114,12 +113,6 @@ actions!(
         Cut,
         Paste,
         OpenContextMenu,
-        MenuUp,
-        MenuDown,
-        MenuLeft,
-        MenuRight,
-        MenuAccept,
-        MenuClose,
         OpenTrash,
         RestoreTrash,
         EmptyTrash,
@@ -201,15 +194,6 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-d", Duplicate, list),
         KeyBinding::new("enter", ShowHidden, Some(FOLDER_ACTION_CONTEXT)),
         KeyBinding::new("space", ShowHidden, Some(FOLDER_ACTION_CONTEXT)),
-    ]);
-    let menu = Some(MENU_CONTEXT);
-    cx.bind_keys([
-        KeyBinding::new("up", MenuUp, menu),
-        KeyBinding::new("down", MenuDown, menu),
-        KeyBinding::new("left", MenuLeft, menu),
-        KeyBinding::new("right", MenuRight, menu),
-        KeyBinding::new("enter", MenuAccept, menu),
-        KeyBinding::new("escape", MenuClose, menu),
     ]);
 }
 
@@ -4030,6 +4014,7 @@ impl Browser {
             entries.get(state.cursor).and_then(|entry| match entry {
                 menu::MenuEntry::Submenu { items, .. } => Some(
                     self.menu_column(items, state.sub_cursor, true, "menu-apps", theme, cx)
+                        .mt(px(crate::menu_view::submenu_offset(&entries, state.cursor)))
                         .max_h(max_height),
                 ),
                 _ => None,
@@ -4071,7 +4056,7 @@ impl Browser {
                             .aria_description(
                                 "Up and Down choose an action. Enter runs it; Escape closes.",
                             )
-                            .key_context(MENU_CONTEXT)
+                            .key_context(crate::menu_view::CONTEXT)
                             .track_focus(&self.menu_focus)
                             .on_action(cx.listener(|this, _: &MenuUp, window, cx| {
                                 this.on_menu_key(MenuKey::Up, window, cx);
@@ -4118,23 +4103,10 @@ impl Browser {
             .iter()
             .enumerate()
             .map(|(index, entry)| self.menu_row(entry, index, cursor, nested, theme, cx));
-        div()
-            .id(column)
+        crate::menu_view::column(column, theme)
             .when(nested, |column| {
                 column.role(Role::Menu).aria_label("Open with applications")
             })
-            .flex()
-            .flex_col()
-            .w(px(size::MENU))
-            .overflow_y_scroll()
-            .p(px(space::XS))
-            .rounded(px(size::RADIUS))
-            .bg(theme.raised)
-            .border_1()
-            .border_color(theme.border_accent)
-            .shadow(vec![theme.floating_shadow()])
-            .font_family(text::FAMILY_BODY)
-            .text_size(px(text::BODY))
             .children(rows)
     }
 
@@ -4159,7 +4131,7 @@ impl Browser {
                 .my(px(space::XS))
                 .bg(theme.border)
                 .into_any_element(),
-            menu::MenuEntry::Submenu { label, .. } => Self::menu_button(
+            menu::MenuEntry::Submenu { label, .. } => crate::menu_view::row(
                 label,
                 menu::RowIcon::Symbol(gpui_kit::assets::IconName::AppWindow),
                 None,
@@ -4200,7 +4172,7 @@ impl Browser {
             } => {
                 let command = command.clone();
                 let enabled = *enabled;
-                Self::menu_button(
+                crate::menu_view::row(
                     label,
                     command.row_icon(),
                     command.shortcut(),
@@ -4261,98 +4233,6 @@ impl Browser {
                 }
             });
         }
-    }
-
-    fn menu_button(
-        label: &str,
-        icon: menu::RowIcon,
-        key: Option<&'static str>,
-        enabled: bool,
-        submenu: bool,
-        current: bool,
-        theme: Theme,
-    ) -> gpui_kit::Stateful<gpui_kit::Div> {
-        let quiet = if current {
-            theme.on_selection
-        } else if enabled {
-            theme.text_muted
-        } else {
-            theme.text_disabled
-        };
-        div()
-            .id(SharedString::from(format!(
-                "menu-{}-{label}",
-                if submenu { "sub" } else { "item" },
-            )))
-            .role(Role::MenuItem)
-            .aria_label(label.to_owned())
-            .when(!enabled, |row| {
-                row.aria_description("Unavailable.")
-                    .a11y_synthetic_children(|builder| builder.parent_node().set_disabled())
-            })
-            .when(submenu, |row| {
-                row.a11y_synthetic_children(|builder| {
-                    builder
-                        .parent_node()
-                        .set_has_popup(gpui_kit::accesskit::HasPopup::Menu)
-                })
-            })
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(px(space::MD))
-            .h(px(size::MENU_ROW))
-            .px(px(space::SM - size::SELECTION_BAR))
-            .rounded(px(size::RADIUS))
-            .border_l(px(size::SELECTION_BAR))
-            .border_color(gpui_kit::transparent_black())
-            .when(current, |row| row.border_color(theme.accent))
-            .when(current, |row| {
-                row.bg(theme.selection).text_color(theme.on_selection)
-            })
-            .when(!current && enabled, |row| row.text_color(theme.text))
-            .when(!enabled, |row| row.text_color(theme.text_disabled))
-            .child(match icon {
-                menu::RowIcon::Symbol(icon) => Icon::new(icon)
-                    .size(px(size::ICON))
-                    .flex_none()
-                    .into_any_element(),
-                // A file the renderer cannot draw falls back to the outline.
-                menu::RowIcon::Image(path) => {
-                    use gpui_kit::StyledImage as _;
-                    img(path)
-                        .size(px(size::ICON))
-                        .flex_none()
-                        .with_fallback(|| {
-                            Icon::new(gpui_kit::assets::IconName::AppWindow)
-                                .size(px(size::ICON))
-                                .into_any_element()
-                        })
-                        .into_any_element()
-                }
-            })
-            .child(div().flex_1().min_w_0().truncate().child(label.to_owned()))
-            .when_some(key, |row, key| {
-                row.child(
-                    div()
-                        .flex_none()
-                        .font_family(text::FAMILY_DATA)
-                        .text_size(px(text::SMALL))
-                        .text_color(quiet)
-                        .child(key),
-                )
-            })
-            .when(submenu, |row| {
-                row.child(
-                    Icon::new(IconName::ChevronRight)
-                        .size(px(size::ICON_SMALL))
-                        .text_color(if current {
-                            theme.on_selection
-                        } else {
-                            theme.text_muted
-                        }),
-                )
-            })
     }
 }
 

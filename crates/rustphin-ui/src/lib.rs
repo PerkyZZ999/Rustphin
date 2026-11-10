@@ -18,8 +18,10 @@ mod launch;
 mod layout;
 mod location;
 mod menu;
+mod menu_view;
 mod operations;
 mod palette;
+mod place_menu;
 mod properties;
 mod recovery;
 mod remote;
@@ -109,6 +111,7 @@ pub fn run(options: Options) {
             palette::bind_keys(cx);
             thumbs::init(cx);
             browser::bind_keys(cx);
+            menu_view::bind_keys(cx);
             workspace::bind_keys(cx);
             sidebar::bind_keys(cx);
             cx.on_window_closed(|cx, _| {

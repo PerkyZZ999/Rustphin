@@ -614,7 +614,9 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   Trash shows as "Trash", the way Places names it, not `trash:/`; Ctrl+L
   still edits the address as text.
 - **Places panel:** 240 px on the left (F9 hides it); a 36 px title row
-  "Places", so its hairline lines up with the tab strip's; rows 28 px with
+  "Places" with a 28 px ghost "New group" button on its right (Lucide
+  `list-plus`, tooltip "New group (Ctrl+Shift+G)"), so its hairline lines up
+  with the tab strip's; rows 28 px with
   16 px icons and a 12 px inset; section headings 28 px; device rows 48 px. The panel scrolls on its own.
 - **Details view:** 28 px heading row; columns name (fills), size (96 px,
   right-aligned), modified (168 px), type (160 px); 8 px side gutter; rows
@@ -700,6 +702,15 @@ stands unless he changes it. There are no pills and no circles.
   when folded; a folded section shows its count ("Network (2)"). Places in a
   group are indented one step. Hidden places, when listed, are at half opacity.
   Network bookmarks use the `server` icon.
+- **Places menu (W-102):** a right-click in the panel opens a menu with the
+  context menu's look and keys. On a place: Open (Enter), Open in new tab;
+  "Move to group ›" (each group, the place's own disabled, then "New group…"
+  and, for a grouped place, "Out of groups"), Move up (Alt+Up), Move down
+  (Alt+Down); Rename (F2), Hide or Show (H), Remove from places (Del; not for
+  KDE's own places). On a group heading: Collapse or Expand (Left/Right); Move
+  up, Move down; Rename group (F2), Delete group (Del; its places stay). On
+  empty space or the title: New group (Ctrl+Shift+G), Add to places (the
+  folder shown, Ctrl+Shift+D); Show or Hide hidden places. Volumes have no menu.
 - **Device rows:** 48 px: a drive icon, the name and mount point ("Data
   (/data)") in `body-md`, a 4 px usage bar (`secondary` on `track`), and
   "1.8 of 3.6 TiB free" in `data-sm` `text-muted`; when the two units differ
@@ -954,6 +965,8 @@ except where the list below says otherwise; each W-079 step adds its line.
   GPUI ignores a variable font's weight axis. Headings render semibold as
   drawn. Weights not listed in the typography tokens fall back to the
   nearest bundled or installed face.
+- Places menu and the "New group" button (W-102), and second menus that
+  line up with the row that opens them.
 - Not yet implemented: the volume name after the
   free space; per-command palette icons; icons and sizes in a question's list of names; tab overflow; the
   design's offset focus ring on buttons (the library draws its own); saving

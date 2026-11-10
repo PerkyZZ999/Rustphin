@@ -1,5 +1,14 @@
 # Validation evidence
 
+### 2026-11-10 — W-102 places menu and New group button
+- **Why:** The maintainer asked whether categories of places existed. They do (R-012 place groups, slice S6), but only Ctrl+Shift+G (with the panel focused) and the palette reached them.
+- **Code:** `menu` is generic over the command a row runs (`MenuEntry<C>`, `MenuEffect<C>`, the `Command` trait); the menu's look and keys moved to `menu_view` (shared by the file view and the panel). `place_menu` decides the panel's menus: on a place, on a group heading, on empty space. The panel draws it with the same keys (Up, Down, Left, Right, Enter, Escape), closes it when it loses focus, and runs each row through the panel's existing operations. The title row has a ghost "New group" button (`list-plus`). Second menus, here and in "Open with", now start level with the row that opens them.
+- **Tests:** 7 in `place_menu` (sorting into any group or a new one; a grouped place can leave and its own group is greyed; without groups a place can still start one; KDE's own places are hidden, not removed; hidden places can be shown; group heading rows; empty-space rows; shortcuts shown) and `a_second_menu_starts_level_with_the_row_that_opened_it`. With the own-group check and the system-place check broken, two tests failed.
+- **On screen (PM1–PM5):** isolated home: the button showed in the title; right-click on `rustphin` gave the menu; Move to group › New group…, typing "Projects" and Return made the group with `rustphin` in it; `website` joined through Move to group › Projects, the second menu level with its row after the fix; the heading's menu folded the group with Enter to "Projects (2)"; empty space gave New group, Add to places, Show hidden places. `place-groups.toml` held the group with both ids, and `user-places.xbel` still held its four places.
+- **Found and fixed on the way:** "Add the folder shown" was cut off beside its shortcut (now "Add to places", Dolphin's wording); the second menu opened at the top of the column.
+- **Not done:** opening the panel's menu from the keyboard (every row's action has its own key in the panel already); nested groups (groups inside groups) are not part of R-012.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-101 places Dolphin keeps to itself
 - **Cause:** The maintainer's places file (read, not changed) marks NAS `<OnlyInApp>dolphin</OnlyInApp>`; Dolphin adds this to places created inside it. The panel showed only places with no such mark or marked `rustphin`. LAPTOP and OVHCloud VPS carry no mark, which is why they showed.
 - **Code:** `sidebar::is_shown` also accepts places marked `dolphin`, since Rustphin stands in for Dolphin (as Dolphin does, it shows them). Places kept by any other application stay hidden.

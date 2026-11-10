@@ -67,15 +67,34 @@ pub enum MenuCommand {
     NewFile,
 }
 
+/// What a menu row runs: the file view's operations, or the places
+/// panel's (`sidebar::PlaceCommand`).
+pub trait Command: Clone {
+    /// The key that does the same outside the menu, as the row shows it.
+    fn shortcut(&self) -> Option<&'static str>;
+    /// What the row shows before its words.
+    fn row_icon(&self) -> RowIcon;
+}
+
+impl Command for MenuCommand {
+    fn shortcut(&self) -> Option<&'static str> {
+        MenuCommand::shortcut(self)
+    }
+
+    fn row_icon(&self) -> RowIcon {
+        MenuCommand::row_icon(self)
+    }
+}
+
 /// One row of a menu.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MenuEntry {
+pub enum MenuEntry<C = MenuCommand> {
     /// An operation. Disabled rows are shown and skipped by the keyboard.
     Item {
         /// The words on the row.
         label: String,
         /// What choosing it does.
-        command: MenuCommand,
+        command: C,
         /// Whether it can be chosen.
         enabled: bool,
     },
@@ -84,7 +103,7 @@ pub enum MenuEntry {
         /// The words on the row.
         label: String,
         /// The rows of the second menu.
-        items: Vec<MenuEntry>,
+        items: Vec<MenuEntry<C>>,
     },
     /// A hairline between groups.
     Separator,
@@ -145,7 +164,7 @@ impl MenuCommand {
     }
 }
 
-impl MenuEntry {
+impl<C> MenuEntry<C> {
     fn enabled_choice(&self) -> bool {
         match self {
             Self::Item { enabled, .. } => *enabled,
@@ -154,7 +173,7 @@ impl MenuEntry {
         }
     }
 
-    fn command(&self) -> Option<&MenuCommand> {
+    fn command(&self) -> Option<&C> {
         match self {
             Self::Item {
                 command, enabled, ..
@@ -224,7 +243,7 @@ pub fn trash_actions(
 
 /// The height of a menu column: `row` for each item or submenu row,
 /// `separator` for each separator, plus `chrome` for padding and borders.
-pub fn column_height(entries: &[MenuEntry], row: f32, separator: f32, chrome: f32) -> f32 {
+pub fn column_height<C>(entries: &[MenuEntry<C>], row: f32, separator: f32, chrome: f32) -> f32 {
     entries
         .iter()
         .map(|entry| match entry {
@@ -346,17 +365,17 @@ pub enum MenuKey {
 
 /// What a key did.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MenuEffect {
+pub enum MenuEffect<C = MenuCommand> {
     /// The cursor moved, or a key did nothing.
     Stay,
     /// Close the menu without running anything.
     Close,
     /// Close the menu and run this.
-    Run(MenuCommand),
+    Run(C),
 }
 
 /// The first row the keyboard can land on.
-pub fn initial(entries: &[MenuEntry]) -> Option<MenuState> {
+pub fn initial<C>(entries: &[MenuEntry<C>]) -> Option<MenuState> {
     Some(MenuState {
         cursor: first_selectable(entries)?,
         submenu: false,
@@ -365,7 +384,11 @@ pub fn initial(entries: &[MenuEntry]) -> Option<MenuState> {
 }
 
 /// Moves the cursor or runs the current row.
-pub fn on_key(entries: &[MenuEntry], state: &mut MenuState, key: MenuKey) -> MenuEffect {
+pub fn on_key<C: Clone>(
+    entries: &[MenuEntry<C>],
+    state: &mut MenuState,
+    key: MenuKey,
+) -> MenuEffect<C> {
     let Some(entry) = entries.get(state.cursor) else {
         return MenuEffect::Close;
     };
@@ -431,11 +454,11 @@ pub fn on_key(entries: &[MenuEntry], state: &mut MenuState, key: MenuKey) -> Men
     }
 }
 
-fn first_selectable(entries: &[MenuEntry]) -> Option<usize> {
+fn first_selectable<C>(entries: &[MenuEntry<C>]) -> Option<usize> {
     entries.iter().position(MenuEntry::enabled_choice)
 }
 
-fn step(entries: &[MenuEntry], from: usize, forward: bool) -> usize {
+fn step<C>(entries: &[MenuEntry<C>], from: usize, forward: bool) -> usize {
     let selectable: Vec<usize> = entries
         .iter()
         .enumerate()
@@ -459,7 +482,7 @@ fn step(entries: &[MenuEntry], from: usize, forward: bool) -> usize {
 
 /// The words on the top-level rows, separators included as an empty string.
 #[cfg(test)]
-fn labels(entries: &[MenuEntry]) -> Vec<&str> {
+pub(crate) fn labels<C>(entries: &[MenuEntry<C>]) -> Vec<&str> {
     entries
         .iter()
         .map(|entry| match entry {

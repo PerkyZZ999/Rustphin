@@ -390,3 +390,15 @@ stand-in on the session's own bus, over a sandbox in the isolated home:
 | ID | Steps | Expected |
 |---|---|---|
 | HV1 | In each of Details, Icons and Compact, move the pointer from outside the window onto an entry, then onto the next one, without pressing | The `hover` fill appears under the pointer and moves with it; nothing else changes |
+
+## Places menu (W-102)
+
+Isolated home with a places file holding Home (a system item) and three folders.
+
+| ID | Steps | Expected |
+|---|---|---|
+| PM1 | Look at the Places title; right-click a folder place | A "New group" button with its tooltip; a menu with Open, Open in new tab, Move to group ›, Move up, Move down, Rename (F2), Hide (H), Remove from places (Del), in the context menu's look |
+| PM2 | Move to group › New group…, type a name, Return | A group with that name holds the place; `place-groups.toml` lists it; `user-places.xbel` keeps every place |
+| PM3 | Right-click another place, Move to group › the group | The second menu starts level with "Move to group"; the place joins the group, the group's own entry is greyed for its members |
+| PM4 | Right-click the group heading, Enter | Collapse, Move up/down, Rename group, Delete group; Enter folds it to "Name (2)" |
+| PM5 | Right-click empty space in the panel | New group (Ctrl+Shift+G), Add to places (Ctrl+Shift+D), Show hidden places |
