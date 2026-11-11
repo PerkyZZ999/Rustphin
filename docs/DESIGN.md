@@ -705,7 +705,11 @@ stands unless he changes it. There are no pills and no circles.
   `primary-bright` icon. Section headings ("Devices", group names) in
   `body-strong` `text-muted` with a chevron that points down when open and right
   when folded; a folded section shows its count ("Network (2)"). Places in a
-  group are indented one step. Hidden places, when listed, are at half opacity.
+  group are indented one step. A group heading can be dragged: dropped on
+  another heading, or on a place in that group, it takes that group's place
+  (W-105); while dragged its name follows the pointer as a chip in the
+  selection colours and the heading under it takes the `hover` fill. Hidden
+  places, when listed, are at half opacity.
   Network bookmarks use the `server` icon.
 - **Places menu (W-102):** a right-click in the panel opens a menu with the
   context menu's look and keys. On a place: Open (Enter), Open in new tab;

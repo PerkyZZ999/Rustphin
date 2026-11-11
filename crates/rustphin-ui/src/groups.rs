@@ -132,6 +132,18 @@ impl Groups {
         target
     }
 
+    /// Moves the group at `from` to `to`, taking that group's place, as a
+    /// group dragged onto another's heading does. Returns where it went.
+    pub fn move_group(&mut self, from: usize, to: usize) -> usize {
+        if from >= self.groups.len() {
+            return from;
+        }
+        let to = to.min(self.groups.len() - 1);
+        let group = self.groups.remove(from);
+        self.groups.insert(to, group);
+        to
+    }
+
     /// Folds or unfolds a group.
     pub fn set_collapsed(&mut self, index: usize, collapsed: bool) {
         if let Some(group) = self.groups.get_mut(index) {
@@ -264,6 +276,23 @@ mod tests {
 
     fn expected(spec: &[(&str, &[&str])]) -> Vec<(String, Vec<String>)> {
         shape(&groups(spec))
+    }
+
+    #[test]
+    fn a_dragged_group_takes_the_place_of_the_one_it_is_dropped_on() {
+        let names = |g: &Groups| g.groups.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+        let mut g = groups(&[("A", &["1"]), ("B", &[]), ("C", &["2"])]);
+        assert_eq!(g.move_group(0, 2), 2);
+        assert_eq!(names(&g), ["B", "C", "A"]);
+        assert_eq!(g.move_group(2, 0), 0);
+        assert_eq!(names(&g), ["A", "B", "C"]);
+        // A group keeps its places on the way.
+        assert_eq!(g.groups[0].places, ["1"]);
+        // Past the end lands last; a group that is not there moves nothing.
+        assert_eq!(g.move_group(0, 9), 2);
+        assert_eq!(names(&g), ["B", "C", "A"]);
+        assert_eq!(g.move_group(7, 0), 7);
+        assert_eq!(names(&g), ["B", "C", "A"]);
     }
 
     #[test]

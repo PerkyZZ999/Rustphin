@@ -22,6 +22,10 @@ S11 — Hardening for daily use (in progress)
 - [x] W-085 — Count dropped frames (interval > 1.5 × refresh period) in the frame log and re-measure the three views of 500,000 entries against D-019 (≤ 5%). Refresh period from `Window::refresh_interval` (60 Hz assumed and logged when unknown); per-summary counts and a whole-run "scroll benchmark result" verdict. All three views pass.
 - [x] W-076s — Ctrl+L selects the whole location so typing replaces it, and Ctrl+L again with everything selected returns to the view, as Dolphin's replaceLocation (found while timing W-073g; K19).
 
+## Later (requested, not scheduled)
+
+- [ ] W-106 — Settings window with a Toolbar page to customize the toolbar entirely, as Dolphin's "Configure Toolbars…" (the maintainer, 2026-11-11). Needs a requirement and a design approved by the maintainer first; see ROADMAP.md "Later".
+
 ## Test-run refinements (the maintainer's findings, 2026-11-10; docs/project/TEST_RUN.md)
 
 - [x] W-090 — Scrollbars on the details, icons and compact views (vertical; horizontal in compact). Done 2026-11-10 (see VALIDATION.md).
@@ -39,6 +43,7 @@ S11 — Hardening for daily use (in progress)
 - [x] W-100 — Hover feedback on entries in the details, icons and compact views. On the maintainer's desktop the 7% `hover` fill shows only while the mouse button is pressed, not on plain hovering (his screenshot, 2026-11-10): find why, then make hovering visible.
 - [x] W-101 — the maintainer has three network folders in Dolphin but Rustphin's Remote section shows two; NAS is missing (2026-11-10).
 - [x] W-102 — Place groups were hard to find: only Ctrl+Shift+G and the palette reached them (the maintainer asked on 2026-11-10 whether categories of places existed; they are R-012, built in S6). A "New group" button in the Places title and a right-click menu on places, group headings and empty space, with "Move to group ›". Done 2026-11-10.
+- [x] W-105 — Reorder place groups by dragging a group heading onto another heading, or onto a place in that group (the maintainer, 2026-11-11). Done 2026-11-11.
 - [x] W-104 — The window buttons sometimes stayed pressed and needed a second click (the maintainer, 2026-11-10): a press on them also armed the title bar's drag, so the slightest movement before the release started a window move and the button never got its release. Done 2026-11-10.
 - [x] W-103 — DESIGN.md leftovers: volume name after the free space, per-command palette icons, icons and sizes in the delete question's names, tab overflow (shrink to 96 px, then scroll; close button on the active tab only when narrow), Devices and Remote folds kept between runs. The kit's shadow band is now left out of width measurements. Done 2026-11-10.
 - [x] W-097 — Icons on buttons wherever they help recognition (iconography skill). Dialog, banner and notice buttons with a clear picture lead with the action's menu or toolbar icon; Cancel, Close and Stop stay words. Done 2026-11-10.

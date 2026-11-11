@@ -95,6 +95,13 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Inputs:** [`DESIGN_BRIEF.md`](DESIGN_BRIEF.md), [`INFORMATION_ARCHITECTURE.md`](INFORMATION_ARCHITECTURE.md), the maintainer's HTML mockups in [`../mockup/`](../mockup/) (34 screens, 2026-11-08) and [`../DESIGN.md`](../DESIGN.md), which W-079 adopted from the target on 2026-11-08 with the mockup's changes.
 - **Status:** in progress since 2026-11-08 (D-024: started before the remaining S11 criteria close). Steps W-079a–g in WORK_ITEMS.md.
 
+## Later — Settings window with toolbar customization (W-106)
+
+- **Requested:** The maintainer, 2026-11-11, for later; not started.
+- **What:** a Settings window (Dolphin's "Configure Rustphin…") whose first page is **Toolbar**: the user rebuilds the toolbar as they want it, as Dolphin's "Configure Toolbars…" allows. A list of available actions beside the toolbar's current actions; add, remove and reorder them (drag or buttons); separators; per action icon only or icon and text; restore the defaults. The result is saved in Rustphin's own config and applied at once.
+- **Before building:** a requirement with acceptance criteria and a design for the maintainer to approve (pages, mockup, how the responsive toolbar rules of W-096 apply to a customized toolbar, where the settings are stored). It adds scope beyond the MVP, so it waits until the maintainer schedules it.
+- **Status:** planned.
+
 ## Traceability
 
 | Requirement | Slice(s) | Validation |

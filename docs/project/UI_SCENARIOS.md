@@ -419,3 +419,13 @@ Isolated home with a places file holding Home (a system item) and three folders.
 | DL3 | Ctrl+Shift+P, type "files" | Each result has its own icon (file-plus, folder-plus, info, scissors, link, copy, copy-plus) |
 | DL4 | Select a folder and two files, Shift+Del | The list shows a folder icon for the folder, file icons and sizes for the files |
 | DL5 | Fold Devices, quit, start again | Devices is still folded ("Devices (n)"); `place-groups.toml` has `devices_folded = true` |
+
+## Reordering groups (W-105)
+
+Isolated home with three places, each in its own group: Work, Music, Photos.
+
+| ID | Steps | Expected |
+|---|---|---|
+| RG1 | Drag the Work heading onto the Photos heading (waypoints with pauses) | While dragging, a "Work" chip follows the pointer and the Photos heading takes the hover fill; afterwards the order is Music, Photos, Work, Work keeps its place and stays unfolded, and `place-groups.toml` lists the groups in that order |
+| RG2 | Drag the Work heading onto the place inside Music | Work goes first: Work, Music, Photos |
+| RG3 | Drag a place onto the Work heading | The place joins Work, as before |

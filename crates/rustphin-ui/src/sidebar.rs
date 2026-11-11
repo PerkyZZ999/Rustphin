@@ -121,6 +121,27 @@ enum Row {
     Remote,
 }
 
+/// A group heading being dragged to reorder the groups (W-105).
+struct DraggedGroup {
+    index: usize,
+    name: SharedString,
+}
+
+impl Render for DraggedGroup {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = *cx.global::<Theme>();
+        div()
+            .px(px(space::MD))
+            .py(px(space::XS))
+            .rounded(px(size::RADIUS))
+            .bg(theme.selection)
+            .text_color(theme.on_selection)
+            .font_family(text::FAMILY_BODY)
+            .text_size(px(text::SMALL))
+            .child(self.name.clone())
+    }
+}
+
 /// A place being dragged within the panel.
 struct DraggedPlace {
     id: String,
@@ -1617,6 +1638,23 @@ impl Sidebar {
         }
     }
 
+    /// The group at `from` was dropped on `target`: it takes the place of
+    /// the group there, or of the group holding the place there.
+    fn drop_group(&mut self, from: usize, target: &Row, cx: &mut Context<Self>) {
+        let to = match target {
+            Row::Group(index) => Some(*index),
+            Row::Place(id) => self.groups.group_of(id),
+            Row::Device(_) | Row::Devices | Row::Remote => None,
+        };
+        let Some(to) = to.filter(|to| *to != from) else {
+            return;
+        };
+        let at = self.groups.move_group(from, to);
+        self.focused = Some(Row::Group(at));
+        self.save_groups(cx);
+        cx.notify();
+    }
+
     /// Folders dragged from a file view were dropped on `target`, or on the
     /// panel itself.
     fn drop_folders(
@@ -1659,6 +1697,23 @@ impl Sidebar {
                     style.bg(theme.hover)
                 } else {
                     style
+                }
+            })
+            .drag_over::<DraggedGroup>(move |style, _, _, _| {
+                if highlight {
+                    style.bg(theme.hover)
+                } else {
+                    style
+                }
+            })
+            .on_drop({
+                let panel = panel.clone();
+                let target = target.clone();
+                move |dragged: &DraggedGroup, _, cx| {
+                    if let Some(target) = &target {
+                        let _ = panel
+                            .update(cx, |panel, cx| panel.drop_group(dragged.index, target, cx));
+                    }
                 }
             })
             .on_drop({
@@ -1918,7 +1973,19 @@ impl Sidebar {
             this.focus.focus(window, cx);
             this.open(&click_row.clone(), false, cx);
         }))
-        .on_mouse_down(MouseButton::Right, Self::menu_opener(Some(row.clone()), cx));
+        .on_mouse_down(MouseButton::Right, Self::menu_opener(Some(row.clone()), cx))
+        .on_drag(
+            DraggedGroup {
+                index,
+                name: name.to_owned().into(),
+            },
+            |dragged, _, _, cx| {
+                cx.new(|_| DraggedGroup {
+                    index: dragged.index,
+                    name: dragged.name.clone(),
+                })
+            },
+        );
         let header = Self::drop_target(line, Some(row.clone()), theme, cx);
         let mut branch = div()
             .id(("group", index))

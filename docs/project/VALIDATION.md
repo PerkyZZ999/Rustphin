@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-11 — W-105 reorder place groups by dragging; W-106 recorded
+- **Code:** `Groups::move_group(from, to)`: the dragged group takes the place of the one dropped on (past the end lands last; a missing group moves nothing). Group headings are drag sources (`DraggedGroup`, a chip with the name); every panel drop target accepts a group: on a heading it moves there, on a place it moves to that place's group, elsewhere nothing. The order is saved with the groups. Alt+Up/Down and the menu's Move up/down still move groups by one.
+- **Tests:** `a_dragged_group_takes_the_place_of_the_one_it_is_dropped_on`; with the insert position broken it failed.
+- **On screen (RG1–RG3):** isolated session with groups Work, Music, Photos: dragging Work onto Photos showed the chip and the highlighted heading, then gave Music, Photos, Work with Work still unfolded; dragging Work onto the place `b` in Music gave Work, Music, Photos; `place-groups.toml` matched each time; dragging the place `c` onto Work still moved it into Work.
+- **W-106:** The maintainer's request for a Settings window with toolbar customization is recorded in ROADMAP.md ("Later") and WORK_ITEMS.md; not started, needs a requirement and an approved design.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-10 — W-104 window buttons that stayed pressed
 - **Report:** The maintainer: Minimise, Maximise and Close sometimes stay pressed and need a second click.
 - **Cause:** the title bar armed its drag on any left press inside it, the window buttons' included; the first pointer movement before the release then called `start_window_move`, the compositor took the pointer, and the button never received its release. A perfectly still click worked, hence "sometimes".
