@@ -24,7 +24,7 @@ S11 — Hardening for daily use (in progress)
 
 ## Later (requested, not scheduled)
 
-- [ ] W-106 — Settings window with a Toolbar page to customize the toolbar entirely, as Dolphin's "Configure Toolbars…" (the maintainer, 2026-11-11). Needs a requirement and a design approved by the maintainer first; see ROADMAP.md "Later".
+- [ ] W-106 — Settings window with a Toolbar page to customize the toolbar entirely, as Dolphin's "Configure Toolbars…" (the maintainer, 2026-11-11). Needs a requirement and a design approved by the maintainer first; see ROADMAP.md "Later". 2026-11-12: the maintainer asked for the whole window to be planned (General, Appearance, Customizations, About, …); proposal in docs/project/SETTINGS_PLAN.md, waiting for his answers to its five decisions.
 
 ## Test-run refinements (the maintainer's findings, 2026-11-10; docs/project/TEST_RUN.md)
 
