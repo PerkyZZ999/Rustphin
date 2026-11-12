@@ -168,6 +168,16 @@ Conventions:
   - [x] A properties view shows name, type, size (computed in the background for folders), times and permissions, and can change permissions.
 - **Validation:** isolated desktop scenarios I2–I9, I11 and I13; observed in W-068 (2026-10-19), with limits in VALIDATION.md.
 
+### R-019 — Settings window (after the MVP, D-029)
+- **Priority:** could (requested by the maintainer on 2026-11-12, beyond the MVP)
+- **Acceptance:**
+  - [ ] "Settings…" in the Actions menu, the palette command and Ctrl+Shift+, open one Settings dialog over the window with General, Appearance, Views, Toolbar, Places, Confirmations, Shortcuts and About pages, reachable by mouse and keyboard.
+  - [ ] Every change applies at once in every window and survives a restart; each page can be reset to its defaults; a damaged or newer settings file never stops Rustphin starting and is never overwritten.
+  - [ ] The Toolbar page adds, removes and reorders toolbar actions and separators, chooses icon only or icon and words per action, and restores the default toolbar; the responsive rules still apply.
+  - [ ] Each page's settings do what SETTINGS_PLAN.md describes, with today's behaviour as the default.
+  - [ ] About shows the version, the licence text, credits and where Rustphin keeps its files; nothing is fetched from the network.
+- **Validation:** unit tests of the settings model (defaults, parsing, migration from version 2); isolated desktop scenarios per page; mockups approved by the maintainer first (W-106a).
+
 ## MVP — non-functional
 
 ### R-101 — Responsiveness at scale

@@ -267,3 +267,11 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** as ADMIN_MODE.md proposes. Rustphin talks to KDE's `org.kde.kio.admin` helper directly over the system bus, as Dolphin's admin worker does, behind an `AdminFs` implementation of the core's `Fs` trait (not kio-fuse, not a helper of its own). The mode covers the whole window and is never saved. In the mode delete is always permanent with confirmation, there are no live updates, no thumbnails and no batch rename; names that do not round-trip as UTF-8 are refused.
 - **Confirmed by / date:** The maintainer, 2026-11-10 ("Approve as written")
 - **Supersedes / superseded by:** completes D-027
+
+## D-029 — A Settings window, as planned in SETTINGS_PLAN.md
+- **Status:** decided
+- **Date:** 2026-11-12
+- **Context:** The maintainer asked for a Settings window with several pages (General, Appearance, Customizations, About, …) and for a plan before building; docs/project/SETTINGS_PLAN.md is that plan, with five open decisions.
+- **Decision:** as SETTINGS_PLAN.md proposes. A dialog over the window (as Properties, D-017), opened by "Settings…" in the Actions menu, the palette and Ctrl+Shift+,; a page list on the left; changes apply at once, with "Reset to defaults" on each page and no OK/Apply. Eight pages: General, Appearance, Views, Toolbar (customisation, W-106), Places, Confirmations, Shortcuts (read-only first), About. "Remember the view for each folder" is offered as an option, off by default. Settings stay in `settings.toml` (version 3). Mockups are approved before building (W-106a), then W-106b–g.
+- **Confirmed by / date:** The maintainer, 2026-11-12 ("Approve as written")
+- **Supersedes / superseded by:** widens W-106 (toolbar customisation) into the whole Settings window; adds scope beyond the MVP at the maintainer's request
