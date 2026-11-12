@@ -534,3 +534,14 @@ Isolated home with `~/.config/rustphin/place-groups.toml` holding two empty grou
 | PL5 | Delete Media; Escape | `place-groups.toml` holds only Projects; `[places]` has devices false, width 360 |
 | PL6 | Drag the panel's right edge | The width follows the pointer within 200–360 px (not seen yet: the drag tool was refused) |
 | PL7 | Settings, Places, Reset to defaults | `[places]` back to devices and remote on, hidden kept hidden, 240; the groups stay |
+
+### Toolbar page (W-106f)
+
+| ID | Steps | Expected |
+|---|---|---|
+| TB10 | Start with no `[toolbar]` in the settings | The toolbar as before W-106f: shield, Back, Forward, Up, Reload, location, New, terminal, View, Split, hidden, Filter, "Actions ⌄" (no key hint at the default 920 px window) |
+| TB11 | Settings, Toolbar | A preview of the items; "Available actions" (search, Separator, then the palette's commands; nothing already on the toolbar); "On the toolbar" in order, Location and Actions marked "always there"; Add and Remove between them |
+| TB12 | Search `copy location`, choose it, Add | "Files: Copy location" goes before Actions; the preview and the real toolbar show its icon; the search list says nothing else matches |
+| TB13 | Choose Back on the toolbar; Page Down; tick Show its words; Move right; choose Act as administrator, Remove; Escape | The toolbar reads Forward, "← Back", Up…; no shield, and the separator left first is not drawn; `[toolbar]` lists the items and `words = ["back"]` |
+| TB14 | Click the copy-location button with nothing selected | It runs as from the palette: "Select an item to copy its location." |
+| TB15 | Settings, Toolbar, Reset to defaults | `[toolbar]` empty; the toolbar as in TB10 |

@@ -1,6 +1,6 @@
 //! The browser view: toolbar, entry list and status line for one location.
 
-use crate::controls::{Outlined as _, tool_button};
+use crate::controls::{Outlined as _, tool_button, tool_button_words};
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
@@ -2797,11 +2797,12 @@ impl Browser {
     /// window places them between its own buttons, across its whole width.
     pub(crate) fn toolbar_parts(
         &mut self,
-        layout: ToolbarLayout,
+        look: &crate::toolbar_items::Look,
         theme: Theme,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> ToolbarParts {
+        use crate::toolbar_items::Item;
         let can_back = self.model.as_ref().is_some_and(DirectoryModel::can_go_back);
         let can_forward = self
             .model
@@ -2814,77 +2815,65 @@ impl Browser {
             .model
             .as_ref()
             .is_some_and(|model| model.options().show_hidden);
+        let words = |item: Item| look.words_of(&item);
         // Each button gives the keyboard back to this pane, so its keys
         // keep working after a click.
-        let navigation = div()
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(px(space::XS))
-            .when(layout.back, |group| {
-                group.child(
-                    tool_button(
-                        "back",
-                        gpui_kit::assets::IconName::ArrowLeft,
-                        "Back (Alt+Left)",
-                        can_back,
-                        None,
-                        &theme,
-                    )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.navigate(DirectoryModel::back, cx);
-                        this.focus(window, cx);
-                    })),
-                )
-            })
-            .when(layout.forward_and_up, |group| {
-                group
-                    .child(
-                        tool_button(
-                            "forward",
-                            gpui_kit::assets::IconName::ArrowRight,
-                            "Forward (Alt+Right)",
-                            can_forward,
-                            None,
-                            &theme,
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.navigate(DirectoryModel::forward, cx);
-                            this.focus(window, cx);
-                        })),
-                    )
-                    .child(
-                        tool_button(
-                            "up",
-                            gpui_kit::assets::IconName::ArrowUp,
-                            "Up one folder (Alt+Up)",
-                            can_up,
-                            None,
-                            &theme,
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.go_up(cx);
-                            this.focus(window, cx);
-                        })),
-                    )
-            })
-            .when(layout.tools, |group| {
-                group.child(
-                    tool_button(
-                        "reload",
-                        gpui_kit::assets::IconName::RefreshCw,
-                        "Reload (F5)",
-                        location.is_some(),
-                        None,
-                        &theme,
-                    )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.navigate(DirectoryModel::reload, cx);
-                        this.focus(window, cx);
-                    })),
-                )
-            })
-            .into_any_element();
+        let back = tool_button_words(
+            "back",
+            gpui_kit::assets::IconName::ArrowLeft,
+            "Back (Alt+Left)",
+            words(Item::Back),
+            can_back,
+            None,
+            &theme,
+        )
+        .on_click(cx.listener(|this, _, window, cx| {
+            this.navigate(DirectoryModel::back, cx);
+            this.focus(window, cx);
+        }))
+        .into_any_element();
+        let forward = tool_button_words(
+            "forward",
+            gpui_kit::assets::IconName::ArrowRight,
+            "Forward (Alt+Right)",
+            words(Item::Forward),
+            can_forward,
+            None,
+            &theme,
+        )
+        .on_click(cx.listener(|this, _, window, cx| {
+            this.navigate(DirectoryModel::forward, cx);
+            this.focus(window, cx);
+        }))
+        .into_any_element();
+        let up = tool_button_words(
+            "up",
+            gpui_kit::assets::IconName::ArrowUp,
+            "Up one folder (Alt+Up)",
+            words(Item::Up),
+            can_up,
+            None,
+            &theme,
+        )
+        .on_click(cx.listener(|this, _, window, cx| {
+            this.go_up(cx);
+            this.focus(window, cx);
+        }))
+        .into_any_element();
+        let reload = tool_button_words(
+            "reload",
+            gpui_kit::assets::IconName::RefreshCw,
+            "Reload (F5)",
+            words(Item::Reload),
+            location.is_some(),
+            None,
+            &theme,
+        )
+        .on_click(cx.listener(|this, _, window, cx| {
+            this.navigate(DirectoryModel::reload, cx);
+            this.focus(window, cx);
+        }))
+        .into_any_element();
 
         let shows_trash = self.shows_trash();
         // The field carries this pane's key context, so Escape and Ctrl+L
@@ -2938,7 +2927,7 @@ impl Browser {
                         location.as_deref(),
                         // The field spans the window less the toolbar's
                         // buttons, about what a pane beside Places had.
-                        crumbs_for_width(layout.width - places_width(cx)),
+                        crumbs_for_width(look.width - places_width(cx)),
                         theme,
                         cx,
                     ))),
@@ -2946,8 +2935,8 @@ impl Browser {
         }
         .into_any_element();
 
-        // New ⌄ and Open terminal here (W-108), where New folder was.
-        let new_folder = layout.tools.then(|| {
+        // New ⌄ and Open terminal here (W-108).
+        let new = {
             let can_create = has_folder && !shows_trash;
             let bounds = Rc::clone(&self.new_button_bounds);
             let new_button = div()
@@ -2971,6 +2960,7 @@ impl Browser {
                                 .flex()
                                 .items_center()
                                 .gap(px(space::XS))
+                                .text_size(text::scaled(text::BODY))
                                 .child(
                                     Icon::new(gpui_kit::assets::IconName::Plus)
                                         .size(px(size::ICON))
@@ -2980,6 +2970,9 @@ impl Browser {
                                             theme.text_disabled
                                         }),
                                 )
+                                .when_some(words(Item::New), |row, words| {
+                                    row.child(div().ml(px(space::XS)).child(words))
+                                })
                                 .child(
                                     Icon::new(IconName::ChevronDown)
                                         .size(px(size::ICON_SMALL))
@@ -2992,28 +2985,24 @@ impl Browser {
                             cx.listener(|this, _, window, cx| this.show_new_menu(window, cx)),
                         ),
                 );
-            let terminal = tool_button(
-                "open-terminal",
-                gpui_kit::assets::IconName::SquareTerminal,
-                "Open terminal here (Shift+F4)",
-                can_create,
-                None,
-                &theme,
-            )
-            .on_click(cx.listener(|this, _, _, cx| this.open_terminal(cx)));
-            div()
-                .flex()
-                .flex_none()
-                .items_center()
-                .gap(px(space::XS))
-                .child(new_button)
-                .child(terminal)
-                .into_any_element()
-        });
+            new_button.into_any_element()
+        };
+        let can_create = has_folder && !self.shows_trash();
+        let terminal = tool_button_words(
+            "open-terminal",
+            gpui_kit::assets::IconName::SquareTerminal,
+            "Open terminal here (Shift+F4)",
+            words(Item::Terminal),
+            can_create,
+            None,
+            &theme,
+        )
+        .on_click(cx.listener(|this, _, _, cx| this.open_terminal(cx)))
+        .into_any_element();
 
         // One button for the view: its mode's icon and a chevron, opening
         // the panel with the modes and the size (W-107).
-        let view_mode = layout.tools.then(|| {
+        let view = {
             let open = self.view_menu_open;
             let (icon, name) = mode_icon_and_name(self.mode);
             let button = Button::new("view-menu")
@@ -3028,7 +3017,11 @@ impl Browser {
                         .flex()
                         .items_center()
                         .gap(px(space::XS))
+                        .text_size(text::scaled(text::BODY))
                         .child(Icon::new(icon).size(px(size::ICON)).text_color(theme.text))
+                        .when_some(words(Item::View), |row, words| {
+                            row.child(div().ml(px(space::XS)).child(words))
+                        })
                         .child(
                             Icon::new(IconName::ChevronDown)
                                 .size(px(size::ICON_SMALL))
@@ -3066,57 +3059,49 @@ impl Browser {
                     )
                 })
                 .into_any_element()
-        });
+        };
 
-        let toggles = layout.tools.then(|| {
-            let filter_open = self.filter_open;
-            div()
-                .flex()
-                .flex_none()
-                .items_center()
-                .gap(px(space::XS))
-                .child(
-                    tool_button(
-                        "show-hidden",
-                        gpui_kit::assets::IconName::Eye,
-                        if show_hidden {
-                            "Hide hidden files (Ctrl+H)"
-                        } else {
-                            "Show hidden files (Ctrl+H)"
-                        },
-                        true,
-                        Some(show_hidden),
-                        &theme,
-                    )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.toggle_hidden(cx);
-                        this.focus(window, cx);
-                    })),
-                )
-                .child(
-                    tool_button(
-                        "filter",
-                        gpui_kit::assets::IconName::Funnel,
-                        if filter_open {
-                            "Close the filter (Ctrl+I)"
-                        } else {
-                            "Filter by name (Ctrl+I)"
-                        },
-                        has_folder,
-                        Some(filter_open),
-                        &theme,
-                    )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.show_filter(window, cx);
-                    })),
-                )
-                .into_any_element()
-        });
+        let filter_open = self.filter_open;
+        let hidden = tool_button_words(
+            "show-hidden",
+            gpui_kit::assets::IconName::Eye,
+            if show_hidden {
+                "Hide hidden files (Ctrl+H)"
+            } else {
+                "Show hidden files (Ctrl+H)"
+            },
+            words(Item::Hidden),
+            true,
+            Some(show_hidden),
+            &theme,
+        )
+        .on_click(cx.listener(|this, _, window, cx| {
+            this.toggle_hidden(cx);
+            this.focus(window, cx);
+        }))
+        .into_any_element();
+        let filter = tool_button_words(
+            "filter",
+            gpui_kit::assets::IconName::Funnel,
+            if filter_open {
+                "Close the filter (Ctrl+I)"
+            } else {
+                "Filter by name (Ctrl+I)"
+            },
+            words(Item::Filter),
+            has_folder,
+            Some(filter_open),
+            &theme,
+        )
+        .on_click(cx.listener(|this, _, window, cx| {
+            this.show_filter(window, cx);
+        }))
+        .into_any_element();
 
         let open_palette = |_: &ClickEvent, window: &mut Window, cx: &mut App| {
             window.dispatch_action(Box::new(crate::workspace::OpenPalette), cx);
         };
-        let actions = if layout.labelled_actions {
+        let actions = if look.actions_words {
             Button::new("actions")
                 .outlined()
                 // The library pads a custom-sized button by a fifth of the
@@ -3137,7 +3122,7 @@ impl Browser {
                                 .size(px(size::ICON))
                                 .text_color(theme.text_muted),
                         )
-                        .when(layout.shortcut_hint, |button| {
+                        .when(look.actions_hint, |button| {
                             button.child(
                                 div()
                                     .flex()
@@ -3170,12 +3155,17 @@ impl Browser {
         };
 
         ToolbarParts {
-            navigation,
-            location: location_part,
-            new_folder,
-            view_mode,
-            toggles,
-            actions,
+            back: Some(back),
+            forward: Some(forward),
+            up: Some(up),
+            reload: Some(reload),
+            location: Some(location_part),
+            new: Some(new),
+            terminal: Some(terminal),
+            view: Some(view),
+            hidden: Some(hidden),
+            filter: Some(filter),
+            actions: Some(actions),
         }
     }
 
@@ -5697,47 +5687,40 @@ fn crumbs_for_width(width: f32) -> usize {
     }
 }
 
-/// Which parts of the toolbar fit the window's width. The rest stay on
-/// their keys and in the Actions palette.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct ToolbarLayout {
-    pub back: bool,
-    pub forward_and_up: bool,
-    /// Actions with its label and chevron, rather than an icon button.
-    pub labelled_actions: bool,
-    /// The Ctrl+Shift+P hint beside the Actions label.
-    pub shortcut_hint: bool,
-    /// Reload, New folder, the view mode and the toggles.
-    pub tools: bool,
-    /// The window's width.
-    pub width: f32,
-}
-
-impl ToolbarLayout {
-    /// The shortcut hint leaves first; then the view tools; then Forward and
-    /// Up, and Actions becomes an icon. Back leaves only when the window can
-    /// no longer hold it beside the location and Actions.
-    pub(crate) fn for_width(width: f32) -> Self {
-        let full = width >= size::TOOLBAR_FULL_MIN;
-        Self {
-            back: width >= size::TOOLBAR_BACK_MIN,
-            forward_and_up: full,
-            labelled_actions: full,
-            shortcut_hint: width >= size::TOOLBAR_HINT_MIN,
-            tools: width >= size::TOOLBAR_TOOLS_MIN,
-            width,
-        }
-    }
-}
-
 /// The toolbar's parts that act on one pane, for the window to place.
 pub(crate) struct ToolbarParts {
-    pub navigation: AnyElement,
-    pub location: AnyElement,
-    pub new_folder: Option<AnyElement>,
-    pub view_mode: Option<AnyElement>,
-    pub toggles: Option<AnyElement>,
-    pub actions: AnyElement,
+    pub back: Option<AnyElement>,
+    pub forward: Option<AnyElement>,
+    pub up: Option<AnyElement>,
+    pub reload: Option<AnyElement>,
+    pub location: Option<AnyElement>,
+    pub new: Option<AnyElement>,
+    pub terminal: Option<AnyElement>,
+    pub view: Option<AnyElement>,
+    pub hidden: Option<AnyElement>,
+    pub filter: Option<AnyElement>,
+    pub actions: Option<AnyElement>,
+}
+
+impl ToolbarParts {
+    /// The element drawn for a built-in pane item; each once.
+    pub(crate) fn take(&mut self, item: &crate::toolbar_items::Item) -> Option<AnyElement> {
+        use crate::toolbar_items::Item;
+        match item {
+            Item::Back => self.back.take(),
+            Item::Forward => self.forward.take(),
+            Item::Up => self.up.take(),
+            Item::Reload => self.reload.take(),
+            Item::Location => self.location.take(),
+            Item::New => self.new.take(),
+            Item::Terminal => self.terminal.take(),
+            Item::View => self.view.take(),
+            Item::Hidden => self.hidden.take(),
+            Item::Filter => self.filter.take(),
+            Item::Actions => self.actions.take(),
+            Item::Admin | Item::Split | Item::Separator | Item::Command(_) => None,
+        }
+    }
 }
 
 /// Which optional columns fit the view.
@@ -5923,32 +5906,6 @@ mod tests {
         for typed in ["trash", "/trash", "trash/", "./trash:", "sftp:/"] {
             assert!(!names_trash(typed), "{typed}");
         }
-    }
-
-    #[test]
-    fn narrow_windows_drop_the_hint_then_the_tools_then_forward_and_up_then_back() {
-        let at = ToolbarLayout::for_width;
-        let widest = at(size::TOOLBAR_HINT_MIN);
-        assert!(
-            widest.shortcut_hint
-                && widest.tools
-                && widest.labelled_actions
-                && widest.forward_and_up
-        );
-        let wide = at(size::TOOLBAR_HINT_MIN - 1.);
-        assert!(!wide.shortcut_hint && wide.tools && wide.labelled_actions);
-        let tools = at(size::TOOLBAR_TOOLS_MIN);
-        assert!(tools.tools && tools.forward_and_up);
-        let no_tools = at(size::TOOLBAR_TOOLS_MIN - 1.);
-        assert!(!no_tools.tools && no_tools.forward_and_up && no_tools.labelled_actions);
-        let full = at(size::TOOLBAR_FULL_MIN);
-        assert!(full.back && full.forward_and_up && full.labelled_actions);
-        let medium = at(size::TOOLBAR_FULL_MIN - 1.);
-        assert!(medium.back && !medium.forward_and_up && !medium.labelled_actions);
-        let back_only = at(size::TOOLBAR_BACK_MIN);
-        assert!(back_only.back && !back_only.forward_and_up);
-        let narrow = at(size::TOOLBAR_BACK_MIN - 1.);
-        assert!(!narrow.back && !narrow.forward_and_up);
     }
 
     #[test]

@@ -29,7 +29,19 @@ pub struct Settings {
     appearance: Appearance,
     confirm: Confirm,
     places: Places,
+    toolbar: ToolbarSaved,
     view: View,
+}
+
+/// The toolbar's items as ids, and those that show words (W-106f). Empty
+/// is today's toolbar.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+struct ToolbarSaved {
+    #[serde(skip_serializing_if = "Vec::is_empty", deserialize_with = "lenient")]
+    items: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", deserialize_with = "lenient")]
+    words: Vec<String>,
 }
 
 /// The places panel (W-106e2). Groups live in their own file.
@@ -420,6 +432,7 @@ impl Settings {
             appearance: Appearance::default(),
             confirm: Confirm::default(),
             places: Places::default(),
+            toolbar: ToolbarSaved::default(),
             view: View {
                 mode: match mode {
                     ViewMode::Icons => Mode::Icons,
@@ -603,6 +616,28 @@ impl Settings {
             text_size,
             hidden_opacity: clamp_hidden(hidden_opacity),
         };
+        self.version = VERSION;
+    }
+
+    /// The toolbar's items.
+    pub fn toolbar(&self) -> crate::toolbar_items::Toolbar {
+        crate::toolbar_items::Toolbar::from_ids(&self.toolbar.items, &self.toolbar.words)
+    }
+
+    /// Chooses the toolbar's items; today's toolbar is saved as nothing.
+    pub fn set_toolbar(&mut self, toolbar: &crate::toolbar_items::Toolbar) {
+        self.toolbar = if *toolbar == crate::toolbar_items::Toolbar::default() {
+            ToolbarSaved::default()
+        } else {
+            let (items, words) = toolbar.to_ids();
+            ToolbarSaved { items, words }
+        };
+        self.version = VERSION;
+    }
+
+    /// Puts the Toolbar page back as it was before anything was chosen.
+    pub fn reset_toolbar(&mut self) {
+        self.toolbar = ToolbarSaved::default();
         self.version = VERSION;
     }
 
@@ -1060,5 +1095,23 @@ mod tests {
         assert!(narrow.places().remote);
         settings.reset_places();
         assert_eq!(settings.places(), defaults);
+    }
+
+    #[test]
+    fn a_chosen_toolbar_survives_and_todays_is_not_written_out() {
+        use crate::toolbar_items::{Item, Toolbar};
+        let mut settings = sample();
+        assert_eq!(settings.toolbar(), Toolbar::default());
+        let mut toolbar = Toolbar::default();
+        toolbar.add(Item::Command("Edit: Copy location".to_owned()), None);
+        toolbar.set_words(2, true);
+        settings.set_toolbar(&toolbar);
+        let loaded = Settings::parse(&settings.to_toml());
+        assert_eq!(loaded.toolbar(), toolbar);
+        settings.set_toolbar(&Toolbar::default());
+        assert!(!settings.to_toml().contains("[toolbar]\nitems"));
+        settings.set_toolbar(&toolbar);
+        settings.reset_toolbar();
+        assert_eq!(settings.toolbar(), Toolbar::default());
     }
 }

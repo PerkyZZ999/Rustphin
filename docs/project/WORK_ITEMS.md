@@ -32,7 +32,7 @@ S11 — Hardening for daily use (in progress)
   - [x] W-106d — Appearance (window look, title bar, faded hidden files, text size). Done 2026-11-12 (see VALIDATION.md). Hidden files fade from 60 % (not the plan's 30 %): fainter fails WCAG AA; the choice is raising them towards 100 %.
   - [x] W-106e1 — Confirmations: ask before trash, emptying the trash, closing a window with several tabs; executable files ask, open or run; deleting for good always asks. Done 2026-11-12 (see VALIDATION.md).
   - [x] W-106e2 — Places page (sections, hidden places, groups, panel width; the panel's edge drags its width). Done 2026-11-12 (see VALIDATION.md). Groups reorder with Move up/down buttons on the page (drag stays in the panel).
-  - [ ] W-106f — Toolbar customisation.
+  - [x] W-106f — Toolbar customisation: built-in buttons, any palette command and separators, in any order, each with or without its words; the location field and Actions always stay; items leave from the right end inwards when the window narrows. Done 2026-11-12 (see VALIDATION.md). Items move between and along the lists with buttons and double-click; dragging them is not offered yet.
   - [ ] W-106g — Shortcuts (read-only).
 
 ## Test-run refinements (the maintainer's findings, 2026-11-10; docs/project/TEST_RUN.md)

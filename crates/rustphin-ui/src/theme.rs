@@ -34,12 +34,6 @@ pub mod size {
     /// Toolbar buttons, the location field and Actions: 36 pixels square or
     /// tall.
     pub const CONTROL: f32 = 36.;
-    /// Minimum window width for the shortcut hint beside Actions.
-    pub const TOOLBAR_HINT_MIN: f32 = 1000.;
-    /// Minimum window width for Forward, Up and the labelled Actions button.
-    pub const TOOLBAR_FULL_MIN: f32 = 560.;
-    /// Minimum window width for the Back button.
-    pub const TOOLBAR_BACK_MIN: f32 = 300.;
     /// Height of the status line.
     pub const STATUS: f32 = 28.;
     /// Narrowest pane whose status line still shows the free space.
@@ -101,6 +95,13 @@ pub mod size {
     pub const USAGE: f32 = 4.;
     /// Width of the places panel, by default.
     pub const SIDEBAR: f32 = 240.;
+    /// The narrowest the location field is drawn before toolbar items
+    /// leave (W-106f).
+    pub const TOOLBAR_LOCATION_MIN: f32 = 280.;
+    /// Actions with its words and chevron.
+    pub const TOOLBAR_ACTIONS: f32 = 96.;
+    /// Actions with its words, chevron and key hint.
+    pub const TOOLBAR_ACTIONS_HINTED: f32 = 196.;
     /// The narrowest the places panel can be made (Settings, Places).
     pub const SIDEBAR_MIN: f32 = 200.;
     /// The widest the places panel can be made.
@@ -187,9 +188,6 @@ pub mod size {
     pub const PATH_BAR: f32 = 28.;
     /// A plain toolbar button and the view-mode segments (`toolbar-button`).
     pub const TOOL_BUTTON: f32 = 32.;
-    /// Window width from which the toolbar shows its view tools (New
-    /// folder, view mode, Split, Show hidden, Filter) and Reload.
-    pub const TOOLBAR_TOOLS_MIN: f32 = 760.;
     /// Width of a scrollbar's track.
     pub const SCROLLBAR: f32 = 8.;
     /// Gap between a scrollbar's thumb and the edge of its track.

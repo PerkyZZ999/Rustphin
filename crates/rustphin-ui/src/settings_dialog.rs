@@ -88,6 +88,8 @@ pub enum Page {
     Appearance,
     /// How folders are shown when they open.
     Views,
+    /// Which buttons the toolbar shows.
+    Toolbar,
     /// What the places panel shows.
     Places,
     /// Which actions ask before they act.
@@ -102,6 +104,7 @@ impl Page {
         Page::General,
         Page::Appearance,
         Page::Views,
+        Page::Toolbar,
         Page::Places,
         Page::Confirmations,
         Page::About,
@@ -113,6 +116,7 @@ impl Page {
             Page::General => "General",
             Page::Appearance => "Appearance",
             Page::Views => "Views",
+            Page::Toolbar => "Toolbar",
             Page::Places => "Places",
             Page::Confirmations => "Confirmations",
             Page::About => "About",
@@ -125,6 +129,7 @@ impl Page {
             Page::General => IconName::Settings,
             Page::Appearance => IconName::Palette,
             Page::Views => IconName::LayoutList,
+            Page::Toolbar => IconName::SlidersHorizontal,
             Page::Places => IconName::Bookmark,
             Page::Confirmations => IconName::CircleCheck,
             Page::About => IconName::Info,
@@ -136,6 +141,7 @@ impl Page {
         match self {
             Page::General => "How Rustphin starts and works with the rest of the desktop.",
             Page::Views => "How folders are shown when they open.",
+            Page::Toolbar => "Which buttons the toolbar shows, and in which order.",
             Page::Places => "What the places panel shows.",
             Page::Confirmations => "Which actions ask before they act.",
             Page::Appearance => {
@@ -148,9 +154,12 @@ impl Page {
     /// Whether it holds settings, and so a "Reset to defaults".
     pub fn has_settings(self) -> bool {
         match self {
-            Page::General | Page::Appearance | Page::Views | Page::Places | Page::Confirmations => {
-                true
-            }
+            Page::General
+            | Page::Appearance
+            | Page::Views
+            | Page::Toolbar
+            | Page::Places
+            | Page::Confirmations => true,
             Page::About => false,
         }
     }
@@ -204,6 +213,12 @@ pub struct SettingsDialog {
     pub(crate) renaming_group: Option<usize>,
     /// The places panel's width.
     pub(crate) width_slider: Entity<SliderState>,
+    /// The search over the available toolbar actions.
+    pub(crate) toolbar_search: Entity<InputState>,
+    /// The row chosen in "Available actions".
+    pub(crate) available_cursor: Option<usize>,
+    /// The row chosen in "On the toolbar".
+    pub(crate) toolbar_cursor: Option<usize>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -258,12 +273,20 @@ impl SettingsDialog {
                 .default_value(width as f32)
         });
         let group_input = cx.new(|cx| InputState::new(window, cx));
+        let toolbar_search =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search actions\u{2026}"));
         let subscriptions = vec![
             cx.subscribe(&width_slider, |_, _, event: &SliderEvent, cx| {
                 let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
                 let width = value.start().round().max(0.) as u32;
                 if preferences(cx).read(cx).settings().places().width != width {
                     crate::settings_places::choose_width(cx, width);
+                }
+            }),
+            cx.subscribe(&toolbar_search, |this, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.available_cursor = None;
+                    cx.notify();
                 }
             }),
             cx.subscribe(&group_input, |this, _, event: &InputEvent, cx| {
@@ -339,6 +362,9 @@ impl SettingsDialog {
             group_input,
             renaming_group: None,
             width_slider,
+            toolbar_search,
+            available_cursor: None,
+            toolbar_cursor: None,
             _subscriptions: subscriptions,
         }
     }
@@ -388,6 +414,12 @@ impl SettingsDialog {
             Page::Views => {
                 preferences(cx).update(cx, |store, cx| {
                     store.update_default_view(Settings::reset_views, cx);
+                });
+            }
+            Page::Toolbar => {
+                self.toolbar_cursor = None;
+                preferences(cx).update(cx, |store, cx| {
+                    store.update(Settings::reset_toolbar, cx);
                 });
             }
             Page::Places => {
@@ -523,6 +555,7 @@ impl SettingsDialog {
             Page::General => self.general(theme, window, cx),
             Page::Appearance => self.appearance(theme, window, cx),
             Page::Views => self.views(theme, window, cx),
+            Page::Toolbar => self.toolbar_page(theme, window, cx),
             Page::Places => self.places(theme, window, cx),
             Page::Confirmations => self.confirmations(theme, window, cx),
             Page::About => self.about(theme, cx),

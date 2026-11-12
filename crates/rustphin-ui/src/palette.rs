@@ -155,6 +155,12 @@ const COMMAND_ICONS: &[(&str, gpui_kit::assets::IconName)] = {
     ]
 };
 
+/// The icon of a command, as its palette row shows it (also on the
+/// toolbar, W-106f).
+pub(crate) fn command_icon(label: &str) -> gpui_kit::assets::IconName {
+    result_icon(label)
+}
+
 /// The icon of one result.
 fn result_icon(label: &str) -> gpui_kit::assets::IconName {
     COMMAND_ICONS

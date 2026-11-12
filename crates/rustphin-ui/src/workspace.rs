@@ -31,7 +31,7 @@ use rustphin_core::{
 };
 
 use crate::{
-    browser::{Browser, BrowserEvent, DraggedEntries, EditLocation, ToolbarLayout},
+    browser::{Browser, BrowserEvent, DraggedEntries, EditLocation},
     commands::{self, Scope},
     controls::tool_button,
     dialog, format,
@@ -1273,25 +1273,7 @@ impl Workspace {
                 self.focus_active(window, cx);
             }
             PaletteEvent::Chosen(Target::Tab(index)) => self.activate(*index, window, cx),
-            PaletteEvent::Chosen(Target::Command(index)) => {
-                if let Some(command) = commands::commands().get(*index) {
-                    let action = command.action;
-                    match command.scope {
-                        Scope::Browser => {
-                            self.focus_active(window, cx);
-                            window.dispatch_action(action(), cx);
-                        }
-                        Scope::Sidebar => {
-                            self.sidebar_visible = true;
-                            let sidebar = self.sidebar.clone();
-                            window.on_next_frame(move |window, cx| {
-                                sidebar.update(cx, |sidebar, cx| sidebar.focus(window, cx));
-                                window.dispatch_action(action(), cx);
-                            });
-                        }
-                    }
-                }
-            }
+            PaletteEvent::Chosen(Target::Command(index)) => self.run_command(*index, window, cx),
         }
         cx.notify();
     }
@@ -2115,10 +2097,28 @@ impl Workspace {
     /// button and Split are the window's; the rest act on the active pane,
     /// which draws them.
     fn toolbar(&mut self, theme: Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        let layout = ToolbarLayout::for_width(content_width(window));
+        use crate::toolbar_items::{Item, Look};
+        // The items chosen in Settings, Toolbar (W-106f), as many as fit.
+        let toolbar = crate::preferences::preferences(cx)
+            .read(cx)
+            .settings()
+            .toolbar();
+        let width = content_width(window);
+        let fitted = toolbar.fit(width);
+        let look = Look {
+            width,
+            actions_words: fitted.actions_words,
+            actions_hint: fitted.actions_hint,
+            words: toolbar
+                .items
+                .iter()
+                .filter(|(_, words)| *words)
+                .map(|(item, _)| item.clone())
+                .collect(),
+        };
         let split = self.tabs.active().panes.len() > 1;
-        let parts = self.tabs.active().browser().update(cx, |browser, cx| {
-            browser.toolbar_parts(layout, theme, window, cx)
+        let mut parts = self.tabs.active().browser().update(cx, |browser, cx| {
+            browser.toolbar_parts(&look, theme, window, cx)
         });
         let separator = || {
             div()
@@ -2127,7 +2127,48 @@ impl Workspace {
                 .h(px(size::TOOL_SEPARATOR))
                 .mx(px(space::XS))
                 .bg(theme.border_strong)
+                .into_any_element()
         };
+        let mut items: Vec<AnyElement> = Vec::new();
+        for (index, ((item, words), shown)) in toolbar.items.iter().zip(&fitted.shown).enumerate() {
+            if !shown {
+                continue;
+            }
+            let words = words.then(|| SharedString::from(item.name()));
+            let element = match item {
+                Item::Admin => Some(self.admin_button(theme, cx)),
+                Item::Separator => Some(separator()),
+                Item::Split => Some(
+                    crate::controls::tool_button_words(
+                        "split",
+                        gpui_kit::assets::IconName::SquareSplitHorizontal,
+                        if split {
+                            "Close split view (F3)"
+                        } else {
+                            "Split view (F3)"
+                        },
+                        words,
+                        true,
+                        Some(split),
+                        &theme,
+                    )
+                    .on_click(cx.listener(|this, _, window, cx| this.toggle_split(window, cx)))
+                    .into_any_element(),
+                ),
+                Item::Location => parts.take(item).map(|location| {
+                    div()
+                        .flex()
+                        .flex_1()
+                        .min_w_0()
+                        .mx(px(space::XS))
+                        .child(location)
+                        .into_any_element()
+                }),
+                Item::Command(label) => self.command_button(index, label, words, theme, cx),
+                other => parts.take(other),
+            };
+            items.extend(element);
+        }
         div()
             .id("toolbar")
             .role(Role::Toolbar)
@@ -2141,41 +2182,63 @@ impl Workspace {
             .bg(theme.chrome)
             .border_b_1()
             .border_color(theme.border)
-            .child(self.admin_button(theme, cx))
-            .child(separator())
-            .child(parts.navigation)
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .min_w_0()
-                    .mx(px(space::XS))
-                    .child(parts.location),
-            )
-            .children(parts.new_folder)
-            .when(layout.tools, |bar| bar.child(separator()))
-            .children(parts.view_mode)
-            .when(layout.tools, |bar| {
-                bar.child(
-                    tool_button(
-                        "split",
-                        gpui_kit::assets::IconName::SquareSplitHorizontal,
-                        if split {
-                            "Close split view (F3)"
-                        } else {
-                            "Split view (F3)"
-                        },
-                        true,
-                        Some(split),
-                        &theme,
-                    )
-                    .on_click(cx.listener(|this, _, window, cx| this.toggle_split(window, cx))),
-                )
-            })
-            .children(parts.toggles)
-            .child(separator())
-            .child(parts.actions)
+            .children(items)
             .into_any_element()
+    }
+
+    /// A palette command put on the toolbar: its palette icon, its name
+    /// and key as the tooltip; a click runs it as the palette would.
+    fn command_button(
+        &self,
+        index: usize,
+        label: &str,
+        words: Option<SharedString>,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let commands = commands::commands();
+        let at = commands.iter().position(|command| command.label == label)?;
+        let command = &commands[at];
+        let tooltip = if command.shortcut.is_empty() {
+            command.label.to_owned()
+        } else {
+            format!("{} ({})", command.label, command.shortcut)
+        };
+        Some(
+            crate::controls::tool_button_words(
+                ("toolbar-command", index),
+                crate::palette::command_icon(label),
+                tooltip,
+                words,
+                true,
+                None,
+                &theme,
+            )
+            .on_click(cx.listener(move |this, _, window, cx| this.run_command(at, window, cx)))
+            .into_any_element(),
+        )
+    }
+
+    /// Runs the palette's command `index` where it belongs: in the active
+    /// pane or in the places panel.
+    fn run_command(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(command) = commands::commands().get(index) {
+            let action = command.action;
+            match command.scope {
+                Scope::Browser => {
+                    self.focus_active(window, cx);
+                    window.dispatch_action(action(), cx);
+                }
+                Scope::Sidebar => {
+                    self.sidebar_visible = true;
+                    let sidebar = self.sidebar.clone();
+                    window.on_next_frame(move |window, cx| {
+                        sidebar.update(cx, |sidebar, cx| sidebar.focus(window, cx));
+                        window.dispatch_action(action(), cx);
+                    });
+                }
+            }
+        }
     }
 
     /// The shield before Back: red while acting as administrator.

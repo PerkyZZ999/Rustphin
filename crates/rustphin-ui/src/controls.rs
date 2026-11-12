@@ -8,11 +8,12 @@ use gpui_kit::{
         Disableable as _, Icon, Sizable as _,
         button::{Button, ButtonVariants as _},
     },
+    div,
     prelude::FluentBuilder as _,
     px,
 };
 
-use crate::theme::{Theme, size};
+use crate::theme::{Theme, size, space, text};
 
 /// A plain toolbar button (`toolbar-button`): an icon on no fill, the hover
 /// fill under the pointer. `on` marks a toggle that is switched on with
@@ -43,6 +44,51 @@ pub fn tool_button(
                 } else {
                     theme.text
                 }),
+        )
+        .disabled(!enabled)
+        .tooltip(label.clone())
+        .accessibility_label(label)
+}
+
+/// A toolbar button that shows its words beside its icon when `words` is
+/// given (Settings, Toolbar, W-106f), else [`tool_button`].
+pub fn tool_button_words(
+    id: impl Into<ElementId>,
+    icon: IconName,
+    label: impl Into<SharedString>,
+    words: Option<SharedString>,
+    enabled: bool,
+    on: Option<bool>,
+    theme: &Theme,
+) -> Button {
+    let Some(words) = words else {
+        return tool_button(id, icon, label, enabled, on, theme);
+    };
+    let label = label.into();
+    let lit = on == Some(true);
+    let color = if !enabled {
+        theme.text_disabled
+    } else if lit {
+        theme.accent
+    } else {
+        theme.text
+    };
+    Button::new(id)
+        .ghost()
+        .with_size(px(size::TOOL_BUTTON))
+        .h(px(size::TOOL_BUTTON))
+        .px(px(space::SM))
+        .when(lit, |button| button.bg(theme.current))
+        .when_some(on, Button::toggled)
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(space::SM))
+                .text_size(text::scaled(text::BODY))
+                .text_color(color)
+                .child(Icon::new(icon).size(px(size::ICON)))
+                .child(words),
         )
         .disabled(!enabled)
         .tooltip(label.clone())

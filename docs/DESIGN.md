@@ -149,14 +149,12 @@ components:
     backgroundColor: "{colors.hover}"
   toolbar-button-disabled:
     textColor: "{colors.text-disabled}"
-  toolbar-shortcut-hint-min:
-    width: 1000px
-  toolbar-tools-min:
-    width: 760px
-  toolbar-full-navigation-min:
-    width: 560px
-  toolbar-back-navigation-min:
-    width: 300px
+  toolbar-location-min:
+    width: 280px
+  toolbar-actions:
+    width: 96px
+  toolbar-actions-hinted:
+    width: 196px
   location-field:
     backgroundColor: "{colors.content-solid}"
     textColor: "{colors.text}"
@@ -608,12 +606,14 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   with the shortcut "Ctrl+Shift+P" in `data-sm` beside it, in one outlined
   group. Toggles that are on take `toolbar-toggle-on` and are announced as
   pressed; their tooltips name the key. In split view the toolbar acts on
-  the active pane. By window width: below 1000 px the shortcut hint leaves;
-  below 760 px Reload, New, Open terminal here, the View button and the three
-  toggles leave;
-  below 560 px Forward and Up leave and Actions becomes an icon button
-  (Lucide `menu`, tooltip "Actions (Ctrl+Shift+P)"); below 300 px Back
-  leaves. They remain in Actions and on their keys.
+  the active pane. The items and their order are chosen in Settings,
+  Toolbar (W-106f); the above is the default. When the window is too narrow
+  for them beside a 280 px location field (`toolbar-location-min`),
+  Actions first drops its key hint (196 → 96 px), then its words (an icon
+  button, Lucide `menu`, tooltip "Actions (Ctrl+Shift+P)"), then items leave
+  from the right end inwards; the location field and Actions always stay,
+  and a separator left alone is not drawn. What leaves remains in Actions
+  and on its key.
 - **Path bar (split view):** the side's location as clickable segments in
   `data-md`, `text` on the active side and `text-muted` on the other, under
   the 2 px `primary-bright` line that marks the active side.
@@ -700,6 +700,15 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   4 px steps, the value in `data-sm`, "or drag the panel's edge"). The
   panel's right edge is a 4 px grip with the resize pointer that sets the
   same width. Reset to defaults leaves the groups as they are.
+  **Toolbar:** a preview of the chosen items (their icons and separators)
+  above two lists side by side, each 32 px rows in a `border` outline:
+  "Available actions" (a search field, then the built-in buttons, a
+  Separator, then every palette command with its palette icon) and "On the
+  toolbar" (in order; the location field and Actions marked "always
+  there"). Between them 28 px icon buttons with tooltips: Add (→), Remove
+  (←); under the second list Move left, Move right and "Show its words"
+  (a checkbox for the chosen item). Double-click adds or removes. The
+  current row of each list in `selection` with the bar.
   **Confirmations:** "Ask before" holds checkboxes for Moving to the trash
   (off by default), Deleting for good (ticked and unavailable, "Always
   asked: it cannot be undone."), Emptying the trash (on) and Closing a
@@ -1113,9 +1122,8 @@ except where the list below says otherwise; each W-079 step adds its line.
   banner, as does a folder that vanished.
 - Settings (W-106b, W-106c1): the dialog, its page list and the tabs below
   720 px, the action row, the controls (segments, drop-downs, small buttons,
-  hints, checkboxes, the slider), General, Appearance, Views, Places,
-  Confirmations and About are built; Toolbar and Shortcuts arrive with
-  W-106f–g.
+  hints, checkboxes, the slider), General, Appearance, Views, Toolbar,
+  Places, Confirmations and About are built; Shortcuts arrives with W-106g.
 
 Carried over unchanged from the earlier design and implemented: the Actions
 palette's **Recover original names after interruption** for the current folder
