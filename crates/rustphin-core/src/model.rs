@@ -1,6 +1,7 @@
 //! The directory model: navigation, background listing and published snapshots.
 
 use std::{
+    collections::{HashMap, HashSet},
     ffi::OsStr,
     io, mem,
     os::unix::ffi::OsStrExt,
@@ -235,6 +236,37 @@ impl Snapshot {
             .position(|&index| self.store.name(index) == name)
     }
 
+    /// The rows showing each of `names`, in the same order, found in one
+    /// pass over the rows: for many names at once, as after a paste, where
+    /// asking [`row_of`](Self::row_of) for each would be quadratic.
+    pub fn rows_of(&self, names: &[Vec<u8>]) -> Vec<Option<usize>> {
+        let mut wanted: HashMap<&[u8], Vec<usize>> = HashMap::with_capacity(names.len());
+        for (at, name) in names.iter().enumerate() {
+            wanted.entry(name.as_slice()).or_default().push(at);
+        }
+        let mut found = vec![None; names.len()];
+        for (row, &index) in self.order.iter().enumerate() {
+            if let Some(places) = wanted.remove(self.store.name(index)) {
+                for at in places {
+                    found[at] = Some(row);
+                }
+                if wanted.is_empty() {
+                    break;
+                }
+            }
+        }
+        found
+    }
+
+    /// Every name listed, shown or not, for many membership questions at
+    /// once (see [`is_listed`](Self::is_listed)).
+    pub fn listed_names(&self) -> HashSet<&[u8]> {
+        (0..self.store.len())
+            .filter_map(|index| u32::try_from(index).ok())
+            .map(|index| self.store.name(index))
+            .collect()
+    }
+
     /// Whether an entry called `name` was listed, shown or not: hidden
     /// files and entries the name filter leaves out still take their name.
     pub fn is_listed(&self, name: &[u8]) -> bool {
@@ -298,7 +330,8 @@ struct Listing {
 struct Shared {
     fs: Arc<dyn Fs>,
     events: flume::Sender<ModelEvent>,
-    pool: rayon::ThreadPool,
+    /// The process's CPU pool, shared by every model.
+    pool: Arc<rayon::ThreadPool>,
     generation: AtomicU64,
     history: Mutex<History>,
     complete: Mutex<Option<Complete>>,
@@ -677,14 +710,27 @@ pub struct DirectoryModel {
     filter: Option<Arc<NameFilter>>,
 }
 
+/// One pool of CPU workers for every model in the process: a window with
+/// many tabs shares the cores rather than starting a pool per pane.
+fn cpu_pool() -> io::Result<Arc<rayon::ThreadPool>> {
+    static POOL: std::sync::OnceLock<Result<Arc<rayon::ThreadPool>, String>> =
+        std::sync::OnceLock::new();
+    POOL.get_or_init(|| {
+        rayon::ThreadPoolBuilder::new()
+            .thread_name(|index| format!("rustphin-cpu-{index}"))
+            .build()
+            .map(Arc::new)
+            .map_err(|error| error.to_string())
+    })
+    .clone()
+    .map_err(io::Error::other)
+}
+
 impl DirectoryModel {
     /// Creates a model reading through `fs`, and the channel its events arrive on.
     pub fn new(fs: Arc<dyn Fs>) -> io::Result<(Self, flume::Receiver<ModelEvent>)> {
         let (events, receiver) = flume::unbounded();
-        let pool = rayon::ThreadPoolBuilder::new()
-            .thread_name(|index| format!("rustphin-cpu-{index}"))
-            .build()
-            .map_err(io::Error::other)?;
+        let pool = cpu_pool()?;
         let (changed, changes) = flume::bounded(1);
         let shared = Arc::new(Shared {
             fs,
@@ -990,6 +1036,18 @@ mod tests {
         assert!(!shown.is_container(2));
         assert_eq!(shown.entry_path(1), dir.path().join("sub"));
         assert_eq!(shown.row_of(b"Zeta.md"), Some(4));
+        // Many names in one pass give the same rows, in the order asked.
+        let asked = [
+            b"Zeta.md".to_vec(),
+            b"missing".to_vec(),
+            b"sub".to_vec(),
+            b"Zeta.md".to_vec(),
+        ];
+        assert_eq!(shown.rows_of(&asked), [Some(4), None, Some(1), Some(4)]);
+        // The listed names include what is not shown.
+        let listed = shown.listed_names();
+        assert!(listed.contains(&b".hidden"[..]) && listed.contains(&b"sub"[..]));
+        assert!(!listed.contains(&b"missing"[..]));
     }
 
     #[test]

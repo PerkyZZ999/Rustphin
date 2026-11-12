@@ -56,7 +56,7 @@ pub fn available(toolbar: &Toolbar, search: &str) -> Vec<Item> {
         .cloned()
         .chain(
             crate::commands::commands()
-                .into_iter()
+                .iter()
                 .map(|command| Item::Command(command.label.to_owned())),
         )
         .filter(|item| !toolbar.contains(item))

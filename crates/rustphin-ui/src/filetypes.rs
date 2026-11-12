@@ -6,7 +6,7 @@
 
 use std::{collections::HashMap, path::Path, sync::Arc};
 
-use gpui_kit::SharedString;
+use gpui_kit::{App, AppContext as _, Entity, Global, SharedString};
 use rustphin_platform::{apps::Associations, icons::IconTheme, mime::MimeDb, xdg};
 
 /// Size at which application icons are looked up: a menu row's icon.
@@ -14,6 +14,47 @@ const APP_ICON_SIZE: u32 = crate::theme::size::ICON as u32;
 
 /// Theme used when the desktop settings name none.
 const DEFAULT_THEME: &str = "breeze-dark";
+
+/// The one database every pane shares, loaded once in the background.
+pub struct Shared {
+    database: Option<Arc<Database>>,
+}
+
+struct SharedTypes(Entity<Shared>);
+
+impl Global for SharedTypes {}
+
+/// Starts loading the databases. Call once, early at start-up: panes
+/// observe [`shared`] and draw type icons once it is ready.
+pub fn init(cx: &mut App) {
+    let entity = cx.new(|cx| {
+        let loading = cx
+            .background_executor()
+            .spawn(async { Arc::new(Database::load()) });
+        cx.spawn(async move |shared, cx| {
+            let database = loading.await;
+            let _ = shared.update(cx, |shared: &mut Shared, cx| {
+                shared.database = Some(database);
+                cx.notify();
+            });
+        })
+        .detach();
+        Shared { database: None }
+    });
+    cx.set_global(SharedTypes(entity));
+}
+
+/// The shared databases.
+pub fn shared(cx: &App) -> Entity<Shared> {
+    cx.global::<SharedTypes>().0.clone()
+}
+
+impl Shared {
+    /// The databases, once loaded.
+    pub fn database(&self) -> Option<Arc<Database>> {
+        self.database.clone()
+    }
+}
 
 /// What the interface shows for one file type.
 #[derive(Debug, Clone)]

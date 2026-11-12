@@ -91,7 +91,7 @@ rust-tc run ~/Documents    # open a specific folder
 
 Environment variables: `RUSTPHIN_ADMIN_BUS=session` (UI tests only) makes administrator mode look for KDE's kio-admin helper on the session bus, where `cargo run -p rustphin-platform --example fake_admin_helper -- <sandbox>` stands in for it; never test administrator mode against the real helper, which would ask for the maintainer's password on his desktop (UI_SCENARIOS.md, AD1–AD4). `RUSTPHIN_OPAQUE=1` forces the opaque theme; `RUSTPHIN_LOG=debug` sets the log level (logs go to stderr). `RUSTPHIN_FRAME_LOG=1` logs frame timing every 120 frames, counting dropped frames (intervals over 1.5 × the refresh period, D-019); `RUSTPHIN_SCROLL_BENCH=1` also makes the list scroll itself for 1,200 frames and ends with a "scroll benchmark result" line saying whether at most 5% were dropped, which is how frame rate is measured (see W-013 and W-085 in `docs/project/VALIDATION.md`). With either set, each opened folder logs a "first entries" line: time until a frame described its entries and until the next frame began (W-073g).
 
-A cold build of the UI toolkit takes two to three minutes.
+A cold build of the UI toolkit takes three to five minutes: dependencies are optimised even in debug builds (W-109), so a debug window opens about as fast as a release one; edits to Rustphin itself still rebuild in seconds.
 
 ## Quality gate: Rust-Toolchain
 

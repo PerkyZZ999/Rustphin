@@ -420,10 +420,27 @@ impl Sidebar {
                     )
                     .ok()
             });
+        // The folder holds other programs' files too; only a change to the
+        // places file itself (another size, time or inode) is read again.
+        let watched = places_path.clone();
         cx.spawn(async move |panel, cx| {
+            let signature = move || {
+                let path = watched.clone();
+                async move {
+                    path.and_then(|path| RealFs.info(&path).ok())
+                        .map(|info| (info.size, info.modified_ns, info.inode))
+                }
+            };
+            // Unknown at first, so the first change is always read.
+            let mut seen = None;
             while changes.recv_async().await.is_ok() {
                 cx.background_executor().timer(RELOAD_DELAY).await;
                 while changes.try_recv().is_ok() {}
+                let now = Some(cx.background_spawn(signature()).await);
+                if now == seen {
+                    continue;
+                }
+                seen = now;
                 if panel.update(cx, |panel, cx| panel.reload(cx)).is_err() {
                     break;
                 }

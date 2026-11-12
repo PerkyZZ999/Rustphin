@@ -111,7 +111,17 @@ pub fn run(options: Options) {
         // The complete icon set: the default bundle lacks the view-mode icons.
         .with_assets(gpui_kit::assets::AllAssets)
         .run(move |cx: &mut App| {
+            // Font matching walks the installed font collection: start the
+            // faces the first frame needs at once, off-thread, so the work
+            // below overlaps it; the window opens when they are ready.
+            let text_system = cx.text_system().clone();
+            let warming = cx.background_executor().spawn(async move {
+                fonts::register(&text_system);
+                warm_fonts(&text_system, &fonts::FIRST_FRAME, "first-frame");
+            });
             gpui_kit::init(cx);
+            // File types and icons, once for every pane, while fonts warm.
+            filetypes::init(cx);
             gpui_kit::component::theme::Theme::change(
                 gpui_kit::component::theme::ThemeMode::Dark,
                 None,
@@ -164,18 +174,17 @@ pub fn run(options: Options) {
             })
             .detach();
 
-            // Font matching can scan the installed font collection. Finish
-            // that work off-thread before the first view needs its fonts.
-            let text_system = cx.text_system().clone();
-            let warming = cx.background_executor().spawn(async move {
-                fonts::register(&text_system);
-                warm_fonts(&text_system);
-            });
             cx.spawn(async move |cx| {
                 warming.await;
-                cx.update(|cx| {
+                let text_system = cx.update(|cx| {
                     open_window(&options, settings, session, session_path, Vec::new(), cx);
+                    cx.text_system().clone()
                 });
+                // The faces later screens use, while the window is up.
+                cx.background_spawn(async move {
+                    warm_fonts(&text_system, &fonts::LATER, "later");
+                })
+                .await;
             })
             .detach();
         });
@@ -302,29 +311,22 @@ fn open_window(
     }
 }
 
-fn warm_fonts(text_system: &gpui_kit::TextSystem) {
+fn warm_fonts(
+    text_system: &gpui_kit::TextSystem,
+    faces: &[(&str, gpui_kit::FontWeight)],
+    which: &'static str,
+) {
     let started = std::time::Instant::now();
-    let fonts: Vec<_> = [
-        gpui_kit::Font::default(),
-        gpui_kit::font(theme::text::FAMILY_BODY),
-        gpui_kit::font(theme::text::FAMILY_DATA),
-        gpui_kit::font(theme::text::FAMILY_HEADING),
-    ]
-    .into_iter()
-    .flat_map(|font| {
-        [
-            gpui_kit::FontWeight::NORMAL,
-            gpui_kit::FontWeight::MEDIUM,
-            gpui_kit::FontWeight::SEMIBOLD,
-        ]
-        .map(|weight| gpui_kit::Font {
-            weight,
-            ..font.clone()
+    let fonts: Vec<_> = faces
+        .iter()
+        .map(|(family, weight)| gpui_kit::Font {
+            weight: *weight,
+            ..gpui_kit::font(*family)
         })
-    })
-    .collect();
+        .collect();
     text_system.prewarm_fonts(&fonts);
     tracing::info!(
+        which,
         elapsed_ms = started.elapsed().as_secs_f64() * 1e3,
         "font caches warmed"
     );

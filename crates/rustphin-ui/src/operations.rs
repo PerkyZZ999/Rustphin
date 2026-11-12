@@ -195,7 +195,11 @@ pub struct Hub {
     /// desktop offers none to share.
     clipboard: Arc<dyn FileClipboard>,
     /// The files on the clipboard as last read: ours or another application's.
-    pub clip: Option<FileClip>,
+    clip: Option<FileClip>,
+    /// The cut paths and their folders, kept with `clip` so each row asks
+    /// a set rather than the whole clipboard on every frame.
+    cut_paths: HashSet<PathBuf>,
+    cut_folders: HashSet<PathBuf>,
     /// Whether the user has been told that the clipboard is not shared.
     told_unshared: bool,
     _clipboard_watch: Option<clipboard::WatchGuard>,
@@ -262,6 +266,8 @@ pub fn init(cx: &mut App) {
             problems: None,
             clipboard,
             clip: None,
+            cut_paths: HashSet::new(),
+            cut_folders: HashSet::new(),
             told_unshared: false,
             _clipboard_watch: watch,
             notice_serial: 0,
@@ -569,7 +575,7 @@ impl Hub {
                 // An unreadable clipboard holds nothing for us.
                 let clip = read.ok().flatten();
                 if hub.clip != clip {
-                    hub.clip = clip;
+                    hub.set_clip(clip);
                     cx.notify();
                 }
             });
@@ -579,17 +585,24 @@ impl Hub {
 
     /// Whether `path` was cut and is waiting to be pasted somewhere.
     pub fn is_cut(&self, path: &Path) -> bool {
-        self.clip
-            .as_ref()
-            .is_some_and(|clip| clip.cut && clip.paths.iter().any(|cut| cut == path))
+        self.cut_paths.contains(path)
     }
 
     /// Whether anything in the folder `folder` is cut. Cheap enough to ask
     /// before checking every row.
     pub fn has_cut_in(&self, folder: &Path) -> bool {
-        self.clip.as_ref().is_some_and(|clip| {
-            clip.cut && clip.paths.iter().any(|cut| cut.parent() == Some(folder))
-        })
+        self.cut_folders.contains(folder)
+    }
+
+    /// The files on the clipboard as last read.
+    pub fn clip(&self) -> Option<&FileClip> {
+        self.clip.as_ref()
+    }
+
+    /// Replaces what is known of the clipboard, and the cut sets with it.
+    fn set_clip(&mut self, clip: Option<FileClip>) {
+        (self.cut_paths, self.cut_folders) = cut_sets(clip.as_ref());
+        self.clip = clip;
     }
 
     /// Puts `paths` on the clipboard, to be copied or, with `cut`, moved by
@@ -610,7 +623,7 @@ impl Hub {
                 Ok(()) => {
                     let text = pick_up_notice(&clip, hub.clipboard.is_shared(), hub.told_unshared);
                     hub.told_unshared = true;
-                    hub.clip = Some(clip);
+                    hub.set_clip(Some(clip));
                     hub.say(text, false, cx);
                 }
                 Err(error) => {
@@ -659,7 +672,7 @@ impl Hub {
             }
             let _ = hub.update(cx, |hub, cx| {
                 if clip.cut {
-                    hub.clip = None;
+                    hub.set_clip(None);
                     hub.start(Request::Move {
                         sources: clip.paths,
                         into,
@@ -1105,15 +1118,32 @@ pub fn free_name(base: &str, is_taken: impl Fn(&str) -> bool) -> String {
 /// view can select the copies once they appear, as Dolphin does.
 pub fn duplicate_names(names: &[Vec<u8>], exists: impl Fn(&[u8]) -> bool) -> Vec<Vec<u8>> {
     let mut made: Vec<Vec<u8>> = Vec::with_capacity(names.len());
+    let mut taken: std::collections::HashSet<Vec<u8>> =
+        std::collections::HashSet::with_capacity(names.len());
     for name in names {
         let target =
             rustphin_core::ops::free_duplicate_name(OsStr::from_bytes(name), |candidate| {
                 let candidate = candidate.as_bytes();
-                exists(candidate) || made.iter().any(|done| done == candidate)
-            });
-        made.push(target.into_vec());
+                exists(candidate) || taken.contains(candidate)
+            })
+            .into_vec();
+        taken.insert(target.clone());
+        made.push(target);
     }
     made
+}
+
+/// The cut paths of `clip` and the folders they are in; empty for a copy.
+fn cut_sets(clip: Option<&FileClip>) -> (HashSet<PathBuf>, HashSet<PathBuf>) {
+    let paths: HashSet<PathBuf> = clip
+        .filter(|clip| clip.cut)
+        .map(|clip| clip.paths.iter().cloned().collect())
+        .unwrap_or_default();
+    let folders = paths
+        .iter()
+        .filter_map(|path| path.parent().map(Path::to_path_buf))
+        .collect();
+    (paths, folders)
 }
 
 /// The part of a file name to select when renaming starts: everything before
@@ -1361,6 +1391,23 @@ mod tests {
         assert_eq!(stem_len(".bashrc", false), ".bashrc".len());
         assert_eq!(stem_len("README", false), "README".len());
         assert_eq!(stem_len("photos.2024", true), "photos.2024".len());
+    }
+
+    #[test]
+    fn only_cut_files_and_their_folders_are_marked() {
+        let clip = |cut| FileClip {
+            paths: vec![PathBuf::from("/a/one"), PathBuf::from("/b/two")],
+            cut,
+        };
+        let (paths, folders) = cut_sets(Some(&clip(true)));
+        assert!(paths.contains(Path::new("/b/two")) && !paths.contains(Path::new("/a")));
+        assert!(folders.contains(Path::new("/a")) && folders.contains(Path::new("/b")));
+        let (paths, folders) = cut_sets(Some(&clip(false)));
+        assert!(
+            paths.is_empty() && folders.is_empty(),
+            "a copy marks nothing"
+        );
+        assert!(cut_sets(None).0.is_empty());
     }
 
     #[test]

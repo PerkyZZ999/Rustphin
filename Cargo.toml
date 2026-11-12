@@ -57,5 +57,12 @@ expect_used = "deny"
 dbg_macro = "deny"
 todo = "deny"
 
+# Optimise dependencies in debug builds: the toolkit's text shaping and
+# font matching are many times slower unoptimised, which made debug
+# windows take seconds to appear. Workspace crates stay unoptimised for
+# fast rebuilds and full debugging.
+[profile.dev.package."*"]
+opt-level = 2
+
 [profile.release]
 debug = "line-tables-only"

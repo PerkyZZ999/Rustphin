@@ -405,6 +405,10 @@ pub struct Browser {
     folder_action_focus: FocusHandle,
     /// The system's file-type databases, once loaded in the background.
     types: Option<Arc<Database>>,
+    /// Waits for the shared databases while they load.
+    types_subscription: Option<Subscription>,
+    /// The folder to list when the pane is first drawn.
+    deferred_start: Option<PathBuf>,
     /// Icon and description per MIME type, filled in as rows need them.
     type_info: HashMap<String, TypeInfo>,
     /// Types whose lookup is running, so each is requested once.
@@ -545,6 +549,8 @@ impl Browser {
             folder_state_scroll: ScrollHandle::new(),
             folder_action_focus,
             types: None,
+            types_subscription: None,
+            deferred_start: None,
             type_info: HashMap::new(),
             types_pending: HashSet::new(),
             zone: TimeZone::system(),
@@ -569,10 +575,12 @@ impl Browser {
             Ok((mut model, events)) => {
                 model.set_options(settings.options());
                 this.model = Some(model);
-                this.load_file_types(cx);
+                this.follow_file_types(cx);
                 cx.spawn(async move |view, cx| Self::receive_events(view, events, 0, cx).await)
                     .detach();
-                this.open(start);
+                // Listed when first drawn: a restored tab in the background
+                // costs nothing until it is shown.
+                this.deferred_start = Some(start);
             }
             Err(error) => {
                 tracing::error!(%error, "could not start the directory model");
@@ -747,10 +755,10 @@ impl Browser {
                 }
                 // Every copy of a duplicate has shown up.
                 if !self.select_all_when_seen.is_empty()
-                    && self
-                        .select_all_when_seen
+                    && snapshot
+                        .rows_of(&self.select_all_when_seen)
                         .iter()
-                        .all(|name| snapshot.row_of(name).is_some())
+                        .all(Option::is_some)
                 {
                     let names = std::mem::take(&mut self.select_all_when_seen);
                     select_names(&mut self.selection, &snapshot, &names);
@@ -811,6 +819,7 @@ impl Browser {
     }
 
     fn open(&mut self, path: PathBuf) {
+        self.deferred_start = None;
         self.frames.opening(Some(&path));
         self.pending_remote = None;
         self.dismiss_menu();
@@ -1050,8 +1059,7 @@ impl Browser {
         };
         let can_paste = hub(cx)
             .read(cx)
-            .clip
-            .as_ref()
+            .clip()
             .is_some_and(|clip| !clip.paths.is_empty());
         menu::MenuFacts {
             on_selection,
@@ -1853,20 +1861,20 @@ impl Browser {
         }
     }
 
-    /// Reads the file-type databases on a background thread.
-    fn load_file_types(&mut self, cx: &mut Context<Self>) {
-        let loading = cx
-            .background_executor()
-            .spawn(async { Arc::new(Database::load()) });
-        cx.spawn(async move |view, cx| {
-            let database = loading.await;
-            // The view may be gone by the time loading finishes.
-            let _ = view.update(cx, |view, cx| {
-                view.types = Some(database);
-                cx.notify();
-            });
-        })
-        .detach();
+    /// Takes the shared file-type databases, now or once they are loaded:
+    /// one load for every pane, not one each.
+    fn follow_file_types(&mut self, cx: &mut Context<Self>) {
+        let shared = crate::filetypes::shared(cx);
+        self.types = shared.read(cx).database();
+        if self.types.is_none() {
+            self.types_subscription = Some(cx.observe(&shared, |view, shared, cx| {
+                if let Some(database) = shared.read(cx).database() {
+                    view.types = Some(database);
+                    view.types_subscription = None;
+                    cx.notify();
+                }
+            }));
+        }
     }
 
     /// The icon and description for an entry, if already known. An unknown
@@ -2190,7 +2198,10 @@ impl Browser {
 
     /// The folder being shown.
     pub fn location(&self) -> Option<PathBuf> {
-        self.model.as_ref().and_then(DirectoryModel::location)
+        self.model
+            .as_ref()
+            .and_then(DirectoryModel::location)
+            .or_else(|| self.deferred_start.clone())
     }
 
     /// The remote folder this pane is waiting for, if the user has not gone
@@ -2780,8 +2791,9 @@ impl Browser {
         let sources = rows.iter().map(|&row| snapshot.entry_path(row)).collect();
         // Hidden or filtered entries still take a name: ask the snapshot's
         // full listing, not the rows on screen.
+        let listed = snapshot.listed_names();
         self.select_all_when_seen =
-            operations::duplicate_names(&names, |name| snapshot.is_listed(name));
+            operations::duplicate_names(&names, |name| listed.contains(name));
         hub(cx).update(cx, |hub, _| hub.start(Request::Duplicate { sources }));
     }
 
@@ -4803,6 +4815,16 @@ struct OpenMenu {
 
 impl Render for Browser {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // First drawn: list the folder it was made for, unless something
+        // has already taken it elsewhere.
+        if let Some(start) = self.deferred_start.take()
+            && self
+                .model
+                .as_ref()
+                .is_some_and(|model| model.location().is_none())
+        {
+            self.open(start);
+        }
         let frame_started = self.frames.begin(window.refresh_interval(cx));
         let theme = *cx.global::<Theme>();
         // Opening another folder clears the filter in the model; the bar follows.
@@ -5649,8 +5671,8 @@ const CUT_OPACITY: f32 = 0.5;
 
 fn select_names(selection: &mut Selection, snapshot: &Snapshot, names: &[Vec<u8>]) {
     let mut selected = false;
-    for name in names {
-        if let Some(row) = snapshot.row_of(name) {
+    for row in snapshot.rows_of(names).into_iter().flatten() {
+        {
             if selected {
                 selection.toggle(snapshot, row);
             } else {

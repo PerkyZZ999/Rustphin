@@ -20,7 +20,13 @@ fn action<A: Action + Default>() -> Box<dyn Action> {
     Box::<A>::default()
 }
 
-pub fn commands() -> Vec<Command> {
+/// Every command, built once: the toolbar asks for them on each frame.
+pub fn commands() -> &'static [Command] {
+    static COMMANDS: std::sync::LazyLock<Vec<Command>> = std::sync::LazyLock::new(build);
+    &COMMANDS
+}
+
+fn build() -> Vec<Command> {
     macro_rules! command {
         ($label:literal, $key:literal, $scope:ident, $action:ty) => {
             Command {

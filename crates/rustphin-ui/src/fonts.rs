@@ -9,6 +9,8 @@
 
 use std::borrow::Cow;
 
+use crate::theme::text;
+
 /// Every bundled face, in no particular order.
 const FACES: [&[u8]; 6] = [
     include_bytes!("../assets/fonts/Inter-Regular.ttf"),
@@ -31,32 +33,37 @@ pub(crate) fn register(text_system: &gpui_kit::TextSystem) {
     }
 }
 
+/// The faces the first frame draws with: warmed before the window opens,
+/// since each first match walks every installed font (about 90 ms each
+/// with 9,000 system fonts).
+pub(crate) const FIRST_FRAME: [(&str, gpui_kit::FontWeight); 4] = [
+    (text::FAMILY_BODY, gpui_kit::FontWeight::NORMAL),
+    (text::FAMILY_BODY, gpui_kit::FontWeight::SEMIBOLD),
+    (text::FAMILY_HEADING, gpui_kit::FontWeight::SEMIBOLD),
+    (text::FAMILY_DATA, gpui_kit::FontWeight::NORMAL),
+];
+
+/// The other faces docs/DESIGN.md uses, plus the medium weight the
+/// component library sets on some labels: warmed once the window is up.
+pub(crate) const LATER: [(&str, gpui_kit::FontWeight); 2] = [
+    (text::FAMILY_BODY, gpui_kit::FontWeight::MEDIUM),
+    (text::FAMILY_DATA, gpui_kit::FontWeight::MEDIUM),
+];
+
 #[cfg(test)]
 mod tests {
-    use gpui_kit::{FontWeight, PlatformTextSystem as _};
+    use gpui_kit::PlatformTextSystem as _;
     use gpui_wgpu::CosmicTextSystem;
 
     use super::faces;
-    use crate::theme::text;
-
-    /// Every family and weight docs/DESIGN.md's typography tokens use, plus
-    /// the medium weight the component library sets on some labels.
-    const USED: [(&str, FontWeight); 6] = [
-        (text::FAMILY_BODY, FontWeight::NORMAL),
-        (text::FAMILY_BODY, FontWeight::MEDIUM),
-        (text::FAMILY_BODY, FontWeight::SEMIBOLD),
-        (text::FAMILY_HEADING, FontWeight::SEMIBOLD),
-        (text::FAMILY_DATA, FontWeight::NORMAL),
-        (text::FAMILY_DATA, FontWeight::MEDIUM),
-    ];
 
     #[test]
     fn each_design_weight_has_a_face_of_exactly_that_weight()
     -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // No system fonts: what resolves comes from the bundle alone.
-        let text_system = CosmicTextSystem::new_without_system_fonts(text::FAMILY_BODY);
+        let text_system = CosmicTextSystem::new_without_system_fonts(super::text::FAMILY_BODY);
         text_system.add_fonts(faces())?;
-        for (family, weight) in USED {
+        for (family, weight) in super::FIRST_FRAME.into_iter().chain(super::LATER) {
             let font = gpui_kit::Font {
                 weight,
                 ..gpui_kit::font(family)
