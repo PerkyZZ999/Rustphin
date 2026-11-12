@@ -8,8 +8,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::layout::{self, ViewMode};
 
-/// The format version this build writes.
-const VERSION: u32 = 1;
+/// The format version this build writes. Version 2 has seven zoom levels
+/// where version 1 had five (W-107).
+const VERSION: u32 = 2;
+
+/// Where each of version 1's five zoom levels (16, 20, 24, 32 and 48-pixel
+/// icons) is among today's seven.
+const ZOOM_FROM_VERSION_1: [usize; 5] = [0, 1, 2, 4, 6];
 
 /// Everything Rustphin remembers between sessions.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -119,9 +124,14 @@ impl Settings {
         }
     }
 
-    /// The remembered zoom level, kept within the valid levels.
+    /// The remembered zoom level, kept within the valid levels. A file
+    /// from before the seven levels keeps its icon size.
     pub fn zoom(&self) -> usize {
-        self.view.zoom.min(layout::ZOOM_LEVELS - 1)
+        if self.version < 2 {
+            ZOOM_FROM_VERSION_1[self.view.zoom.min(ZOOM_FROM_VERSION_1.len() - 1)]
+        } else {
+            self.view.zoom.min(layout::ZOOM_LEVELS - 1)
+        }
     }
 
     /// The remembered ordering and filtering, with `details` set for the mode.
@@ -175,7 +185,7 @@ mod tests {
     fn the_file_uses_plain_readable_names() {
         let text = sample().to_toml();
         for line in [
-            "version = 1",
+            "version = 2",
             "[view]",
             "mode = \"icons\"",
             "sort = \"modified\"",
@@ -227,6 +237,18 @@ mod tests {
     }
 
     #[test]
+    fn a_zoom_saved_with_five_levels_keeps_its_icon_size() {
+        let icon = |text: &str| ViewMode::Details.layout(Settings::parse(text).zoom()).icon;
+        // Version 1 had 16, 20, 24, 32 and 48-pixel levels.
+        let old: Vec<f32> = (0..5)
+            .map(|zoom| icon(&format!("version = 1\n[view]\nzoom = {zoom}\n")))
+            .collect();
+        assert_eq!(old, [16., 20., 24., 32., 48.]);
+        // Today's files are taken as they are.
+        assert_eq!(icon("version = 2\n[view]\nzoom = 3\n"), 28.);
+    }
+
+    #[test]
     fn an_out_of_range_zoom_is_clamped() {
         assert_eq!(
             Settings::parse("[view]\nzoom = 99\n").zoom(),
@@ -236,7 +258,7 @@ mod tests {
 
     #[test]
     fn a_file_from_a_newer_version_is_recognised() {
-        assert!(Settings::parse("version = 2\n").is_from_newer_version());
+        assert!(Settings::parse("version = 3\n").is_from_newer_version());
         assert!(!sample().is_from_newer_version());
         assert!(!Settings::parse("").is_from_newer_version());
     }

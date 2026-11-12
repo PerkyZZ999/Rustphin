@@ -13,18 +13,25 @@ pub enum ViewMode {
 }
 
 /// Number of zoom levels; valid levels are `0..ZOOM_LEVELS`.
-pub const ZOOM_LEVELS: usize = 5;
+pub const ZOOM_LEVELS: usize = 7;
 /// The zoom level a new window starts at: 24-pixel icons and 36-pixel rows
 /// in the list views, 96-pixel icons in the icons view.
 pub const DEFAULT_ZOOM: usize = 2;
 
 /// Icon sizes of the two list-like modes, by zoom level.
-const SMALL_ICONS: [f32; ZOOM_LEVELS] = [16., 20., 24., 32., 48.];
+const SMALL_ICONS: [f32; ZOOM_LEVELS] = [16., 20., 24., 28., 32., 40., 48.];
 /// Icon sizes of the icons mode, by zoom level.
-const LARGE_ICONS: [f32; ZOOM_LEVELS] = [48., 64., 96., 128., 192.];
+const LARGE_ICONS: [f32; ZOOM_LEVELS] = [48., 64., 96., 112., 128., 160., 192.];
 /// Column pitch of the compact mode, by zoom level: the column plus the
 /// 8-pixel gap after it (240-pixel columns at the default level).
-const COMPACT_WIDTHS: [f32; ZOOM_LEVELS] = [232., 240., 248., 264., 296.];
+const COMPACT_WIDTHS: [f32; ZOOM_LEVELS] = [232., 240., 248., 256., 264., 280., 296.];
+/// Names in the details and compact views grow with their rows (W-107):
+/// size and line height by zoom level. The default level is the type
+/// scale's 12 pixels.
+const LIST_NAME_TEXT: [f32; ZOOM_LEVELS] = [11., 12., 12., 13., 14., 15., 16.];
+const LIST_NAME_LINE: [f32; ZOOM_LEVELS] = [16., 16., 16., 18., 18., 20., 20.];
+/// Sizes, dates and types beside the names, by zoom level.
+const LIST_DATA_TEXT: [f32; ZOOM_LEVELS] = [10., 11., 11., 12., 12., 13., 14.];
 /// Width a large icon's cell adds to the icon, gap included: 128-pixel
 /// cells 8 pixels apart at the 96-pixel level.
 const ICON_CELL_EXTRA_WIDTH: f32 = 40.;
@@ -45,6 +52,12 @@ pub struct Layout {
     pub row_height: f32,
     /// Width of one grid cell; `None` when each entry spans the full width.
     pub cell_width: Option<f32>,
+    /// Size of an entry's name.
+    pub name_text: f32,
+    /// Line height of an entry's name.
+    pub name_line: f32,
+    /// Size of the size, date and type beside a name.
+    pub data_text: f32,
 }
 
 impl ViewMode {
@@ -52,21 +65,25 @@ impl ViewMode {
     pub fn layout(self, zoom: usize) -> Layout {
         let zoom = zoom.min(ZOOM_LEVELS - 1);
         let small_row = (SMALL_ICONS[zoom] + ROW_PADDING).max(MIN_ROW);
+        let list = |cell_width| Layout {
+            icon: SMALL_ICONS[zoom],
+            row_height: small_row,
+            cell_width,
+            name_text: LIST_NAME_TEXT[zoom],
+            name_line: LIST_NAME_LINE[zoom],
+            data_text: LIST_DATA_TEXT[zoom],
+        };
         match self {
-            Self::Details => Layout {
-                icon: SMALL_ICONS[zoom],
-                row_height: small_row,
-                cell_width: None,
-            },
-            Self::Compact => Layout {
-                icon: SMALL_ICONS[zoom],
-                row_height: small_row,
-                cell_width: Some(COMPACT_WIDTHS[zoom]),
-            },
+            Self::Details => list(None),
+            Self::Compact => list(Some(COMPACT_WIDTHS[zoom])),
+            // The icons view's names keep the type scale: the icon grows.
             Self::Icons => Layout {
                 icon: LARGE_ICONS[zoom],
                 row_height: LARGE_ICONS[zoom] + ICON_CELL_EXTRA_HEIGHT,
                 cell_width: Some(LARGE_ICONS[zoom] + ICON_CELL_EXTRA_WIDTH),
+                name_text: crate::theme::text::NAME,
+                name_line: crate::theme::text::LINE,
+                data_text: crate::theme::text::DATA,
             },
         }
     }
@@ -406,8 +423,45 @@ mod tests {
         let rows: Vec<f32> = (0..ZOOM_LEVELS)
             .map(|zoom| ViewMode::Details.layout(zoom).row_height)
             .collect();
-        assert_eq!(rows, [24., 28., 32., 40., 56.]);
+        assert_eq!(rows, [24., 28., 32., 36., 40., 48., 56.]);
         assert_eq!(default.columns(2000.), 1);
+    }
+
+    #[test]
+    fn list_text_grows_with_the_rows_and_the_default_keeps_the_type_scale() {
+        let text = |mode: ViewMode| -> Vec<(f32, f32, f32)> {
+            (0..ZOOM_LEVELS)
+                .map(|zoom| {
+                    let layout = mode.layout(zoom);
+                    (layout.name_text, layout.name_line, layout.data_text)
+                })
+                .collect()
+        };
+        let list = text(ViewMode::Details);
+        assert_eq!(
+            list,
+            [
+                (11., 16., 10.),
+                (12., 16., 11.),
+                (12., 16., 11.),
+                (13., 18., 12.),
+                (14., 18., 12.),
+                (15., 20., 13.),
+                (16., 20., 14.)
+            ]
+        );
+        assert_eq!(text(ViewMode::Compact), list);
+        // The default is the type scale's name and data sizes.
+        let default = ViewMode::Details.layout(DEFAULT_ZOOM);
+        assert_eq!(
+            (default.name_text, default.data_text),
+            (crate::theme::text::NAME, crate::theme::text::DATA)
+        );
+        // Every name line fits its row.
+        for zoom in 0..ZOOM_LEVELS {
+            let layout = ViewMode::Details.layout(zoom);
+            assert!(layout.name_line <= layout.row_height);
+        }
     }
 
     #[test]
@@ -416,6 +470,9 @@ mod tests {
             icon: 16.,
             row_height: 28.,
             cell_width: None,
+            name_text: 12.,
+            name_line: 16.,
+            data_text: 11.,
         };
         assert_eq!(across(list, 1, 1000).cell_bottom_left(0), (0., 28.));
         assert_eq!(across(list, 1, 1000).cell_bottom_left(3), (0., 112.));
@@ -423,6 +480,9 @@ mod tests {
             icon: 64.,
             row_height: 100.,
             cell_width: Some(90.),
+            name_text: 12.,
+            name_line: 16.,
+            data_text: 11.,
         };
         assert_eq!(across(grid, 4, 1000).cell_bottom_left(0), (0., 100.));
         assert_eq!(across(grid, 4, 1000).cell_bottom_left(6), (180., 200.));

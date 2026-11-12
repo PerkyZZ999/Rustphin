@@ -18,10 +18,11 @@ use gpui_kit::{
     Render, Role, ScrollHandle, ScrollStrategy, SharedString, StatefulInteractiveElement as _,
     Styled as _, Subscription, UniformListScrollHandle, WeakEntity, Window, actions, anchored,
     component::{
-        Icon, IconName, Sizable as _,
+        Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
         input::{Input, InputEvent, InputState},
         scroll::{Scrollbar, ScrollbarMode},
+        slider::{Slider, SliderEvent, SliderState},
     },
     deferred, div, img, point,
     prelude::FluentBuilder as _,
@@ -50,6 +51,8 @@ use crate::{
 };
 
 const KEY_CONTEXT: &str = "Browser";
+/// The View button's panel, while it has the keyboard focus (W-107).
+const VIEW_MENU_CONTEXT: &str = "ViewMenu";
 /// The only action inside an empty-folder message.
 const FOLDER_ACTION_CONTEXT: &str = "FolderStateAction";
 /// The browser while no text field inside it has focus.
@@ -113,6 +116,7 @@ actions!(
         Cut,
         Paste,
         OpenContextMenu,
+        CloseViewMenu,
         OpenTrash,
         RestoreTrash,
         EmptyTrash,
@@ -177,6 +181,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-1", ShowIcons, view),
         KeyBinding::new("ctrl-2", ShowCompact, view),
         KeyBinding::new("ctrl-3", ShowDetails, view),
+        KeyBinding::new("escape", CloseViewMenu, Some(VIEW_MENU_CONTEXT)),
         KeyBinding::new("escape", CancelEdit, view),
         KeyBinding::new("f2", Rename, list),
         KeyBinding::new("f10", NewFolder, list),
@@ -378,6 +383,11 @@ pub struct Browser {
     menu: Option<OpenMenu>,
     /// Holds the keyboard focus while the context menu is open.
     menu_focus: FocusHandle,
+    /// The View button's panel is open (W-107).
+    view_menu_open: bool,
+    view_menu_focus: FocusHandle,
+    /// The panel's size slider, over the zoom levels.
+    size_slider: Entity<SliderState>,
     /// The bounded message shown while a listing has no visible entries.
     folder_state_scroll: ScrollHandle,
     /// Contains only the hidden-files action; it is not an extra tab stop.
@@ -459,6 +469,27 @@ impl Browser {
                 cx.notify();
             }
         }));
+        // The View panel closes when the focus leaves it: a click elsewhere.
+        let view_menu_focus = cx.focus_handle();
+        subscriptions.push(cx.on_focus_out(&view_menu_focus, window, |this, _, _, cx| {
+            if std::mem::take(&mut this.view_menu_open) {
+                cx.notify();
+            }
+        }));
+        let size_slider = cx.new(|_| {
+            SliderState::new()
+                .min(0.)
+                .max((layout::ZOOM_LEVELS - 1) as f32)
+                .step(1.)
+                .default_value(settings.zoom() as f32)
+        });
+        subscriptions.push(
+            cx.subscribe(&size_slider, |this, _, event: &SliderEvent, cx| {
+                let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
+                let zoom = value.start().round().max(0.) as usize;
+                this.set_zoom(zoom.min(layout::ZOOM_LEVELS - 1), cx);
+            }),
+        );
 
         let folder_action_focus = cx.focus_handle().tab_stop(false);
         subscriptions.push(cx.on_focus_in(&folder_action_focus, window, |this, _, cx| {
@@ -499,6 +530,9 @@ impl Browser {
             focus,
             menu: None,
             menu_focus,
+            view_menu_open: false,
+            view_menu_focus,
+            size_slider,
             folder_state_scroll: ScrollHandle::new(),
             folder_action_focus,
             types: None,
@@ -1482,6 +1516,174 @@ impl Browser {
             self.volume = name;
             cx.notify();
         }
+    }
+
+    /// The View button's panel: the three modes, then the size (W-107).
+    fn view_menu_panel(
+        &mut self,
+        theme: Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        // The slider follows the zoom, whichever way it was changed.
+        let zoom = self.zoom as f32;
+        if self.size_slider.read(cx).value().start() != zoom {
+            self.size_slider
+                .update(cx, |slider, cx| slider.set_value(zoom, window, cx));
+        }
+        let current_mode = self.mode;
+        let mode_row = |mode: ViewMode, key: &'static str, cx: &mut Context<Self>| {
+            let (icon, name) = mode_icon_and_name(mode);
+            let current = current_mode == mode;
+            div()
+                .id(SharedString::from(format!("view-menu-{name}")))
+                .role(Role::RadioButton)
+                .aria_label(format!("{name} ({key})"))
+                .aria_selected(current)
+                .flex()
+                .items_center()
+                .gap(px(space::MD))
+                .h(px(size::MENU_ROW))
+                .px(px(space::SM - size::SELECTION_BAR))
+                .rounded(px(size::RADIUS))
+                .border_l(px(size::SELECTION_BAR))
+                .border_color(gpui_kit::transparent_black())
+                .when(current, |row| {
+                    row.bg(theme.current).border_color(theme.accent)
+                })
+                .when(!current, |row| row.hover(|row| row.bg(theme.hover)))
+                .child(
+                    Icon::new(icon)
+                        .size(px(size::ICON))
+                        .flex_none()
+                        .text_color(if current { theme.accent } else { theme.text }),
+                )
+                .child(div().flex_1().min_w_0().child(name))
+                .when(current, |row| {
+                    row.child(
+                        Icon::new(gpui_kit::assets::IconName::Check)
+                            .size(px(size::ICON))
+                            .flex_none()
+                            .text_color(theme.accent),
+                    )
+                })
+                .child(
+                    div()
+                        .flex_none()
+                        .font_family(text::FAMILY_DATA)
+                        .text_size(px(text::SMALL))
+                        .text_color(theme.text_muted)
+                        .child(key),
+                )
+                .on_click(cx.listener(move |this, _, _, cx| this.set_mode(mode, cx)))
+        };
+        let step = |id: &'static str,
+                    icon: gpui_kit::assets::IconName,
+                    label: &'static str,
+                    enabled: bool,
+                    delta: isize,
+                    cx: &mut Context<Self>| {
+            Button::new(id)
+                .ghost()
+                .with_size(px(size::SMALL_BUTTON))
+                .size(px(size::SMALL_BUTTON))
+                .child(Icon::new(icon).size(px(size::ICON)))
+                .disabled(!enabled)
+                .tooltip(label)
+                .accessibility_label(label)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.set_zoom(layout::step_zoom(this.zoom, delta), cx);
+                }))
+        };
+        let rows = [
+            mode_row(ViewMode::Icons, "Ctrl+1", cx).into_any_element(),
+            mode_row(ViewMode::Compact, "Ctrl+2", cx).into_any_element(),
+            mode_row(ViewMode::Details, "Ctrl+3", cx).into_any_element(),
+        ];
+        let smaller = step(
+            "view-smaller",
+            gpui_kit::assets::IconName::Minus,
+            "Smaller (Ctrl+\u{2212})",
+            self.zoom > 0,
+            -1,
+            cx,
+        );
+        let larger = step(
+            "view-larger",
+            gpui_kit::assets::IconName::Plus,
+            "Larger (Ctrl+=)",
+            self.zoom + 1 < layout::ZOOM_LEVELS,
+            1,
+            cx,
+        );
+        let icon = self.mode.layout(self.zoom).icon;
+        crate::menu_view::column("view-menu-panel", theme)
+            .role(Role::Dialog)
+            .aria_label("View")
+            .aria_description("Choose how entries are shown and how large. Escape closes.")
+            .key_context(VIEW_MENU_CONTEXT)
+            .track_focus(&self.view_menu_focus)
+            .on_action(cx.listener(|this, _: &CloseViewMenu, window, cx| {
+                this.view_menu_open = false;
+                this.focus(window, cx);
+                cx.notify();
+            }))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .occlude()
+            .children(rows)
+            .child(
+                div()
+                    .h(px(size::HAIRLINE))
+                    .my(px(space::XS))
+                    .bg(theme.border),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px(px(space::SM))
+                    .pt(px(space::XS))
+                    .child(
+                        div()
+                            .font_family(text::FAMILY_DATA)
+                            .font_weight(gpui_kit::FontWeight::MEDIUM)
+                            .text_size(px(text::SMALL))
+                            .text_color(theme.text_muted)
+                            .child("SIZE"),
+                    )
+                    .child(
+                        div()
+                            .font_family(text::FAMILY_DATA)
+                            .text_size(px(text::SMALL))
+                            .text_color(theme.text_muted)
+                            .child(format!("{icon:.0} px")),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(space::SM))
+                    .h(px(size::MENU_ROW))
+                    .px(px(space::XS))
+                    .child(smaller)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            // The fill in the accent, the thumb in the text
+                            // colour, as DESIGN.md's view menu.
+                            .child(
+                                Slider::new(&self.size_slider)
+                                    .horizontal()
+                                    .bg(theme.accent)
+                                    .text_color(theme.text),
+                            ),
+                    )
+                    .child(larger),
+            )
+            .into_any_element()
     }
 
     /// Reads the folder shown again, as F5 does.
@@ -2524,64 +2726,60 @@ impl Browser {
             .into_any_element()
         });
 
+        // One button for the view: its mode's icon and a chevron, opening
+        // the panel with the modes and the size (W-107).
         let view_mode = layout.tools.then(|| {
-            let mode = self.mode;
-            let segment = |id: &'static str, icon, label: &'static str, target: ViewMode| {
-                tool_button(id, icon, label, true, Some(mode == target), &theme)
-                    .rounded_none()
-                    .w(px(size::TOOL_BUTTON - 2.))
-                    .h(px(size::TOOL_BUTTON - 2.))
-            };
+            let open = self.view_menu_open;
+            let (icon, name) = mode_icon_and_name(self.mode);
+            let button = Button::new("view-menu")
+                .ghost()
+                .with_size(px(size::TOOL_BUTTON))
+                .h(px(size::TOOL_BUTTON))
+                .px(px(space::SM))
+                .when(open, |button| button.bg(theme.current))
+                .toggled(open)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(space::XS))
+                        .child(Icon::new(icon).size(px(size::ICON)).text_color(theme.text))
+                        .child(
+                            Icon::new(IconName::ChevronDown)
+                                .size(px(size::ICON_SMALL))
+                                .text_color(theme.text_muted),
+                        ),
+                )
+                .tooltip(format!("View: {name} and size"))
+                .accessibility_label(format!("View: {name} and size"))
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.view_menu_open = !this.view_menu_open;
+                    if this.view_menu_open {
+                        this.view_menu_focus.focus(window, cx);
+                    } else {
+                        this.focus(window, cx);
+                    }
+                    cx.notify();
+                }));
+            let panel = open.then(|| self.view_menu_panel(theme, window, cx));
             div()
-                .id("view-mode")
-                .role(Role::RadioGroup)
-                .aria_label("View mode")
-                .flex()
+                .relative()
                 .flex_none()
-                .rounded(px(size::RADIUS))
-                .border_1()
-                .border_color(theme.border_strong)
-                .overflow_hidden()
-                .child(
-                    segment(
-                        "view-icons",
-                        gpui_kit::assets::IconName::LayoutGrid,
-                        "Icons (Ctrl+1)",
-                        ViewMode::Icons,
+                .child(button)
+                .when_some(panel, |anchor, panel| {
+                    anchor.child(
+                        div()
+                            .absolute()
+                            .right_0()
+                            .top(px(size::TOOL_BUTTON + space::XS))
+                            .child(deferred(
+                                anchored()
+                                    .anchor(gpui_kit::Anchor::TopRight)
+                                    .snap_to_window_with_margin(Edges::all(px(space::SM)))
+                                    .child(panel),
+                            )),
                     )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.set_mode(ViewMode::Icons, cx);
-                        this.focus(window, cx);
-                    })),
-                )
-                .child(
-                    segment(
-                        "view-compact",
-                        gpui_kit::assets::IconName::Columns3,
-                        "Compact (Ctrl+2)",
-                        ViewMode::Compact,
-                    )
-                    .border_l_1()
-                    .border_color(theme.border_strong)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.set_mode(ViewMode::Compact, cx);
-                        this.focus(window, cx);
-                    })),
-                )
-                .child(
-                    segment(
-                        "view-details",
-                        gpui_kit::assets::IconName::List,
-                        "Details (Ctrl+3)",
-                        ViewMode::Details,
-                    )
-                    .border_l_1()
-                    .border_color(theme.border_strong)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.set_mode(ViewMode::Details, cx);
-                        this.focus(window, cx);
-                    })),
-                )
+                })
                 .into_any_element()
         });
 
@@ -3094,9 +3292,11 @@ impl Browser {
                 underline: None,
                 strikethrough: None,
             };
+            // The field matches the names around it at this size (W-107).
+            let name_text = self.mode.layout(self.zoom).name_text;
             let text_width = window
                 .text_system()
-                .layout_line(&value, px(text::NAME), &[run], None)
+                .layout_line(&value, px(name_text), &[run], None)
                 .width;
             let width = text_width + px(space::XS * 2. + size::HAIRLINE * 2. + space::XS);
             div()
@@ -3112,7 +3312,7 @@ impl Browser {
                         .xsmall()
                         .min_h(px(size::RENAME_FIELD))
                         .px(px(space::XS))
-                        .text_size(px(text::NAME)),
+                        .text_size(px(name_text)),
                     &self.rename_input,
                     "New name",
                     window,
@@ -3380,7 +3580,8 @@ impl Browser {
                             .flex()
                             .items_center()
                             .size_full()
-                            .text_size(px(text::NAME))
+                            .text_size(px(layout.name_text))
+                            .line_height(px(layout.name_line))
                             .child(
                                 div()
                                     .flex()
@@ -3416,7 +3617,7 @@ impl Browser {
                                         .px(px(space::SM))
                                         .text_right()
                                         .font_family(text::FAMILY_DATA)
-                                        .text_size(px(text::DATA))
+                                        .text_size(px(layout.data_text))
                                         .text_color(secondary)
                                         .when(!size_text.is_empty(), |cell| cell.child(size_text)),
                                 )
@@ -3428,7 +3629,7 @@ impl Browser {
                                         .flex_none()
                                         .px(px(space::SM))
                                         .font_family(text::FAMILY_DATA)
-                                        .text_size(px(text::DATA))
+                                        .text_size(px(layout.data_text))
                                         .text_color(secondary)
                                         .when(!modified_text.is_empty(), |cell| {
                                             cell.child(modified_text)
@@ -3443,7 +3644,7 @@ impl Browser {
                                         .px(px(space::SM))
                                         .truncate()
                                         .font_family(text::FAMILY_DATA)
-                                        .text_size(px(text::DATA))
+                                        .text_size(px(layout.data_text))
                                         .text_color(secondary)
                                         .when(!description.is_empty(), |cell| {
                                             cell.child(description)
@@ -3510,7 +3711,7 @@ impl Browser {
                 .gap(px(space::XS))
                 .py(px(space::SM))
                 .px(px(space::XS))
-                .text_size(px(text::NAME))
+                .text_size(px(layout.name_text))
                 .child(icon)
                 .child(if entry.renaming {
                     self.name_cell(&entry, theme, window, cx).w_full()
@@ -3528,7 +3729,8 @@ impl Browser {
                 .items_center()
                 .gap(px(space::MD))
                 .px(px(space::SM))
-                .text_size(px(text::NAME))
+                .text_size(px(layout.name_text))
+                .line_height(px(layout.name_line))
                 .child(icon)
                 .child(
                     self.name_cell(&entry, theme, window, cx)
@@ -5102,6 +5304,15 @@ impl Entry {
                 entry_opacity(self.hidden, self.cut, self.selected),
                 |surface, opacity| surface.opacity(opacity),
             )
+    }
+}
+
+/// The toolbar's icon and the menu's name of a view mode.
+fn mode_icon_and_name(mode: ViewMode) -> (gpui_kit::assets::IconName, &'static str) {
+    match mode {
+        ViewMode::Icons => (gpui_kit::assets::IconName::LayoutGrid, "Icons"),
+        ViewMode::Compact => (gpui_kit::assets::IconName::Columns3, "Compact"),
+        ViewMode::Details => (gpui_kit::assets::IconName::List, "Details"),
     }
 }
 

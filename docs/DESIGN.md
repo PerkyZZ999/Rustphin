@@ -601,13 +601,13 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
 - **Toolbar:** plain 32 px icon buttons (`toolbar-button`, no outline, the
   hover fill under the pointer), in groups separated by 20 px hairlines: Act
   as administrator · Back, Forward, Up, Reload · the location field (fills
-  the middle) · New folder · the view mode (Icons, Compact, Details as one
-  outlined segmented control) · Split, Show hidden, Filter · "Actions ⌄"
+  the middle) · New folder · the View button (the current mode's icon and a
+  12 px chevron, opening the view menu) · Split, Show hidden, Filter · "Actions ⌄"
   with the shortcut "Ctrl+Shift+P" in `data-sm` beside it, in one outlined
   group. Toggles that are on take `toolbar-toggle-on` and are announced as
   pressed; their tooltips name the key. In split view the toolbar acts on
   the active pane. By window width: below 1000 px the shortcut hint leaves;
-  below 760 px Reload, New folder, the view mode and the three toggles leave;
+  below 760 px Reload, New folder, the View button and the three toggles leave;
   below 560 px Forward and Up leave and Actions becomes an icon button
   (Lucide `menu`, tooltip "Actions (Ctrl+Shift+P)"); below 300 px Back
   leaves. They remain in Actions and on their keys.
@@ -628,9 +628,24 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   32 px with 24 px icons or 24 × 16 px thumbnails. Below 820 px of pane width
   the type column goes, below 600 px the modified column, below 360 px the
   size column. The scrollbar's track starts below the headings.
-- **Zoom:** five levels with 16, 20, 24, 32 and 48 px icons; rows are the icon
-  plus 8 px, at least 24 px (24, 28, 32, 40, 56; W-096d). The default is the 24 px
-  level. Icons view uses 48, 64, 96, 128 and 192 px icons as today; at the
+- **View menu (W-107):** the View button opens a 240 px panel with the
+  context menu's surface, under the button's right edge: the three modes as
+  rows (icon, name, key: Icons Ctrl+1, Compact Ctrl+2, Details Ctrl+3), the
+  current one in `primary-subtle` with the 2 px `primary-bright` bar and a
+  check; a hairline; then "Size" in `label-sm` capitals with the level's
+  icon size in `data-sm` ("24 px"), and a row of a 28 px "−" button, a
+  slider over the seven levels (filled in `primary-bright`, its thumb in
+  `text`) and a 28 px "+" button (Ctrl+− and Ctrl+=;
+  Ctrl+0 resets). Choosing a mode or a size applies at once; Escape or a
+  click elsewhere closes the panel.
+- **Zoom:** seven levels with 16, 20, 24, 28, 32, 40 and 48 px icons; rows are
+  the icon plus 8 px, at least 24 px (24, 28, 32, 36, 40, 48, 56; W-096d,
+  W-107). The default is the 24 px level. In the details and compact views
+  the text grows with the rows: names 11, 12, 12, 13, 14, 15 and 16 px on
+  16, 16, 16, 18, 18, 20 and 20 px lines; sizes, dates and types 10, 11, 11,
+  12, 12, 13 and 14 px (the default level keeps the 12 and 11 px of the
+  type scale). Column headings keep their size. Icons view uses 48, 64, 96,
+  112, 128, 160 and 192 px icons; at the
   96 px level a cell is 128 × 152 px with 8 px gaps (cells scale with the
   level), the name wraps to two lines, centred. Compact view fills 240 px
   columns, 8 px apart, top to bottom, with 32 px rows; as many rows as fit

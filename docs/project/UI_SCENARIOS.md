@@ -429,3 +429,14 @@ Isolated home with three places, each in its own group: Work, Music, Photos.
 | RG1 | Drag the Work heading onto the Photos heading (waypoints with pauses) | While dragging, a "Work" chip follows the pointer and the Photos heading takes the hover fill; afterwards the order is Music, Photos, Work, Work keeps its place and stays unfolded, and `place-groups.toml` lists the groups in that order |
 | RG2 | Drag the Work heading onto the place inside Music | Work goes first: Work, Music, Photos |
 | RG3 | Drag a place onto the Work heading | The place joins Work, as before |
+
+## View menu and size (W-107)
+
+| ID | Steps | Expected |
+|---|---|---|
+| VM1 | Look at the toolbar; click the View button | One button with the mode's icon and a chevron replaces the three; the panel lists Icons, Compact, Details with their keys, the current one checked, then SIZE with "24 px", "−", a slider and "+" |
+| VM2 | Click "+" twice | Details rows grow to 40 px with 32 px icons, 14 px names and 12 px sizes and dates; the slider and "32 px" follow |
+| VM3 | Drag the slider to its left end | 16 px icons, 24 px rows, 11 px names; "−" is unavailable |
+| VM4 | Click Compact in the panel; click empty space | The view becomes compact and the button shows its icon; the panel closes |
+| VM5 | Open the panel; click the button again; open it; press Escape | Each closes it |
+| VM6 | Relaunch | The mode and size come back; `settings.toml` says `version = 2` |

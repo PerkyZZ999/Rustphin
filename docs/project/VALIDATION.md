@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-12 — W-107 View menu and resizable rows
+- **Design first:** DESIGN.md's toolbar now has one View button (mode icon and chevron) instead of the segmented control; a new "View menu" bullet; the zoom bullet has seven levels (16, 20, 24, 28, 32, 40, 48 px icons) with list text 11–16 px and data 10–14 px, the default level keeping the 12 and 11 px of the type scale.
+- **Code:** `layout` has seven levels and gives each mode's name size, name line and data size; the details rows, the compact and icons cells and the rename field use them. The browser's View button opens a panel (`view_menu_panel`): mode rows (current one in `current` with the accent bar and a check), then SIZE with the level's icon size, "−", GPUI-Kit's slider over the levels (fill `accent`, thumb `text`) and "+". It closes on Escape (`ViewMenu` context), on focus leaving it, and on the button. The slider follows the zoom however it changes. Settings are version 2; a version 1 file's five levels map to the same icon sizes (0, 1, 2, 4, 6).
+- **Tests:** `list_text_grows_with_the_rows_and_the_default_keeps_the_type_scale`, `details_rows_span_the_width_and_grow_with_the_icon` (seven rows), `a_zoom_saved_with_five_levels_keeps_its_icon_size`; the existing layout tests (four-pixel grid, nothing shrinks when zooming in) cover the new levels.
+- **On screen (VM1–VM6):** isolated session: the single button; the panel as designed; "+" twice gave 32 px icons with 14 px names; dragging the slider to the left gave 16 px with "−" unavailable; Compact from the panel changed the view and the button's icon; a click outside, the button and Escape each closed the panel; a relaunch came back in the saved mode and size (`version = 2`). First the slider showed the toolkit's white fill and dark thumb; it now uses the accent and text colours.
+- **Gate:** `rust-tc doctor` PASS.
+
 ### 2026-11-11 — W-105 reorder place groups by dragging; W-106 recorded
 - **Code:** `Groups::move_group(from, to)`: the dragged group takes the place of the one dropped on (past the end lands last; a missing group moves nothing). Group headings are drag sources (`DraggedGroup`, a chip with the name); every panel drop target accepts a group: on a heading it moves there, on a place it moves to that place's group, elsewhere nothing. The order is saved with the groups. Alt+Up/Down and the menu's Move up/down still move groups by one.
 - **Tests:** `a_dragged_group_takes_the_place_of_the_one_it_is_dropped_on`; with the insert position broken it failed.
