@@ -545,3 +545,11 @@ Isolated home with `~/.config/rustphin/place-groups.toml` holding two empty grou
 | TB13 | Choose Back on the toolbar; Page Down; tick Show its words; Move right; choose Act as administrator, Remove; Escape | The toolbar reads Forward, "← Back", Up…; no shield, and the separator left first is not drawn; `[toolbar]` lists the items and `words = ["back"]` |
 | TB14 | Click the copy-location button with nothing selected | It runs as from the palette: "Select an item to copy its location." |
 | TB15 | Settings, Toolbar, Reset to defaults | `[toolbar]` empty; the toolbar as in TB10 |
+
+### Shortcuts page (W-106g)
+
+| ID | Steps | Expected |
+|---|---|---|
+| SC1 | Settings, Shortcuts | "The keys Rustphin understands. Changing them comes later.", a search field, then Navigation (Back Backspace, Forward Alt+Right, … Open terminal here Shift+F4), View and the other categories, each key in a key cap; no Reset to defaults |
+| SC2 | Type `f2` | Files: Rename selection F2; Places: Rename selected place or group F2 |
+| SC3 | Type `zzz` after it | "No shortcut matches. Try another word." |

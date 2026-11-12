@@ -94,6 +94,8 @@ pub enum Page {
     Places,
     /// Which actions ask before they act.
     Confirmations,
+    /// The keys Rustphin understands.
+    Shortcuts,
     /// Version, licence, credits, privacy and files.
     About,
 }
@@ -107,6 +109,7 @@ impl Page {
         Page::Toolbar,
         Page::Places,
         Page::Confirmations,
+        Page::Shortcuts,
         Page::About,
     ];
 
@@ -119,6 +122,7 @@ impl Page {
             Page::Toolbar => "Toolbar",
             Page::Places => "Places",
             Page::Confirmations => "Confirmations",
+            Page::Shortcuts => "Shortcuts",
             Page::About => "About",
         }
     }
@@ -132,6 +136,7 @@ impl Page {
             Page::Toolbar => IconName::SlidersHorizontal,
             Page::Places => IconName::Bookmark,
             Page::Confirmations => IconName::CircleCheck,
+            Page::Shortcuts => IconName::Keyboard,
             Page::About => IconName::Info,
         }
     }
@@ -144,6 +149,7 @@ impl Page {
             Page::Toolbar => "Which buttons the toolbar shows, and in which order.",
             Page::Places => "What the places panel shows.",
             Page::Confirmations => "Which actions ask before they act.",
+            Page::Shortcuts => "The keys Rustphin understands. Changing them comes later.",
             Page::Appearance => {
                 "How the window looks. The colours are Rustphin\u{2019}s dark design."
             }
@@ -160,7 +166,7 @@ impl Page {
             | Page::Toolbar
             | Page::Places
             | Page::Confirmations => true,
-            Page::About => false,
+            Page::Shortcuts | Page::About => false,
         }
     }
 
@@ -219,6 +225,8 @@ pub struct SettingsDialog {
     pub(crate) available_cursor: Option<usize>,
     /// The row chosen in "On the toolbar".
     pub(crate) toolbar_cursor: Option<usize>,
+    /// The search over the shortcuts.
+    pub(crate) shortcut_search: Entity<InputState>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -273,6 +281,8 @@ impl SettingsDialog {
                 .default_value(width as f32)
         });
         let group_input = cx.new(|cx| InputState::new(window, cx));
+        let shortcut_search =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search shortcuts\u{2026}"));
         let toolbar_search =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search actions\u{2026}"));
         let subscriptions = vec![
@@ -281,6 +291,11 @@ impl SettingsDialog {
                 let width = value.start().round().max(0.) as u32;
                 if preferences(cx).read(cx).settings().places().width != width {
                     crate::settings_places::choose_width(cx, width);
+                }
+            }),
+            cx.subscribe(&shortcut_search, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
                 }
             }),
             cx.subscribe(&toolbar_search, |this, _, event: &InputEvent, cx| {
@@ -365,6 +380,7 @@ impl SettingsDialog {
             toolbar_search,
             available_cursor: None,
             toolbar_cursor: None,
+            shortcut_search,
             _subscriptions: subscriptions,
         }
     }
@@ -433,7 +449,7 @@ impl SettingsDialog {
                     store.update(Settings::reset_confirmations, cx);
                 });
             }
-            Page::About => {}
+            Page::Shortcuts | Page::About => {}
         }
     }
 
@@ -558,6 +574,7 @@ impl SettingsDialog {
             Page::Toolbar => self.toolbar_page(theme, window, cx),
             Page::Places => self.places(theme, window, cx),
             Page::Confirmations => self.confirmations(theme, window, cx),
+            Page::Shortcuts => self.shortcuts(theme, window, cx),
             Page::About => self.about(theme, cx),
         };
         div()
@@ -885,7 +902,7 @@ mod tests {
     #[test]
     fn up_and_down_move_through_the_list_and_stop_at_its_ends() {
         assert_eq!(Page::General.step(1), Page::Appearance);
-        assert_eq!(Page::About.step(-1), Page::Confirmations);
+        assert_eq!(Page::About.step(-1), Page::Shortcuts);
         assert_eq!(Page::General.step(-1), Page::General);
         assert_eq!(Page::About.step(1), Page::About);
         assert_eq!(Page::General.step(10), Page::About);

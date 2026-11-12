@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-12 — W-106g Settings: Shortcuts page (W-106 complete)
+- **Code:** `settings_shortcuts.rs`: the palette's commands that have keys, grouped by category in the palette's order, searchable by name, category or key; key caps (`size::KEY_CAP` 20 px); an empty search says so. Read-only: no Reset.
+- **Tests:** `rust-tc doctor` PASS, 606 tests. New: shortcuts come from the palette, only those with keys, grouped and searchable by key (proved: listing commands without keys fails it).
+- **On screen (isolated session, SC1–SC3):** as listed.
+- **W-106 as a whole:** all eight pages of D-029 are built (W-106b–g). R-019: Toolbar and About ticked; open are Tab through the controls, a second window following changes, and three differences from the plan for the maintainer (dates without "system format", hidden files from 60 %, toolbar items moved by buttons).
+- **Waiver:** none
+
 ### 2026-11-12 — W-106f Settings: Toolbar page
 - **Code:** `toolbar_items.rs`: the items (built-in buttons, palette commands by label, separators), today's toolbar as the default, the saved lists read leniently (unknown ids and repeats dropped, Location and Actions put back), add/remove/shift/words, and `fit`: Actions drops its key hint, then its words, then items leave from the right end inwards; separators left alone are not drawn. The browser builds each item on its own (`ToolbarParts::take`), with words when chosen (`tool_button_words`); the workspace lays the chosen list out and runs a command button as the palette does (`run_command`). The fixed width rules (`ToolbarLayout`, 1000/760/560/300 px) are gone; DESIGN.md says what replaced them (tokens `toolbar-location-min` 280 px, `toolbar-actions` 96, `toolbar-actions-hinted` 196, tuned on screen so the default 920 px window looks as before). `settings_toolbar.rs`: preview, search, the two lists, Add/Remove, Move left/right, Show its words.
 - **Tests:** `rust-tc doctor` PASS, 605 tests. New: saved lists round trip and keep what must stay; Location and Actions cannot go, buttons appear once, added before Actions; a wide window shows everything and a narrow one drops from the right (Actions to an icon, then only Location and Actions); a separator left alone is not drawn; a chosen toolbar survives the file and today's is not written; available actions leave out what is on the toolbar and follow the search. Proved by breaking: fitting from the left, not restoring Location, and an ignored search each failed their tests (3).

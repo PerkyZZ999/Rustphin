@@ -24,7 +24,7 @@ S11 — Hardening for daily use (in progress)
 
 ## Later (requested, not scheduled)
 
-- [ ] W-106 — Settings window with a Toolbar page to customize the toolbar entirely, as Dolphin's "Configure Toolbars…" (the maintainer, 2026-11-11). Needs a requirement and a design approved by the maintainer first; see ROADMAP.md "Later". 2026-11-12: the maintainer asked for the whole window to be planned (General, Appearance, Customizations, About, …); proposal in docs/project/SETTINGS_PLAN.md; approved as written (D-029, R-019).
+- [x] W-106 — Settings window with a Toolbar page to customize the toolbar entirely, as Dolphin's "Configure Toolbars…" (the maintainer, 2026-11-11). Needs a requirement and a design approved by the maintainer first; see ROADMAP.md "Later". 2026-11-12: the maintainer asked for the whole window to be planned (General, Appearance, Customizations, About, …); proposal in docs/project/SETTINGS_PLAN.md; approved as written (D-029, R-019).
   - [x] W-106a — Mockups of the Settings window, one scene per page and a narrow window: docs/mockup/36-settings.html (drawn 2026-11-12). Approved by the maintainer 2026-11-12.
   - [x] W-106b — Shared settings store (`preferences.rs`: one entity, newest write wins), the dialog with its page list (tabs when narrow), About, Ctrl+Shift+, and "Workspace: Settings…". Done 2026-11-12 (see VALIDATION.md).
   - [x] W-106c1 — General page: start (restore, home, chosen folder), folders from other applications (new tab or new window), default file manager, terminal (KDE's or a command), one or two clicks. Done 2026-11-12 (see VALIDATION.md).
@@ -33,7 +33,7 @@ S11 — Hardening for daily use (in progress)
   - [x] W-106e1 — Confirmations: ask before trash, emptying the trash, closing a window with several tabs; executable files ask, open or run; deleting for good always asks. Done 2026-11-12 (see VALIDATION.md).
   - [x] W-106e2 — Places page (sections, hidden places, groups, panel width; the panel's edge drags its width). Done 2026-11-12 (see VALIDATION.md). Groups reorder with Move up/down buttons on the page (drag stays in the panel).
   - [x] W-106f — Toolbar customisation: built-in buttons, any palette command and separators, in any order, each with or without its words; the location field and Actions always stay; items leave from the right end inwards when the window narrows. Done 2026-11-12 (see VALIDATION.md). Items move between and along the lists with buttons and double-click; dragging them is not offered yet.
-  - [ ] W-106g — Shortcuts (read-only).
+  - [x] W-106g — Shortcuts (read-only): the palette's keys by category, searchable. Done 2026-11-12 (see VALIDATION.md).
 
 ## Test-run refinements (the maintainer's findings, 2026-11-10; docs/project/TEST_RUN.md)
 

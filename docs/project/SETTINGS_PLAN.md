@@ -1,8 +1,9 @@
 # Settings window: plan for the maintainer to approve (W-106)
 
-Status: **proposal, 2026-11-12.** Nothing is built until the maintainer approves or
-changes it. Then: a requirement in REQUIREMENTS.md, the decisions in
-DECISIONS.md, mockups in `docs/mockup/`, and the work items below.
+Status: **approved as written 2026-11-12 (D-029, R-019) and built the same
+day (W-106b–g).** Where the build differs from this plan is recorded in
+VALIDATION.md and R-019: no "system format" for dates, hidden files fade
+from 60 % (WCAG AA), toolbar items move by buttons rather than dragging.
 
 ## What it is
 

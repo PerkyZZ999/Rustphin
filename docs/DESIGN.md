@@ -690,6 +690,13 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   at" (a slider from 60 % to 100 % in 5 % steps, 60 % by default, with the
   value in `data-sm`; fainter, a hidden name under the pointer falls below
   WCAG AA in the glass theme over a white window, so 60 % is the floor).
+  **Shortcuts:** "The keys Rustphin understands. Changing them comes
+  later." A search field, then a group per palette category (Navigation,
+  Files, View, …) of 28 px rows: the action's name, and its keys on the
+  right, each a 20 px key cap in `data-sm` on `content` inside a
+  `border-strong` outline, 4 px apart; a hairline under each row. Only
+  actions with a key are listed; a search with no match says "No shortcut
+  matches. Try another word." Read-only: no Reset to defaults.
   **Places:** "Sections" holds Show (Devices, Remote checkboxes) and Hidden
   places (Keep them hidden, Show them faded); "Groups" lists each group
   with its name, "N places" in `body-sm` `text-muted`, and 28 px icon
@@ -1122,8 +1129,7 @@ except where the list below says otherwise; each W-079 step adds its line.
   banner, as does a folder that vanished.
 - Settings (W-106b, W-106c1): the dialog, its page list and the tabs below
   720 px, the action row, the controls (segments, drop-downs, small buttons,
-  hints, checkboxes, the slider), General, Appearance, Views, Toolbar,
-  Places, Confirmations and About are built; Shortcuts arrives with W-106g.
+  hints, checkboxes, the slider) and all eight pages are built (W-106b–g).
 
 Carried over unchanged from the earlier design and implemented: the Actions
 palette's **Recover original names after interruption** for the current folder

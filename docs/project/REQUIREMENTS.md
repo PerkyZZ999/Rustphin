@@ -171,11 +171,11 @@ Conventions:
 ### R-019 — Settings window (after the MVP, D-029)
 - **Priority:** could (requested by the maintainer on 2026-11-12, beyond the MVP)
 - **Acceptance:**
-  - [ ] "Settings…" in the Actions menu, the palette command and Ctrl+Shift+, open one Settings dialog over the window with General, Appearance, Views, Toolbar, Places, Confirmations, Shortcuts and About pages, reachable by mouse and keyboard.
-  - [ ] Every change applies at once in every window and survives a restart; each page can be reset to its defaults; a damaged or newer settings file never stops Rustphin starting and is never overwritten.
-  - [ ] The Toolbar page adds, removes and reorders toolbar actions and separators, chooses icon only or icon and words per action, and restores the default toolbar; the responsive rules still apply.
-  - [ ] Each page's settings do what SETTINGS_PLAN.md describes, with today's behaviour as the default.
-  - [ ] About shows the version, the licence text, credits and where Rustphin keeps its files; nothing is fetched from the network.
+  - [ ] "Settings…" in the Actions menu, the palette command and Ctrl+Shift+, open one Settings dialog over the window with General, Appearance, Views, Toolbar, Places, Confirmations, Shortcuts and About pages, reachable by mouse and keyboard. (W-106b–g: all eight pages, opened from the palette and Ctrl+Shift+,; pages by Up/Down, a page by Page Up/Down, drop-downs by arrows. Open: Tab through the controls was not seen moving.)
+  - [ ] Every change applies at once in every window and survives a restart; each page can be reset to its defaults; a damaged or newer settings file never stops Rustphin starting and is never overwritten. (Applies at once and survives restarts on screen, Reset seen on every page with settings, lenient reading and newer-file protection unit-tested. Open: a second window following a change was not seen.)
+  - [x] The Toolbar page adds, removes and reorders toolbar actions and separators, chooses icon only or icon and words per action, and restores the default toolbar; the responsive rules still apply. (W-106f: TB10–TB15 on screen; the narrowing rule unit-tested.)
+  - [ ] Each page's settings do what SETTINGS_PLAN.md describes, with today's behaviour as the default. (Built W-106c–g with today's defaults. Differs, for the maintainer: dates have no "system format"; hidden files fade from 60 %, not 30 % (AA); toolbar items move by buttons, not by dragging.)
+  - [x] About shows the version, the licence text, credits and where Rustphin keeps its files; nothing is fetched from the network. (W-106b, ST2–ST4.)
 - **Validation:** unit tests of the settings model (defaults, parsing, migration from version 2); isolated desktop scenarios per page; mockups approved by the maintainer first (W-106a).
 
 ## MVP — non-functional
