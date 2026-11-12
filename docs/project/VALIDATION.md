@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-12 — W-106e1 Settings: Confirmations page
+- **Code:** settings `[confirm]` (trash, empty_trash, programs: ask/open/run, close_tabs; lenient, strange values keep asking). Hub: `Question::ConfirmTrash` and `trash_after_confirming` / `confirm_trash`; emptying the trash skips its question when unticked (`empty_now`). Browser: Delete passes the setting and the listed entries. Workspace: the trash question ("Move to trash (Enter)", primary); the program choice applied before the launch prompt (a shortcut still asks unless Run); "Close the window?" for a window with several tabs, from Ctrl+Q, the title bar's ✕ (now the Quit action) and the compositor's close (`on_window_should_close`). Deleting for good always asks (D-011): shown ticked and unavailable.
+- **Tests:** `rust-tc doctor` PASS, 599 tests. New: confirmations default to today's behaviour, survive the file, and strange values keep asking (proved: a changed default fails it). The hub's questions are covered on screen only (the hub is not built in unit tests).
+- **On screen (isolated sessions, CF1–CF6):** all as listed, including Alt+F4.
+- **Not verified:** KWin's own close button with KDE's title bar (Alt+F4 takes the same path); "Open it" for a script (it hands the file to the default application, as the prompt's Open does).
+- **Waiver:** none
+
 ### 2026-11-12 — W-106d Settings: Appearance page
 - **Code:** settings `[appearance]` (look, title bar, text size, hidden files' opacity, read leniently; the opacity kept within 60–100 %). The store sets, for every view, the text scale (`theme::text::scaled`, now behind all 92 interface text sizes; file names follow the View size) and the hidden fade (`theme::hidden_opacity`), and refreshes the windows when they change. The workspace follows the look: glass only where the desktop blurs and opaque was not chosen; the blur effect stays attached (attaching again would be a protocol error) and the "blur unavailable" line is not shown when opaque was chosen. New windows take KDE's frame when chosen. `settings_appearance.rs`: the page, with a slider for the fade.
 - **Contrast:** the plan offered 30–100 %. A test now checks every step the slider offers in both themes: 50 % gave 4.21:1 and 55 % 4.18:1 for a hidden name under the pointer (glass over a white window), so the floor is 60 %, today's value; fainter would break WCAG AA (AGENTS.md). The maintainer may want to know: hidden files can be made stronger, not fainter.

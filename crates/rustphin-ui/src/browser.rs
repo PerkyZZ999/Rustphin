@@ -2718,15 +2718,27 @@ impl Browser {
             return self.delete_selected(cx);
         }
         let paths = self.selected_paths();
-        if !paths.is_empty() {
-            hub(cx).update(cx, |hub, _| hub.start(Request::Trash { paths }));
-        }
+        let ask = crate::preferences::preferences(cx)
+            .read(cx)
+            .settings()
+            .confirmations()
+            .trash;
+        let listed = self.listed_selection();
+        hub(cx).update(cx, |hub, cx| {
+            hub.trash_after_confirming(paths, listed, ask, cx)
+        });
     }
 
     fn delete_selected(&mut self, cx: &mut Context<Self>) {
         let paths = self.selected_paths();
-        // The question lists each with its icon and size, from the listing.
-        let listed = self.current_snapshot().map_or_else(Vec::new, |snapshot| {
+        let listed = self.listed_selection();
+        hub(cx).update(cx, |hub, cx| hub.delete_after_confirming(paths, listed, cx));
+    }
+
+    /// What a question lists for the selected entries: each with its icon
+    /// and size, from the listing.
+    fn listed_selection(&self) -> Vec<operations::Listed> {
+        self.current_snapshot().map_or_else(Vec::new, |snapshot| {
             self.selection
                 .rows(snapshot)
                 .into_iter()
@@ -2740,8 +2752,7 @@ impl Browser {
                     }
                 })
                 .collect()
-        });
-        hub(cx).update(cx, |hub, cx| hub.delete_after_confirming(paths, listed, cx));
+        })
     }
 
     fn pick_up_selected(&mut self, cut: bool, cx: &mut Context<Self>) {

@@ -88,13 +88,21 @@ pub enum Page {
     Appearance,
     /// How folders are shown when they open.
     Views,
+    /// Which actions ask before they act.
+    Confirmations,
     /// Version, licence, credits, privacy and files.
     About,
 }
 
 impl Page {
     /// The pages in the list, top to bottom.
-    pub const ALL: &'static [Page] = &[Page::General, Page::Appearance, Page::Views, Page::About];
+    pub const ALL: &'static [Page] = &[
+        Page::General,
+        Page::Appearance,
+        Page::Views,
+        Page::Confirmations,
+        Page::About,
+    ];
 
     /// Its name in the list and as its heading.
     pub fn name(self) -> &'static str {
@@ -102,6 +110,7 @@ impl Page {
             Page::General => "General",
             Page::Appearance => "Appearance",
             Page::Views => "Views",
+            Page::Confirmations => "Confirmations",
             Page::About => "About",
         }
     }
@@ -112,6 +121,7 @@ impl Page {
             Page::General => IconName::Settings,
             Page::Appearance => IconName::Palette,
             Page::Views => IconName::LayoutList,
+            Page::Confirmations => IconName::CircleCheck,
             Page::About => IconName::Info,
         }
     }
@@ -121,6 +131,7 @@ impl Page {
         match self {
             Page::General => "How Rustphin starts and works with the rest of the desktop.",
             Page::Views => "How folders are shown when they open.",
+            Page::Confirmations => "Which actions ask before they act.",
             Page::Appearance => {
                 "How the window looks. The colours are Rustphin\u{2019}s dark design."
             }
@@ -131,7 +142,7 @@ impl Page {
     /// Whether it holds settings, and so a "Reset to defaults".
     pub fn has_settings(self) -> bool {
         match self {
-            Page::General | Page::Appearance | Page::Views => true,
+            Page::General | Page::Appearance | Page::Views | Page::Confirmations => true,
             Page::About => false,
         }
     }
@@ -329,6 +340,11 @@ impl SettingsDialog {
                     store.update_default_view(Settings::reset_views, cx);
                 });
             }
+            Page::Confirmations => {
+                preferences(cx).update(cx, |store, cx| {
+                    store.update(Settings::reset_confirmations, cx);
+                });
+            }
             Page::About => {}
         }
     }
@@ -450,6 +466,7 @@ impl SettingsDialog {
             Page::General => self.general(theme, window, cx),
             Page::Appearance => self.appearance(theme, window, cx),
             Page::Views => self.views(theme, window, cx),
+            Page::Confirmations => self.confirmations(theme, window, cx),
             Page::About => self.about(theme, cx),
         };
         div()
@@ -777,7 +794,7 @@ mod tests {
     #[test]
     fn up_and_down_move_through_the_list_and_stop_at_its_ends() {
         assert_eq!(Page::General.step(1), Page::Appearance);
-        assert_eq!(Page::About.step(-1), Page::Views);
+        assert_eq!(Page::About.step(-1), Page::Confirmations);
         assert_eq!(Page::General.step(-1), Page::General);
         assert_eq!(Page::About.step(1), Page::About);
         assert_eq!(Page::General.step(10), Page::About);

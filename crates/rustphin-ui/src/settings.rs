@@ -27,7 +27,60 @@ pub struct Settings {
     version: u32,
     general: General,
     appearance: Appearance,
+    confirm: Confirm,
     view: View,
+}
+
+/// What Rustphin asks before doing (W-106e). Deleting for good always asks.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+struct Confirm {
+    #[serde(deserialize_with = "lenient")]
+    trash: bool,
+    #[serde(deserialize_with = "lenient_true")]
+    empty_trash: bool,
+    #[serde(deserialize_with = "lenient")]
+    programs: Programs,
+    #[serde(deserialize_with = "lenient")]
+    close_tabs: bool,
+}
+
+impl Default for Confirm {
+    fn default() -> Self {
+        Self {
+            trash: false,
+            empty_trash: true,
+            programs: Programs::default(),
+            close_tabs: false,
+        }
+    }
+}
+
+/// What activating a program file does, as KDE's own choice for
+/// executable files. A shortcut has nothing to open: it asks unless Run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Programs {
+    /// Ask each time.
+    #[default]
+    Ask,
+    /// Hand it to the default application, as a document.
+    Open,
+    /// Run it.
+    Run,
+}
+
+/// The Confirmations page's choices.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Confirmations {
+    /// Ask before moving to the trash.
+    pub trash: bool,
+    /// Ask before emptying the trash.
+    pub empty_trash: bool,
+    /// What activating a program does.
+    pub programs: Programs,
+    /// Ask before closing a window that has several tabs.
+    pub close_tabs: bool,
 }
 
 /// How the window looks (W-106d). The design stays dark.
@@ -308,6 +361,7 @@ impl Settings {
             version: VERSION,
             general: General::default(),
             appearance: Appearance::default(),
+            confirm: Confirm::default(),
             view: View {
                 mode: match mode {
                     ViewMode::Icons => Mode::Icons,
@@ -491,6 +545,33 @@ impl Settings {
             text_size,
             hidden_opacity: clamp_hidden(hidden_opacity),
         };
+        self.version = VERSION;
+    }
+
+    /// What Rustphin asks before doing.
+    pub fn confirmations(&self) -> Confirmations {
+        Confirmations {
+            trash: self.confirm.trash,
+            empty_trash: self.confirm.empty_trash,
+            programs: self.confirm.programs,
+            close_tabs: self.confirm.close_tabs,
+        }
+    }
+
+    /// Chooses what Rustphin asks before doing.
+    pub fn set_confirmations(&mut self, confirmations: Confirmations) {
+        self.confirm = Confirm {
+            trash: confirmations.trash,
+            empty_trash: confirmations.empty_trash,
+            programs: confirmations.programs,
+            close_tabs: confirmations.close_tabs,
+        };
+        self.version = VERSION;
+    }
+
+    /// Puts the Confirmations page back as it was before anything was chosen.
+    pub fn reset_confirmations(&mut self) {
+        self.confirm = Confirm::default();
         self.version = VERSION;
     }
 
@@ -833,5 +914,39 @@ mod tests {
         settings.reset_appearance();
         assert_eq!(settings.text_size(), TextSize::Normal);
         assert_eq!(TextSize::Larger.scale() * 12., 14.);
+    }
+
+    #[test]
+    fn confirmations_default_to_todays_behaviour_and_survive() {
+        let defaults = Settings::default().confirmations();
+        assert_eq!(
+            defaults,
+            Confirmations {
+                trash: false,
+                empty_trash: true,
+                programs: Programs::Ask,
+                close_tabs: false,
+            }
+        );
+        let mut settings = sample();
+        let chosen = Confirmations {
+            trash: true,
+            empty_trash: false,
+            programs: Programs::Open,
+            close_tabs: true,
+        };
+        settings.set_confirmations(chosen);
+        assert_eq!(Settings::parse(&settings.to_toml()).confirmations(), chosen);
+        let odd = Settings::parse(
+            "version = 3\n[confirm]\nempty_trash = 3\nprograms = \"always\"\ntrash = true\n",
+        );
+        assert!(
+            odd.confirmations().empty_trash,
+            "a strange value keeps asking"
+        );
+        assert_eq!(odd.confirmations().programs, Programs::Ask);
+        assert!(odd.confirmations().trash);
+        settings.reset_confirmations();
+        assert_eq!(settings.confirmations(), defaults);
     }
 }

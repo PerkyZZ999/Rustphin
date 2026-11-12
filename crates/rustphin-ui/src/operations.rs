@@ -104,6 +104,13 @@ pub enum Question {
         /// The folder they were dropped on.
         into: PathBuf,
     },
+    /// Moving to the trash, when Settings asks to be asked (W-106e).
+    ConfirmTrash {
+        /// What would be moved.
+        paths: Vec<PathBuf>,
+        /// What the listing knew of each, in the same order.
+        listed: Vec<Listed>,
+    },
     /// Emptying the trash needs the user's explicit yes.
     ConfirmEmpty {
         /// Number of trashed entries.
@@ -357,6 +364,38 @@ impl Hub {
         }
     }
 
+    /// Moves `paths` to the trash, first asking when `ask` (Settings,
+    /// Confirmations).
+    pub fn trash_after_confirming(
+        &mut self,
+        paths: Vec<PathBuf>,
+        listed: Vec<Listed>,
+        ask: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if paths.is_empty() {
+            return;
+        }
+        if ask {
+            self.questions
+                .push_back(Question::ConfirmTrash { paths, listed });
+        } else {
+            self.start(Request::Trash { paths });
+        }
+        cx.notify();
+    }
+
+    /// Answers the trash confirmation being shown.
+    pub fn confirm_trash(&mut self, confirmed: bool, cx: &mut Context<Self>) {
+        if let Some(Question::ConfirmTrash { .. }) = self.questions.front()
+            && let Some(Question::ConfirmTrash { paths, .. }) = self.questions.pop_front()
+            && confirmed
+        {
+            self.start(Request::Trash { paths });
+        }
+        cx.notify();
+    }
+
     /// Answers the conflict being shown.
     pub fn resolve(&mut self, choice: ConflictChoice, apply_to_all: bool, cx: &mut Context<Self>) {
         if let Some(Question::Conflict { id, .. }) = self.questions.front() {
@@ -443,8 +482,17 @@ impl Hub {
                     hub.say("The trash is already empty.".to_owned(), false, cx);
                 }
                 Ok((entries, paths)) => {
-                    hub.questions
-                        .push_back(Question::ConfirmEmpty { entries, paths });
+                    let ask = crate::preferences::preferences(cx)
+                        .read(cx)
+                        .settings()
+                        .confirmations()
+                        .empty_trash;
+                    if ask {
+                        hub.questions
+                            .push_back(Question::ConfirmEmpty { entries, paths });
+                    } else {
+                        hub.empty_now(paths);
+                    }
                     cx.notify();
                 }
                 Err(error) => hub.say(format!("The trash could not be read: {error}."), true, cx),
@@ -459,16 +507,21 @@ impl Hub {
             && let Some(Question::ConfirmEmpty { paths, .. }) = self.questions.pop_front()
             && confirmed
         {
-            let id = self.active().start(Request::Delete { paths });
-            self.labels.insert(
-                id,
-                (
-                    "Emptying the trash".to_owned(),
-                    "emptied the trash".to_owned(),
-                ),
-            );
+            self.empty_now(paths);
         }
         cx.notify();
+    }
+
+    /// Removes everything in the trash: `paths`, entries and records.
+    fn empty_now(&mut self, paths: Vec<PathBuf>) {
+        let id = self.active().start(Request::Delete { paths });
+        self.labels.insert(
+            id,
+            (
+                "Emptying the trash".to_owned(),
+                "emptied the trash".to_owned(),
+            ),
+        );
     }
 
     /// Copies or moves dropped `sources` into `into`; asks which when
@@ -739,6 +792,7 @@ impl Hub {
                         *asker != id
                     }
                     Question::ConfirmDelete { .. }
+                    | Question::ConfirmTrash { .. }
                     | Question::ConfirmEmpty { .. }
                     | Question::Drop { .. } => true,
                 });

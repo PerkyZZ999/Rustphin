@@ -31,6 +31,7 @@ mod rename_dialog;
 mod session;
 mod settings;
 mod settings_appearance;
+mod settings_confirmations;
 mod settings_controls;
 mod settings_dialog;
 mod settings_general;

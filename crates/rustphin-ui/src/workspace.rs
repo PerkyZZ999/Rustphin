@@ -351,6 +351,8 @@ pub struct Workspace {
     shows_here: Vec<rustphin_platform::file_manager::Shown>,
     /// A program or shortcut waiting for confirmation before it runs.
     launch: Option<LaunchPrompt>,
+    /// Asking whether to close a window that has several tabs (W-106e).
+    close_prompt: bool,
     /// Properties of one entry, while that dialog is open.
     pub(crate) properties: Option<PropertiesDialog>,
     /// Redraws the properties dialog when a thumbnail is ready, while it is open.
@@ -445,6 +447,7 @@ impl Workspace {
             pending_shows: Vec::new(),
             shows_here: Vec::new(),
             launch: None,
+            close_prompt: false,
             properties: None,
             error_details: None,
             properties_thumbs: None,
@@ -453,6 +456,13 @@ impl Workspace {
             _history: cx.observe(&history(cx), |this, _, cx| this.refresh_palette(cx)),
             _places: cx.observe(&sidebar, |this, _, cx| this.refresh_palette(cx)),
         };
+        // A close the desktop asks for (Alt+F4, KDE's title bar) may ask
+        // first too (Settings, Confirmations).
+        let weak = cx.entity().downgrade();
+        window.on_window_should_close(cx, move |_, cx| {
+            weak.update(cx, |this, cx| this.may_close(cx))
+                .unwrap_or(true)
+        });
         if let Some(service) = cx.try_global::<ShowService>() {
             let incoming = service.0.receiver();
             cx.spawn(async move |this, cx| {
@@ -823,12 +833,24 @@ impl Workspace {
                     name,
                     program,
                 } => {
+                    let choice = crate::preferences::preferences(cx)
+                        .read(cx)
+                        .settings()
+                        .confirmations()
+                        .programs;
                     this.launch = Some(LaunchPrompt {
                         path,
                         name,
                         program,
                     });
-                    cx.notify();
+                    // Settings, Confirmations: the answer chosen once for all.
+                    match (choice, program) {
+                        (crate::settings::Programs::Run, _) => this.answer_launch(true, false, cx),
+                        (crate::settings::Programs::Open, true) => {
+                            this.answer_launch(false, true, cx);
+                        }
+                        _ => cx.notify(),
+                    }
                 }
             });
         })
@@ -963,6 +985,87 @@ impl Workspace {
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.answer_launch(false, false, cx);
                         })),
+                ),
+        );
+        dialog::scrim(panel, theme)
+    }
+
+    /// Whether the window may close now; otherwise asks first (Settings,
+    /// Confirmations: a window with several tabs).
+    pub(crate) fn may_close(&mut self, cx: &mut Context<Self>) -> bool {
+        let ask = crate::preferences::preferences(cx)
+            .read(cx)
+            .settings()
+            .confirmations()
+            .close_tabs;
+        if ask && self.tabs.len() > 1 && !self.dialog_open {
+            self.close_prompt = true;
+            cx.notify();
+            return false;
+        }
+        !self.close_prompt
+    }
+
+    /// The question before a window with several tabs closes.
+    fn close_dialog(&self, theme: Theme, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        let count = self.tabs.len();
+        let sentence = format!(
+            "This window has {count} tabs. Closing it closes them all; they open again \
+             next time when Rustphin restores the last tabs."
+        );
+        let panel = dialog::panel(
+            div()
+                .id("close-question")
+                .role(Role::Dialog)
+                .aria_label("Close the window?")
+                .aria_description(format!("{sentence} Enter closes; Escape keeps it open."))
+                .a11y_synthetic_children(|builder| builder.parent_node().set_modal())
+                .key_context(DIALOG_CONTEXT)
+                .track_focus(&self.dialog_focus)
+                .on_action(cx.listener(|this, _: &DialogAccept, window, _| {
+                    this.close_prompt = false;
+                    window.remove_window();
+                }))
+                .on_action(cx.listener(|this, _: &DialogCancel, _, cx| {
+                    this.close_prompt = false;
+                    cx.notify();
+                })),
+            size::DIALOG,
+            theme,
+            window,
+        )
+        .child(dialog::title_row(
+            gpui_kit::assets::IconName::X,
+            "Close the window?".to_owned(),
+            "Cancel (Esc)",
+            cx.listener(|this, _, _, cx| {
+                this.close_prompt = false;
+                cx.notify();
+            }),
+            theme,
+        ))
+        .child(dialog::body().child(self.question_body(sentence, Vec::new(), theme)))
+        .child(
+            dialog::actions(theme)
+                .child(
+                    dialog::button("close-cancel", "Cancel (Esc)")
+                        .outlined()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.close_prompt = false;
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    dialog::button_with_icon(
+                        "close-accept",
+                        gpui_kit::assets::IconName::X,
+                        format!("Close {count} tabs (Enter)"),
+                    )
+                    .primary()
+                    .on_click(cx.listener(|this, _, window, _| {
+                        this.close_prompt = false;
+                        window.remove_window();
+                    })),
                 ),
         );
         dialog::scrim(panel, theme)
@@ -1693,6 +1796,7 @@ impl Render for Workspace {
         let hub = hub(cx);
         let dialog_open = !hub.read(cx).questions.is_empty()
             || self.launch.is_some()
+            || self.close_prompt
             || self.properties.is_some()
             || self.error_details.is_some();
         if dialog_open && self.palette.is_some() {
@@ -1810,6 +1914,8 @@ impl Render for Workspace {
             Some(self.dialog(&question, theme, window, cx))
         } else if let Some(prompt) = self.launch.as_ref() {
             Some(self.launch_dialog(prompt, theme, window, cx))
+        } else if self.close_prompt {
+            Some(self.close_dialog(theme, window, cx))
         } else {
             self.error_details
                 .as_ref()
@@ -1867,8 +1973,13 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &MoveToOtherView, _, cx| {
                 this.transfer_to_other_view(Transfer::Move, cx);
             }))
-            // Quitting is closing the window, with the same session save.
-            .on_action(|_: &Quit, window, _| window.remove_window())
+            // Quitting is closing the window, with the same session save,
+            // after asking when Settings says to and there are several tabs.
+            .on_action(cx.listener(|this, _: &Quit, window, cx| {
+                if this.may_close(cx) {
+                    window.remove_window();
+                }
+            }))
             .on_action(cx.listener(|this, _: &FocusPlaces, window, cx| {
                 this.sidebar_visible = true;
                 let sidebar = this.sidebar.clone();
@@ -2653,6 +2764,7 @@ impl Workspace {
             Question::Drop { .. } => "Choose move or copy, or Cancel to keep the files where they are.".to_owned(),
             Question::ConfirmDelete { .. } => "This does not use the trash. It cannot be undone. Cancel or Escape leaves it as it is.".to_owned(),
             Question::ConfirmEmpty { .. } => "Everything in the trash is deleted for good. It cannot be undone. Cancel or Escape leaves it as it is.".to_owned(),
+            Question::ConfirmTrash { .. } => "It can be restored from the trash. Cancel or Escape leaves it where it is.".to_owned(),
         };
         let cancel = |label: &'static str| {
             dialog::button("dialog-cancel", label)
@@ -2831,6 +2943,25 @@ impl Workspace {
                     .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
                 ],
             ),
+            Question::ConfirmTrash { paths, listed } => (
+                I::Trash,
+                "Move to the trash?".to_owned(),
+                format!(
+                    "Move {} to the trash? It can be restored from there.",
+                    operations::what(paths)
+                ),
+                vec![name_list(paths, listed)],
+                vec![
+                    cancel("Cancel (Esc)"),
+                    dialog::button_with_icon(
+                        "dialog-accept",
+                        gpui_kit::assets::IconName::Trash,
+                        "Move to trash (Enter)",
+                    )
+                    .primary()
+                    .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
+                ],
+            ),
             Question::ConfirmEmpty { entries, .. } => (
                 I::Trash,
                 "Empty the trash?".to_owned(),
@@ -2988,6 +3119,8 @@ impl Workspace {
             (Some(Question::Failed { .. }), Answer::Cancel) => hub.recover(Recovery::Cancel, cx),
             (Some(Question::ConfirmDelete { .. }), Answer::Accept) => hub.confirm_delete(true, cx),
             (Some(Question::ConfirmDelete { .. }), Answer::Cancel) => hub.confirm_delete(false, cx),
+            (Some(Question::ConfirmTrash { .. }), Answer::Accept) => hub.confirm_trash(true, cx),
+            (Some(Question::ConfirmTrash { .. }), Answer::Cancel) => hub.confirm_trash(false, cx),
             (Some(Question::ConfirmEmpty { .. }), Answer::Accept) => hub.confirm_empty(true, cx),
             (Some(Question::ConfirmEmpty { .. }), Answer::Cancel) => hub.confirm_empty(false, cx),
             (Some(Question::Drop { .. }), Answer::Accept) => {

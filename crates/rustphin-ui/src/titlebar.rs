@@ -150,8 +150,10 @@ pub fn title_bar(
             .on_click(|_, window, _| window.zoom_window()),
         ))
         .child(keep_press(
-            window_button("window-close", IconName::X, "Close window")
-                .on_click(|_, window, _| window.remove_window()),
+            // As Ctrl+Q: the window may ask first (Settings, Confirmations).
+            window_button("window-close", IconName::X, "Close window").on_click(|_, window, cx| {
+                window.dispatch_action(Box::new(crate::workspace::Quit), cx);
+            }),
         ));
     Some(bar.into_any_element())
 }

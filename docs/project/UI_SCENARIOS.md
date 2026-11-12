@@ -507,3 +507,16 @@ Isolated home with `Box/.hidden-note`, `Box/.cache-dir` and `Box/visible.txt`, h
 | AP3 | Click the slider's right end; Opaque; KDE's; Escape | 100 %, and the hidden entries are no longer faded; the file holds `look = "opaque"`, `title_bar = "kde"`, `text_size = "larger"`, `hidden_opacity = 100` |
 | AP4 | Quit and start again | KWin draws the title bar; Rustphin's bar steps aside; the text is still larger |
 | AP5 | Settings, Appearance, Reset to defaults | Glass, Rustphin's own, Normal (the text shrinks at once), 60 % |
+
+### Confirmations page (W-106e1)
+
+Isolated home with `Work/a.txt`, `Work/b.txt` and `Work/script.sh`, an executable that appends a line to `~/ran.log` (test data only).
+
+| ID | Steps | Expected |
+|---|---|---|
+| CF1 | Settings, Confirmations | Ask before: Moving to the trash (off), Deleting for good (ticked, unavailable, "Always asked: it cannot be undone."), Emptying the trash (on), Closing a window with several tabs (off); Executable files: Opening one, Ask each time |
+| CF2 | Tick Moving to the trash; select `a.txt`, Delete; Escape; Delete, Enter | "Move to the trash?" lists `a.txt` with its size; Escape leaves it; Enter moves it to `~/.local/share/Trash/files` |
+| CF3 | Opening one: Run it; double-click `script.sh` | It runs at once: `ran.log` gains a line, no question |
+| CF4 | Tick Closing a window…; Ctrl+T; Ctrl+Q; Escape; Alt+F4; Escape; the title bar's ✕; Enter | "Close the window?" with "Close 2 tabs (Enter)" each time; Escape keeps the window; Enter closes it |
+| CF5 | Open the trash folder; untick Emptying the trash; palette "Trash: Empty this trash" | The trash is emptied with no question (files and info both empty) |
+| CF6 | Reset to defaults | `[confirm]` back to trash false, empty_trash true, programs ask, close_tabs false |
