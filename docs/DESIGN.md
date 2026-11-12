@@ -658,11 +658,13 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   label in a 184 px column and the control after it (segmented controls for
   two or three choices, 28 px high inside one `border-strong` outline, the
   current choice in `primary-subtle` with `primary-bright` words; 28 px
-  drop-downs at least 200 px wide on `surface-raised`, their list in the
+  drop-downs at least 200 px wide (128 px beside another control) on
+  `surface-raised`, their list in the
   context menu's surface with the current choice ticked; 28 px outlined
   buttons; hints in `body-sm` `text-muted`; checkboxes, and sliders with
   their value in `data-sm`). Every control is a button underneath: Tab
-  reaches it, Space or Enter uses it, a drop-down's list takes the arrows. The page scrolls on its own. The
+  reaches it, Space or Enter uses it, a drop-down's list takes the arrows;
+  Page Up and Page Down scroll the page. The page scrolls on its own. The
   action row: "Reset to defaults" (outlined, `rotate-ccw`) on the left for
   the page shown, where it has settings; "Close (Esc)" primary on the right.
   Changes apply at once. **About:** the 64 px logo, "Rustphin" in
@@ -680,6 +682,16 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   "from KDE's settings", or the command chosen here with a field and "Use
   KDE's"; "Use another…" opens the field, up to 360 px wide) and Open files and folders with
   (A double click, A single click; "As KDE is set" until one is chosen).
+  **Views:** "Default view" holds View (Icons, Compact, Details), Size (the
+  View menu's slider, 200 px, with the icon size in `data-sm`) and "Remember
+  the view for each folder"; "Order" holds Sort by (drop-down) with A to Z
+  or Z to A, then Folders first and Show hidden files; "Details view" holds
+  the Size, Modified and Type columns, Dates (a drop-down showing now in each
+  style: `2026-11-12 14:32` or `Today 14:32`) and Sizes (Binary (KiB, MiB),
+  Decimal (kB, MB)); "Previews" holds "Show pictures' thumbnails" and the
+  largest picture previewed (up to 5, 10, 50 or 100 MB a file). Changing
+  the default view changes every open pane at once, except a folder with a
+  view of its own.
   Before the first change
   there is no file: the path adds "(made when you first change a setting)"
   and the button is unavailable.
@@ -1075,8 +1087,8 @@ except where the list below says otherwise; each W-079 step adds its line.
   banner, as does a folder that vanished.
 - Settings (W-106b, W-106c1): the dialog, its page list and the tabs below
   720 px, the action row, the controls (segments, drop-downs, small buttons,
-  hints), General and About are built; the other pages arrive with
-  W-106c2–g, each with its "Reset to defaults".
+  hints, checkboxes, the slider), General, Views and About are built; the
+  other pages arrive with W-106d–g, each with its "Reset to defaults".
 
 Carried over unchanged from the earlier design and implemented: the Actions
 palette's **Recover original names after interruption** for the current folder

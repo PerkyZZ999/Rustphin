@@ -15,7 +15,10 @@ use std::{
 
 use gpui_kit::{App, AppContext as _, Context, Entity, Global};
 
-use crate::settings::{Click, Settings};
+use crate::{
+    folder_views::{FolderView, FolderViews},
+    settings::{Click, Settings},
+};
 
 /// The shared settings.
 pub struct Preferences {
@@ -25,31 +28,50 @@ pub struct Preferences {
     saved: bool,
     /// KDE is set to open files with one click (`kdeglobals`, read at start).
     kde_single_click: bool,
+    /// Each folder's own view, when the settings say to remember them.
+    folder_views: FolderViews,
+    folder_writer: Option<Writer>,
+    /// Counts the default view's changes made in Settings; open panes take
+    /// on the default when it moves (W-106c2).
+    view_epoch: u64,
+}
+
+/// What the store starts from, read before the first window.
+pub struct Loaded {
+    /// The settings file's contents, or the defaults.
+    pub settings: Settings,
+    /// Where the settings are saved; `None` saves nothing.
+    pub path: Option<PathBuf>,
+    /// The settings file was there.
+    pub saved: bool,
+    /// KDE's choice of how files open.
+    pub kde_single_click: bool,
+    /// The folders' own views.
+    pub folder_views: FolderViews,
+    /// Where those are saved.
+    pub folder_path: Option<PathBuf>,
 }
 
 struct Shared(Entity<Preferences>);
 
 impl Global for Shared {}
 
-/// Makes the settings read at start-up the shared ones. `path` is where
-/// they are saved; nothing is saved when it is `None` or the file came
-/// from a newer version. `saved` says whether the file was there;
-/// `kde_single_click` is KDE's choice of how files open.
-pub fn init(
-    settings: Settings,
-    path: Option<PathBuf>,
-    saved: bool,
-    kde_single_click: bool,
-    cx: &mut App,
-) {
-    let writer = path
-        .filter(|_| !settings.is_from_newer_version())
-        .map(Writer::new);
+/// Makes the settings read at start-up the shared ones. Nothing is saved
+/// where a path is `None`, nor when the settings came from a newer version.
+pub fn init(loaded: Loaded, cx: &mut App) {
+    let newer = loaded.settings.is_from_newer_version();
+    let writer = loaded.path.filter(|_| !newer).map(Writer::new);
+    let folder_writer = loaded.folder_path.filter(|_| !newer).map(Writer::new);
+    let (dates, units) = loaded.settings.formats();
+    crate::format::set_style(units, dates);
     let entity = cx.new(|_| Preferences {
-        settings,
+        settings: loaded.settings,
         writer,
-        saved,
-        kde_single_click,
+        saved: loaded.saved,
+        kde_single_click: loaded.kde_single_click,
+        folder_views: loaded.folder_views,
+        folder_writer,
+        view_epoch: 0,
     });
     cx.set_global(Shared(entity));
 }
@@ -98,6 +120,8 @@ impl Preferences {
             return;
         }
         self.settings = next;
+        let (dates, units) = self.settings.formats();
+        crate::format::set_style(units, dates);
         if let Some(writer) = &self.writer {
             let job = writer.job(self.settings.to_toml());
             cx.background_executor()
@@ -106,6 +130,41 @@ impl Preferences {
             self.saved = true;
         }
         cx.notify();
+    }
+
+    /// Changes the default view from Settings: every open pane takes it on,
+    /// except a folder with a view of its own while those are remembered.
+    pub fn update_default_view(
+        &mut self,
+        change: impl FnOnce(&mut Settings),
+        cx: &mut Context<Self>,
+    ) {
+        self.view_epoch += 1;
+        self.update(change, cx);
+        cx.notify();
+    }
+
+    /// How many times Settings changed the default view.
+    pub fn view_epoch(&self) -> u64 {
+        self.view_epoch
+    }
+
+    /// The view remembered for the folder at `location`, if any.
+    pub fn folder_view(&self, location: &str) -> Option<FolderView> {
+        self.folder_views.get(location)
+    }
+
+    /// Remembers the folder's view and saves the list off the UI thread.
+    pub fn set_folder_view(&mut self, location: String, view: FolderView, cx: &mut Context<Self>) {
+        if !self.folder_views.set(location, view) {
+            return;
+        }
+        if let Some(writer) = &self.folder_writer {
+            let job = writer.job(self.folder_views.to_toml());
+            cx.background_executor()
+                .spawn(async move { job.run() })
+                .detach();
+        }
     }
 }
 

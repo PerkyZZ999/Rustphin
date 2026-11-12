@@ -28,6 +28,8 @@ pub struct Thumbs {
     known: HashMap<Key, Option<Arc<Path>>>,
     /// Requests that have not been answered yet.
     waiting: HashSet<Key>,
+    /// The largest file previewed, in bytes.
+    limit: u64,
 }
 
 struct GlobalThumbs(Entity<Thumbs>);
@@ -60,10 +62,37 @@ pub fn init(cx: &mut App) {
             .detach();
             thumbnailer
         });
+        // Settings, Views: pictures over the chosen size keep their icon.
+        let limit = crate::preferences::preferences(cx)
+            .read(cx)
+            .settings()
+            .previews()
+            .limit_bytes();
+        if let Some(thumbnailer) = &thumbnailer {
+            thumbnailer.set_limit(limit);
+        }
+        cx.observe(
+            &crate::preferences::preferences(cx),
+            |thumbs: &mut Thumbs, store, cx| {
+                let limit = store.read(cx).settings().previews().limit_bytes();
+                if limit != thumbs.limit {
+                    thumbs.limit = limit;
+                    if let Some(thumbnailer) = &thumbs.thumbnailer {
+                        thumbnailer.set_limit(limit);
+                    }
+                    // What was refused or made under the old limit is asked again.
+                    thumbs.known.clear();
+                    thumbs.waiting.clear();
+                    cx.notify();
+                }
+            },
+        )
+        .detach();
         Thumbs {
             thumbnailer,
             known: HashMap::new(),
             waiting: HashSet::new(),
+            limit,
         }
     });
     cx.set_global(GlobalThumbs(thumbs));
@@ -135,6 +164,7 @@ mod tests {
             thumbnailer: None,
             known: HashMap::new(),
             waiting: HashSet::new(),
+            limit: 0,
         }
     }
 

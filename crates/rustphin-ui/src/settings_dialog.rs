@@ -16,8 +16,11 @@ use gpui_kit::{
     Role, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
     Window, actions,
     assets::IconName,
-    component::input::{InputEvent, InputState},
     component::{Disableable as _, Icon, button::ButtonVariants as _},
+    component::{
+        input::{InputEvent, InputState},
+        slider::{SliderEvent, SliderState},
+    },
     div, img,
     prelude::FluentBuilder as _,
     px,
@@ -45,6 +48,10 @@ actions!(
         PreviousPage,
         /// The page below in the list.
         NextPage,
+        /// Scroll the page shown up by most of its height.
+        ScrollUp,
+        /// Scroll the page shown down by most of its height.
+        ScrollDown,
     ]
 );
 
@@ -56,6 +63,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("escape", CloseSettings, context),
         KeyBinding::new("up", PreviousPage, pages),
         KeyBinding::new("down", NextPage, pages),
+        KeyBinding::new("pageup", ScrollUp, pages),
+        KeyBinding::new("pagedown", ScrollDown, pages),
     ]);
 }
 
@@ -75,18 +84,21 @@ const LICENCE: &str = include_str!("../../../LICENSE");
 pub enum Page {
     /// How Rustphin starts and works with the desktop.
     General,
+    /// How folders are shown when they open.
+    Views,
     /// Version, licence, credits, privacy and files.
     About,
 }
 
 impl Page {
     /// The pages in the list, top to bottom.
-    pub const ALL: &'static [Page] = &[Page::General, Page::About];
+    pub const ALL: &'static [Page] = &[Page::General, Page::Views, Page::About];
 
     /// Its name in the list and as its heading.
     pub fn name(self) -> &'static str {
         match self {
             Page::General => "General",
+            Page::Views => "Views",
             Page::About => "About",
         }
     }
@@ -95,6 +107,7 @@ impl Page {
     pub fn icon(self) -> IconName {
         match self {
             Page::General => IconName::Settings,
+            Page::Views => IconName::LayoutList,
             Page::About => IconName::Info,
         }
     }
@@ -103,6 +116,7 @@ impl Page {
     pub fn description(self) -> &'static str {
         match self {
             Page::General => "How Rustphin starts and works with the rest of the desktop.",
+            Page::Views => "How folders are shown when they open.",
             Page::About => "Rustphin and the work it builds on.",
         }
     }
@@ -110,7 +124,7 @@ impl Page {
     /// Whether it holds settings, and so a "Reset to defaults".
     pub fn has_settings(self) -> bool {
         match self {
-            Page::General => true,
+            Page::General | Page::Views => true,
             Page::About => false,
         }
     }
@@ -152,6 +166,8 @@ pub struct SettingsDialog {
     pub(crate) terminal_input: Entity<InputState>,
     /// The terminal field is open though nothing is chosen yet.
     pub(crate) editing_terminal: bool,
+    /// The default view's size.
+    pub(crate) zoom_slider: Entity<SliderState>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -174,6 +190,14 @@ impl SettingsDialog {
             input
         });
         let selects = Selects::new(cx);
+        let zoom = store.read(cx).settings().zoom();
+        let zoom_slider = cx.new(|_| {
+            SliderState::new()
+                .min(0.)
+                .max((crate::layout::ZOOM_LEVELS - 1) as f32)
+                .step(1.)
+                .default_value(zoom as f32)
+        });
         let subscriptions = vec![
             // A drop-down's list closes when the focus leaves it.
             cx.on_focus_out(&selects.focus, window, |this, _, _, cx| {
@@ -183,6 +207,22 @@ impl SettingsDialog {
             }),
             // Every change shows at once, whichever window made it.
             cx.observe(&store, |_, _, cx| cx.notify()),
+            cx.subscribe(&zoom_slider, |_, _, event: &SliderEvent, cx| {
+                let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
+                let zoom =
+                    (value.start().round().max(0.) as usize).min(crate::layout::ZOOM_LEVELS - 1);
+                if preferences(cx).read(cx).settings().zoom() != zoom {
+                    preferences(cx).update(cx, |store, cx| {
+                        store.update_default_view(
+                            |settings| {
+                                let (mode, options) = (settings.mode(), settings.options());
+                                settings.set_view(mode, zoom, options);
+                            },
+                            cx,
+                        );
+                    });
+                }
+            }),
             cx.subscribe(&terminal_input, |this, input, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) && this.editing_terminal_allowed() {
                     let command = input.read(cx).value().to_string();
@@ -212,6 +252,7 @@ impl SettingsDialog {
             make_default: MakeDefault::Idle,
             terminal_input,
             editing_terminal: false,
+            zoom_slider,
             _subscriptions: subscriptions,
         }
     }
@@ -221,10 +262,24 @@ impl SettingsDialog {
         self.page == Page::General
     }
 
+    /// Scrolls the page shown by most of its height, `direction` down when
+    /// positive, as Page Down does in a list.
+    fn scroll_page(&mut self, direction: f32, cx: &mut Context<Self>) {
+        let height = f32::from(self.page_scroll.bounds().size.height);
+        let max = f32::from(self.page_scroll.max_offset().y);
+        let now = -f32::from(self.page_scroll.offset().y);
+        let to = page_scroll_target(now, direction * height * 0.8, max);
+        self.page_scroll
+            .set_offset(gpui_kit::point(px(0.), px(-to)));
+        cx.notify();
+    }
+
     /// Closes the open drop-down and gives the keyboard back to the dialog.
     pub(crate) fn close_select(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.selects.open = None;
-        self.focus.focus(window, cx);
+        // After the click that chose has finished: focusing during it left
+        // the keyboard with the list being removed.
+        cx.defer_in(window, |this, window, cx| this.focus.focus(window, cx));
         cx.notify();
     }
 
@@ -237,6 +292,11 @@ impl SettingsDialog {
                     .update(cx, |input, cx| input.set_value("", window, cx));
                 preferences(cx).update(cx, |store, cx| {
                     store.update(Settings::reset_general, cx);
+                });
+            }
+            Page::Views => {
+                preferences(cx).update(cx, |store, cx| {
+                    store.update_default_view(Settings::reset_views, cx);
                 });
             }
             Page::About => {}
@@ -358,6 +418,7 @@ impl SettingsDialog {
     fn page(&mut self, theme: Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let content = match self.page {
             Page::General => self.general(theme, window, cx),
+            Page::Views => self.views(theme, window, cx),
             Page::About => self.about(theme, cx),
         };
         div()
@@ -549,6 +610,11 @@ impl SettingsDialog {
     }
 }
 
+/// Where a page scrolled by `by` from `now` ends, within `0..=max`.
+fn page_scroll_target(now: f32, by: f32, max: f32) -> f32 {
+    (now + by).clamp(0., max.max(0.))
+}
+
 /// A group of settings under its capital label and a hairline.
 pub fn group(label: &'static str, rows: Vec<AnyElement>, theme: Theme) -> AnyElement {
     div()
@@ -640,6 +706,8 @@ impl Render for SettingsDialog {
                     let page = this.page.step(1);
                     this.show(page, cx);
                 }))
+                .on_action(cx.listener(|this, _: &ScrollUp, _, cx| this.scroll_page(-1., cx)))
+                .on_action(cx.listener(|this, _: &ScrollDown, _, cx| this.scroll_page(1., cx)))
                 .flex()
                 .flex_col()
                 .size_full()
@@ -677,11 +745,20 @@ mod tests {
 
     #[test]
     fn up_and_down_move_through_the_list_and_stop_at_its_ends() {
-        assert_eq!(Page::General.step(1), Page::About);
-        assert_eq!(Page::About.step(-1), Page::General);
+        assert_eq!(Page::General.step(1), Page::Views);
+        assert_eq!(Page::About.step(-1), Page::Views);
         assert_eq!(Page::General.step(-1), Page::General);
         assert_eq!(Page::About.step(1), Page::About);
         assert_eq!(Page::General.step(10), Page::About);
+    }
+
+    #[test]
+    fn page_down_and_up_stop_at_the_ends_of_the_page() {
+        assert_eq!(page_scroll_target(0., 400., 900.), 400.);
+        assert_eq!(page_scroll_target(800., 400., 900.), 900.);
+        assert_eq!(page_scroll_target(100., -400., 900.), 0.);
+        // A page that fits does not move.
+        assert_eq!(page_scroll_target(0., 400., 0.), 0.);
     }
 
     #[test]

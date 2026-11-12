@@ -9,6 +9,7 @@ mod controls;
 mod diagnostics;
 mod dialog;
 mod filetypes;
+mod folder_views;
 mod fonts;
 mod format;
 mod groups;
@@ -32,6 +33,7 @@ mod settings;
 mod settings_controls;
 mod settings_dialog;
 mod settings_general;
+mod settings_views;
 mod sidebar;
 mod tabs;
 mod theme;
@@ -83,6 +85,13 @@ pub fn run(options: Options) {
     let settings = settings_text
         .map(|text| Settings::parse(&text))
         .unwrap_or_default();
+    // Each folder's own view (W-106c2), a small file beside the session.
+    let views_path = rustphin_platform::config::state_dir().map(|dir| dir.join("views.toml"));
+    let folder_views = views_path
+        .as_deref()
+        .and_then(|path| rustphin_platform::config::read(path).ok().flatten())
+        .map(|text| folder_views::FolderViews::parse(&text))
+        .unwrap_or_default();
     let session_path = rustphin_platform::config::state_dir().map(|dir| dir.join("session.toml"));
     let saved_session = session_path
         .as_deref()
@@ -109,10 +118,14 @@ pub fn run(options: Options) {
             });
             // One store of settings for every window (D-029).
             preferences::init(
-                settings.clone(),
-                settings_path.clone(),
-                settings_saved,
-                kde_single_click,
+                preferences::Loaded {
+                    settings: settings.clone(),
+                    path: settings_path.clone(),
+                    saved: settings_saved,
+                    kde_single_click,
+                    folder_views,
+                    folder_path: views_path.clone(),
+                },
                 cx,
             );
             if let Some(issue) = session_issue {

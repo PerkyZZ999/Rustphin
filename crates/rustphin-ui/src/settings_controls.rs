@@ -13,6 +13,7 @@ use gpui_kit::{
     component::{
         Icon, Sizable as _,
         button::{Button, ButtonVariants as _},
+        checkbox::Checkbox,
     },
     deferred, div,
     prelude::FluentBuilder as _,
@@ -117,7 +118,58 @@ pub fn segmented<T: Copy + PartialEq + 'static>(
 pub fn select<T: Copy + PartialEq + 'static>(
     id: &'static str,
     label: &'static str,
-    choices: &[(T, &'static str)],
+    choices: &[(T, &str)],
+    current: T,
+    selects: &Selects,
+    theme: Theme,
+    pick: Pick<T>,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    sized_select(
+        size::SETTING_SELECT,
+        id,
+        label,
+        choices,
+        current,
+        selects,
+        theme,
+        pick,
+        cx,
+    )
+}
+
+/// A [`select`] for short choices, 128 pixels at least, that leaves room
+/// for a control beside it (Sort by and its direction).
+#[allow(clippy::too_many_arguments)]
+pub fn short_select<T: Copy + PartialEq + 'static>(
+    id: &'static str,
+    label: &'static str,
+    choices: &[(T, &str)],
+    current: T,
+    selects: &Selects,
+    theme: Theme,
+    pick: Pick<T>,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    sized_select(
+        size::SETTING_SELECT_SHORT,
+        id,
+        label,
+        choices,
+        current,
+        selects,
+        theme,
+        pick,
+        cx,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sized_select<T: Copy + PartialEq + 'static>(
+    min_width: f32,
+    id: &'static str,
+    label: &'static str,
+    choices: &[(T, &str)],
     current: T,
     selects: &Selects,
     theme: Theme,
@@ -127,7 +179,9 @@ pub fn select<T: Copy + PartialEq + 'static>(
     let shown = choices
         .iter()
         .find(|(value, _)| *value == current)
-        .map_or("", |(_, words)| *words);
+        .map_or(SharedString::default(), |(_, words)| {
+            SharedString::from((*words).to_owned())
+        });
     let at = choices
         .iter()
         .position(|(value, _)| *value == current)
@@ -136,7 +190,7 @@ pub fn select<T: Copy + PartialEq + 'static>(
     let trigger = Button::new(id)
         .with_size(px(space::SM * 5.))
         .h(px(size::SETTING_CONTROL))
-        .min_w(px(size::SETTING_SELECT))
+        .min_w(px(min_width))
         .outlined()
         .bg(theme.raised)
         .accessibility_label(SharedString::from(format!("{label}: {shown}")))
@@ -206,13 +260,14 @@ pub fn select<T: Copy + PartialEq + 'static>(
                         }))
                         .children(choices.iter().enumerate().map(|(index, (value, words))| {
                             let value = *value;
+                            let words = SharedString::from((*words).to_owned());
                             let chosen = value == current;
                             let under = index == selects.cursor;
                             let pick = pick.clone();
                             div()
                                 .id(("settings-select-row", index))
                                 .role(Role::ListBoxOption)
-                                .aria_label(*words)
+                                .aria_label(words.clone())
                                 .aria_selected(chosen)
                                 .flex()
                                 .flex_none()
@@ -244,7 +299,7 @@ pub fn select<T: Copy + PartialEq + 'static>(
                                         )
                                     },
                                 ))
-                                .child(div().flex_1().min_w_0().truncate().child(*words))
+                                .child(div().flex_1().min_w_0().truncate().child(words))
                                 .on_mouse_move(cx.listener(move |this, _, _, cx| {
                                     if this.selects.cursor != index {
                                         this.selects.cursor = index;
@@ -266,6 +321,25 @@ pub fn select<T: Copy + PartialEq + 'static>(
         .flex_none()
         .child(trigger)
         .children(list)
+        .into_any_element()
+}
+
+/// A checkbox with its words, in the body size.
+pub fn checkbox(
+    id: &'static str,
+    label: &'static str,
+    checked: bool,
+    pick: Pick<bool>,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    Checkbox::new(id)
+        .text_size(px(text::BODY))
+        .label(label)
+        .accessibility_label(label)
+        .checked(checked)
+        .on_click(cx.listener(move |this, checked: &bool, window, cx| {
+            pick(this, *checked, window, cx);
+        }))
         .into_any_element()
 }
 

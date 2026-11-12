@@ -155,6 +155,8 @@ pub mod size {
     pub const SETTING_CONTROL: f32 = 28.;
     /// The narrowest a drop-down in Settings is drawn.
     pub const SETTING_SELECT: f32 = 200.;
+    /// The narrowest a short drop-down in Settings is drawn (Sort by).
+    pub const SETTING_SELECT_SHORT: f32 = 128.;
     /// The widest a text field in Settings is drawn.
     pub const SETTING_FIELD: f32 = 360.;
     /// The logo on the About page.

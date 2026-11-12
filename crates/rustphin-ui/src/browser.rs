@@ -394,6 +394,8 @@ pub struct Browser {
     new_button_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     /// The View button's panel is open (W-107).
     view_menu_open: bool,
+    /// The shared settings' default-view changes this pane has seen.
+    view_epoch: u64,
     view_menu_focus: FocusHandle,
     /// The panel's size slider, over the zoom levels.
     size_slider: Entity<SliderState>,
@@ -471,6 +473,8 @@ impl Browser {
                 cx.notify();
             }
         }));
+        // Settings changes show at once (D-029, W-106c2).
+        subscriptions.push(cx.observe(&crate::preferences::preferences(cx), Self::on_preferences));
         // The View panel closes when the focus leaves it: a click elsewhere.
         let view_menu_focus = cx.focus_handle();
         subscriptions.push(cx.on_focus_out(&view_menu_focus, window, |this, _, _, cx| {
@@ -535,6 +539,7 @@ impl Browser {
             new_files: rustphin_platform::templates::built_in(),
             new_button_bounds: Rc::new(Cell::new(None)),
             view_menu_open: false,
+            view_epoch: crate::preferences::preferences(cx).read(cx).view_epoch(),
             view_menu_focus,
             size_slider,
             folder_state_scroll: ScrollHandle::new(),
@@ -765,6 +770,9 @@ impl Browser {
                     cx.emit(BrowserEvent::Visited(path));
                 }
                 self.snapshot = Some(snapshot);
+                if arrived {
+                    self.adopt_folder_view(cx);
+                }
                 // A live update must not move the view; only arriving does.
                 if arrived || arrived_names || awaited.is_some() {
                     self.reveal_focus();
@@ -1899,16 +1907,107 @@ impl Browser {
         None
     }
 
-    /// Stores the view settings if they changed, on a background thread.
-    /// Tells the shared settings this pane's view; they save it (D-029).
+    /// Tells the shared settings this pane's view; they save it (D-029):
+    /// as the folder's own view while those are remembered, else as the
+    /// default.
     fn save_settings(&mut self, cx: &mut Context<Self>) {
         let Some(model) = &self.model else {
             return;
         };
         let (mode, zoom, options) = (self.mode, self.zoom, model.options());
-        crate::preferences::preferences(cx).update(cx, |preferences, cx| {
-            preferences.update(|settings| settings.set_view(mode, zoom, options), cx);
+        let store = crate::preferences::preferences(cx);
+        let folder = self
+            .location()
+            .filter(|_| store.read(cx).settings().per_folder())
+            .map(|path| crate::location::Location::Folder(path).to_saved());
+        store.update(cx, |preferences, cx| match folder {
+            Some(location) => preferences.set_folder_view(
+                location,
+                crate::folder_views::FolderView {
+                    mode,
+                    zoom,
+                    options,
+                },
+                cx,
+            ),
+            None => preferences.update(|settings| settings.set_view(mode, zoom, options), cx),
         });
+    }
+
+    /// Shows `view` without saving it: a folder's own view, or the default.
+    fn apply_view(&mut self, view: crate::folder_views::FolderView, cx: &mut Context<Self>) {
+        if self.mode != view.mode || self.zoom != view.zoom {
+            self.mode = view.mode;
+            self.zoom = view.zoom;
+            self.icon_size_changed();
+        }
+        if let Some(model) = &mut self.model {
+            let options = ViewOptions {
+                details: view.mode == ViewMode::Details,
+                ..view.options
+            };
+            if model.options() != options
+                && let Some(generation) = model.set_options(options)
+            {
+                self.generation = generation;
+            }
+        }
+        cx.notify();
+    }
+
+    /// The default view as the settings hold it.
+    fn default_view(settings: &crate::settings::Settings) -> crate::folder_views::FolderView {
+        crate::folder_views::FolderView {
+            mode: settings.mode(),
+            zoom: settings.zoom(),
+            options: settings.options(),
+        }
+    }
+
+    /// On arriving in a folder while each folder keeps its view: its own
+    /// view, or the default for one never set.
+    fn adopt_folder_view(&mut self, cx: &mut Context<Self>) {
+        let store = crate::preferences::preferences(cx);
+        let store = store.read(cx);
+        if !store.settings().per_folder() {
+            return;
+        }
+        let Some(path) = self.location() else {
+            return;
+        };
+        let view = store
+            .folder_view(&crate::location::Location::Folder(path).to_saved())
+            .unwrap_or_else(|| Self::default_view(store.settings()));
+        self.apply_view(view, cx);
+    }
+
+    /// The shared settings changed: redraw (columns, previews, dates and
+    /// sizes), and take on a default view changed in Settings unless this
+    /// folder keeps its own.
+    fn on_preferences(
+        &mut self,
+        store: Entity<crate::preferences::Preferences>,
+        cx: &mut Context<Self>,
+    ) {
+        let store = store.read(cx);
+        let epoch = store.view_epoch();
+        let mut adopt = None;
+        if epoch != self.view_epoch {
+            self.view_epoch = epoch;
+            let own = store.settings().per_folder()
+                && self.location().is_some_and(|path| {
+                    store
+                        .folder_view(&crate::location::Location::Folder(path).to_saved())
+                        .is_some()
+                });
+            if !own {
+                adopt = Some(Self::default_view(store.settings()));
+            }
+        }
+        if let Some(view) = adopt {
+            self.apply_view(view, cx);
+        }
+        cx.notify();
     }
 
     /// Forgets resolved icons after the icon size changed; rows ask again.
@@ -3432,7 +3531,12 @@ impl Browser {
         let edge = self.mode.layout(self.zoom).icon;
         // No previews as administrator: they would read every picture as
         // root (docs/project/ADMIN_MODE.md).
+        let previews = crate::preferences::preferences(cx)
+            .read(cx)
+            .settings()
+            .previews();
         if container
+            || !previews.shown
             || edge < MIN_THUMBNAIL_EDGE
             || self.trash_dir.is_some()
             || self.admin_fs.is_some()
@@ -4722,7 +4826,11 @@ impl Render for Browser {
             self.width = f32::from(window.viewport_size().width);
         }
         let width = self.width;
-        let columns = Columns::for_width(width);
+        let chosen = crate::preferences::preferences(cx)
+            .read(cx)
+            .settings()
+            .detail_columns();
+        let columns = Columns::for_width(width).within(chosen);
         let layout = self.mode.layout(self.zoom);
         let len = snapshot.as_ref().map_or(0, |snapshot| snapshot.len());
         self.lanes = match self.mode.flow() {
@@ -5621,6 +5729,15 @@ struct Columns {
 }
 
 impl Columns {
+    /// Only the columns chosen in Settings, of those that fit.
+    fn within(self, chosen: crate::settings::DetailColumns) -> Self {
+        Self {
+            size: self.size && chosen.size,
+            modified: self.modified && chosen.modified,
+            kind: self.kind && chosen.kind,
+        }
+    }
+
     /// Narrow panes drop type, modified and then size to preserve names.
     fn for_width(width: f32) -> Self {
         Self {
@@ -5828,6 +5945,19 @@ mod tests {
         assert!(medium.modified && !medium.kind);
         let narrow = Columns::for_width(size::WIDTH_FOR_MODIFIED - 1.);
         assert!(!narrow.modified && !narrow.kind);
+    }
+
+    #[test]
+    fn a_column_shows_only_when_chosen_and_there_is_room() {
+        let chosen = crate::settings::DetailColumns {
+            size: true,
+            modified: false,
+            kind: true,
+        };
+        let wide = Columns::for_width(1200.).within(chosen);
+        assert!(wide.size && !wide.modified && wide.kind);
+        let narrow = Columns::for_width(size::WIDTH_FOR_MODIFIED - 1.).within(chosen);
+        assert!(narrow.size && !narrow.kind, "room still decides");
     }
 
     #[test]

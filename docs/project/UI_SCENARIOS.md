@@ -482,3 +482,16 @@ Isolated home prepared before launch (start the session without an app, then `la
 | GN6 | Click a folder once | It opens |
 | GN7 | Ctrl+Q with a tab in `Work`, start Rustphin again | It opens the chosen folder, not the saved tab |
 | GN8 | Settings, Reset to defaults | `[general]` is back to `start = "restore"`, `shown_folders = "tab"`, no terminal or click |
+
+### Views page (W-106c2)
+
+Isolated home with `Pics/small.png` (131 KB) and `Pics/big.png` (7.6 MB of noise), `Docs/notes.txt` (5,000 bytes) and `Docs/readme.txt`. Page Down scrolls the page (the wheel is not available in the test tools).
+
+| ID | Steps | Expected |
+|---|---|---|
+| VW1 | Settings, Down to Views | Default view (View Details, Size 24 px, Remember unticked), Order (Name, A to Z, Folders first ticked), Details view (three columns ticked, the date of now, Binary), Previews (ticked, up to 50 MB a file); Sort by and its direction on one line |
+| VW2 | Icons | The pane behind becomes icons at once, both pictures with thumbnails |
+| VW3 | Page Down; the preview limit, up to 5 MB; Escape | One Escape closes Settings; `big.png` shows the picture type icon, `small.png` its thumbnail |
+| VW4 | In Docs: Details, Dates "Today …", Decimal, untick Type; Escape | Details without the Type column; "Today 10:59"; "5.0 kB", the status line and the devices in kB/GB |
+| VW5 | Tick Remember the view for each folder; Escape; Ctrl+1; Alt+Up; Alt+Left | Docs turns to icons and `views.toml` holds Docs as icons; the home folder shows the default (details); back in Docs, icons again |
+| VW6 | Settings, Views, Reset to defaults | `[view]` back to details, size 2, no per-folder views, all columns, ISO, binary, previews up to 50 MB |

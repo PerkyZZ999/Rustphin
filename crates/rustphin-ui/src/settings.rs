@@ -7,7 +7,10 @@
 use rustphin_core::{SortKey, ViewOptions};
 use serde::{Deserialize, Serialize};
 
-use crate::layout::{self, ViewMode};
+use crate::{
+    format::{Dates, Units},
+    layout::{self, ViewMode},
+};
 
 /// The format version this build writes. Version 2 has seven zoom levels
 /// where version 1 had five (W-107); version 3 adds `[general]` (W-106c).
@@ -79,6 +82,22 @@ pub enum Click {
     Single,
 }
 
+/// Like [`lenient`] for a choice that is on unless the file says otherwise.
+fn lenient_true<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    let value = toml::Value::deserialize(deserializer)?;
+    Ok(value.as_bool().unwrap_or(true))
+}
+
+/// Like [`lenient`] for the preview limit, which is at least 1 MB.
+fn lenient_limit<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
+    let value = toml::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_integer()
+        .and_then(|mb| u32::try_from(mb).ok())
+        .filter(|mb| *mb >= 1)
+        .unwrap_or(THUMBNAIL_LIMIT_MB))
+}
+
 /// Reads a value, or its default when it is not one this build knows, so
 /// one strange value does not cost the rest of the file.
 fn lenient<'de, D, T>(deserializer: D) -> Result<T, D::Error>
@@ -99,6 +118,56 @@ struct View {
     descending: bool,
     show_hidden: bool,
     folders_first: bool,
+    /// Each folder keeps the view it was last shown in (W-106c2).
+    #[serde(deserialize_with = "lenient")]
+    per_folder: bool,
+    /// The details view's optional columns.
+    #[serde(deserialize_with = "lenient_true")]
+    column_size: bool,
+    #[serde(deserialize_with = "lenient_true")]
+    column_modified: bool,
+    #[serde(deserialize_with = "lenient_true")]
+    column_type: bool,
+    #[serde(deserialize_with = "lenient")]
+    dates: Dates,
+    #[serde(deserialize_with = "lenient")]
+    sizes: Units,
+    /// Pictures show their thumbnails.
+    #[serde(deserialize_with = "lenient_true")]
+    thumbnails: bool,
+    /// Pictures larger than this many megabytes keep their type icon.
+    #[serde(deserialize_with = "lenient_limit")]
+    thumbnail_limit_mb: u32,
+}
+
+/// The largest picture previewed by default, in megabytes.
+pub const THUMBNAIL_LIMIT_MB: u32 = 50;
+
+/// The details columns that can be hidden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DetailColumns {
+    /// Size.
+    pub size: bool,
+    /// Modified.
+    pub modified: bool,
+    /// Type.
+    pub kind: bool,
+}
+
+/// Picture previews: whether they are shown and up to which file size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Previews {
+    /// Thumbnails are shown at all.
+    pub shown: bool,
+    /// Largest file previewed, in megabytes.
+    pub limit_mb: u32,
+}
+
+impl Previews {
+    /// The largest file previewed, in bytes.
+    pub fn limit_bytes(self) -> u64 {
+        u64::from(self.limit_mb) * 1_000_000
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -130,6 +199,14 @@ impl Default for View {
             descending: options.descending,
             show_hidden: options.show_hidden,
             folders_first: options.folders_first,
+            per_folder: false,
+            column_size: true,
+            column_modified: true,
+            column_type: true,
+            dates: Dates::default(),
+            sizes: Units::default(),
+            thumbnails: true,
+            thumbnail_limit_mb: THUMBNAIL_LIMIT_MB,
         }
     }
 }
@@ -156,14 +233,87 @@ impl Settings {
                 descending: options.descending,
                 show_hidden: options.show_hidden,
                 folders_first: options.folders_first,
+                ..View::default()
             },
         }
     }
 
-    /// Replaces the view part with the current view, keeping the rest.
+    /// Replaces the default view with `mode`, `zoom` and `options`, keeping
+    /// the Views page's other choices.
     pub fn set_view(&mut self, mode: ViewMode, zoom: usize, options: ViewOptions) {
-        let current = Self::new(mode, zoom, options);
-        self.view = current.view;
+        let current = Self::new(mode, zoom, options).view;
+        self.view = View {
+            per_folder: self.view.per_folder,
+            column_size: self.view.column_size,
+            column_modified: self.view.column_modified,
+            column_type: self.view.column_type,
+            dates: self.view.dates,
+            sizes: self.view.sizes,
+            thumbnails: self.view.thumbnails,
+            thumbnail_limit_mb: self.view.thumbnail_limit_mb,
+            ..current
+        };
+        self.version = VERSION;
+    }
+
+    /// Whether each folder keeps its own view.
+    pub fn per_folder(&self) -> bool {
+        self.view.per_folder
+    }
+
+    /// Chooses whether each folder keeps its own view.
+    pub fn set_per_folder(&mut self, on: bool) {
+        self.view.per_folder = on;
+        self.version = VERSION;
+    }
+
+    /// The details columns chosen.
+    pub fn detail_columns(&self) -> DetailColumns {
+        DetailColumns {
+            size: self.view.column_size,
+            modified: self.view.column_modified,
+            kind: self.view.column_type,
+        }
+    }
+
+    /// Chooses the details columns.
+    pub fn set_detail_columns(&mut self, columns: DetailColumns) {
+        self.view.column_size = columns.size;
+        self.view.column_modified = columns.modified;
+        self.view.column_type = columns.kind;
+        self.version = VERSION;
+    }
+
+    /// How dates and sizes are written.
+    pub fn formats(&self) -> (Dates, Units) {
+        (self.view.dates, self.view.sizes)
+    }
+
+    /// Chooses how dates and sizes are written.
+    pub fn set_formats(&mut self, dates: Dates, sizes: Units) {
+        self.view.dates = dates;
+        self.view.sizes = sizes;
+        self.version = VERSION;
+    }
+
+    /// Picture previews.
+    pub fn previews(&self) -> Previews {
+        Previews {
+            shown: self.view.thumbnails,
+            limit_mb: self.view.thumbnail_limit_mb,
+        }
+    }
+
+    /// Chooses picture previews.
+    pub fn set_previews(&mut self, previews: Previews) {
+        self.view.thumbnails = previews.shown;
+        self.view.thumbnail_limit_mb = previews.limit_mb.max(1);
+        self.version = VERSION;
+    }
+
+    /// Puts the Views page back as it was before anything was chosen.
+    pub fn reset_views(&mut self) {
+        self.view = View::default();
         self.version = VERSION;
     }
 
@@ -451,5 +601,74 @@ mod tests {
         // The view is another page's.
         assert_eq!(settings.mode(), ViewMode::Icons);
         assert!(!settings.to_toml().contains("terminal"));
+    }
+
+    #[test]
+    fn the_views_page_choices_survive_and_a_pane_does_not_undo_them() {
+        let mut settings = sample();
+        settings.set_per_folder(true);
+        settings.set_detail_columns(DetailColumns {
+            size: true,
+            modified: false,
+            kind: false,
+        });
+        settings.set_formats(Dates::Relative, Units::Decimal);
+        settings.set_previews(Previews {
+            shown: false,
+            limit_mb: 10,
+        });
+        // A pane telling its view keeps the page's other choices.
+        settings.set_view(ViewMode::Compact, 1, ViewOptions::default());
+        let loaded = Settings::parse(&settings.to_toml());
+        assert_eq!(loaded, settings);
+        assert!(loaded.per_folder());
+        assert!(!loaded.detail_columns().modified && loaded.detail_columns().size);
+        assert_eq!(loaded.formats(), (Dates::Relative, Units::Decimal));
+        assert_eq!(loaded.previews().limit_mb, 10);
+        assert_eq!(loaded.mode(), ViewMode::Compact);
+    }
+
+    #[test]
+    fn missing_or_strange_view_choices_take_their_defaults() {
+        let old = Settings::parse("version = 2\n[view]\nmode = \"icons\"\n");
+        assert!(!old.per_folder());
+        assert_eq!(
+            old.detail_columns(),
+            DetailColumns {
+                size: true,
+                modified: true,
+                kind: true
+            }
+        );
+        assert!(old.previews().shown);
+        assert_eq!(old.previews().limit_mb, THUMBNAIL_LIMIT_MB);
+        let odd = Settings::parse(
+            "version = 3\n[view]\nmode = \"icons\"\ncolumn_size = \"no\"\nthumbnail_limit_mb = -4\ndates = \"lunar\"\n",
+        );
+        assert!(odd.detail_columns().size);
+        assert_eq!(odd.previews().limit_mb, THUMBNAIL_LIMIT_MB);
+        assert_eq!(odd.formats().0, Dates::Iso);
+        assert_eq!(odd.mode(), ViewMode::Icons);
+    }
+
+    #[test]
+    fn previews_stop_at_their_limit_and_resetting_the_page_restores_them() {
+        let previews = Previews {
+            shown: true,
+            limit_mb: 50,
+        };
+        assert_eq!(previews.limit_bytes(), 50_000_000);
+        let mut settings = sample();
+        settings.set_previews(Previews {
+            shown: false,
+            limit_mb: 0,
+        });
+        assert_eq!(settings.previews().limit_mb, 1);
+        settings.set_start(Start::Home, None);
+        settings.reset_views();
+        assert!(settings.previews().shown);
+        assert_eq!(settings.mode(), ViewMode::Details);
+        // The General page is another page's.
+        assert_eq!(settings.start().0, Start::Home);
     }
 }

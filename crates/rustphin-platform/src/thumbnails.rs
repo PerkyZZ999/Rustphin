@@ -14,7 +14,10 @@ use std::{
     io::{self, BufWriter},
     os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
-    sync::{Arc, Condvar, Mutex},
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     thread,
 };
 
@@ -279,7 +282,18 @@ impl ThumbnailCache {
     /// The thumbnail of `file` in class `size`: the cached one when valid,
     /// otherwise a new one. `None` when the file cannot be thumbnailed.
     pub fn get(&self, file: &Path, size: ThumbSize) -> Option<PathBuf> {
-        let mtime = fs::metadata(file).ok()?.mtime();
+        self.get_within(file, size, MAX_FILE_BYTES)
+    }
+
+    /// [`get`](Self::get) for files of at most `max_bytes`: a larger file
+    /// gets none, and no failure is recorded, so a higher limit later
+    /// brings its thumbnail back (Settings, Views, W-106c2).
+    pub fn get_within(&self, file: &Path, size: ThumbSize, max_bytes: u64) -> Option<PathBuf> {
+        let metadata = fs::metadata(file).ok()?;
+        if metadata.len() > max_bytes {
+            return None;
+        }
+        let mtime = metadata.mtime();
         if let Some(cached) = self.lookup(file, mtime, size) {
             return Some(cached);
         }
@@ -310,6 +324,8 @@ struct Queue {
 /// Makes thumbnails on background threads, newest request first.
 pub struct Thumbnailer {
     queue: Arc<(Mutex<Queue>, Condvar)>,
+    /// The largest file given a thumbnail, in bytes.
+    limit: Arc<AtomicU64>,
 }
 
 fn lock(queue: &Mutex<Queue>) -> std::sync::MutexGuard<'_, Queue> {
@@ -324,8 +340,10 @@ impl Thumbnailer {
     pub fn start(cache: ThumbnailCache, workers: usize) -> (Self, flume::Receiver<Thumbnail>) {
         let (results, receiver) = flume::unbounded();
         let queue: Arc<(Mutex<Queue>, Condvar)> = Arc::default();
+        let limit = Arc::new(AtomicU64::new(MAX_FILE_BYTES));
         for _ in 0..workers.max(1) {
             let (queue, cache, results) = (Arc::clone(&queue), cache.clone(), results.clone());
+            let limit = Arc::clone(&limit);
             let spawned = thread::Builder::new()
                 .name("rustphin-thumbnails".to_owned())
                 .spawn(move || {
@@ -344,7 +362,7 @@ impl Thumbnailer {
                                 state = wake.wait(state).unwrap_or_else(|p| p.into_inner());
                             }
                         };
-                        let thumb = cache.get(&file, size);
+                        let thumb = cache.get_within(&file, size, limit.load(Ordering::Relaxed));
                         if results.send(Thumbnail { file, size, thumb }).is_err() {
                             return;
                         }
@@ -355,7 +373,14 @@ impl Thumbnailer {
                 let _ = error;
             }
         }
-        (Self { queue }, receiver)
+        (Self { queue, limit }, receiver)
+    }
+
+    /// Thumbnails only files of at most `bytes` from now on (never more than
+    /// the decoder's own limit).
+    pub fn set_limit(&self, bytes: u64) {
+        self.limit
+            .store(bytes.min(MAX_FILE_BYTES), Ordering::Relaxed);
     }
 
     /// Asks for the thumbnail of `file`. When too many requests wait, the
@@ -491,6 +516,33 @@ mod tests {
 
         let image = image::open(&thumb).unwrap();
         assert_eq!((image.width(), image.height()), (20, 10));
+    }
+
+    #[test]
+    fn a_file_over_the_limit_gets_no_thumbnail_until_the_limit_is_raised() {
+        let f = fixture();
+        let file = f.dir.join("big.png");
+        picture(&file, 300, 300);
+        let bytes = fs::metadata(&file).unwrap().len();
+        assert_eq!(
+            f.cache.get_within(&file, ThumbSize::Normal, bytes - 1),
+            None
+        );
+        let mtime = fs::metadata(&file).unwrap().mtime();
+        assert!(
+            !f.cache.has_failed(&file, mtime),
+            "not recorded as a failure"
+        );
+        assert!(
+            f.cache
+                .get_within(&file, ThumbSize::Normal, bytes)
+                .is_some()
+        );
+        // A thumbnail made earlier is not shown over the limit either.
+        assert_eq!(
+            f.cache.get_within(&file, ThumbSize::Normal, bytes - 1),
+            None
+        );
     }
 
     #[test]
