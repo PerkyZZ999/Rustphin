@@ -43,6 +43,7 @@ use crate::{
     remote,
     session::{Session, SessionSaves, SessionTab},
     settings::Settings,
+    settings_dialog::{SettingsDialog, SettingsEvent},
     sidebar::{Sidebar, SidebarEvent},
     tabs::Tabs,
     theme::{Theme, size, space, text},
@@ -58,6 +59,10 @@ impl Global for ShowService {}
 const KEY_CONTEXT: &str = "Workspace";
 /// A dialog that is waiting for an answer.
 const DIALOG_CONTEXT: &str = "Dialog";
+/// Where the dialogs' own keys apply: not in Settings, whose controls take
+/// letters and Enter for themselves (it is a dialog for the window's other
+/// shortcuts).
+const DIALOG_KEYS: &str = "Dialog && !SettingsDialog";
 
 actions!(
     workspace,
@@ -82,6 +87,7 @@ actions!(
         ToggleSidebar,
         AddPlace,
         OpenPalette,
+        OpenSettings,
         StopOperations,
         DismissNotice,
         FocusPlaces,
@@ -182,6 +188,10 @@ pub fn bind_keys(cx: &mut App) {
             OpenPalette,
             Some("Workspace && !Dialog && !Palette"),
         ),
+        // Dolphin's key for its settings. GPUI names Ctrl+Shift+, by the
+        // shifted character, "<" on most layouts.
+        KeyBinding::new("ctrl-<", OpenSettings, context),
+        KeyBinding::new("ctrl-shift-,", OpenSettings, context),
         // Dolphin enters a location from anywhere in the window. Inside a
         // pane the browser's own binding applies; text fields keep their keys.
         KeyBinding::new("ctrl-l", EditLocation, Some(OUTSIDE_PANES)),
@@ -231,16 +241,16 @@ pub fn bind_keys(cx: &mut App) {
             Undo,
             Some("Workspace && !Input && !Dialog && !Palette"),
         ),
-        KeyBinding::new("enter", DialogAccept, Some(DIALOG_CONTEXT)),
-        KeyBinding::new("escape", DialogCancel, Some(DIALOG_CONTEXT)),
+        KeyBinding::new("enter", DialogAccept, Some(DIALOG_KEYS)),
+        KeyBinding::new("escape", DialogCancel, Some(DIALOG_KEYS)),
         // A text field inside a dialog has its own context. Escape still cancels.
         KeyBinding::new("escape", DialogCancel, Some("Dialog > Input")),
-        KeyBinding::new("s", DialogSkip, Some(DIALOG_CONTEXT)),
-        KeyBinding::new("k", DialogKeepBoth, Some(DIALOG_CONTEXT)),
-        KeyBinding::new("r", DialogReplace, Some(DIALOG_CONTEXT)),
-        KeyBinding::new("a", DialogToggleAll, Some(DIALOG_CONTEXT)),
-        KeyBinding::new("c", DialogCopy, Some(DIALOG_CONTEXT)),
-        KeyBinding::new("o", DialogOpen, Some(DIALOG_CONTEXT)),
+        KeyBinding::new("s", DialogSkip, Some(DIALOG_KEYS)),
+        KeyBinding::new("k", DialogKeepBoth, Some(DIALOG_KEYS)),
+        KeyBinding::new("r", DialogReplace, Some(DIALOG_KEYS)),
+        KeyBinding::new("a", DialogToggleAll, Some(DIALOG_KEYS)),
+        KeyBinding::new("c", DialogCopy, Some(DIALOG_KEYS)),
+        KeyBinding::new("o", DialogOpen, Some(DIALOG_KEYS)),
     ]);
 }
 
@@ -288,7 +298,6 @@ pub struct Workspace {
     tabs: Tabs<Tab>,
     /// Recently closed tabs, newest first, for Ctrl+Shift+T.
     closed_tabs: Vec<SessionTab>,
-    settings_path: Option<PathBuf>,
     /// Where the open tabs are stored; `None` when they must not be written.
     session_path: Option<PathBuf>,
     /// The session as last queued, to skip writes that change nothing.
@@ -328,6 +337,9 @@ pub struct Workspace {
     palette: Option<Entity<Palette>>,
     palette_subscription: Option<Subscription>,
     palette_from_sidebar: bool,
+    /// The Settings dialog, while it is open (W-106).
+    settings: Option<Entity<SettingsDialog>>,
+    settings_subscription: Option<Subscription>,
     /// Batch rename, when several files are being renamed together.
     pub(crate) rename: Option<crate::rename_dialog::RenameDialog>,
     /// Folders other applications asked to be shown, applied on the next frame.
@@ -356,7 +368,6 @@ impl Workspace {
         fallback: PathBuf,
         session_path: Option<PathBuf>,
         settings: Settings,
-        settings_path: Option<PathBuf>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -373,14 +384,7 @@ impl Workspace {
                     .panes
                     .iter()
                     .map(|location| {
-                        Self::pane_at(
-                            location,
-                            &fallback,
-                            settings.clone(),
-                            settings_path.clone(),
-                            window,
-                            cx,
-                        )
+                        Self::pane_at(location, &fallback, settings.clone(), window, cx)
                     })
                     .collect(),
                 active: tab.active_pane,
@@ -388,13 +392,7 @@ impl Workspace {
             .collect();
         let tabs = Tabs::from_parts(tabs, session.active).unwrap_or_else(|| {
             Tabs::new(Tab {
-                panes: vec![Self::pane(
-                    fallback,
-                    settings,
-                    settings_path.clone(),
-                    window,
-                    cx,
-                )],
+                panes: vec![Self::pane(fallback, settings, window, cx)],
                 active: 0,
             })
         });
@@ -404,7 +402,6 @@ impl Workspace {
             appearance: None,
             tabs,
             closed_tabs: Vec::new(),
-            settings_path,
             session_path,
             saved: Session::default(),
             session_saves: SessionSaves::default(),
@@ -429,6 +426,8 @@ impl Workspace {
             palette: None,
             palette_subscription: None,
             palette_from_sidebar: false,
+            settings: None,
+            settings_subscription: None,
             rename: None,
             pending_shows: Vec::new(),
             launch: None,
@@ -528,7 +527,6 @@ impl Workspace {
         location: &Location,
         fallback: &Path,
         settings: Settings,
-        settings_path: Option<PathBuf>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Pane {
@@ -536,7 +534,7 @@ impl Workspace {
             Location::Folder(path) => (path.clone(), None),
             Location::Remote(address) => (fallback.to_path_buf(), Some(address)),
         };
-        let pane = Self::pane(path, settings, settings_path, window, cx);
+        let pane = Self::pane(path, settings, window, cx);
         if let Some(address) = remote {
             pane.browser.update(cx, |browser, cx| {
                 browser.open_remote(address.clone(), true, cx);
@@ -548,11 +546,10 @@ impl Workspace {
     fn pane(
         path: PathBuf,
         settings: Settings,
-        settings_path: Option<PathBuf>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Pane {
-        let browser = cx.new(|cx| Browser::new(path, settings, settings_path, window, cx));
+        let browser = cx.new(|cx| Browser::new(path, settings, window, cx));
         let subscriptions = [
             // Tab labels and the window title follow the folder being shown.
             cx.observe(&browser, |_, _, cx| cx.notify()),
@@ -1066,6 +1063,7 @@ impl Workspace {
 
     fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.palette.is_some()
+            || self.settings.is_some()
             || self.rename.is_some()
             || self.properties.is_some()
             || self.launch.is_some()
@@ -1079,6 +1077,40 @@ impl Workspace {
         let palette = cx.new(|cx| Palette::new(candidates, status, window, cx));
         self.palette_subscription = Some(cx.subscribe_in(&palette, window, Self::on_palette_event));
         self.palette = Some(palette);
+        cx.notify();
+    }
+
+    /// Opens Settings over the window, or gives it the keyboard if open.
+    fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(settings) = &self.settings {
+            settings.read(cx).focus_handle().focus(window, cx);
+            return;
+        }
+        if self.dialog_open || self.palette.is_some() {
+            return;
+        }
+        self.rename = None;
+        let settings = cx.new(SettingsDialog::new);
+        self.settings_subscription =
+            Some(cx.subscribe_in(&settings, window, Self::on_settings_event));
+        settings.read(cx).focus_handle().focus(window, cx);
+        self.settings = Some(settings);
+        cx.notify();
+    }
+
+    fn on_settings_event(
+        &mut self,
+        _: &Entity<SettingsDialog>,
+        event: &SettingsEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings = None;
+        self.settings_subscription = None;
+        match event {
+            SettingsEvent::Close => self.focus_active(window, cx),
+            SettingsEvent::OpenFolder(folder) => self.open_tab(folder.clone(), true, window, cx),
+        }
         cx.notify();
     }
 
@@ -1187,13 +1219,7 @@ impl Workspace {
             return;
         }
         let settings = self.tabs.active().browser().read(cx).settings();
-        let pane = Self::pane(
-            folder.clone(),
-            settings,
-            self.settings_path.clone(),
-            window,
-            cx,
-        );
+        let pane = Self::pane(folder.clone(), settings, window, cx);
         pane.browser
             .update(cx, |browser, cx| browser.reveal(folder, names, cx));
         let previous = self.tabs.active_index();
@@ -1219,7 +1245,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let settings = self.tabs.active().browser().read(cx).settings();
-        let pane = Self::pane(path, settings, self.settings_path.clone(), window, cx);
+        let pane = Self::pane(path, settings, window, cx);
         let previous = self.tabs.active_index();
         self.tabs.open(Tab {
             panes: vec![pane],
@@ -1272,16 +1298,7 @@ impl Workspace {
         let panes = saved
             .panes
             .iter()
-            .map(|location| {
-                Self::pane_at(
-                    location,
-                    &fallback,
-                    settings.clone(),
-                    self.settings_path.clone(),
-                    window,
-                    cx,
-                )
-            })
+            .map(|location| Self::pane_at(location, &fallback, settings.clone(), window, cx))
             .collect::<Vec<_>>();
         self.tabs.open(Tab {
             active: saved.active_pane.min(panes.len().saturating_sub(1)),
@@ -1338,7 +1355,7 @@ impl Workspace {
             let Some(path) = location else {
                 return;
             };
-            let pane = Self::pane(path, settings, self.settings_path.clone(), window, cx);
+            let pane = Self::pane(path, settings, window, cx);
             self.edit_tab(index, |tab| {
                 tab.panes.push(pane);
                 tab.active = 1;
@@ -1600,6 +1617,7 @@ impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.pending_properties.is_empty()
             && self.properties.is_none()
+            && self.settings.is_none()
             && self.launch.is_none()
             && self.rename.is_none()
             && hub(cx).read(cx).questions.is_empty()
@@ -1657,7 +1675,11 @@ impl Render for Workspace {
             cx.defer_in(window, move |_, window, cx| focus.focus(window, cx));
         } else if !dialog_open && self.dialog_open {
             self.apply_to_all = false;
-            cx.defer_in(window, |this, window, cx| this.focus_active(window, cx));
+            // Settings, if open under the question, takes the keyboard back.
+            cx.defer_in(window, |this, window, cx| match &this.settings {
+                Some(settings) => settings.read(cx).focus_handle().focus(window, cx),
+                None => this.focus_active(window, cx),
+            });
         }
         self.dialog_open = dialog_open;
 
@@ -1853,6 +1875,9 @@ impl Render for Workspace {
             .on_action(
                 cx.listener(|this, _: &OpenPalette, window, cx| this.open_palette(window, cx)),
             )
+            .on_action(
+                cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings(window, cx)),
+            )
             .on_action(|_: &DismissNotice, _, cx| {
                 operations::hub(cx).update(cx, Hub::dismiss_notice)
             })
@@ -1897,6 +1922,7 @@ impl Render for Workspace {
             // results first, the blur status last.
             .children(activity)
             .children(self.blur_status(theme))
+            .children(self.settings.clone())
             .children(dialog)
             .when(self.rename.is_some(), |workspace| {
                 let element = self

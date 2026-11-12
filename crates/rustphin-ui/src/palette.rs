@@ -139,6 +139,7 @@ const COMMAND_ICONS: &[(&str, gpui_kit::assets::IconName)] = {
         ("Workspace: Toggle split view", I::SquareSplitHorizontal),
         ("Workspace: Show or hide places", I::PanelLeft),
         ("Workspace: Quit", I::Power),
+        ("Workspace: Settings…", I::Settings),
         ("Places: New group", I::ListPlus),
         ("Places: Add current folder", I::BookmarkPlus),
         ("Places: Rename selected place or group", I::Pencil),

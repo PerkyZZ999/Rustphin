@@ -453,3 +453,17 @@ Isolated home with `~/Templates/Letter.odt` and, as the terminal in `~/.config/k
 | NT4 | Click the terminal button in a folder whose name has a space | The terminal starts in that folder, with its configured options |
 | NT5 | Point `TerminalApplication` at a missing program; click the button | "The terminal could not be opened: … Choose one in System Settings, Default Applications, Terminal emulator." |
 | NT6 | Click empty space, Shift+F4 | The terminal starts in the folder |
+
+## Settings (W-106)
+
+Isolated home; a fresh one has no `~/.config/rustphin/settings.toml`. In kwin-mcp send the key as `ctrl+shift+,` (the name `comma` sends nothing).
+
+| ID | Steps | Expected |
+|---|---|---|
+| ST1 | Ctrl+Shift+,; Escape. Then Ctrl+Shift+P, "settings", Return | Settings opens over the dimmed window on its first page and closes again; the palette offers "Settings…" with Ctrl+Shift+, and opens the same dialog |
+| ST2 | Open Settings in a fresh home; look at About | Logo, "Rustphin", "Version 0.1.0", the licence row, credits, the privacy line with a green check; the path ends "(made when you first change a setting)" and "Open the settings folder" is unavailable |
+| ST3 | Show the licence; Back | The GPL's full text replaces the page, in the data font, with Back above it at its own width; Back returns to About |
+| ST4 | Close Settings, Ctrl+= in the list, open Settings, Open the settings folder | The path loses its note and the button is available; the dialog closes and a new tab shows `settings.toml` |
+| ST5 | Window narrower than 720 px (maximise it in a 700 px screen) | The page list becomes a row of tabs above the page, the current one underlined |
+| ST6 | With Settings open: Ctrl+T, then Escape | No tab opens behind the dialog; Escape closes Settings and the keyboard is back in the list |
+| ST7 | The ✕ in the title row, and Close (Esc) | Each closes Settings |

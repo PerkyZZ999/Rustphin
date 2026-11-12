@@ -239,6 +239,12 @@ pub fn commands() -> Vec<Command> {
         ),
         command!("Workspace: Quit", "Ctrl+Q", Browser, w::Quit),
         command!(
+            "Workspace: Settings…",
+            "Ctrl+Shift+,",
+            Browser,
+            w::OpenSettings
+        ),
+        command!(
             "Workspace: Close tab or window",
             "Ctrl+W",
             Browser,

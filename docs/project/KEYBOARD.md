@@ -72,6 +72,7 @@ Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 | Quit | Ctrl+Q | Ctrl+Q (same as closing the window) | K9 |
 | New window | Ctrl+N | not offered (one window) | — |
 | Command palette | KDE command bar (from KXmlGui, not Dolphin source) | Ctrl+Shift+P | Q1 |
+| Settings | Ctrl+Shift+, (Configure Dolphin) | Ctrl+Shift+, | ST1 |
 
 ## Places panel (focused)
 

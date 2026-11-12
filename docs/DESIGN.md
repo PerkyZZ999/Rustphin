@@ -641,6 +641,33 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   offered yet. **Open terminal here** opens the terminal chosen in KDE's
   settings (Konsole when none) in the folder shown; it is unavailable in
   the trash and while nothing is listed.
+- **Settings (W-106, D-029, mockup 36):** a dialog over the window, opened by
+  Ctrl+Shift+, and the palette's "Workspace: Settings…". 760 × 560 px at most,
+  16 px from every window edge; the dialog surface, accent outline and glow;
+  a 48 px title row (`settings`, "Settings", Close). On the left a 200 px
+  list of pages, 32 px rows with a 16 px icon and the name: General
+  (`settings`), Appearance (`palette`), Views (`layout-list`), Toolbar
+  (`sliders-horizontal`), Places (`bookmark`), Confirmations
+  (`circle-check`), Shortcuts (`keyboard`), About (`info`); the current page
+  in `primary-subtle` with the 2 px `primary-bright` bar and icon, others
+  `hover` under the pointer; Up and Down move through it. Below 720 px of
+  window width the list becomes a 36 px row of tabs above the page, the
+  current one underlined in `primary-bright`. A page: its name in
+  `headline-sm` and one sentence in `text-muted`, then groups under
+  `label-sm` capitals with a hairline; each setting a 32 px row with its
+  label in a 184 px column and the control after it (segmented controls for
+  two or three choices, 28 px drop-downs for longer lists, checkboxes, and
+  sliders with their value in `data-sm`). The page scrolls on its own. The
+  action row: "Reset to defaults" (outlined, `rotate-ccw`) on the left for
+  the page shown, where it has settings; "Close (Esc)" primary on the right.
+  Changes apply at once. **About:** the 64 px logo, "Rustphin" in
+  `headline-md`, the version in `data-sm`, one line on what it is; the
+  licence (GPL-3.0-or-later) with "Show the licence", which shows the full
+  text in the page with "Back"; credits; "No telemetry. Rustphin never uses
+  the network." with `circle-check`; where the settings file is, with "Open
+  the settings folder", which opens it in a new tab. Before the first change
+  there is no file: the path adds "(made when you first change a setting)"
+  and the button is unavailable.
 - **View menu (W-107):** the View button opens a 240 px panel with the
   context menu's surface, under the button's right edge: the three modes as
   rows (icon, name, key: Icons Ctrl+1, Compact Ctrl+2, Details Ctrl+3), the
@@ -1031,6 +1058,9 @@ except where the list below says otherwise; each W-079 step adds its line.
   The status line names the reason ("Not readable", "Does not exist"). A
   shown folder that fails to re-read keeps its listing under the error
   banner, as does a folder that vanished.
+- Settings (W-106b): the dialog, its page list and the tabs below 720 px,
+  the action row and the About page are built; the other pages arrive with
+  W-106c–g, each with its "Reset to defaults".
 
 Carried over unchanged from the earlier design and implemented: the Actions
 palette's **Recover original names after interruption** for the current folder

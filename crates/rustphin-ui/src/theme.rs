@@ -139,6 +139,20 @@ pub mod size {
     pub const BUTTON: f32 = 32.;
     /// Height of a dialog's title row.
     pub const DIALOG_TITLE: f32 = 48.;
+    /// The Settings dialog's width at its largest (W-106, mockup 36).
+    pub const SETTINGS_WIDTH: f32 = 760.;
+    /// The Settings dialog's height at its largest.
+    pub const SETTINGS_HEIGHT: f32 = 560.;
+    /// Its page list on the left.
+    pub const SETTINGS_NAV: f32 = 200.;
+    /// The label column of a setting.
+    pub const SETTINGS_LABEL: f32 = 184.;
+    /// Below this window width the page list becomes a row of tabs.
+    pub const SETTINGS_NARROW: f32 = 720.;
+    /// A setting's row.
+    pub const SETTING_ROW: f32 = 32.;
+    /// The logo on the About page.
+    pub const ABOUT_LOGO: f32 = 64.;
     /// Corner radius shared by controls, rows and panels.
     pub const RADIUS: f32 = 2.;
     /// Height of the window's own title bar (`title-bar`).

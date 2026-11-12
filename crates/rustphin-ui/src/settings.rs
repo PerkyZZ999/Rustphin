@@ -93,6 +93,13 @@ impl Settings {
         }
     }
 
+    /// Replaces the view part with the current view, keeping the rest.
+    pub fn set_view(&mut self, mode: ViewMode, zoom: usize, options: ViewOptions) {
+        let current = Self::new(mode, zoom, options);
+        self.view = current.view;
+        self.version = VERSION;
+    }
+
     /// Reads settings from TOML text, falling back to the defaults for the
     /// whole file if it cannot be parsed.
     pub fn parse(text: &str) -> Self {
@@ -234,6 +241,23 @@ mod tests {
         ] {
             assert_eq!(Settings::parse(text), Settings::default(), "for {text:?}");
         }
+    }
+
+    #[test]
+    fn setting_the_view_changes_only_the_view_and_writes_todays_version() {
+        let mut settings = Settings::parse("version = 1\n[view]\nzoom = 3\n");
+        settings.set_view(
+            ViewMode::Compact,
+            5,
+            ViewOptions {
+                show_hidden: true,
+                ..ViewOptions::default()
+            },
+        );
+        assert_eq!(settings.mode(), ViewMode::Compact);
+        assert_eq!(settings.zoom(), 5);
+        assert!(settings.options().show_hidden);
+        assert!(settings.to_toml().contains("version = 2"));
     }
 
     #[test]

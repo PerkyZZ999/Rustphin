@@ -416,10 +416,6 @@ pub struct Browser {
     lanes: usize,
     /// Bumped when the icon size changes, so lookups for the old size are dropped.
     icon_epoch: u64,
-    /// Where view settings are stored; `None` when they must not be written.
-    settings_path: Option<PathBuf>,
-    /// The settings as last written, to skip writes that change nothing.
-    saved: Settings,
     frames: FrameLog,
     /// The width this view is drawn at, in pixels; zero until known.
     width: f32,
@@ -450,12 +446,9 @@ impl Browser {
     pub fn new(
         start: PathBuf,
         settings: Settings,
-        settings_path: Option<PathBuf>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        // Never overwrite a file a later version of Rustphin wrote.
-        let settings_path = settings_path.filter(|_| !settings.is_from_newer_version());
         let location_input =
             cx.new(|cx| InputState::new(window, cx).placeholder("Enter a folder path"));
         let rename_input = cx.new(|cx| InputState::new(window, cx));
@@ -554,8 +547,6 @@ impl Browser {
             zoom: settings.zoom(),
             lanes: 1,
             icon_epoch: 0,
-            settings_path,
-            saved: settings.clone(),
             frames: FrameLog::from_env(cx),
             width: 0.,
             band: None,
@@ -1900,24 +1891,15 @@ impl Browser {
     }
 
     /// Stores the view settings if they changed, on a background thread.
+    /// Tells the shared settings this pane's view; they save it (D-029).
     fn save_settings(&mut self, cx: &mut Context<Self>) {
-        let (Some(path), Some(model)) = (self.settings_path.clone(), &self.model) else {
+        let Some(model) = &self.model else {
             return;
         };
-        let settings = Settings::new(self.mode, self.zoom, model.options());
-        if settings == self.saved {
-            return;
-        }
-        self.saved = settings.clone();
-        cx.background_executor()
-            .spawn(async move {
-                let text = settings.to_toml();
-                if let Err(error) = rustphin_platform::config::write_atomic(&path, text.as_bytes())
-                {
-                    tracing::warn!(%error, path = %path.display(), "could not save the settings");
-                }
-            })
-            .detach();
+        let (mode, zoom, options) = (self.mode, self.zoom, model.options());
+        crate::preferences::preferences(cx).update(cx, |preferences, cx| {
+            preferences.update(|settings| settings.set_view(mode, zoom, options), cx);
+        });
     }
 
     /// Forgets resolved icons after the icon size changed; rows ask again.

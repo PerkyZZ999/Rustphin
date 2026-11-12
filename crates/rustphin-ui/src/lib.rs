@@ -22,12 +22,14 @@ mod menu_view;
 mod operations;
 mod palette;
 mod place_menu;
+mod preferences;
 mod properties;
 mod recovery;
 mod remote;
 mod rename_dialog;
 mod session;
 mod settings;
+mod settings_dialog;
 mod sidebar;
 mod tabs;
 mod theme;
@@ -62,15 +64,18 @@ pub fn run(options: Options) {
     // A small file read once before the window exists.
     let settings_path =
         rustphin_platform::config::config_dir().map(|dir| dir.join("settings.toml"));
-    let settings = settings_path
-        .as_deref()
-        .and_then(|path| match rustphin_platform::config::read(path) {
-            Ok(text) => text,
-            Err(error) => {
-                tracing::warn!(%error, path = %path.display(), "could not read the settings");
-                None
-            }
-        })
+    let settings_text =
+        settings_path
+            .as_deref()
+            .and_then(|path| match rustphin_platform::config::read(path) {
+                Ok(text) => text,
+                Err(error) => {
+                    tracing::warn!(%error, path = %path.display(), "could not read the settings");
+                    None
+                }
+            });
+    let settings_saved = settings_text.is_some();
+    let settings = settings_text
         .map(|text| Settings::parse(&text))
         .unwrap_or_default();
     let session_path = rustphin_platform::config::state_dir().map(|dir| dir.join("session.toml"));
@@ -92,6 +97,8 @@ pub fn run(options: Options) {
                 cx,
             );
             operations::init(cx);
+            // One store of settings for every window (D-029).
+            preferences::init(settings.clone(), settings_path.clone(), settings_saved, cx);
             if let Some(issue) = session_issue {
                 tracing::warn!(%issue, "saved session is protected for this run");
                 operations::hub(cx).update(cx, |hub, cx| {
@@ -109,6 +116,7 @@ pub fn run(options: Options) {
                 tracing::info!("not listening for requests to show files");
             }
             palette::bind_keys(cx);
+            settings_dialog::bind_keys(cx);
             thumbs::init(cx);
             browser::bind_keys(cx);
             menu_view::bind_keys(cx);
@@ -131,7 +139,7 @@ pub fn run(options: Options) {
             cx.spawn(async move |cx| {
                 warming.await;
                 cx.update(|cx| {
-                    open_window(options, settings, session, settings_path, session_path, cx);
+                    open_window(options, settings, session, session_path, cx);
                 });
             })
             .detach();
@@ -142,7 +150,6 @@ fn open_window(
     options: Options,
     settings: Settings,
     session: Session,
-    settings_path: Option<PathBuf>,
     session_path: Option<PathBuf>,
     cx: &mut App,
 ) {
@@ -169,7 +176,6 @@ fn open_window(
                 options.home.clone(),
                 session_path.clone(),
                 settings.clone(),
-                settings_path.clone(),
                 window,
                 cx,
             )
