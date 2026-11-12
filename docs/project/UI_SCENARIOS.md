@@ -467,3 +467,18 @@ Isolated home; a fresh one has no `~/.config/rustphin/settings.toml`. In kwin-mc
 | ST5 | Window narrower than 720 px (maximise it in a 700 px screen) | The page list becomes a row of tabs above the page, the current one underlined |
 | ST6 | With Settings open: Ctrl+T, then Escape | No tab opens behind the dialog; Escape closes Settings and the keyboard is back in the list |
 | ST7 | The ✕ in the title row, and Close (Esc) | Each closes Settings |
+
+### General page (W-106c1)
+
+Isolated home prepared before launch (start the session without an app, then `launch_app`): `~/.local/share/applications/rustphin.desktop` and a stand-in `fake-dolphin.desktop` for `inode/directory`, `~/.config/mimeapps.list` choosing the stand-in, `TerminalApplication=konsole` in `~/.config/kdeglobals`, a script `~/term.sh` that appends its working directory and arguments to `~/term.log`, folders `Work/Inner` and `Other`. Never the real mimeapps list or terminal.
+
+| ID | Steps | Expected |
+|---|---|---|
+| GN1 | Open Settings | General first: Starting (When Rustphin starts: Restore the last tabs; Folders opened by other applications: In a new tab), Desktop ("Stand-in Dolphin opens folders now." with Make Rustphin the default; Konsole from KDE's settings with Use another…; A double click with "As KDE is set") |
+| GN2 | Make Rustphin the default | The line becomes the green check "Rustphin opens folders for this desktop."; `mimeapps.list` reads `inode/directory=rustphin.desktop;fake-dolphin.desktop;` and keeps its 0644 permissions |
+| GN3 | Click the start drop-down; Down; Return. Then the drop-down again, click Open a chosen folder | The list opens under the drop-down with the current choice ticked; the keys choose "home"; the chosen folder is the one shown, in the data font, with Use the folder shown unavailable |
+| GN4 | Open the drop-down, Escape | Only the list closes |
+| GN5 | In a new window; A single click; Use another…, type `~/term.sh --x` (full path); Escape; Shift+F4 | The settings file holds them; the field fills its row; Escape closes Settings; `term.log` shows the folder and `--x` |
+| GN6 | Click a folder once | It opens |
+| GN7 | Ctrl+Q with a tab in `Work`, start Rustphin again | It opens the chosen folder, not the saved tab |
+| GN8 | Settings, Reset to defaults | `[general]` is back to `start = "restore"`, `shown_folders = "tab"`, no terminal or click |

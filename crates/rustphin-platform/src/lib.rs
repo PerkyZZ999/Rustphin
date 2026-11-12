@@ -12,6 +12,7 @@ pub mod config;
 pub mod devices;
 pub mod file_manager;
 pub mod icons;
+pub mod kdeglobals;
 pub mod mime;
 pub mod places;
 pub mod process;

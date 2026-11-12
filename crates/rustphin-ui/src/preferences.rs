@@ -15,7 +15,7 @@ use std::{
 
 use gpui_kit::{App, AppContext as _, Context, Entity, Global};
 
-use crate::settings::Settings;
+use crate::settings::{Click, Settings};
 
 /// The shared settings.
 pub struct Preferences {
@@ -23,6 +23,8 @@ pub struct Preferences {
     writer: Option<Writer>,
     /// The file exists: it was read at start-up or has been written since.
     saved: bool,
+    /// KDE is set to open files with one click (`kdeglobals`, read at start).
+    kde_single_click: bool,
 }
 
 struct Shared(Entity<Preferences>);
@@ -31,8 +33,15 @@ impl Global for Shared {}
 
 /// Makes the settings read at start-up the shared ones. `path` is where
 /// they are saved; nothing is saved when it is `None` or the file came
-/// from a newer version. `saved` says whether the file was there.
-pub fn init(settings: Settings, path: Option<PathBuf>, saved: bool, cx: &mut App) {
+/// from a newer version. `saved` says whether the file was there;
+/// `kde_single_click` is KDE's choice of how files open.
+pub fn init(
+    settings: Settings,
+    path: Option<PathBuf>,
+    saved: bool,
+    kde_single_click: bool,
+    cx: &mut App,
+) {
     let writer = path
         .filter(|_| !settings.is_from_newer_version())
         .map(Writer::new);
@@ -40,6 +49,7 @@ pub fn init(settings: Settings, path: Option<PathBuf>, saved: bool, cx: &mut App
         settings,
         writer,
         saved,
+        kde_single_click,
     });
     cx.set_global(Shared(entity));
 }
@@ -50,6 +60,24 @@ pub fn preferences(cx: &App) -> Entity<Preferences> {
 }
 
 impl Preferences {
+    /// The settings as they are now.
+    pub fn settings(&self) -> &Settings {
+        &self.settings
+    }
+
+    /// Whether one click opens a file or folder: as chosen in Settings, or
+    /// as KDE is set.
+    pub fn opens_with_one_click(&self) -> bool {
+        self.settings
+            .click()
+            .map_or(self.kde_single_click, |click| click == Click::Single)
+    }
+
+    /// KDE's own choice of how files open.
+    pub fn kde_single_click(&self) -> bool {
+        self.kde_single_click
+    }
+
     /// Where they are saved, if anywhere.
     pub fn path(&self) -> Option<&Path> {
         self.writer.as_ref().map(|writer| writer.path.as_path())

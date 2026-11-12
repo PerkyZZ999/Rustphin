@@ -151,6 +151,12 @@ pub mod size {
     pub const SETTINGS_NARROW: f32 = 720.;
     /// A setting's row.
     pub const SETTING_ROW: f32 = 32.;
+    /// A control in a setting's row: segments, drop-downs, small buttons.
+    pub const SETTING_CONTROL: f32 = 28.;
+    /// The narrowest a drop-down in Settings is drawn.
+    pub const SETTING_SELECT: f32 = 200.;
+    /// The widest a text field in Settings is drawn.
+    pub const SETTING_FIELD: f32 = 360.;
     /// The logo on the About page.
     pub const ABOUT_LOGO: f32 = 64.;
     /// Corner radius shared by controls, rows and panels.

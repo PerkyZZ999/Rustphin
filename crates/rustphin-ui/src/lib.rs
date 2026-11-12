@@ -29,7 +29,9 @@ mod remote;
 mod rename_dialog;
 mod session;
 mod settings;
+mod settings_controls;
 mod settings_dialog;
+mod settings_general;
 mod sidebar;
 mod tabs;
 mod theme;
@@ -75,6 +77,9 @@ pub fn run(options: Options) {
                 }
             });
     let settings_saved = settings_text.is_some();
+    let kde_single_click =
+        rustphin_platform::kdeglobals::read(rustphin_platform::xdg::config_home().as_deref())
+            .is_some_and(|text| rustphin_platform::kdeglobals::single_click(&text));
     let settings = settings_text
         .map(|text| Settings::parse(&text))
         .unwrap_or_default();
@@ -82,7 +87,8 @@ pub fn run(options: Options) {
     let saved_session = session_path
         .as_deref()
         .map_or(Ok(None), rustphin_platform::config::read);
-    let restored = session::restore(saved_session, &options.starts);
+    let starts = start_folders(&options, &settings);
+    let restored = session::restore(saved_session, &starts);
     let session_path = session_path.filter(|_| restored.can_save());
     let session = restored.session;
     let session_issue = restored.issue;
@@ -97,8 +103,18 @@ pub fn run(options: Options) {
                 cx,
             );
             operations::init(cx);
+            cx.set_global(WindowDefaults {
+                home: options.home.clone(),
+                force_opaque: options.force_opaque,
+            });
             // One store of settings for every window (D-029).
-            preferences::init(settings.clone(), settings_path.clone(), settings_saved, cx);
+            preferences::init(
+                settings.clone(),
+                settings_path.clone(),
+                settings_saved,
+                kde_single_click,
+                cx,
+            );
             if let Some(issue) = session_issue {
                 tracing::warn!(%issue, "saved session is protected for this run");
                 operations::hub(cx).update(cx, |hub, cx| {
@@ -139,18 +155,75 @@ pub fn run(options: Options) {
             cx.spawn(async move |cx| {
                 warming.await;
                 cx.update(|cx| {
-                    open_window(options, settings, session, session_path, cx);
+                    open_window(&options, settings, session, session_path, Vec::new(), cx);
                 });
             })
             .detach();
         });
 }
 
+/// The folders to open at start: those asked for, else what the General
+/// settings choose (W-106c). None means the last session's tabs.
+fn start_folders(options: &Options, settings: &Settings) -> Vec<PathBuf> {
+    if !options.starts.is_empty() {
+        return options.starts.clone();
+    }
+    match settings.start() {
+        (settings::Start::Restore, _) => Vec::new(),
+        (settings::Start::Home, _) => vec![options.home.clone()],
+        (settings::Start::Folder, folder) => {
+            match folder.and_then(location::Location::from_saved) {
+                Some(location::Location::Folder(path)) => vec![path],
+                // A remote or missing choice starts at home.
+                _ => vec![options.home.clone()],
+            }
+        }
+    }
+}
+
+/// What every window opens with, kept for windows opened later.
+struct WindowDefaults {
+    home: PathBuf,
+    force_opaque: bool,
+}
+
+impl gpui_kit::Global for WindowDefaults {}
+
+/// A window of its own for folders another application asked to show
+/// (General, "In a new window"). It is not the saved session: its tabs are
+/// not restored next time.
+pub(crate) fn open_window_showing(
+    shown: Vec<rustphin_platform::file_manager::Shown>,
+    cx: &mut App,
+) {
+    let Some(first) = shown.first().map(|shown| shown.folder.clone()) else {
+        return;
+    };
+    let Some(defaults) = cx.try_global::<WindowDefaults>() else {
+        return;
+    };
+    let options = Options {
+        starts: Vec::new(),
+        home: defaults.home.clone(),
+        force_opaque: defaults.force_opaque,
+    };
+    let settings = preferences::preferences(cx).read(cx).settings().clone();
+    open_window(
+        &options,
+        settings,
+        Session::folders(vec![first]),
+        None,
+        shown,
+        cx,
+    );
+}
+
 fn open_window(
-    options: Options,
+    options: &Options,
     settings: Settings,
     session: Session,
     session_path: Option<PathBuf>,
+    shown: Vec<rustphin_platform::file_manager::Shown>,
     cx: &mut App,
 ) {
     let bounds = Bounds::centered(None, size(px(960.), px(640.)), cx);
@@ -182,6 +255,9 @@ fn open_window(
         });
         if !options.force_opaque {
             workspace.update(cx, |workspace, cx| workspace.follow_blur(window, cx));
+        }
+        if !shown.is_empty() {
+            workspace.update(cx, |workspace, _| workspace.show_later(shown));
         }
         // The component library's root paints its own opaque background
         // under the view. Clear it: the browser paints the window

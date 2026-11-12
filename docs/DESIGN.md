@@ -656,8 +656,13 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   `headline-sm` and one sentence in `text-muted`, then groups under
   `label-sm` capitals with a hairline; each setting a 32 px row with its
   label in a 184 px column and the control after it (segmented controls for
-  two or three choices, 28 px drop-downs for longer lists, checkboxes, and
-  sliders with their value in `data-sm`). The page scrolls on its own. The
+  two or three choices, 28 px high inside one `border-strong` outline, the
+  current choice in `primary-subtle` with `primary-bright` words; 28 px
+  drop-downs at least 200 px wide on `surface-raised`, their list in the
+  context menu's surface with the current choice ticked; 28 px outlined
+  buttons; hints in `body-sm` `text-muted`; checkboxes, and sliders with
+  their value in `data-sm`). Every control is a button underneath: Tab
+  reaches it, Space or Enter uses it, a drop-down's list takes the arrows. The page scrolls on its own. The
   action row: "Reset to defaults" (outlined, `rotate-ccw`) on the left for
   the page shown, where it has settings; "Close (Esc)" primary on the right.
   Changes apply at once. **About:** the 64 px logo, "Rustphin" in
@@ -665,7 +670,17 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   licence (GPL-3.0-or-later) with "Show the licence", which shows the full
   text in the page with "Back"; credits; "No telemetry. Rustphin never uses
   the network." with `circle-check`; where the settings file is, with "Open
-  the settings folder", which opens it in a new tab. Before the first change
+  the settings folder", which opens it in a new tab. **General:** "Starting"
+  holds When Rustphin starts (drop-down: Restore the last tabs, Open the
+  home folder, Open a chosen folder; the chosen folder shows below in
+  `data-sm` with "Use the folder shown") and Folders opened by other
+  applications (In a new tab, In a new window). "Desktop" holds Default
+  file manager (the success line when Rustphin is the default, else who is
+  and "Make Rustphin the default"), Terminal (KDE's terminal by name with
+  "from KDE's settings", or the command chosen here with a field and "Use
+  KDE's"; "Use another…" opens the field, up to 360 px wide) and Open files and folders with
+  (A double click, A single click; "As KDE is set" until one is chosen).
+  Before the first change
   there is no file: the path adds "(made when you first change a setting)"
   and the button is unavailable.
 - **View menu (W-107):** the View button opens a 240 px panel with the
@@ -1058,9 +1073,10 @@ except where the list below says otherwise; each W-079 step adds its line.
   The status line names the reason ("Not readable", "Does not exist"). A
   shown folder that fails to re-read keeps its listing under the error
   banner, as does a folder that vanished.
-- Settings (W-106b): the dialog, its page list and the tabs below 720 px,
-  the action row and the About page are built; the other pages arrive with
-  W-106c–g, each with its "Reset to defaults".
+- Settings (W-106b, W-106c1): the dialog, its page list and the tabs below
+  720 px, the action row, the controls (segments, drop-downs, small buttons,
+  hints), General and About are built; the other pages arrive with
+  W-106c2–g, each with its "Reset to defaults".
 
 Carried over unchanged from the earlier design and implemented: the Actions
 palette's **Recover original names after interruption** for the current folder

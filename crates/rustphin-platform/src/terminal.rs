@@ -17,23 +17,35 @@ use crate::apps::{LaunchError, spawn, split_exec};
 /// The terminal command chosen in the KDE settings under `config_home`, as
 /// words, or Konsole.
 pub fn configured(config_home: Option<&Path>) -> Vec<String> {
-    config_home
-        .and_then(|home| std::fs::read_to_string(home.join("kdeglobals")).ok())
+    crate::kdeglobals::read(config_home)
         .and_then(|text| terminal_in(&text))
         .unwrap_or_else(|| vec!["konsole".to_owned()])
 }
 
 /// The `TerminalApplication` of the `[General]` group, split into words.
 fn terminal_in(kdeglobals: &str) -> Option<Vec<String>> {
-    let mut in_general = false;
-    for line in kdeglobals.lines().map(str::trim) {
-        if line.starts_with('[') {
-            in_general = line == "[General]";
-        } else if in_general && let Some(value) = line.strip_prefix("TerminalApplication=") {
-            return split_exec(value.trim()).filter(|words| !words.is_empty());
-        }
+    crate::kdeglobals::value(kdeglobals, "General", "TerminalApplication").and_then(words)
+}
+
+/// A terminal command line split into words as a desktop file's `Exec` is;
+/// `None` when it is empty or its quotes do not close.
+pub fn words(command: &str) -> Option<Vec<String>> {
+    split_exec(command.trim()).filter(|words| !words.is_empty())
+}
+
+/// How a terminal is named to the user: its program's file name with a
+/// capital, "Ghostty" for `/usr/bin/ghostty --gtk-single-instance=true`.
+pub fn display_name(words: &[String]) -> String {
+    let program = words.first().map(String::as_str).unwrap_or_default();
+    let name = Path::new(program)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
     }
-    None
 }
 
 /// The program and arguments that open `words`'s terminal in `folder`.
@@ -67,10 +79,20 @@ pub fn command_in(words: &[String], folder: &Path) -> Option<(OsString, Vec<OsSt
     Some((program.into(), args))
 }
 
-/// Opens the configured terminal in `folder`. Reads the settings: call
-/// from a background thread.
-pub fn open_in(folder: &Path, config_home: Option<PathBuf>) -> Result<(), LaunchError> {
-    let words = configured(config_home.as_deref());
+/// Opens the terminal in `folder`: `command` when Rustphin's settings name
+/// one, else the one KDE is set to. Reads the settings: call from a
+/// background thread.
+pub fn open_in(
+    folder: &Path,
+    command: Option<&str>,
+    config_home: Option<PathBuf>,
+) -> Result<(), LaunchError> {
+    let words = match command {
+        Some(command) => {
+            words(command).ok_or_else(|| LaunchError::NoCommand(command.to_owned()))?
+        }
+        None => configured(config_home.as_deref()),
+    };
     let Some((program, args)) = command_in(&words, folder) else {
         return Err(LaunchError::NoCommand(String::new()));
     };
@@ -108,6 +130,26 @@ mod tests {
         let none = tempfile::tempdir().unwrap();
         assert_eq!(configured(Some(none.path())), words("konsole"));
         assert_eq!(configured(None), words("konsole"));
+    }
+
+    #[test]
+    fn a_terminal_is_named_by_its_program() {
+        assert_eq!(
+            display_name(&words("/usr/bin/ghostty --gtk-single-instance=true")),
+            "Ghostty"
+        );
+        assert_eq!(display_name(&words("konsole")), "Konsole");
+        assert_eq!(display_name(&[]), "");
+    }
+
+    #[test]
+    fn a_chosen_command_is_split_and_an_unclosed_quote_is_refused() {
+        assert_eq!(
+            super::words("  kitty --single-instance "),
+            Some(words("kitty --single-instance"))
+        );
+        assert_eq!(super::words("\"foot"), None);
+        assert_eq!(super::words("   "), None);
     }
 
     #[test]

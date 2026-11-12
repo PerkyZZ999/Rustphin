@@ -344,6 +344,9 @@ pub struct Workspace {
     pub(crate) rename: Option<crate::rename_dialog::RenameDialog>,
     /// Folders other applications asked to be shown, applied on the next frame.
     pending_shows: Vec<rustphin_platform::file_manager::Shown>,
+    /// Folders to show in this window whatever the settings say: those a
+    /// window was opened for.
+    shows_here: Vec<rustphin_platform::file_manager::Shown>,
     /// A program or shortcut waiting for confirmation before it runs.
     launch: Option<LaunchPrompt>,
     /// Properties of one entry, while that dialog is open.
@@ -430,6 +433,7 @@ impl Workspace {
             settings_subscription: None,
             rename: None,
             pending_shows: Vec::new(),
+            shows_here: Vec::new(),
             launch: None,
             properties: None,
             error_details: None,
@@ -1080,6 +1084,11 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Shows `shown` in this window once it is drawn.
+    pub(crate) fn show_later(&mut self, shown: Vec<rustphin_platform::file_manager::Shown>) {
+        self.shows_here.extend(shown);
+    }
+
     /// Opens Settings over the window, or gives it the keyboard if open.
     fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(settings) = &self.settings {
@@ -1090,7 +1099,8 @@ impl Workspace {
             return;
         }
         self.rename = None;
-        let settings = cx.new(SettingsDialog::new);
+        let shown = self.tabs.active().browser().read(cx).location();
+        let settings = cx.new(|cx| SettingsDialog::new(shown, window, cx));
         self.settings_subscription =
             Some(cx.subscribe_in(&settings, window, Self::on_settings_event));
         settings.read(cx).focus_handle().focus(window, cx);
@@ -1625,8 +1635,20 @@ impl Render for Workspace {
             let path = self.pending_properties.remove(0);
             self.open_properties(path, "File".to_owned(), Default::default(), cx);
         }
-        if !self.pending_shows.is_empty() {
+        if !self.pending_shows.is_empty()
+            && crate::preferences::preferences(cx)
+                .read(cx)
+                .settings()
+                .shown_folders()
+                == crate::settings::ShownIn::Window
+        {
+            // General, "In a new window" (W-106c).
             let pending = std::mem::take(&mut self.pending_shows);
+            cx.defer(move |cx| crate::open_window_showing(pending, cx));
+        }
+        if !self.pending_shows.is_empty() || !self.shows_here.is_empty() {
+            let mut pending = std::mem::take(&mut self.shows_here);
+            pending.append(&mut self.pending_shows);
             for (index, shown) in pending.into_iter().enumerate() {
                 let names = shown
                     .select

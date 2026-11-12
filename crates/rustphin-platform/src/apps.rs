@@ -156,6 +156,22 @@ impl Associations {
             .collect()
     }
 
+    /// The application the desktop opens `mime` with by default, if a
+    /// mimeapps list names one that is installed and not removed.
+    pub fn default_for(&self, mime: &str) -> Option<&Application> {
+        let removed = self.removed.get(mime);
+        self.defaults
+            .get(mime)?
+            .iter()
+            .filter(|id| removed.is_none_or(|removed| !removed.contains(*id)))
+            .find_map(|id| self.apps.get(id))
+    }
+
+    /// The installed application with desktop-file id `id`.
+    pub fn get(&self, id: &str) -> Option<&Application> {
+        self.apps.get(id)
+    }
+
     fn ids_for(&self, mime: &str) -> Vec<String> {
         let mut ids = Vec::new();
         if let Some(default) = self.defaults.get(mime) {
@@ -172,6 +188,86 @@ impl Associations {
         }
         ids
     }
+}
+
+/// Makes `id` the default application for `mime` in the user's
+/// `mimeapps.list` under `config_home`, as KDE's Default Applications page
+/// does. Every other line is kept; the previous defaults stay behind it.
+/// Reads and writes files: call from a background thread.
+pub fn set_default(config_home: &Path, mime: &str, id: &str) -> io::Result<()> {
+    let path = config_home.join("mimeapps.list");
+    let text = crate::config::read(&path)?.unwrap_or_default();
+    // The list is the desktop's, readable as other applications made it;
+    // keep its permissions (a new one gets the usual 0644).
+    let mode = fs::metadata(&path).map_or(0o644, |meta| meta.permissions().mode() & 0o7777);
+    crate::config::write_atomic(&path, with_default(&text, mime, id).as_bytes())?;
+    fs::set_permissions(&path, fs::Permissions::from_mode(mode))
+}
+
+/// `text`, a mimeapps list, with `id` first among the defaults for `mime`.
+fn with_default(text: &str, mime: &str, id: &str) -> String {
+    const GROUP: &str = "[Default Applications]";
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    let mut in_group = false;
+    let mut group_end = None;
+    let mut found = None;
+    for (index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            if in_group && group_end.is_none() {
+                group_end = Some(index);
+            }
+            in_group = trimmed == GROUP;
+        } else if in_group
+            && let Some((key, _)) = trimmed.split_once('=')
+            && key.trim() == mime
+        {
+            found = Some(index);
+            break;
+        }
+    }
+    match found {
+        Some(index) => {
+            let others = lines[index]
+                .split_once('=')
+                .map(|(_, ids)| ids.to_owned())
+                .unwrap_or_default();
+            let mut ids = vec![id.to_owned()];
+            ids.extend(
+                others
+                    .split(';')
+                    .map(str::trim)
+                    .filter(|other| !other.is_empty() && *other != id)
+                    .map(str::to_owned),
+            );
+            lines[index] = format!("{mime}={};", ids.join(";"));
+        }
+        None => {
+            let entry = format!("{mime}={id};");
+            let group = lines.iter().position(|line| line.trim() == GROUP);
+            match group {
+                Some(start) => {
+                    // After the group's last entry, before any blank lines
+                    // that separate it from the next group.
+                    let mut at = group_end.unwrap_or(lines.len());
+                    while at > start + 1 && lines[at - 1].trim().is_empty() {
+                        at -= 1;
+                    }
+                    lines.insert(at, entry);
+                }
+                None => {
+                    if lines.last().is_some_and(|line| !line.trim().is_empty()) {
+                        lines.push(String::new());
+                    }
+                    lines.push(GROUP.to_owned());
+                    lines.push(entry);
+                }
+            }
+        }
+    }
+    let mut out = lines.join("\n");
+    out.push('\n');
+    out
 }
 
 /// Whether activating `path` opens a document, runs a program, or starts a
@@ -967,5 +1063,102 @@ mod tests {
             .find(|path| path.is_file())
             .expect("a true program");
         run_program(program).unwrap();
+    }
+
+    #[test]
+    fn making_an_application_the_default_puts_it_first_and_keeps_the_rest() {
+        let text = "[Added Associations]\ntext/plain=org.kde.kate.desktop;\n\n[Default Applications]\ninode/directory=org.kde.dolphin.desktop;other.desktop;\ntext/plain=org.kde.kate.desktop;\n";
+        assert_eq!(
+            with_default(text, "inode/directory", "rustphin.desktop"),
+            "[Added Associations]\ntext/plain=org.kde.kate.desktop;\n\n[Default Applications]\ninode/directory=rustphin.desktop;org.kde.dolphin.desktop;other.desktop;\ntext/plain=org.kde.kate.desktop;\n"
+        );
+        // Asking twice changes nothing more.
+        let once = with_default(text, "inode/directory", "rustphin.desktop");
+        assert_eq!(
+            with_default(&once, "inode/directory", "rustphin.desktop"),
+            once
+        );
+    }
+
+    #[test]
+    fn a_missing_default_line_or_group_is_added() {
+        let text = "[Default Applications]\ntext/plain=org.kde.kate.desktop;\n\n[Added Associations]\nimage/png=gwenview.desktop;\n";
+        assert_eq!(
+            with_default(text, "inode/directory", "rustphin.desktop"),
+            "[Default Applications]\ntext/plain=org.kde.kate.desktop;\ninode/directory=rustphin.desktop;\n\n[Added Associations]\nimage/png=gwenview.desktop;\n"
+        );
+        assert_eq!(
+            with_default("", "inode/directory", "rustphin.desktop"),
+            "[Default Applications]\ninode/directory=rustphin.desktop;\n"
+        );
+        assert_eq!(
+            with_default(
+                "[Added Associations]\nimage/png=a.desktop;",
+                "inode/directory",
+                "r.desktop"
+            ),
+            "[Added Associations]\nimage/png=a.desktop;\n\n[Default Applications]\ninode/directory=r.desktop;\n"
+        );
+    }
+
+    #[test]
+    fn the_default_is_the_first_installed_application_not_removed() {
+        let mut index = Associations::default();
+        for id in ["dolphin.desktop", "rustphin.desktop"] {
+            index.apps.insert(
+                id.to_owned(),
+                Application {
+                    id: id.to_owned(),
+                    name: id.to_owned(),
+                    icon: None,
+                },
+            );
+        }
+        index.defaults.insert(
+            "inode/directory".to_owned(),
+            vec![
+                "gone.desktop".to_owned(),
+                "dolphin.desktop".to_owned(),
+                "rustphin.desktop".to_owned(),
+            ],
+        );
+        let default = |index: &Associations| {
+            index
+                .default_for("inode/directory")
+                .map(|app| app.id.clone())
+        };
+        assert_eq!(default(&index).as_deref(), Some("dolphin.desktop"));
+        index.removed.insert(
+            "inode/directory".to_owned(),
+            ["dolphin.desktop".to_owned()].into(),
+        );
+        assert_eq!(default(&index).as_deref(), Some("rustphin.desktop"));
+        assert!(index.default_for("text/plain").is_none());
+    }
+
+    #[test]
+    fn setting_the_default_writes_the_users_list_and_reads_back() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(
+            home.path().join("mimeapps.list"),
+            "[Default Applications]\ninode/directory=dolphin.desktop;\n",
+        )
+        .unwrap();
+        set_default(home.path(), "inode/directory", "rustphin.desktop").unwrap();
+        // The desktop's file keeps the permissions it had.
+        let mode = fs::metadata(home.path().join("mimeapps.list"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o644);
+        let mut index = Associations::default();
+        merge_mimeapps(
+            &std::fs::read_to_string(home.path().join("mimeapps.list")).unwrap(),
+            &mut index,
+        );
+        assert_eq!(
+            index.defaults["inode/directory"],
+            ["rustphin.desktop", "dolphin.desktop"]
+        );
     }
 }

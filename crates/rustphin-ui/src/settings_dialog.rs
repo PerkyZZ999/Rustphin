@@ -11,10 +11,12 @@ use std::{
 };
 
 use gpui_kit::{
-    AnyElement, App, Context, EventEmitter, FocusHandle, Image, ImageFormat,
-    InteractiveElement as _, IntoElement, KeyBinding, ParentElement as _, Render, Role,
-    ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _, Window, actions,
+    AnyElement, App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Image,
+    ImageFormat, InteractiveElement as _, IntoElement, KeyBinding, ParentElement as _, Render,
+    Role, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
+    Window, actions,
     assets::IconName,
+    component::input::{InputEvent, InputState},
     component::{Disableable as _, Icon, button::ButtonVariants as _},
     div, img,
     prelude::FluentBuilder as _,
@@ -25,6 +27,9 @@ use crate::{
     controls::Outlined as _,
     dialog,
     preferences::preferences,
+    settings::Settings,
+    settings_controls::Selects,
+    settings_general::{DesktopFacts, MakeDefault},
     theme::{Theme, size, space, text},
 };
 
@@ -68,17 +73,20 @@ const LICENCE: &str = include_str!("../../../LICENSE");
 /// One page of the dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Page {
+    /// How Rustphin starts and works with the desktop.
+    General,
     /// Version, licence, credits, privacy and files.
     About,
 }
 
 impl Page {
     /// The pages in the list, top to bottom.
-    pub const ALL: &'static [Page] = &[Page::About];
+    pub const ALL: &'static [Page] = &[Page::General, Page::About];
 
     /// Its name in the list and as its heading.
     pub fn name(self) -> &'static str {
         match self {
+            Page::General => "General",
             Page::About => "About",
         }
     }
@@ -86,6 +94,7 @@ impl Page {
     /// Its icon in the list.
     pub fn icon(self) -> IconName {
         match self {
+            Page::General => IconName::Settings,
             Page::About => IconName::Info,
         }
     }
@@ -93,6 +102,7 @@ impl Page {
     /// The sentence under its heading.
     pub fn description(self) -> &'static str {
         match self {
+            Page::General => "How Rustphin starts and works with the rest of the desktop.",
             Page::About => "Rustphin and the work it builds on.",
         }
     }
@@ -100,6 +110,7 @@ impl Page {
     /// Whether it holds settings, and so a "Reset to defaults".
     pub fn has_settings(self) -> bool {
         match self {
+            Page::General => true,
             Page::About => false,
         }
     }
@@ -129,18 +140,106 @@ pub struct SettingsDialog {
     page_scroll: ScrollHandle,
     /// The About page shows the licence's full text.
     licence: bool,
+    /// The drop-down that is open.
+    pub(crate) selects: Selects,
+    /// The folder the window showed when Settings opened.
+    pub(crate) shown: Option<PathBuf>,
+    /// KDE's terminal and the default file manager, once read.
+    pub(crate) desktop: Option<DesktopFacts>,
+    /// "Make Rustphin the default", while it runs or after it failed.
+    pub(crate) make_default: MakeDefault,
+    /// The terminal command chosen here.
+    pub(crate) terminal_input: Entity<InputState>,
+    /// The terminal field is open though nothing is chosen yet.
+    pub(crate) editing_terminal: bool,
+    _subscriptions: Vec<Subscription>,
 }
 
 impl EventEmitter<SettingsEvent> for SettingsDialog {}
 
 impl SettingsDialog {
-    /// The dialog on its first page.
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    /// The dialog on its first page; `shown` is the folder the window
+    /// shows, offered as the folder to start in.
+    pub fn new(shown: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let store = preferences(cx);
+        let chosen = store
+            .read(cx)
+            .settings()
+            .terminal()
+            .unwrap_or_default()
+            .to_owned();
+        let terminal_input = cx.new(|cx| {
+            let mut input = InputState::new(window, cx).placeholder("konsole --separate");
+            input.set_value(chosen, window, cx);
+            input
+        });
+        let selects = Selects::new(cx);
+        let subscriptions = vec![
+            // A drop-down's list closes when the focus leaves it.
+            cx.on_focus_out(&selects.focus, window, |this, _, _, cx| {
+                if this.selects.open.take().is_some() {
+                    cx.notify();
+                }
+            }),
+            // Every change shows at once, whichever window made it.
+            cx.observe(&store, |_, _, cx| cx.notify()),
+            cx.subscribe(&terminal_input, |this, input, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) && this.editing_terminal_allowed() {
+                    let command = input.read(cx).value().to_string();
+                    preferences(cx).update(cx, |store, cx| {
+                        store.update(|settings| settings.set_terminal(&command), cx);
+                    });
+                }
+            }),
+        ];
+        cx.spawn(async move |this, cx| {
+            let facts = cx.background_spawn(async { DesktopFacts::read() }).await;
+            this.update(cx, |this, cx| {
+                this.desktop = Some(facts);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
         Self {
             page: Page::ALL[0],
             focus: cx.focus_handle(),
             page_scroll: ScrollHandle::new(),
             licence: false,
+            selects,
+            shown,
+            desktop: None,
+            make_default: MakeDefault::Idle,
+            terminal_input,
+            editing_terminal: false,
+            _subscriptions: subscriptions,
+        }
+    }
+
+    /// The terminal field writes the settings only while it is shown.
+    fn editing_terminal_allowed(&self) -> bool {
+        self.page == Page::General
+    }
+
+    /// Closes the open drop-down and gives the keyboard back to the dialog.
+    pub(crate) fn close_select(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.selects.open = None;
+        self.focus.focus(window, cx);
+        cx.notify();
+    }
+
+    /// Puts the shown page's settings back to their defaults.
+    fn reset_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match self.page {
+            Page::General => {
+                self.editing_terminal = false;
+                self.terminal_input
+                    .update(cx, |input, cx| input.set_value("", window, cx));
+                preferences(cx).update(cx, |store, cx| {
+                    store.update(Settings::reset_general, cx);
+                });
+            }
+            Page::About => {}
         }
     }
 
@@ -256,8 +355,9 @@ impl SettingsDialog {
     }
 
     /// The page shown: its heading and sentence, then its settings.
-    fn page(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+    fn page(&mut self, theme: Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let content = match self.page {
+            Page::General => self.general(theme, window, cx),
             Page::About => self.about(theme, cx),
         };
         div()
@@ -488,7 +588,7 @@ impl Render for SettingsDialog {
         let theme = *cx.global::<Theme>();
         let narrow = f32::from(window.viewport_size().width) < size::SETTINGS_NARROW;
         let height = px(size::SETTINGS_HEIGHT).min(dialog::max_height(window));
-        let page = self.page(theme, cx);
+        let page = self.page(theme, window, cx);
         let middle = if narrow {
             div()
                 .flex()
@@ -508,6 +608,7 @@ impl Render for SettingsDialog {
         let reset = self.page.has_settings().then(|| {
             dialog::button_with_icon("settings-reset", IconName::RotateCcw, "Reset to defaults")
                 .outlined()
+                .on_click(cx.listener(|this, _, window, cx| this.reset_page(window, cx)))
         });
         let panel = dialog::panel(
             div().id("settings-dialog"),
@@ -525,6 +626,10 @@ impl Render for SettingsDialog {
             div()
                 .track_focus(&self.focus)
                 .on_action(cx.listener(|_, _: &CloseSettings, _, cx| {
+                    cx.emit(SettingsEvent::Close);
+                }))
+                // Escape in a text field is the dialogs' Cancel (workspace.rs).
+                .on_action(cx.listener(|_, _: &crate::workspace::DialogCancel, _, cx| {
                     cx.emit(SettingsEvent::Close);
                 }))
                 .on_action(cx.listener(|this, _: &PreviousPage, _, cx| {
@@ -569,6 +674,15 @@ impl Render for SettingsDialog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn up_and_down_move_through_the_list_and_stop_at_its_ends() {
+        assert_eq!(Page::General.step(1), Page::About);
+        assert_eq!(Page::About.step(-1), Page::General);
+        assert_eq!(Page::General.step(-1), Page::General);
+        assert_eq!(Page::About.step(1), Page::About);
+        assert_eq!(Page::General.step(10), Page::About);
+    }
 
     #[test]
     fn the_licence_shown_is_the_gpl_the_crate_declares() {

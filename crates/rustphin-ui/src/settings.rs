@@ -1,4 +1,5 @@
-//! View settings remembered between sessions, stored as TOML.
+//! Rustphin's settings, stored as TOML (D-029): how it starts and works
+//! with the desktop, and the view folders open in.
 //!
 //! Reading never fails: a missing, damaged or partly unknown file yields the
 //! defaults for whatever could not be understood.
@@ -9,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::layout::{self, ViewMode};
 
 /// The format version this build writes. Version 2 has seven zoom levels
-/// where version 1 had five (W-107).
-const VERSION: u32 = 2;
+/// where version 1 had five (W-107); version 3 adds `[general]` (W-106c).
+const VERSION: u32 = 3;
 
 /// Where each of version 1's five zoom levels (16, 20, 24, 32 and 48-pixel
 /// icons) is among today's seven.
@@ -21,7 +22,72 @@ const ZOOM_FROM_VERSION_1: [usize; 5] = [0, 1, 2, 4, 6];
 #[serde(default)]
 pub struct Settings {
     version: u32,
+    general: General,
     view: View,
+}
+
+/// How Rustphin starts and works with the rest of the desktop.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+struct General {
+    #[serde(deserialize_with = "lenient")]
+    start: Start,
+    /// The folder for `Start::Folder`, saved as a session location.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient")]
+    start_folder: Option<String>,
+    #[serde(deserialize_with = "lenient")]
+    shown_folders: ShownIn,
+    /// A terminal command chosen here instead of KDE's.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient")]
+    terminal: Option<String>,
+    /// How files open; KDE's setting when absent.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient")]
+    click: Option<Click>,
+}
+
+/// What Rustphin shows when it starts without folders to open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Start {
+    /// The tabs open when it last closed.
+    #[default]
+    Restore,
+    /// The home folder.
+    Home,
+    /// The chosen folder.
+    Folder,
+}
+
+/// Where folders other applications ask for are shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ShownIn {
+    /// A new tab of the open window.
+    #[default]
+    Tab,
+    /// A window of their own.
+    Window,
+}
+
+/// How many clicks open a file or folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Click {
+    /// A double click; one click selects.
+    Double,
+    /// A single click; Ctrl or Shift and a click select.
+    Single,
+}
+
+/// Reads a value, or its default when it is not one this build knows, so
+/// one strange value does not cost the rest of the file.
+fn lenient<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    let value = toml::Value::deserialize(deserializer)?;
+    Ok(T::deserialize(value).unwrap_or_default())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,6 +139,7 @@ impl Settings {
     pub fn new(mode: ViewMode, zoom: usize, options: ViewOptions) -> Self {
         Self {
             version: VERSION,
+            general: General::default(),
             view: View {
                 mode: match mode {
                     ViewMode::Icons => Mode::Icons,
@@ -97,6 +164,61 @@ impl Settings {
     pub fn set_view(&mut self, mode: ViewMode, zoom: usize, options: ViewOptions) {
         let current = Self::new(mode, zoom, options);
         self.view = current.view;
+        self.version = VERSION;
+    }
+
+    /// What Rustphin shows when it starts without folders to open, and the
+    /// chosen folder as a session location.
+    pub fn start(&self) -> (Start, Option<&str>) {
+        (self.general.start, self.general.start_folder.as_deref())
+    }
+
+    /// Sets what Rustphin shows at start; `folder` is kept when `None`.
+    pub fn set_start(&mut self, start: Start, folder: Option<String>) {
+        self.general.start = start;
+        if folder.is_some() {
+            self.general.start_folder = folder;
+        }
+        self.version = VERSION;
+    }
+
+    /// Where folders other applications ask for are shown.
+    pub fn shown_folders(&self) -> ShownIn {
+        self.general.shown_folders
+    }
+
+    /// Sets where folders other applications ask for are shown.
+    pub fn set_shown_folders(&mut self, shown: ShownIn) {
+        self.general.shown_folders = shown;
+        self.version = VERSION;
+    }
+
+    /// The terminal command chosen here, if any.
+    pub fn terminal(&self) -> Option<&str> {
+        self.general.terminal.as_deref()
+    }
+
+    /// Chooses a terminal command; empty words go back to KDE's terminal.
+    pub fn set_terminal(&mut self, command: &str) {
+        let command = command.trim();
+        self.general.terminal = (!command.is_empty()).then(|| command.to_owned());
+        self.version = VERSION;
+    }
+
+    /// How files open, when chosen here; `None` follows KDE.
+    pub fn click(&self) -> Option<Click> {
+        self.general.click
+    }
+
+    /// Chooses how files open; `None` follows KDE.
+    pub fn set_click(&mut self, click: Option<Click>) {
+        self.general.click = click;
+        self.version = VERSION;
+    }
+
+    /// Puts the General page back as it was before anything was chosen.
+    pub fn reset_general(&mut self) {
+        self.general = General::default();
         self.version = VERSION;
     }
 
@@ -192,7 +314,7 @@ mod tests {
     fn the_file_uses_plain_readable_names() {
         let text = sample().to_toml();
         for line in [
-            "version = 2",
+            "version = 3",
             "[view]",
             "mode = \"icons\"",
             "sort = \"modified\"",
@@ -257,7 +379,7 @@ mod tests {
         assert_eq!(settings.mode(), ViewMode::Compact);
         assert_eq!(settings.zoom(), 5);
         assert!(settings.options().show_hidden);
-        assert!(settings.to_toml().contains("version = 2"));
+        assert!(settings.to_toml().contains("version = 3"));
     }
 
     #[test]
@@ -282,8 +404,52 @@ mod tests {
 
     #[test]
     fn a_file_from_a_newer_version_is_recognised() {
-        assert!(Settings::parse("version = 3\n").is_from_newer_version());
+        assert!(Settings::parse("version = 4\n").is_from_newer_version());
         assert!(!sample().is_from_newer_version());
         assert!(!Settings::parse("").is_from_newer_version());
+    }
+
+    #[test]
+    fn the_general_settings_survive_being_written_and_read_back() {
+        let mut settings = sample();
+        settings.set_start(Start::Folder, Some("/home/u/Work".to_owned()));
+        settings.set_shown_folders(ShownIn::Window);
+        settings.set_terminal("  kitty --single-instance ");
+        settings.set_click(Some(Click::Single));
+        let text = settings.to_toml();
+        assert!(text.contains("[general]") && text.contains("start = \"folder\""));
+        let loaded = Settings::parse(&text);
+        assert_eq!(loaded, settings);
+        assert_eq!(loaded.start(), (Start::Folder, Some("/home/u/Work")));
+        assert_eq!(loaded.shown_folders(), ShownIn::Window);
+        assert_eq!(loaded.terminal(), Some("kitty --single-instance"));
+        assert_eq!(loaded.click(), Some(Click::Single));
+    }
+
+    #[test]
+    fn a_value_this_build_does_not_know_falls_back_alone() {
+        let settings = Settings::parse(
+            "version = 3\n[general]\nstart = \"sideways\"\nshown_folders = \"window\"\nclick = 2\n[view]\nzoom = 4\n",
+        );
+        assert_eq!(settings.start().0, Start::Restore);
+        assert_eq!(settings.shown_folders(), ShownIn::Window);
+        assert_eq!(settings.click(), None);
+        assert_eq!(settings.zoom(), 4);
+    }
+
+    #[test]
+    fn choosing_no_terminal_or_resetting_the_page_goes_back_to_kdes() {
+        let mut settings = sample();
+        settings.set_terminal("foot");
+        settings.set_terminal("   ");
+        assert_eq!(settings.terminal(), None);
+        settings.set_start(Start::Home, None);
+        settings.set_click(Some(Click::Double));
+        settings.reset_general();
+        assert_eq!(settings.start(), (Start::Restore, None));
+        assert_eq!(settings.click(), None);
+        // The view is another page's.
+        assert_eq!(settings.mode(), ViewMode::Icons);
+        assert!(!settings.to_toml().contains("terminal"));
     }
 }

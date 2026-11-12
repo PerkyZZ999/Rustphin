@@ -1617,23 +1617,32 @@ impl Browser {
         else {
             return;
         };
+        let chosen = crate::preferences::preferences(cx)
+            .read(cx)
+            .settings()
+            .terminal()
+            .map(str::to_owned);
         cx.spawn(async move |_, cx| {
+            let from_settings = chosen.is_some();
             let opened = cx
                 .background_spawn(async move {
                     rustphin_platform::terminal::open_in(
                         &folder,
+                        chosen.as_deref(),
                         rustphin_platform::xdg::config_home(),
                     )
                 })
                 .await;
             if let Err(error) = opened {
+                let choose = if from_settings {
+                    "Choose another in Settings, General, Terminal."
+                } else {
+                    "Choose one in System Settings, Default Applications, Terminal emulator."
+                };
                 cx.update(|cx| {
                     hub(cx).update(cx, |hub, cx| {
                         hub.say(
-                            format!(
-                                "The terminal could not be opened: {error}. Choose one in \
-                                 System Settings, Default Applications, Terminal emulator."
-                            ),
+                            format!("The terminal could not be opened: {error}. {choose}"),
                             true,
                             cx,
                         );
@@ -3634,7 +3643,17 @@ impl Browser {
             let modifiers = event.modifiers();
             this.click_row(row, modifiers, cx);
             let plain = !modifiers.shift && !modifiers.control;
-            if plain && event.click_count() >= 2 {
+            // One click opens when KDE or the settings say so (W-106c); the
+            // second click of a double click then does nothing more.
+            let single = crate::preferences::preferences(cx)
+                .read(cx)
+                .opens_with_one_click();
+            let opens = if single {
+                event.click_count() == 1
+            } else {
+                event.click_count() >= 2
+            };
+            if plain && opens {
                 this.activate_row(row, cx);
             }
         })

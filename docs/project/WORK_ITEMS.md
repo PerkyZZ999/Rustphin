@@ -27,7 +27,8 @@ S11 — Hardening for daily use (in progress)
 - [ ] W-106 — Settings window with a Toolbar page to customize the toolbar entirely, as Dolphin's "Configure Toolbars…" (the maintainer, 2026-11-11). Needs a requirement and a design approved by the maintainer first; see ROADMAP.md "Later". 2026-11-12: the maintainer asked for the whole window to be planned (General, Appearance, Customizations, About, …); proposal in docs/project/SETTINGS_PLAN.md; approved as written (D-029, R-019).
   - [x] W-106a — Mockups of the Settings window, one scene per page and a narrow window: docs/mockup/36-settings.html (drawn 2026-11-12). Approved by the maintainer 2026-11-12.
   - [x] W-106b — Shared settings store (`preferences.rs`: one entity, newest write wins), the dialog with its page list (tabs when narrow), About, Ctrl+Shift+, and "Workspace: Settings…". Done 2026-11-12 (see VALIDATION.md).
-  - [ ] W-106c — General and Views pages (today's remembered view settings move in).
+  - [x] W-106c1 — General page: start (restore, home, chosen folder), folders from other applications (new tab or new window), default file manager, terminal (KDE's or a command), one or two clicks. Done 2026-11-12 (see VALIDATION.md).
+  - [ ] W-106c2 — Views page (default view and size, per-folder views, order, hidden files, details columns, dates, sizes, previews).
   - [ ] W-106d — Appearance (window look, title bar, faded hidden files, text size).
   - [ ] W-106e — Confirmations and Places.
   - [ ] W-106f — Toolbar customisation.
