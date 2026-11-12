@@ -601,13 +601,16 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
 - **Toolbar:** plain 32 px icon buttons (`toolbar-button`, no outline, the
   hover fill under the pointer), in groups separated by 20 px hairlines: Act
   as administrator · Back, Forward, Up, Reload · the location field (fills
-  the middle) · New folder · the View button (the current mode's icon and a
-  12 px chevron, opening the view menu) · Split, Show hidden, Filter · "Actions ⌄"
+  the middle) · New (Lucide `plus` and a 12 px chevron, opening the New
+  menu), Open terminal here (`square-terminal`, Shift+F4) · the View button
+  (the current mode's icon and a 12 px chevron, opening the view menu) ·
+  Split, Show hidden, Filter · "Actions ⌄"
   with the shortcut "Ctrl+Shift+P" in `data-sm` beside it, in one outlined
   group. Toggles that are on take `toolbar-toggle-on` and are announced as
   pressed; their tooltips name the key. In split view the toolbar acts on
   the active pane. By window width: below 1000 px the shortcut hint leaves;
-  below 760 px Reload, New folder, the View button and the three toggles leave;
+  below 760 px Reload, New, Open terminal here, the View button and the three
+  toggles leave;
   below 560 px Forward and Up leave and Actions becomes an icon button
   (Lucide `menu`, tooltip "Actions (Ctrl+Shift+P)"); below 300 px Back
   leaves. They remain in Actions and on their keys.
@@ -628,6 +631,16 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   32 px with 24 px icons or 24 × 16 px thumbnails. Below 820 px of pane width
   the type column goes, below 600 px the modified column, below 360 px the
   size column. The scrollbar's track starts below the headings.
+- **New menu (W-108):** as Dolphin's "Create New": the context menu opened
+  under the New button: Folder… (`folder-plus`, F10); a hairline; Text File…
+  (`file-text`), Empty File… (`file`), HTML File…
+  (`file-code`), then the user's templates (the files in `~/Templates`, and
+  KDE template entries) by name with `file`. Choosing one creates it with a
+  free name ("Text File.txt", "Text File 2.txt") and opens the name for
+  editing, as New folder does. KDE's three "Link to…" entries are not
+  offered yet. **Open terminal here** opens the terminal chosen in KDE's
+  settings (Konsole when none) in the folder shown; it is unavailable in
+  the trash and while nothing is listed.
 - **View menu (W-107):** the View button opens a 240 px panel with the
   context menu's surface, under the button's right edge: the three modes as
   rows (icon, name, key: Icons Ctrl+1, Compact Ctrl+2, Details Ctrl+3), the

@@ -44,6 +44,12 @@ pub fn commands() -> Vec<Command> {
         ),
         command!("Navigation: Reload folder", "F5", Browser, b::Reload),
         command!(
+            "Navigation: Open terminal here",
+            "Shift+F4",
+            Browser,
+            b::OpenTerminal
+        ),
+        command!(
             "Navigation: Open selected folder",
             "Enter",
             Browser,

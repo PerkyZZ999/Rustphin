@@ -97,6 +97,7 @@ const COMMAND_ICONS: &[(&str, gpui_kit::assets::IconName)] = {
         ("Navigation: Home folder", I::House),
         ("Navigation: Enter a location", I::TextCursorInput),
         ("Navigation: Reload folder", I::RefreshCw),
+        ("Navigation: Open terminal here", I::SquareTerminal),
         ("Navigation: Open selected folder", I::SquareArrowOutUpRight),
         ("View: Icons", I::LayoutGrid),
         ("View: Compact", I::Columns3),

@@ -11,7 +11,10 @@ use std::{
 
 use tempfile::TempDir;
 
-use super::{faults::FaultFs, *};
+use super::{
+    faults::{Fault, FaultFs},
+    *,
+};
 use crate::RealFs;
 
 /// What one entry of a directory tree is, for comparing trees.
@@ -207,6 +210,98 @@ fn creating_over_an_existing_entry_is_refused_and_leaves_it_alone() {
 
     assert!(matches!(error, OpError::AlreadyExists(path) if path == d.src.join("taken")));
     assert_eq!(read(d.src.join("taken")), "precious");
+}
+
+fn from_template(parent: &Path, name: &str, template: Template) -> Request {
+    Request::CreateFromTemplate {
+        parent: parent.to_owned(),
+        name: name.into(),
+        template,
+    }
+}
+
+#[test]
+fn a_file_is_created_from_built_in_contents_or_a_template_file() {
+    let d = dirs();
+    let html = b"<!DOCTYPE html>\n".to_vec();
+    let outcome = go(
+        &from_template(&d.src, "page.html", Template::Contents(html)),
+        &mut Script::default(),
+    );
+    let template = d.dst.join("Letter.odt");
+    file(&template, "letter body");
+    go(
+        &from_template(&d.src, "Letter.odt", Template::File(template.clone())),
+        &mut Script::default(),
+    );
+
+    assert_eq!(read(d.src.join("page.html")), "<!DOCTYPE html>\n");
+    assert_eq!(read(d.src.join("Letter.odt")), "letter body");
+    assert_eq!(read(&template), "letter body");
+    // Nothing temporary is left beside them.
+    assert_eq!(names(&d.src), ["Letter.odt", "page.html"]);
+    assert!(
+        matches!(&outcome.changes[..], [Change::Created { path, .. }] if *path == d.src.join("page.html"))
+    );
+}
+
+#[test]
+fn a_template_never_replaces_an_existing_entry() {
+    let d = dirs();
+    file(d.src.join("taken.txt"), "precious");
+
+    let error = run(
+        &RealFs,
+        &NoTrash,
+        &from_template(&d.src, "taken.txt", Template::Contents(b"new".to_vec())),
+        &mut Script::default(),
+    )
+    .unwrap_err();
+
+    assert!(matches!(error, OpError::AlreadyExists(path) if path == d.src.join("taken.txt")));
+    assert_eq!(read(d.src.join("taken.txt")), "precious");
+    assert_eq!(names(&d.src), ["taken.txt"]);
+}
+
+#[test]
+fn a_template_that_fails_to_be_written_leaves_nothing_behind() {
+    let d = dirs();
+    let template = d.dst.join("big.odt");
+    file(&template, "template body");
+    for fault in [Fault::Error, Fault::ShortCopy] {
+        let fs = FaultFs::failing_at(0, fault);
+        let created = run(
+            &fs,
+            &NoTrash,
+            &from_template(&d.src, "new.odt", Template::File(template.clone())),
+            &mut Script::default(),
+        );
+        // Even a copy that reports success but came out short is refused.
+        assert!(created.is_err(), "{fault:?}");
+        assert!(names(&d.src).is_empty(), "{fault:?}: {:?}", names(&d.src));
+    }
+    let fs = FaultFs::failing_at(0, Fault::Error);
+    assert!(
+        run(
+            &fs,
+            &NoTrash,
+            &from_template(&d.src, "a.txt", Template::Contents(b"x".to_vec())),
+            &mut Script::default(),
+        )
+        .is_err()
+    );
+    assert!(names(&d.src).is_empty(), "{:?}", names(&d.src));
+}
+
+#[test]
+fn undoing_a_file_made_from_a_template_removes_it() {
+    let d = dirs();
+    let outcome = go(
+        &from_template(&d.src, "notes.txt", Template::Contents(b"hello".to_vec())),
+        &mut Script::default(),
+    );
+    undo(&RealFs, &NoTrash, &outcome.changes, &mut Script::default()).unwrap();
+    assert!(names(&d.src).is_empty());
 }
 
 #[test]

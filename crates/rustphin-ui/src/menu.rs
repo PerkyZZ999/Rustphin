@@ -65,6 +65,26 @@ pub enum MenuCommand {
     NewFolder,
     /// Create an empty file.
     NewFile,
+    /// Create the New menu's entry at `index` (W-108).
+    NewFromTemplate {
+        /// Position in the browser's list of templates.
+        index: usize,
+        /// Which picture the row shows.
+        kind: TemplateKind,
+    },
+}
+
+/// What kind of file a New menu entry creates, for its icon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TemplateKind {
+    /// A text file.
+    Text,
+    /// An empty file.
+    Empty,
+    /// An HTML page.
+    Html,
+    /// One of the user's templates.
+    Other,
 }
 
 /// What a menu row runs: the file view's operations, or the places
@@ -125,7 +145,11 @@ impl MenuCommand {
             Self::Properties => "Alt+Enter",
             Self::NewFolder => "F10",
             Self::NewFile => "Ctrl+Alt+N",
-            Self::OpenWith(_) | Self::Restore | Self::EmptyTrash | Self::OpenTrash(_) => {
+            Self::OpenWith(_)
+            | Self::Restore
+            | Self::EmptyTrash
+            | Self::OpenTrash(_)
+            | Self::NewFromTemplate { .. } => {
                 return None;
             }
         })
@@ -160,6 +184,11 @@ impl MenuCommand {
             Self::Restore => I::ArchiveRestore,
             Self::NewFolder => I::FolderPlus,
             Self::NewFile => I::FilePlus,
+            Self::NewFromTemplate { kind, .. } => match kind {
+                TemplateKind::Text => I::FileText,
+                TemplateKind::Html => I::FileCode,
+                TemplateKind::Empty | TemplateKind::Other => I::File,
+            },
         }
     }
 }
@@ -333,6 +362,23 @@ fn background_menu(facts: &MenuFacts) -> Vec<MenuEntry> {
         item("New folder", MenuCommand::NewFolder, !facts.in_trash),
         item("New file", MenuCommand::NewFile, !facts.in_trash),
     ]
+}
+
+/// The New button's menu, as Dolphin's "Create New": a folder, then each
+/// template by its label (W-108).
+pub fn new_menu(templates: &[(String, TemplateKind)]) -> Vec<MenuEntry> {
+    let mut entries = vec![item("Folder\u{2026}", MenuCommand::NewFolder, true)];
+    if !templates.is_empty() {
+        entries.push(MenuEntry::Separator);
+    }
+    entries.extend(templates.iter().enumerate().map(|(index, (label, kind))| {
+        item(
+            &format!("{label}\u{2026}"),
+            MenuCommand::NewFromTemplate { index, kind: *kind },
+            true,
+        )
+    }));
+    entries
 }
 
 /// Which row the keyboard is on.
@@ -747,6 +793,37 @@ mod tests {
             facts.in_trash = true;
         }));
         assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn the_new_menu_offers_a_folder_then_each_template_with_its_picture() {
+        let entries = new_menu(&[
+            ("Text File".into(), TemplateKind::Text),
+            ("HTML File".into(), TemplateKind::Html),
+            ("Letter".into(), TemplateKind::Other),
+        ]);
+        assert_eq!(
+            labels(&entries),
+            [
+                "Folder\u{2026}",
+                "",
+                "Text File\u{2026}",
+                "HTML File\u{2026}",
+                "Letter\u{2026}"
+            ]
+        );
+        let MenuEntry::Item { command, .. } = &entries[3] else {
+            panic!("an item");
+        };
+        assert_eq!(
+            *command,
+            MenuCommand::NewFromTemplate {
+                index: 1,
+                kind: TemplateKind::Html
+            }
+        );
+        assert_eq!(command.icon(), gpui_kit::assets::IconName::FileCode);
+        assert_eq!(labels(&new_menu(&[])), ["Folder\u{2026}"]);
     }
 
     #[test]

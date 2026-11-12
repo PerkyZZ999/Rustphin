@@ -312,4 +312,9 @@ impl Fs for FaultFs {
         self.plain_step()?;
         RealFs.write_new(path, content)
     }
+
+    fn create_file_with(&self, path: &Path, content: &[u8]) -> io::Result<()> {
+        self.plain_step()?;
+        RealFs.create_file_with(path, content)
+    }
 }

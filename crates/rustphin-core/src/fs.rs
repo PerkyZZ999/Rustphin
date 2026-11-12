@@ -186,6 +186,13 @@ pub trait Fs: Send + Sync + 'static {
         Err(io::ErrorKind::Unsupported.into())
     }
 
+    /// Creates the file `path` with `content`, with the permissions any new
+    /// file of the user gets, and syncs it. Fails with
+    /// [`io::ErrorKind::AlreadyExists`] when something is there.
+    fn create_file_with(&self, _path: &Path, _content: &[u8]) -> io::Result<()> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
     /// Sets the permission bits of `path`. Other attributes are left as they are.
     fn set_mode(&self, _path: &Path, _mode: u32) -> io::Result<()> {
         Err(io::ErrorKind::Unsupported.into())
@@ -384,6 +391,16 @@ impl Fs for RealFs {
             .write(true)
             .create_new(true)
             .mode(0o600)
+            .open(path)?;
+        file.write_all(content)?;
+        file.sync_all()
+    }
+
+    fn create_file_with(&self, path: &Path, content: &[u8]) -> io::Result<()> {
+        // 0o666 less the umask, as for any file the user creates.
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
             .open(path)?;
         file.write_all(content)?;
         file.sync_all()

@@ -26,6 +26,15 @@ use std::{
 
 use crate::{EntryKind, FileInfo, Fs};
 
+/// What a file created from a template starts with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Template {
+    /// These bytes: one of the built-in templates.
+    Contents(Vec<u8>),
+    /// A copy of this file: one of the user's or the system's templates.
+    File(PathBuf),
+}
+
 /// What to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
@@ -42,6 +51,17 @@ pub enum Request {
         parent: PathBuf,
         /// Name of the new file.
         name: OsString,
+    },
+    /// Create the file `name` in `parent` from `template`, as Dolphin's
+    /// "Create New" menu does. Written under a temporary name, then given
+    /// its name; nothing is ever replaced.
+    CreateFromTemplate {
+        /// Existing directory to create in.
+        parent: PathBuf,
+        /// Name of the new file.
+        name: OsString,
+        /// What the file starts with.
+        template: Template,
     },
     /// Give `path` the name `new_name` within the same directory.
     Rename {
@@ -433,6 +453,14 @@ pub fn run(
             engine.create(parent, name, EntryKind::File)?;
             true
         }
+        Request::CreateFromTemplate {
+            parent,
+            name,
+            template,
+        } => {
+            engine.create_from_template(parent, name, template)?;
+            true
+        }
         Request::Rename { path, new_name } => {
             engine.rename(path, new_name)?;
             true
@@ -683,6 +711,60 @@ impl Engine<'_> {
                 return Err(OpError::AlreadyExists(path));
             }
             Err(error) => return Err(io_error(&path)(error)),
+        }
+        let info = self.fs.info(&path).map_err(io_error(&path))?;
+        self.changes.push(Change::Created { path, info });
+        Ok(())
+    }
+
+    /// Writes the template under a temporary name, then gives it `name`
+    /// without replacing anything; a failure leaves nothing behind.
+    fn create_from_template(
+        &mut self,
+        parent: &Path,
+        name: &OsStr,
+        template: &Template,
+    ) -> Result<(), OpError> {
+        validate_name(name)?;
+        let path = parent.join(name);
+        if self.fs.info(&path).is_ok() {
+            return Err(OpError::AlreadyExists(path));
+        }
+        let temp = parent.join(temp_name());
+        let written = match template {
+            Template::Contents(content) => self.fs.create_file_with(&temp, content),
+            // A copy is published only when it is whole, as other copies.
+            Template::File(source) => self
+                .fs
+                .copy_file(source, &temp, &mut |_| ControlFlow::Continue(()))
+                .and_then(|()| {
+                    let (from, to) = (self.fs.info(source)?, self.fs.info(&temp)?);
+                    if from.size == to.size {
+                        Ok(())
+                    } else {
+                        Err(io::Error::other("the template changed while it was copied"))
+                    }
+                }),
+        };
+        if let Err(error) = written {
+            let _ = self.fs.remove_file(&temp);
+            return Err(match template {
+                Template::File(source) if error.kind() == io::ErrorKind::NotFound => {
+                    io_error(source)(error)
+                }
+                _ => io_error(&path)(error),
+            });
+        }
+        match self.fs.rename_new(&temp, &path) {
+            Ok(()) => {}
+            Err(error) => {
+                let _ = self.fs.remove_file(&temp);
+                return Err(if error.kind() == io::ErrorKind::AlreadyExists {
+                    OpError::AlreadyExists(path)
+                } else {
+                    io_error(&path)(error)
+                });
+            }
         }
         let info = self.fs.info(&path).map_err(io_error(&path))?;
         self.changes.push(Change::Created { path, info });

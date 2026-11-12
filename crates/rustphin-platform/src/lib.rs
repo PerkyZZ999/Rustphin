@@ -17,6 +17,8 @@ pub mod places;
 pub mod process;
 pub mod properties;
 pub mod remote;
+pub mod templates;
+pub mod terminal;
 pub mod thumbnails;
 pub mod trash;
 pub mod uri;

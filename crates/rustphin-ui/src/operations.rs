@@ -834,7 +834,9 @@ pub fn activity(request: &Request, undo: bool) -> String {
     }
     match request {
         Request::CreateDir { name, .. } => format!("Creating folder {}", quoted(name)),
-        Request::CreateFile { name, .. } => format!("Creating file {}", quoted(name)),
+        Request::CreateFile { name, .. } | Request::CreateFromTemplate { name, .. } => {
+            format!("Creating file {}", quoted(name))
+        }
         Request::Rename { path, new_name } => {
             format!("Renaming {} to {}", folder_name(path), quoted(new_name))
         }
@@ -864,7 +866,9 @@ pub fn activity(request: &Request, undo: bool) -> String {
 pub fn past(request: &Request) -> String {
     match request {
         Request::CreateDir { name, .. } => format!("created folder {}", quoted(name)),
-        Request::CreateFile { name, .. } => format!("created file {}", quoted(name)),
+        Request::CreateFile { name, .. } | Request::CreateFromTemplate { name, .. } => {
+            format!("created file {}", quoted(name))
+        }
         Request::Rename { path, new_name } => {
             format!("renamed {} to {}", folder_name(path), quoted(new_name))
         }

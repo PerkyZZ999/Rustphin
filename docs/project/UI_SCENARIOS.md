@@ -440,3 +440,16 @@ Isolated home with three places, each in its own group: Work, Music, Photos.
 | VM4 | Click Compact in the panel; click empty space | The view becomes compact and the button shows its icon; the panel closes |
 | VM5 | Open the panel; click the button again; open it; press Escape | Each closes it |
 | VM6 | Relaunch | The mode and size come back; `settings.toml` says `version = 2` |
+
+## New menu and Open terminal here (W-108)
+
+Isolated home with `~/Templates/Letter.odt` and, as the terminal in `~/.config/kdeglobals`, a script that writes its working directory and arguments to a file. Never the real terminal.
+
+| ID | Steps | Expected |
+|---|---|---|
+| NT1 | Look at the toolbar; click New | "+ ⌄" and a terminal icon replace New folder; the menu opens under the button: Folder… F10, a hairline, Text File…, Empty File…, HTML File…, Letter… with their icons |
+| NT2 | Choose HTML File…, type `index`, Return | `index.html` holds the page skeleton (101 bytes), `rw-r--r--`; the name is offered for editing with "HTML File" selected |
+| NT3 | New › Letter…, Return; New › Text File… twice, Return each | `Letter.odt` is a copy of the template; `Text File.txt` and `Text File 2.txt` |
+| NT4 | Click the terminal button in a folder whose name has a space | The terminal starts in that folder, with its configured options |
+| NT5 | Point `TerminalApplication` at a missing program; click the button | "The terminal could not be opened: … Choose one in System Settings, Default Applications, Terminal emulator." |
+| NT6 | Click empty space, Shift+F4 | The terminal starts in the folder |

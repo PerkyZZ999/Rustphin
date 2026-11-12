@@ -891,6 +891,13 @@ impl rustphin_core::Fs for AdminFs {
         Ok(self.helper.write_new(path, &[], 0o644)?)
     }
 
+    fn create_file_with(&self, path: &Path, content: &[u8]) -> std::io::Result<()> {
+        self.forget(path);
+        Ok(self
+            .helper
+            .write_new(path, content, 0o666 & !process_umask())?)
+    }
+
     /// KIO copies the content, permission bits and modification time as
     /// root; it reports no progress until the end and cannot be synced.
     fn copy_file(

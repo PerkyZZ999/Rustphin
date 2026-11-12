@@ -41,6 +41,7 @@ Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 | Action | Dolphin | Rustphin | Replayed |
 |---|---|---|---|
 | New folder | F10 | F10, Ctrl+Shift+N | F1 |
+| Open terminal here | Shift+F4 | Shift+F4 | NT6 |
 | New file | (menu) | Ctrl+Alt+N | — |
 | Rename | F2 | F2 (several files: batch rename) | B1 |
 | Move to trash | Delete | Delete | F3 |

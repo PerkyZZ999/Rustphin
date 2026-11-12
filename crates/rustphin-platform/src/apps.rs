@@ -607,7 +607,7 @@ fn field_codes(exec: &str) -> (bool, bool) {
     (per_file, list)
 }
 
-fn split_exec(exec: &str) -> Option<Vec<String>> {
+pub(crate) fn split_exec(exec: &str) -> Option<Vec<String>> {
     let mut tokens = Vec::new();
     let mut current = String::new();
     let mut chars = exec.chars().peekable();
@@ -723,7 +723,7 @@ fn expand_embedded(
     out
 }
 
-fn spawn(mut command: Command, program: &str) -> Result<(), LaunchError> {
+pub(crate) fn spawn(mut command: Command, program: &str) -> Result<(), LaunchError> {
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())

@@ -2,10 +2,12 @@
 
 use crate::controls::{Outlined as _, tool_button};
 use std::{
+    cell::Cell,
     collections::{HashMap, HashSet},
     ffi::{OsStr, OsString},
     os::unix::ffi::OsStrExt as _,
     path::{Path, PathBuf},
+    rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -91,6 +93,7 @@ actions!(
         ShowIcons,
         ShowCompact,
         ShowDetails,
+        OpenTerminal,
         Activate,
         GoUp,
         GoHome,
@@ -181,6 +184,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-1", ShowIcons, view),
         KeyBinding::new("ctrl-2", ShowCompact, view),
         KeyBinding::new("ctrl-3", ShowDetails, view),
+        KeyBinding::new("shift-f4", OpenTerminal, view),
         KeyBinding::new("escape", CloseViewMenu, Some(VIEW_MENU_CONTEXT)),
         KeyBinding::new("escape", CancelEdit, view),
         KeyBinding::new("f2", Rename, list),
@@ -383,6 +387,11 @@ pub struct Browser {
     menu: Option<OpenMenu>,
     /// Holds the keyboard focus while the context menu is open.
     menu_focus: FocusHandle,
+    /// What the New menu creates besides folders, read in the background
+    /// (W-108); KDE's built-in entries until then.
+    new_files: Vec<rustphin_platform::templates::NewFile>,
+    /// Where the New button was drawn, so its menu opens under it.
+    new_button_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     /// The View button's panel is open (W-107).
     view_menu_open: bool,
     view_menu_focus: FocusHandle,
@@ -530,6 +539,8 @@ impl Browser {
             focus,
             menu: None,
             menu_focus,
+            new_files: rustphin_platform::templates::built_in(),
+            new_button_bounds: Rc::new(Cell::new(None)),
             view_menu_open: false,
             view_menu_focus,
             size_slider,
@@ -576,6 +587,21 @@ impl Browser {
                 });
             }
         }
+        // The New menu's templates, from the user's and the system's
+        // folders, read off the UI thread.
+        cx.spawn(async move |view, cx| {
+            let files = cx
+                .background_spawn(async move {
+                    use rustphin_platform::{templates, xdg};
+                    let folder = xdg::home().and_then(|home| {
+                        templates::templates_dir(&home, xdg::config_home().as_deref())
+                    });
+                    templates::load(folder.as_deref(), &xdg::data_dirs())
+                })
+                .await;
+            let _ = view.update(cx, |view, _| view.new_files = files);
+        })
+        .detach();
         this
     }
 
@@ -1183,6 +1209,10 @@ impl Browser {
                 // Creating focuses the new name once it appears.
             }
             MenuCommand::NewFile => self.create_entry(false, cx),
+            MenuCommand::NewFromTemplate { index, .. } => {
+                self.create_from_template(index, cx);
+                // Creating focuses the new name once it appears.
+            }
             MenuCommand::Properties => self.open_properties(window, cx),
         }
         cx.notify();
@@ -1516,6 +1546,111 @@ impl Browser {
             self.volume = name;
             cx.notify();
         }
+    }
+
+    /// Opens the New button's menu under it (W-108).
+    fn show_new_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.trash_dir.is_some() || self.current_snapshot().is_none() {
+            return;
+        }
+        let templates: Vec<(String, menu::TemplateKind)> = self
+            .new_files
+            .iter()
+            .map(|file| {
+                use rustphin_platform::templates::BuiltIn;
+                let kind = match file.built_in {
+                    Some(BuiltIn::Text) => menu::TemplateKind::Text,
+                    Some(BuiltIn::Empty) => menu::TemplateKind::Empty,
+                    Some(BuiltIn::Html) => menu::TemplateKind::Html,
+                    None => menu::TemplateKind::Other,
+                };
+                (file.label.clone(), kind)
+            })
+            .collect();
+        let entries = menu::new_menu(&templates);
+        let Some(state) = menu::initial(&entries) else {
+            return;
+        };
+        let at = self
+            .new_button_bounds
+            .get()
+            .map(|area| point(area.left(), area.bottom() + px(space::XS)))
+            .unwrap_or_default();
+        self.menu = Some(OpenMenu {
+            at,
+            above: None,
+            entries,
+            state,
+            name: "New",
+            scroll: ScrollHandle::new(),
+        });
+        self.menu_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    /// Creates the New menu's template at `index` with a free name, then
+    /// lets its name be typed, as New folder does.
+    fn create_from_template(&mut self, index: usize, cx: &mut Context<Self>) {
+        let (Some(parent), Some(snapshot)) = (self.location(), self.current_snapshot()) else {
+            return;
+        };
+        if self.trash_dir.is_some() {
+            return;
+        }
+        let Some(file) = self.new_files.get(index) else {
+            return;
+        };
+        let name = rustphin_platform::templates::free_file_name(&file.file_name, |name| {
+            snapshot.row_of(name.as_bytes()).is_some()
+        });
+        let template = file.template.clone();
+        self.select_when_seen = Some((name.clone().into_bytes(), true));
+        hub(cx).update(cx, |hub, _| {
+            hub.start(Request::CreateFromTemplate {
+                parent,
+                name: name.into(),
+                template,
+            });
+        });
+    }
+
+    /// Opens the terminal chosen in KDE's settings in the folder shown
+    /// (Shift+F4, W-108).
+    fn open_terminal(&mut self, cx: &mut Context<Self>) {
+        if self.trash_dir.is_some() {
+            return;
+        }
+        let Some(folder) = self
+            .location()
+            .filter(|_| self.current_snapshot().is_some())
+        else {
+            return;
+        };
+        cx.spawn(async move |_, cx| {
+            let opened = cx
+                .background_spawn(async move {
+                    rustphin_platform::terminal::open_in(
+                        &folder,
+                        rustphin_platform::xdg::config_home(),
+                    )
+                })
+                .await;
+            if let Err(error) = opened {
+                cx.update(|cx| {
+                    hub(cx).update(cx, |hub, cx| {
+                        hub.say(
+                            format!(
+                                "The terminal could not be opened: {error}. Choose one in \
+                                 System Settings, Default Applications, Terminal emulator."
+                            ),
+                            true,
+                            cx,
+                        );
+                    });
+                });
+            }
+        })
+        .detach();
     }
 
     /// The View button's panel: the three modes, then the size (W-107).
@@ -2710,20 +2845,69 @@ impl Browser {
         }
         .into_any_element();
 
+        // New ⌄ and Open terminal here (W-108), where New folder was.
         let new_folder = layout.tools.then(|| {
-            tool_button(
-                "new-folder",
-                gpui_kit::assets::IconName::FolderPlus,
-                "New folder (F10)",
-                has_folder && !shows_trash,
+            let can_create = has_folder && !shows_trash;
+            let bounds = Rc::clone(&self.new_button_bounds);
+            let new_button = div()
+                .relative()
+                .flex_none()
+                // Remembers where the button is, so its menu opens under it.
+                .child(
+                    gpui_kit::canvas(move |area, _, _| bounds.set(Some(area)), |_, _, _, _| {})
+                        .absolute()
+                        .size_full(),
+                )
+                .child(
+                    Button::new("new-menu")
+                        .ghost()
+                        .with_size(px(size::TOOL_BUTTON))
+                        .h(px(size::TOOL_BUTTON))
+                        .px(px(space::SM))
+                        .disabled(!can_create)
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(space::XS))
+                                .child(
+                                    Icon::new(gpui_kit::assets::IconName::Plus)
+                                        .size(px(size::ICON))
+                                        .text_color(if can_create {
+                                            theme.text
+                                        } else {
+                                            theme.text_disabled
+                                        }),
+                                )
+                                .child(
+                                    Icon::new(IconName::ChevronDown)
+                                        .size(px(size::ICON_SMALL))
+                                        .text_color(theme.text_muted),
+                                ),
+                        )
+                        .tooltip("New folder or file (F10 for a folder)")
+                        .accessibility_label("New folder or file")
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.show_new_menu(window, cx)),
+                        ),
+                );
+            let terminal = tool_button(
+                "open-terminal",
+                gpui_kit::assets::IconName::SquareTerminal,
+                "Open terminal here (Shift+F4)",
+                can_create,
                 None,
                 &theme,
             )
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.create_entry(true, cx);
-                this.focus(window, cx);
-            }))
-            .into_any_element()
+            .on_click(cx.listener(|this, _, _, cx| this.open_terminal(cx)));
+            div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap(px(space::XS))
+                .child(new_button)
+                .child(terminal)
+                .into_any_element()
         });
 
         // One button for the view: its mode's icon and a chevron, opening
@@ -4674,6 +4858,7 @@ impl Render for Browser {
             .on_action(cx.listener(|this, _: &ShowDetails, _, cx| {
                 this.set_mode(ViewMode::Details, cx);
             }))
+            .on_action(cx.listener(|this, _: &OpenTerminal, _, cx| this.open_terminal(cx)))
             .on_action(cx.listener(|this, _: &SelectAll, _, cx| {
                 this.change_selection(Selection::select_all, cx);
             }))
