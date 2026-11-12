@@ -1213,7 +1213,8 @@ impl Workspace {
         }
         self.rename = None;
         let shown = self.tabs.active().browser().read(cx).location();
-        let settings = cx.new(|cx| SettingsDialog::new(shown, window, cx));
+        let sidebar = self.sidebar.clone();
+        let settings = cx.new(|cx| SettingsDialog::new(shown, sidebar, window, cx));
         self.settings_subscription =
             Some(cx.subscribe_in(&settings, window, Self::on_settings_event));
         settings.read(cx).focus_handle().focus(window, cx);
@@ -1556,7 +1557,7 @@ impl Workspace {
     ) -> impl IntoElement {
         let active = self.tabs.active_index();
         let panel = if self.sidebar_visible {
-            size::SIDEBAR
+            places_panel_width(cx)
         } else {
             0.
         };
@@ -1874,7 +1875,7 @@ impl Render for Workspace {
         let split = tab.panes.len() > 1;
         // Panes share equally the width the places panel leaves.
         let panel_width = if self.sidebar_visible {
-            size::SIDEBAR
+            places_panel_width(cx)
         } else {
             0.
         };
@@ -2047,10 +2048,33 @@ impl Render for Workspace {
             // The places panel beside the tabs over the panes, as in Dolphin.
             .child(
                 div()
+                    .relative()
                     .flex()
                     .flex_1()
                     .min_h_0()
+                    // Dragging the panel's edge sets its width (W-106e2).
+                    .on_drag_move::<PanelGrip>(cx.listener(
+                        |_, event: &gpui_kit::DragMoveEvent<PanelGrip>, _, cx| {
+                            let width = f32::from(event.event.position.x - event.bounds.left());
+                            set_panel_width(width, cx);
+                        },
+                    ))
                     .when(self.sidebar_visible, |row| row.child(self.sidebar.clone()))
+                    .when(self.sidebar_visible, |row| {
+                        row.child(
+                            div()
+                                .id("places-grip")
+                                .role(Role::Splitter)
+                                .aria_label("Places panel width")
+                                .absolute()
+                                .top_0()
+                                .bottom_0()
+                                .left(px(places_panel_width(cx) - size::SIDEBAR_GRIP / 2.))
+                                .w(px(size::SIDEBAR_GRIP))
+                                .cursor_col_resize()
+                                .on_drag(PanelGrip, |grip, _, _, cx| cx.new(|_| *grip)),
+                        )
+                    })
                     .child(
                         div()
                             .flex()
@@ -3238,6 +3262,40 @@ fn content_width(window: &Window) -> f32 {
 fn tab_width(available: f32, count: usize) -> f32 {
     let room = (available - size::TAB_ADD).max(0.) / count.max(1) as f32;
     room.clamp(size::TAB_MIN, size::TAB)
+}
+
+/// What is dragged when the places panel's edge is.
+#[derive(Clone, Copy)]
+struct PanelGrip;
+
+impl Render for PanelGrip {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
+
+/// The places panel's width as Settings holds it.
+fn places_panel_width(cx: &App) -> f32 {
+    crate::preferences::preferences(cx)
+        .read(cx)
+        .settings()
+        .places()
+        .width as f32
+}
+
+/// Sets the places panel's width, kept in bounds by the settings.
+fn set_panel_width(width: f32, cx: &mut App) {
+    let width = width.max(0.).round() as u32;
+    let store = crate::preferences::preferences(cx);
+    let choice = store.read(cx).settings().places();
+    store.update(cx, |store, cx| {
+        store.update(
+            |settings| {
+                settings.set_places(crate::settings::PlacesChoice { width, ..choice });
+            },
+            cx,
+        );
+    });
 }
 
 #[cfg(test)]

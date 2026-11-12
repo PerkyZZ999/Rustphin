@@ -31,7 +31,7 @@ S11 — Hardening for daily use (in progress)
   - [x] W-106c2 — Views page (default view and size, per-folder views, order, hidden files, details columns, dates, sizes, previews). Done 2026-11-12 (see VALIDATION.md). Dates offer ISO and "Today 14:32"; the plan's "system format" is not offered (no locale date data in the build) and waits for the maintainer's call.
   - [x] W-106d — Appearance (window look, title bar, faded hidden files, text size). Done 2026-11-12 (see VALIDATION.md). Hidden files fade from 60 % (not the plan's 30 %): fainter fails WCAG AA; the choice is raising them towards 100 %.
   - [x] W-106e1 — Confirmations: ask before trash, emptying the trash, closing a window with several tabs; executable files ask, open or run; deleting for good always asks. Done 2026-11-12 (see VALIDATION.md).
-  - [ ] W-106e2 — Places page (sections, hidden places, groups, panel width).
+  - [x] W-106e2 — Places page (sections, hidden places, groups, panel width; the panel's edge drags its width). Done 2026-11-12 (see VALIDATION.md). Groups reorder with Move up/down buttons on the page (drag stays in the panel).
   - [ ] W-106f — Toolbar customisation.
   - [ ] W-106g — Shortcuts (read-only).
 

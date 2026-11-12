@@ -35,6 +35,7 @@ mod settings_confirmations;
 mod settings_controls;
 mod settings_dialog;
 mod settings_general;
+mod settings_places;
 mod settings_views;
 mod sidebar;
 mod tabs;

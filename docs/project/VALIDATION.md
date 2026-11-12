@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-12 — W-106e2 Settings: Places page
+- **Code:** settings `[places]` (devices, remote, show_hidden, width within 200–360 on the 4 px grid; lenient). The panel follows them at once: hidden sections leave both the drawing and the keyboard's rows; "show hidden places" is now remembered (the panel's toggle writes it); the width replaces the fixed 240 px in the panel, the tab strip, the panes and the breadcrumbs' room. A 4 px grip on the panel's right edge (`Role::Splitter`, resize pointer) sets the width by dragging. The panel gains `group_summaries`, `shift_group`, `delete_group` and `rename_group` for the page. `settings_places.rs`: sections, groups (name, count, Move up/down, Rename with a field, Delete), width slider. Reset leaves the groups.
+- **Fixed on the way:** opening Settings crashed with the width slider: the library checks a slider's minimum against its maximum, 100 by default, so `min(200)` before `max(360)` panicked. The maximum is now set first; the panic was found on screen (an isolated session), not by tests.
+- **Tests:** `rust-tc doctor` PASS, 600 tests. New: Places choices survive, the width stays in bounds and on the grid; without the Remote section its heading and ungrouped places leave the rows (proved: breaking each made its test fail).
+- **On screen (isolated sessions, PL1–PL5, PL7):** all as listed.
+- **Not verified:** dragging the panel's edge (PL6; the drag tool was refused in this session); show hidden places faded from the page (the same flag as the panel's toggle, tested before); the Remote section hidden on screen (no network places in the test home).
+- **Waiver:** none
+
 ### 2026-11-12 — W-106e1 Settings: Confirmations page
 - **Code:** settings `[confirm]` (trash, empty_trash, programs: ask/open/run, close_tabs; lenient, strange values keep asking). Hub: `Question::ConfirmTrash` and `trash_after_confirming` / `confirm_trash`; emptying the trash skips its question when unticked (`empty_now`). Browser: Delete passes the setting and the listed entries. Workspace: the trash question ("Move to trash (Enter)", primary); the program choice applied before the launch prompt (a shortcut still asks unless Run); "Close the window?" for a window with several tabs, from Ctrl+Q, the title bar's ✕ (now the Quit action) and the compositor's close (`on_window_should_close`). Deleting for good always asks (D-011): shown ticked and unavailable.
 - **Tests:** `rust-tc doctor` PASS, 599 tests. New: confirmations default to today's behaviour, survive the file, and strange values keep asking (proved: a changed default fails it). The hub's questions are covered on screen only (the hub is not built in unit tests).

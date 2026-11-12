@@ -28,7 +28,64 @@ pub struct Settings {
     general: General,
     appearance: Appearance,
     confirm: Confirm,
+    places: Places,
     view: View,
+}
+
+/// The places panel (W-106e2). Groups live in their own file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+struct Places {
+    #[serde(deserialize_with = "lenient_true")]
+    devices: bool,
+    #[serde(deserialize_with = "lenient_true")]
+    remote: bool,
+    #[serde(deserialize_with = "lenient")]
+    show_hidden: bool,
+    /// The panel's width in pixels, within 200–360.
+    #[serde(deserialize_with = "lenient_width")]
+    width: u32,
+}
+
+impl Default for Places {
+    fn default() -> Self {
+        Self {
+            devices: true,
+            remote: true,
+            show_hidden: false,
+            width: crate::theme::size::SIDEBAR as u32,
+        }
+    }
+}
+
+/// The Places page's choices.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlacesChoice {
+    /// The Devices section is shown.
+    pub devices: bool,
+    /// The Remote section is shown.
+    pub remote: bool,
+    /// Hidden places are shown, faded.
+    pub show_hidden: bool,
+    /// The panel's width in pixels.
+    pub width: u32,
+}
+
+/// A panel width within what the window allows, on the 4-pixel grid.
+fn clamp_width(width: u32) -> u32 {
+    let (min, max) = (
+        crate::theme::size::SIDEBAR_MIN as u32,
+        crate::theme::size::SIDEBAR_MAX as u32,
+    );
+    (width.clamp(min, max) / 4) * 4
+}
+
+fn lenient_width<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
+    let value = toml::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_integer()
+        .and_then(|width| u32::try_from(width).ok())
+        .map_or(crate::theme::size::SIDEBAR as u32, clamp_width))
 }
 
 /// What Rustphin asks before doing (W-106e). Deleting for good always asks.
@@ -362,6 +419,7 @@ impl Settings {
             general: General::default(),
             appearance: Appearance::default(),
             confirm: Confirm::default(),
+            places: Places::default(),
             view: View {
                 mode: match mode {
                     ViewMode::Icons => Mode::Icons,
@@ -545,6 +603,33 @@ impl Settings {
             text_size,
             hidden_opacity: clamp_hidden(hidden_opacity),
         };
+        self.version = VERSION;
+    }
+
+    /// The places panel's choices.
+    pub fn places(&self) -> PlacesChoice {
+        PlacesChoice {
+            devices: self.places.devices,
+            remote: self.places.remote,
+            show_hidden: self.places.show_hidden,
+            width: clamp_width(self.places.width),
+        }
+    }
+
+    /// Chooses the places panel's look; the width is kept in bounds.
+    pub fn set_places(&mut self, choice: PlacesChoice) {
+        self.places = Places {
+            devices: choice.devices,
+            remote: choice.remote,
+            show_hidden: choice.show_hidden,
+            width: clamp_width(choice.width),
+        };
+        self.version = VERSION;
+    }
+
+    /// Puts the Places page back as it was before anything was chosen.
+    pub fn reset_places(&mut self) {
+        self.places = Places::default();
         self.version = VERSION;
     }
 
@@ -948,5 +1033,32 @@ mod tests {
         assert!(odd.confirmations().trash);
         settings.reset_confirmations();
         assert_eq!(settings.confirmations(), defaults);
+    }
+
+    #[test]
+    fn the_places_panel_choices_survive_and_its_width_stays_in_bounds() {
+        let defaults = Settings::default().places();
+        assert!(defaults.devices && defaults.remote && !defaults.show_hidden);
+        assert_eq!(defaults.width, 240);
+        let mut settings = sample();
+        settings.set_places(PlacesChoice {
+            devices: false,
+            remote: true,
+            show_hidden: true,
+            width: 301,
+        });
+        let loaded = Settings::parse(&settings.to_toml()).places();
+        assert!(!loaded.devices && loaded.show_hidden);
+        assert_eq!(loaded.width, 300, "on the 4-pixel grid");
+        settings.set_places(PlacesChoice {
+            width: 1000,
+            ..loaded
+        });
+        assert_eq!(settings.places().width, 360);
+        let narrow = Settings::parse("version = 3\n[places]\nwidth = 12\nremote = \"x\"\n");
+        assert_eq!(narrow.places().width, 200);
+        assert!(narrow.places().remote);
+        settings.reset_places();
+        assert_eq!(settings.places(), defaults);
     }
 }

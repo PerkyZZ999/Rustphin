@@ -99,8 +99,14 @@ pub mod size {
     pub const CHECK_ROW: f32 = 28.;
     /// Height of a usage bar under a volume's name.
     pub const USAGE: f32 = 4.;
-    /// Width of the places panel.
+    /// Width of the places panel, by default.
     pub const SIDEBAR: f32 = 240.;
+    /// The narrowest the places panel can be made (Settings, Places).
+    pub const SIDEBAR_MIN: f32 = 200.;
+    /// The widest the places panel can be made.
+    pub const SIDEBAR_MAX: f32 = 360.;
+    /// The strip at the places panel's right edge that drags its width.
+    pub const SIDEBAR_GRIP: f32 = 4.;
     /// Width of a context menu and of its application list.
     pub const MENU: f32 = 240.;
     /// Properties' thumbnail: a 3:2 picture fitted in 96 × 64 pixels.

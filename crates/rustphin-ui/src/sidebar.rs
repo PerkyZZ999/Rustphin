@@ -250,7 +250,13 @@ fn is_shown(place: &Place, show_hidden: bool) -> bool {
 /// The rows of the panel, top to bottom: local places outside groups, then
 /// each group's heading followed by its places unless it is collapsed, then
 /// the Remote heading and the network places outside groups unless folded.
-fn rows(places: &[Place], groups: &Groups, show_hidden: bool, remote_folded: bool) -> Vec<Row> {
+fn rows(
+    places: &[Place],
+    groups: &Groups,
+    show_hidden: bool,
+    remote_folded: bool,
+    show_remote: bool,
+) -> Vec<Row> {
     let layout = groups.layout(places);
     let (remote, local): (Vec<&Place>, Vec<&Place>) = layout
         .ungrouped
@@ -273,7 +279,7 @@ fn rows(places: &[Place], groups: &Groups, show_hidden: bool, remote_folded: boo
             );
         }
     }
-    if !remote.is_empty() {
+    if show_remote && !remote.is_empty() {
         rows.push(Row::Remote);
         if !remote_folded {
             rows.extend(remote.iter().map(|place| Row::Place(place.id.clone())));
@@ -385,6 +391,11 @@ impl Sidebar {
         let rename_input = cx.new(|cx| InputState::new(window, cx));
         let menu_focus = cx.focus_handle();
         let subscriptions = vec![
+            // Settings, Places: sections, hidden places and width show at once.
+            cx.observe(&crate::preferences::preferences(cx), |this, store, cx| {
+                this.show_hidden = store.read(cx).settings().places().show_hidden;
+                cx.notify();
+            }),
             cx.subscribe_in(&rename_input, window, Self::on_rename_input),
             // A click elsewhere takes the focus and closes the menu.
             cx.on_blur(&menu_focus, window, |this, _, cx| {
@@ -427,7 +438,11 @@ impl Sidebar {
             places_load: 0,
             places_notice: None,
             groups: Groups::default(),
-            show_hidden: false,
+            show_hidden: crate::preferences::preferences(cx)
+                .read(cx)
+                .settings()
+                .places()
+                .show_hidden,
             focused: None,
             renaming: None,
             rename_input,
@@ -644,13 +659,75 @@ impl Sidebar {
         self.places.iter().find(|place| place.id == id)
     }
 
-    fn rows(&self) -> Vec<Row> {
+    /// The panel's choices in Settings, Places (W-106e2).
+    fn choice(&self, cx: &App) -> crate::settings::PlacesChoice {
+        crate::preferences::preferences(cx)
+            .read(cx)
+            .settings()
+            .places()
+    }
+
+    /// Shows or hides the hidden places, and remembers it.
+    fn set_show_hidden(&mut self, show: bool, cx: &mut Context<Self>) {
+        self.show_hidden = show;
+        crate::preferences::preferences(cx).update(cx, |store, cx| {
+            store.update(
+                |settings| {
+                    let choice = settings.places();
+                    settings.set_places(crate::settings::PlacesChoice {
+                        show_hidden: show,
+                        ..choice
+                    });
+                },
+                cx,
+            );
+        });
+        cx.notify();
+    }
+
+    /// Each group's name and how many places it holds, in order, for
+    /// Settings.
+    pub fn group_summaries(&self) -> Vec<(String, usize)> {
+        self.groups
+            .groups
+            .iter()
+            .map(|group| (group.name.clone(), group.places.len()))
+            .collect()
+    }
+
+    /// Moves a group up (negative) or down, from Settings.
+    pub fn shift_group(&mut self, index: usize, delta: isize, cx: &mut Context<Self>) {
+        self.groups.shift(index, delta);
+        self.save_groups(cx);
+        cx.notify();
+    }
+
+    /// Deletes a group, from Settings; its places stay, outside groups.
+    pub fn delete_group(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.groups.remove(index);
+        self.save_groups(cx);
+        cx.notify();
+    }
+
+    /// Renames a group, from Settings; an empty name is ignored.
+    pub fn rename_group(&mut self, index: usize, name: &str, cx: &mut Context<Self>) {
+        self.groups.rename(index, name);
+        self.save_groups(cx);
+        cx.notify();
+    }
+
+    fn rows(&self, cx: &App) -> Vec<Row> {
+        let choice = self.choice(cx);
         let mut rows = rows(
             &self.places,
             &self.groups,
             self.show_hidden,
             self.groups.remote_folded,
+            choice.remote,
         );
+        if !choice.devices {
+            return rows;
+        }
         if !self.devices.is_empty() || self.devices_unavailable {
             rows.push(Row::Devices);
         }
@@ -665,7 +742,7 @@ impl Sidebar {
     }
 
     fn move_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
-        let rows = self.rows();
+        let rows = self.rows(cx);
         if rows.is_empty() {
             return;
         }
@@ -1423,7 +1500,7 @@ impl Sidebar {
                     self.add_place(folder, None, cx);
                 }
             }
-            PlaceCommand::ToggleHiddenPlaces => self.show_hidden = !self.show_hidden,
+            PlaceCommand::ToggleHiddenPlaces => self.set_show_hidden(!self.show_hidden, cx),
         }
         cx.notify();
     }
@@ -2055,7 +2132,8 @@ impl Render for Sidebar {
                 .into_any_element(),
             );
         }
-        if !remote_places.is_empty() {
+        let choice = self.choice(cx);
+        if choice.remote && !remote_places.is_empty() {
             let folded = self.groups.remote_folded;
             let row = Row::Remote;
             let click_row = row.clone();
@@ -2094,7 +2172,7 @@ impl Render for Sidebar {
             }
         }
         let devices = self.devices.clone();
-        if !devices.is_empty() || self.devices_unavailable {
+        if choice.devices && (!devices.is_empty() || self.devices_unavailable) {
             let folded = self.groups.devices_folded;
             let row = Row::Devices;
             let click_row = row.clone();
@@ -2232,8 +2310,7 @@ impl Render for Sidebar {
             .on_action(cx.listener(|this, _: &NextGroup, _, cx| this.cycle_group(cx)))
             .on_action(cx.listener(|this, _: &NewGroup, _, cx| this.new_group(cx)))
             .on_action(cx.listener(|this, _: &ToggleHiddenPlaces, _, cx| {
-                this.show_hidden = !this.show_hidden;
-                cx.notify();
+                this.set_show_hidden(!this.show_hidden, cx);
             }))
             .on_action(cx.listener(|this, _: &Eject, _, cx| {
                 if let Some(Row::Device(id)) = this.focused.clone() {
@@ -2246,7 +2323,7 @@ impl Render for Sidebar {
             .flex()
             .flex_col()
             .flex_none()
-            .w(px(size::SIDEBAR))
+            .w(px(self.choice(cx).width as f32))
             .h_full()
             .bg(theme.chrome)
             .border_r_1()
@@ -2327,7 +2404,7 @@ mod tests {
         let p = |id: &str| Row::Place(id.to_owned());
 
         assert_eq!(
-            rows(&places, &groups, false, false),
+            rows(&places, &groups, false, false, true),
             [
                 p("home"),
                 p("docs"),
@@ -2339,12 +2416,21 @@ mod tests {
             ]
         );
         assert_eq!(
-            rows(&places, &groups, false, true),
+            rows(&places, &groups, false, true, true),
             [p("home"), p("docs"), Row::Group(0), p("vps"), Row::Remote]
+        );
+        // Settings, Places: without the Remote section its heading and
+        // places leave the keyboard's list; a grouped one stays.
+        assert_eq!(
+            rows(&places, &groups, false, false, false),
+            [p("home"), p("docs"), Row::Group(0), p("vps")]
         );
         // No network places outside groups: no Remote heading.
         let local = [place("home", "file:///home/u")];
-        assert_eq!(rows(&local, &Groups::default(), false, false), [p("home")]);
+        assert_eq!(
+            rows(&local, &Groups::default(), false, false, true),
+            [p("home")]
+        );
     }
 
     #[test]
@@ -2375,7 +2461,7 @@ mod tests {
         let p = |id: &str| Row::Place(id.to_owned());
 
         assert_eq!(
-            rows(&places, &groups, false, false),
+            rows(&places, &groups, false, false, true),
             [
                 p("home"),
                 Row::Group(0),
@@ -2385,7 +2471,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            rows(&places, &groups, true, false),
+            rows(&places, &groups, true, false, true),
             [
                 p("home"),
                 Row::Group(0),

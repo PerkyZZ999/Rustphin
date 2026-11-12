@@ -690,6 +690,16 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   at" (a slider from 60 % to 100 % in 5 % steps, 60 % by default, with the
   value in `data-sm`; fainter, a hidden name under the pointer falls below
   WCAG AA in the glass theme over a white window, so 60 % is the floor).
+  **Places:** "Sections" holds Show (Devices, Remote checkboxes) and Hidden
+  places (Keep them hidden, Show them faded); "Groups" lists each group
+  with its name, "N places" in `body-sm` `text-muted`, and 28 px icon
+  buttons with tooltips: Move up, Move down, Rename (the name becomes a
+  field, Enter keeps it), Delete; "Deleting a group keeps its places."
+  below, or "No groups yet. Make one with New group in the places panel."
+  when there are none; "Panel" holds Width (a slider from 200 to 360 px in
+  4 px steps, the value in `data-sm`, "or drag the panel's edge"). The
+  panel's right edge is a 4 px grip with the resize pointer that sets the
+  same width. Reset to defaults leaves the groups as they are.
   **Confirmations:** "Ask before" holds checkboxes for Moving to the trash
   (off by default), Deleting for good (ticked and unavailable, "Always
   asked: it cannot be undone."), Emptying the trash (on) and Closing a
@@ -1103,9 +1113,9 @@ except where the list below says otherwise; each W-079 step adds its line.
   banner, as does a folder that vanished.
 - Settings (W-106b, W-106c1): the dialog, its page list and the tabs below
   720 px, the action row, the controls (segments, drop-downs, small buttons,
-  hints, checkboxes, the slider), General, Appearance, Views,
-  Confirmations and About are built; the other pages arrive with
-  W-106e2–g, each with its "Reset to defaults".
+  hints, checkboxes, the slider), General, Appearance, Views, Places,
+  Confirmations and About are built; Toolbar and Shortcuts arrive with
+  W-106f–g.
 
 Carried over unchanged from the earlier design and implemented: the Actions
 palette's **Recover original names after interruption** for the current folder

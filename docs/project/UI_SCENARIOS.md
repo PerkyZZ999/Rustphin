@@ -520,3 +520,17 @@ Isolated home with `Work/a.txt`, `Work/b.txt` and `Work/script.sh`, an executabl
 | CF4 | Tick Closing a window…; Ctrl+T; Ctrl+Q; Escape; Alt+F4; Escape; the title bar's ✕; Enter | "Close the window?" with "Close 2 tabs (Enter)" each time; Escape keeps the window; Enter closes it |
 | CF5 | Open the trash folder; untick Emptying the trash; palette "Trash: Empty this trash" | The trash is emptied with no question (files and info both empty) |
 | CF6 | Reset to defaults | `[confirm]` back to trash false, empty_trash true, programs ask, close_tabs false |
+
+### Places page (W-106e2)
+
+Isolated home with `~/.config/rustphin/place-groups.toml` holding two empty groups, Work and Media, written before launch.
+
+| ID | Steps | Expected |
+|---|---|---|
+| PL1 | Settings, Places | Sections (Devices and Remote ticked; Keep them hidden), Groups (Work and Media, "0 places", Move up/down, Rename, Delete; the first's Move up and the last's Move down unavailable; "Deleting a group keeps its places."), Panel (Width 240 px, "or drag the panel's edge") |
+| PL2 | Move Media up | Media first, here and in the panel behind |
+| PL3 | Rename Work, Ctrl+A, type `Projects`, Enter | The row and the panel say Projects |
+| PL4 | Untick Devices; click the width slider's right end | The Devices section leaves the panel; the panel is 360 px wide and the panes narrower |
+| PL5 | Delete Media; Escape | `place-groups.toml` holds only Projects; `[places]` has devices false, width 360 |
+| PL6 | Drag the panel's right edge | The width follows the pointer within 200–360 px (not seen yet: the drag tool was refused) |
+| PL7 | Settings, Places, Reset to defaults | `[places]` back to devices and remote on, hidden kept hidden, 240; the groups stay |

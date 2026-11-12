@@ -2938,7 +2938,7 @@ impl Browser {
                         location.as_deref(),
                         // The field spans the window less the toolbar's
                         // buttons, about what a pane beside Places had.
-                        crumbs_for_width(layout.width - size::SIDEBAR),
+                        crumbs_for_width(layout.width - places_width(cx)),
                         theme,
                         cx,
                     ))),
@@ -3219,7 +3219,7 @@ impl Browser {
                     // No buttons beside it: the whole pane is for the path.
                     .child(self.breadcrumbs(
                         location.as_deref(),
-                        crumbs_for_width(self.width + size::SIDEBAR),
+                        crumbs_for_width(self.width + places_width(cx)),
                         theme,
                         cx,
                     )),
@@ -5610,6 +5610,15 @@ impl Entry {
                 |surface, opacity| surface.opacity(opacity),
             )
     }
+}
+
+/// The places panel's width as Settings holds it.
+fn places_width(cx: &App) -> f32 {
+    crate::preferences::preferences(cx)
+        .read(cx)
+        .settings()
+        .places()
+        .width as f32
 }
 
 /// The toolbar's icon and the menu's name of a view mode.

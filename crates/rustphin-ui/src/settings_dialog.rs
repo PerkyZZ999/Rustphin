@@ -88,6 +88,8 @@ pub enum Page {
     Appearance,
     /// How folders are shown when they open.
     Views,
+    /// What the places panel shows.
+    Places,
     /// Which actions ask before they act.
     Confirmations,
     /// Version, licence, credits, privacy and files.
@@ -100,6 +102,7 @@ impl Page {
         Page::General,
         Page::Appearance,
         Page::Views,
+        Page::Places,
         Page::Confirmations,
         Page::About,
     ];
@@ -110,6 +113,7 @@ impl Page {
             Page::General => "General",
             Page::Appearance => "Appearance",
             Page::Views => "Views",
+            Page::Places => "Places",
             Page::Confirmations => "Confirmations",
             Page::About => "About",
         }
@@ -121,6 +125,7 @@ impl Page {
             Page::General => IconName::Settings,
             Page::Appearance => IconName::Palette,
             Page::Views => IconName::LayoutList,
+            Page::Places => IconName::Bookmark,
             Page::Confirmations => IconName::CircleCheck,
             Page::About => IconName::Info,
         }
@@ -131,6 +136,7 @@ impl Page {
         match self {
             Page::General => "How Rustphin starts and works with the rest of the desktop.",
             Page::Views => "How folders are shown when they open.",
+            Page::Places => "What the places panel shows.",
             Page::Confirmations => "Which actions ask before they act.",
             Page::Appearance => {
                 "How the window looks. The colours are Rustphin\u{2019}s dark design."
@@ -142,7 +148,9 @@ impl Page {
     /// Whether it holds settings, and so a "Reset to defaults".
     pub fn has_settings(self) -> bool {
         match self {
-            Page::General | Page::Appearance | Page::Views | Page::Confirmations => true,
+            Page::General | Page::Appearance | Page::Views | Page::Places | Page::Confirmations => {
+                true
+            }
             Page::About => false,
         }
     }
@@ -188,6 +196,14 @@ pub struct SettingsDialog {
     pub(crate) zoom_slider: Entity<SliderState>,
     /// Hidden files' opacity, in percent.
     pub(crate) hidden_slider: Entity<SliderState>,
+    /// The places panel, whose groups the Places page changes.
+    pub(crate) sidebar: Entity<crate::sidebar::Sidebar>,
+    /// The name field for a group being renamed.
+    pub(crate) group_input: Entity<InputState>,
+    /// The group being renamed.
+    pub(crate) renaming_group: Option<usize>,
+    /// The places panel's width.
+    pub(crate) width_slider: Entity<SliderState>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -196,7 +212,12 @@ impl EventEmitter<SettingsEvent> for SettingsDialog {}
 impl SettingsDialog {
     /// The dialog on its first page; `shown` is the folder the window
     /// shows, offered as the folder to start in.
-    pub fn new(shown: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        shown: Option<PathBuf>,
+        sidebar: Entity<crate::sidebar::Sidebar>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let store = preferences(cx);
         let chosen = store
             .read(cx)
@@ -226,7 +247,32 @@ impl SettingsDialog {
                 .step(5.)
                 .default_value(hidden as f32)
         });
+        let width = store.read(cx).settings().places().width;
+        let width_slider = cx.new(|_| {
+            // The maximum first: the library checks the minimum against
+            // the current maximum, 100 by default, and panics below it.
+            SliderState::new()
+                .max(size::SIDEBAR_MAX)
+                .min(size::SIDEBAR_MIN)
+                .step(4.)
+                .default_value(width as f32)
+        });
+        let group_input = cx.new(|cx| InputState::new(window, cx));
         let subscriptions = vec![
+            cx.subscribe(&width_slider, |_, _, event: &SliderEvent, cx| {
+                let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
+                let width = value.start().round().max(0.) as u32;
+                if preferences(cx).read(cx).settings().places().width != width {
+                    crate::settings_places::choose_width(cx, width);
+                }
+            }),
+            cx.subscribe(&group_input, |this, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    this.finish_group_rename(cx);
+                }
+            }),
+            // Groups changed in the panel show here at once.
+            cx.observe(&sidebar, |_, _, cx| cx.notify()),
             cx.subscribe(&hidden_slider, |_, _, event: &SliderEvent, cx| {
                 let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
                 let percent = value.start().round().max(0.) as u32;
@@ -289,6 +335,10 @@ impl SettingsDialog {
             editing_terminal: false,
             zoom_slider,
             hidden_slider,
+            sidebar,
+            group_input,
+            renaming_group: None,
+            width_slider,
             _subscriptions: subscriptions,
         }
     }
@@ -340,6 +390,12 @@ impl SettingsDialog {
                     store.update_default_view(Settings::reset_views, cx);
                 });
             }
+            Page::Places => {
+                // The groups are content, not settings: they stay.
+                preferences(cx).update(cx, |store, cx| {
+                    store.update(Settings::reset_places, cx);
+                });
+            }
             Page::Confirmations => {
                 preferences(cx).update(cx, |store, cx| {
                     store.update(Settings::reset_confirmations, cx);
@@ -358,6 +414,7 @@ impl SettingsDialog {
         if self.page != page {
             self.page = page;
             self.licence = false;
+            self.renaming_group = None;
             self.page_scroll.set_offset(gpui_kit::point(px(0.), px(0.)));
             cx.notify();
         }
@@ -466,6 +523,7 @@ impl SettingsDialog {
             Page::General => self.general(theme, window, cx),
             Page::Appearance => self.appearance(theme, window, cx),
             Page::Views => self.views(theme, window, cx),
+            Page::Places => self.places(theme, window, cx),
             Page::Confirmations => self.confirmations(theme, window, cx),
             Page::About => self.about(theme, cx),
         };
