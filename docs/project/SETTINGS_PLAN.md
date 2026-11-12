@@ -1,9 +1,9 @@
 # Settings window: plan for the maintainer to approve (W-106)
 
 Status: **approved as written 2026-11-12 (D-029, R-019) and built the same
-day (W-106b–g).** Where the build differs from this plan is recorded in
-VALIDATION.md and R-019: no "system format" for dates, hidden files fade
-from 60 % (WCAG AA), toolbar items move by buttons rather than dragging.
+day (W-106b–g).** Three differences from this plan were accepted by
+The maintainer (D-030): no "system format" for dates, hidden files fade from 60 %
+(WCAG AA), toolbar items move by buttons rather than dragging.
 
 ## What it is
 

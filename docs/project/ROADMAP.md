@@ -101,7 +101,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **What:** a Settings window (Dolphin's "Configure Rustphin…") whose first page is **Toolbar**: the user rebuilds the toolbar as they want it, as Dolphin's "Configure Toolbars…" allows. A list of available actions beside the toolbar's current actions; add, remove and reorder them (drag or buttons); separators; per action icon only or icon and text; restore the defaults. The result is saved in Rustphin's own config and applied at once.
 - **Before building:** a requirement with acceptance criteria and a design for the maintainer to approve (pages, mockup, how the responsive toolbar rules of W-096 apply to a customized toolbar, where the settings are stored). It adds scope beyond the MVP, so it waits until the maintainer schedules it.
 - **2026-11-12:** The maintainer asked for the whole Settings window (General, Appearance, Customizations, About, …) to be planned first. The proposal is [`SETTINGS_PLAN.md`](SETTINGS_PLAN.md): eight pages, storage, order of work W-106a–g and five decisions for the maintainer.
-- **Status:** plan and mockups approved 2026-11-12 (D-029, R-019); built the same day as W-106b–g (all eight pages). R-019 is open on Tab through the controls, a second window following changes, and three differences from the plan for the maintainer to accept or change.
+- **Status:** plan and mockups approved 2026-11-12 (D-029, R-019); built the same day as W-106b–g (all eight pages). Three differences from the plan accepted (D-030). R-019 is open on Tab through the controls and a second window following changes.
 
 ## Traceability
 

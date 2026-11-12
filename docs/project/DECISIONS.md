@@ -275,3 +275,10 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** as SETTINGS_PLAN.md proposes. A dialog over the window (as Properties, D-017), opened by "Settings…" in the Actions menu, the palette and Ctrl+Shift+,; a page list on the left; changes apply at once, with "Reset to defaults" on each page and no OK/Apply. Eight pages: General, Appearance, Views, Toolbar (customisation, W-106), Places, Confirmations, Shortcuts (read-only first), About. "Remember the view for each folder" is offered as an option, off by default. Settings stay in `settings.toml` (version 3). Mockups are approved before building (W-106a), then W-106b–g.
 - **Confirmed by / date:** The maintainer, 2026-11-12 ("Approve as written")
 - **Supersedes / superseded by:** widens W-106 (toolbar customisation) into the whole Settings window; adds scope beyond the MVP at the maintainer's request
+
+## D-030 — Settings: three differences from the plan accepted
+- **Date:** 2026-11-12
+- **Context:** building the Settings window (W-106b–g) to D-029 left three points where the build differs from SETTINGS_PLAN.md (VALIDATION.md, W-106c2, W-106d, W-106f).
+- **Decision:** accepted as built. Hidden files fade from 60 % to 100 %, not 30 %: fainter, a hidden name under the pointer falls below WCAG AA (tested). Dates are ISO or "Today 14:32"; no "system format", which would need locale date data the build does not have. Toolbar items move between and along the Toolbar page's lists by buttons and double-click, not by dragging.
+- **Confirmed by / date:** The maintainer, 2026-11-12 ("Accept them")
+- **Supersedes / superseded by:** amends D-029 on these three points only
