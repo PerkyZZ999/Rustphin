@@ -382,7 +382,7 @@ impl RenameDialog {
                     .flex()
                     .items_center()
                     .gap(px(space::SM))
-                    .text_size(px(text::BODY))
+                    .text_size(text::scaled(text::BODY))
                     .child(gpui_kit::component::Icon::new(icon).size(px(size::ICON)))
                     .child(label),
             )
@@ -425,7 +425,7 @@ impl RenameDialog {
                     .child(div().flex_1().min_w_0().child(field(theme, "Replace with", &self.replace, window, cx)))
                     .into_any_element(),
                 div().flex_none().child(Checkbox::new("rename-regex")
-                .text_size(px(text::BODY))
+                .text_size(text::scaled(text::BODY))
                     .label("Regular expression")
                     .checked(self.regex)
                     .on_click(cx.listener(|this, checked: &bool, _, cx| {
@@ -522,7 +522,7 @@ impl RenameDialog {
                         .border_t_1()
                         .border_color(theme.border)
                         .font_family(text::FAMILY_DATA)
-                        .text_size(px(text::DATA))
+                        .text_size(text::scaled(text::DATA))
                         .child(
                             line()
                                 .child(name_cell(&row.from, theme.text))

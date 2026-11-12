@@ -58,7 +58,7 @@ fn small_button(id: impl Into<gpui_kit::ElementId>, label: SharedString) -> Butt
         .with_size(px(space::MD * 5.))
         .h(px(size::SETTING_CONTROL))
         .accessibility_label(label.clone())
-        .child(div().text_size(px(text::BODY)).child(label))
+        .child(div().text_size(text::scaled(text::BODY)).child(label))
 }
 
 /// An outlined 28-pixel button, as "Use another…".
@@ -201,7 +201,7 @@ fn sized_select<T: Copy + PartialEq + 'static>(
                 .items_center()
                 .justify_between()
                 .gap(px(space::SM))
-                .text_size(px(text::BODY))
+                .text_size(text::scaled(text::BODY))
                 .text_color(theme.text)
                 .child(shown)
                 .child(
@@ -333,7 +333,7 @@ pub fn checkbox(
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
     Checkbox::new(id)
-        .text_size(px(text::BODY))
+        .text_size(text::scaled(text::BODY))
         .label(label)
         .accessibility_label(label)
         .checked(checked)
@@ -346,7 +346,7 @@ pub fn checkbox(
 /// A hint after a control, in the small muted words.
 pub fn hint(words: impl Into<SharedString>, theme: Theme) -> AnyElement {
     div()
-        .text_size(px(text::SMALL))
+        .text_size(text::scaled(text::SMALL))
         .text_color(theme.text_muted)
         .child(words.into())
         .into_any_element()

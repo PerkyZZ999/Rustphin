@@ -287,7 +287,7 @@ impl Render for DraggedTab {
             .rounded(px(size::RADIUS))
             .bg(theme.selection)
             .text_color(theme.on_selection)
-            .text_size(px(text::SMALL))
+            .text_size(text::scaled(text::SMALL))
             .child(self.label.clone())
     }
 }
@@ -334,6 +334,8 @@ pub struct Workspace {
     admin_installed: bool,
     _hub: Subscription,
     _sidebar: Subscription,
+    /// Follows the shared settings: the window's look (W-106d).
+    _preferences: Subscription,
     palette: Option<Entity<Palette>>,
     palette_subscription: Option<Subscription>,
     palette_from_sidebar: bool,
@@ -426,6 +428,14 @@ impl Workspace {
             admin_changes_seen: 0,
             admin_installed: rustphin_platform::admin::installed(),
             _sidebar: sidebar_events,
+            _preferences: cx.observe_in(
+                &crate::preferences::preferences(cx),
+                window,
+                |this: &mut Self, store, window, cx| {
+                    let opaque = store.read(cx).settings().look() == crate::settings::Look::Opaque;
+                    this.choose_opaque(opaque, window, cx);
+                },
+            ),
             palette: None,
             palette_subscription: None,
             palette_from_sidebar: false,
@@ -1583,7 +1593,7 @@ impl Workspace {
                 .bg(theme.chrome_raised)
                 .border_b_1()
                 .border_color(theme.border)
-                .text_size(px(text::BODY))
+                .text_size(text::scaled(text::BODY))
                 .child(
                     div()
                         .id("folder-tabs")
@@ -2098,7 +2108,7 @@ impl Workspace {
                 .border_b_1()
                 .border_color(theme.danger_border)
                 .text_color(theme.danger)
-                .text_size(px(text::BODY))
+                .text_size(text::scaled(text::BODY))
                 .child(
                     Icon::new(gpui_kit::assets::IconName::ShieldAlert)
                         .size(px(size::ICON))
@@ -2216,7 +2226,7 @@ impl Workspace {
                 .flex_col()
                 .flex_none()
                 .bg(theme.chrome)
-                .text_size(px(text::BODY))
+                .text_size(text::scaled(text::BODY))
                 .children(running)
                 .children(notice),
         )
@@ -2242,14 +2252,14 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .gap(px(space::SM))
-                    .text_size(px(text::BODY))
+                    .text_size(text::scaled(text::BODY))
                     .child(Icon::new(icon).size(px(size::ICON)).flex_none())
                     .child(label)
                     .when_some(key, |button, key| {
                         button.child(
                             div()
                                 .font_family(text::FAMILY_DATA)
-                                .text_size(px(text::SMALL))
+                                .text_size(text::scaled(text::SMALL))
                                 .text_color(theme.text_muted)
                                 .child(key),
                         )
@@ -2313,7 +2323,7 @@ impl Workspace {
                 div()
                     .flex_none()
                     .font_family(text::FAMILY_DATA)
-                    .text_size(px(text::SMALL))
+                    .text_size(text::scaled(text::SMALL))
                     .text_color(theme.text_muted)
                     .child(running.detail()),
             )
@@ -2322,7 +2332,7 @@ impl Workspace {
                     .outlined()
                     .with_size(px(space::LG * 5.))
                     .h(px(size::BUTTON))
-                    .child(div().text_size(px(text::BODY)).child("Stop"))
+                    .child(div().text_size(text::scaled(text::BODY)).child("Stop"))
                     .tooltip("Stop. What is already done stays.")
                     .on_click(move |_, _, cx| hub(cx).update(cx, |hub, _| hub.cancel(id))),
             )
@@ -2386,7 +2396,11 @@ impl Workspace {
                         .outlined()
                         .with_size(px(space::LG * 5.))
                         .h(px(size::BUTTON))
-                        .child(div().text_size(px(text::BODY)).child("Details\u{2026}"))
+                        .child(
+                            div()
+                                .text_size(text::scaled(text::BODY))
+                                .child("Details\u{2026}"),
+                        )
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.error_details = Some(problems.clone());
                             cx.notify();
@@ -2463,7 +2477,7 @@ impl Workspace {
                     .child(
                         div()
                             .font_family(text::FAMILY_DATA)
-                            .text_size(px(text::SMALL))
+                            .text_size(text::scaled(text::SMALL))
                             .text_color(theme.text_muted)
                             .child(folder),
                     )
@@ -2608,7 +2622,7 @@ impl Workspace {
                                 .min_w_0()
                                 .truncate()
                                 .font_family(text::FAMILY_DATA)
-                                .text_size(px(text::DATA))
+                                .text_size(text::scaled(text::DATA))
                                 .child(folder_label(path)),
                         )
                         .when_some(known.and_then(|known| known.size), |row, bytes| {
@@ -2616,7 +2630,7 @@ impl Workspace {
                                 div()
                                     .flex_none()
                                     .font_family(text::FAMILY_DATA)
-                                    .text_size(px(text::SMALL))
+                                    .text_size(text::scaled(text::SMALL))
                                     .text_color(theme.text_muted)
                                     .child(format::size(bytes)),
                             )
@@ -2688,7 +2702,7 @@ impl Workspace {
                         )
                         .into_any_element(),
                         Checkbox::new("apply-to-all")
-                            .text_size(px(text::BODY))
+                            .text_size(text::scaled(text::BODY))
                             .label("Do the same for all other conflicts (A)")
                             .checked(all)
                             .on_click(cx.listener(|this, checked: &bool, _, cx| {

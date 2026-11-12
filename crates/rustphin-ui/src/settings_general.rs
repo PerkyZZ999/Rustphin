@@ -136,7 +136,7 @@ impl SettingsDialog {
                         div()
                             .min_w_0()
                             .font_family(text::FAMILY_DATA)
-                            .text_size(px(text::SMALL))
+                            .text_size(text::scaled(text::SMALL))
                             .child(chosen),
                     )
                     .child(
@@ -287,7 +287,7 @@ impl SettingsDialog {
             .when_some(failed, |column, reason| {
                 column.child(
                     div()
-                        .text_size(px(text::SMALL))
+                        .text_size(text::scaled(text::SMALL))
                         .text_color(theme.danger)
                         .child(reason),
                 )
@@ -425,7 +425,7 @@ impl SettingsDialog {
                     )
                     .child(if invalid {
                         div()
-                            .text_size(px(text::SMALL))
+                            .text_size(text::scaled(text::SMALL))
                             .text_color(theme.danger)
                             .child("A quote is not closed: the command cannot be run.")
                             .into_any_element()

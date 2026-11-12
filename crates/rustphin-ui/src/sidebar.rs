@@ -137,7 +137,7 @@ impl Render for DraggedGroup {
             .bg(theme.selection)
             .text_color(theme.on_selection)
             .font_family(text::FAMILY_BODY)
-            .text_size(px(text::SMALL))
+            .text_size(text::scaled(text::SMALL))
             .child(self.name.clone())
     }
 }
@@ -158,7 +158,7 @@ impl Render for DraggedPlace {
             .bg(theme.selection)
             .text_color(theme.on_selection)
             .font_family(text::FAMILY_BODY)
-            .text_size(px(text::SMALL))
+            .text_size(text::scaled(text::SMALL))
             .child(self.title.clone())
     }
 }
@@ -1000,7 +1000,7 @@ impl Sidebar {
                     .flex_1()
                     .min_w_0()
                     .gap(px(space::XS))
-                    .text_size(px(text::BODY))
+                    .text_size(text::scaled(text::BODY))
                     .child(div().truncate().child(shown))
                     // How full it is: a bar, and the same in words on hover
                     // and in the line under it.
@@ -1024,8 +1024,8 @@ impl Sidebar {
                             .child(
                                 div()
                                     .font_family(text::FAMILY_DATA)
-                                    .text_size(px(text::SMALL))
-                                    .line_height(px(text::LINE - space::XS))
+                                    .text_size(text::scaled(text::SMALL))
+                                    .line_height(text::scaled(text::LINE - space::XS))
                                     .text_color(theme.text_muted)
                                     .truncate()
                                     .child(usage_text(total, free)),
@@ -1858,7 +1858,7 @@ impl Sidebar {
             })
             // A hidden place is only listed while hidden ones are shown.
             .when(place.hidden, |line| line.opacity(0.5))
-            .text_size(px(text::NAME))
+            .text_size(text::scaled(text::NAME))
             .child(
                 Icon::new(icon_for(place))
                     .size(px(size::PLACE_ICON))
@@ -1899,7 +1899,7 @@ impl Sidebar {
             .gap(px(space::SM))
             .px(px(space::MD))
             .py(px(space::SM))
-            .text_size(px(text::BODY))
+            .text_size(text::scaled(text::BODY))
             .text_color(theme.text_muted)
             .child(
                 Icon::new(icon)
@@ -1930,7 +1930,7 @@ impl Sidebar {
         line.gap(px(space::SM))
             .px(px(space::SM - size::SELECTION_BAR))
             .text_color(theme.text_muted)
-            .text_size(px(text::BODY))
+            .text_size(text::scaled(text::BODY))
             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
             // The arrow, not colour, says whether the section is open.
             .child(
@@ -2163,8 +2163,8 @@ impl Render for Sidebar {
                     .px(px(space::SM))
                     .font_family(text::FAMILY_HEADING)
                     .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                    .text_size(px(text::HEADING))
-                    .line_height(px(text::HEADING_LINE))
+                    .text_size(text::scaled(text::HEADING))
+                    .line_height(text::scaled(text::HEADING_LINE))
                     .text_color(theme.text)
                     .child("Places"),
             )
@@ -2253,8 +2253,8 @@ impl Render for Sidebar {
             .border_color(theme.border)
             .text_color(theme.text)
             .font_family(text::FAMILY_BODY)
-            .text_size(px(text::BODY))
-            .line_height(px(text::LINE))
+            .text_size(text::scaled(text::BODY))
+            .line_height(text::scaled(text::LINE))
             .child(header)
             .child(list)
             .children(self.menu_layer(theme, window, cx))

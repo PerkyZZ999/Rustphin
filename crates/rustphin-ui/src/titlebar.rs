@@ -129,7 +129,7 @@ pub fn title_bar(
                 .pl(px(size::WINDOW_BUTTON * 3. - size::ICON - space::MD))
                 .truncate()
                 .text_center()
-                .text_size(px(text::BODY))
+                .text_size(text::scaled(text::BODY))
                 .text_color(theme.text_muted)
                 .child(SharedString::from(title.to_owned())),
         )

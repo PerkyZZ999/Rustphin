@@ -192,6 +192,21 @@ pub mod size {
 
 /// Type scale in pixels (D-026).
 pub mod text {
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    static SCALE: AtomicU32 = AtomicU32::new(1f32.to_bits());
+
+    /// Scales every interface text size from now on (Settings,
+    /// Appearance, Text size); file names follow the View size instead.
+    pub fn set_scale(scale: f32) {
+        SCALE.store(scale.to_bits(), Ordering::Relaxed);
+    }
+
+    /// `size`, one of the sizes below, as drawn at the chosen text size.
+    pub fn scaled(size: f32) -> gpui_kit::Pixels {
+        gpui_kit::px(size * f32::from_bits(SCALE.load(Ordering::Relaxed)))
+    }
+
     /// Interface and file-name text (`body-md`, `body-sm`).
     pub const FAMILY_BODY: &str = "Inter";
     /// Sizes, dates, paths and counts (`data-md`, `data-sm`).
@@ -385,6 +400,24 @@ impl Theme {
 /// Dolphin so it reads as hidden at a glance; the leading dot says so too.
 pub const HIDDEN_OPACITY: f32 = 0.6;
 
+/// The faintest hidden entries may be drawn when chosen in Settings,
+/// Appearance (W-106d): the lowest opacity, in whole percent, at which
+/// their names still reach WCAG AA in both themes (tested below).
+pub const HIDDEN_OPACITY_MIN_PERCENT: u32 = 60;
+
+static HIDDEN: std::sync::atomic::AtomicU32 =
+    std::sync::atomic::AtomicU32::new(HIDDEN_OPACITY.to_bits());
+
+/// Draws hidden entries at `opacity` from now on (Settings, Appearance).
+pub fn set_hidden_opacity(opacity: f32) {
+    HIDDEN.store(opacity.to_bits(), std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The opacity hidden entries are drawn at.
+pub fn hidden_opacity() -> f32 {
+    f32::from_bits(HIDDEN.load(std::sync::atomic::Ordering::Relaxed))
+}
+
 /// `top` composited over an opaque `bottom`.
 fn over(top: Rgba, bottom: Rgba) -> Rgba {
     let mix = |t: f32, b: f32| t * top.a + b * (1. - top.a);
@@ -434,6 +467,10 @@ mod tests {
     };
 
     fn assert_readable(theme: Theme) {
+        assert_readable_with_hidden(theme, HIDDEN_OPACITY);
+    }
+
+    fn assert_readable_with_hidden(theme: Theme, hidden: f32) {
         let window = over(theme.window, WHITE);
         let chrome = over(theme.chrome, window);
         let tab_strip = over(theme.chrome_raised, window);
@@ -492,12 +529,12 @@ mod tests {
             ("danger text on a dialog", theme.danger, theme.raised),
             (
                 "a hidden entry's name on content",
-                over(faded(theme.text, HIDDEN_OPACITY), content),
+                over(faded(theme.text, hidden), content),
                 content,
             ),
             (
                 "a hidden entry's name under the pointer",
-                over(faded(theme.text, HIDDEN_OPACITY), hover),
+                over(faded(theme.text, hidden), hover),
                 hover,
             ),
         ] {
@@ -524,7 +561,7 @@ mod tests {
             ("disabled text on content", theme.text_disabled, content),
             (
                 "a hidden entry's size and date on content",
-                over(faded(theme.text_muted, HIDDEN_OPACITY), content),
+                over(faded(theme.text_muted, hidden), content),
                 content,
             ),
             (
@@ -559,5 +596,14 @@ mod tests {
     #[test]
     fn translucent_theme_meets_contrast_minimums_over_a_white_window() {
         assert_readable(Theme::obsidian(true));
+    }
+
+    #[test]
+    fn every_fading_settings_offers_keeps_hidden_names_readable() {
+        for percent in (HIDDEN_OPACITY_MIN_PERCENT..=100).step_by(5) {
+            let hidden = percent as f32 / 100.;
+            assert_readable_with_hidden(Theme::obsidian(false), hidden);
+            assert_readable_with_hidden(Theme::obsidian(true), hidden);
+        }
     }
 }

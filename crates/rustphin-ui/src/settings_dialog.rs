@@ -84,6 +84,8 @@ const LICENCE: &str = include_str!("../../../LICENSE");
 pub enum Page {
     /// How Rustphin starts and works with the desktop.
     General,
+    /// How the window looks.
+    Appearance,
     /// How folders are shown when they open.
     Views,
     /// Version, licence, credits, privacy and files.
@@ -92,12 +94,13 @@ pub enum Page {
 
 impl Page {
     /// The pages in the list, top to bottom.
-    pub const ALL: &'static [Page] = &[Page::General, Page::Views, Page::About];
+    pub const ALL: &'static [Page] = &[Page::General, Page::Appearance, Page::Views, Page::About];
 
     /// Its name in the list and as its heading.
     pub fn name(self) -> &'static str {
         match self {
             Page::General => "General",
+            Page::Appearance => "Appearance",
             Page::Views => "Views",
             Page::About => "About",
         }
@@ -107,6 +110,7 @@ impl Page {
     pub fn icon(self) -> IconName {
         match self {
             Page::General => IconName::Settings,
+            Page::Appearance => IconName::Palette,
             Page::Views => IconName::LayoutList,
             Page::About => IconName::Info,
         }
@@ -117,6 +121,9 @@ impl Page {
         match self {
             Page::General => "How Rustphin starts and works with the rest of the desktop.",
             Page::Views => "How folders are shown when they open.",
+            Page::Appearance => {
+                "How the window looks. The colours are Rustphin\u{2019}s dark design."
+            }
             Page::About => "Rustphin and the work it builds on.",
         }
     }
@@ -124,7 +131,7 @@ impl Page {
     /// Whether it holds settings, and so a "Reset to defaults".
     pub fn has_settings(self) -> bool {
         match self {
-            Page::General | Page::Views => true,
+            Page::General | Page::Appearance | Page::Views => true,
             Page::About => false,
         }
     }
@@ -168,6 +175,8 @@ pub struct SettingsDialog {
     pub(crate) editing_terminal: bool,
     /// The default view's size.
     pub(crate) zoom_slider: Entity<SliderState>,
+    /// Hidden files' opacity, in percent.
+    pub(crate) hidden_slider: Entity<SliderState>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -198,7 +207,22 @@ impl SettingsDialog {
                 .step(1.)
                 .default_value(zoom as f32)
         });
+        let hidden = store.read(cx).settings().hidden_opacity();
+        let hidden_slider = cx.new(|_| {
+            SliderState::new()
+                .min(crate::theme::HIDDEN_OPACITY_MIN_PERCENT as f32)
+                .max(100.)
+                .step(5.)
+                .default_value(hidden as f32)
+        });
         let subscriptions = vec![
+            cx.subscribe(&hidden_slider, |_, _, event: &SliderEvent, cx| {
+                let (SliderEvent::Change(value) | SliderEvent::Release(value)) = event;
+                let percent = value.start().round().max(0.) as u32;
+                if preferences(cx).read(cx).settings().hidden_opacity() != percent {
+                    crate::settings_appearance::choose_hidden(cx, percent);
+                }
+            }),
             // A drop-down's list closes when the focus leaves it.
             cx.on_focus_out(&selects.focus, window, |this, _, _, cx| {
                 if this.selects.open.take().is_some() {
@@ -253,6 +277,7 @@ impl SettingsDialog {
             terminal_input,
             editing_terminal: false,
             zoom_slider,
+            hidden_slider,
             _subscriptions: subscriptions,
         }
     }
@@ -292,6 +317,11 @@ impl SettingsDialog {
                     .update(cx, |input, cx| input.set_value("", window, cx));
                 preferences(cx).update(cx, |store, cx| {
                     store.update(Settings::reset_general, cx);
+                });
+            }
+            Page::Appearance => {
+                preferences(cx).update(cx, |store, cx| {
+                    store.update(Settings::reset_appearance, cx);
                 });
             }
             Page::Views => {
@@ -418,6 +448,7 @@ impl SettingsDialog {
     fn page(&mut self, theme: Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let content = match self.page {
             Page::General => self.general(theme, window, cx),
+            Page::Appearance => self.appearance(theme, window, cx),
             Page::Views => self.views(theme, window, cx),
             Page::About => self.about(theme, cx),
         };
@@ -444,8 +475,8 @@ impl SettingsDialog {
                         div()
                             .font_family(text::FAMILY_HEADING)
                             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                            .text_size(px(text::HEADING))
-                            .line_height(px(text::HEADING_LINE))
+                            .text_size(text::scaled(text::HEADING))
+                            .line_height(text::scaled(text::HEADING_LINE))
                             .child(self.page.name()),
                     )
                     .child(
@@ -479,7 +510,7 @@ impl SettingsDialog {
                     .into_any_element(),
                 div()
                     .font_family(text::FAMILY_DATA)
-                    .text_size(px(text::SMALL))
+                    .text_size(text::scaled(text::SMALL))
                     .text_color(theme.text)
                     .child(LICENCE)
                     .into_any_element(),
@@ -513,14 +544,14 @@ impl SettingsDialog {
                             div()
                                 .font_family(text::FAMILY_HEADING)
                                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                .text_size(px(text::TITLE))
-                                .line_height(px(text::TITLE_LINE))
+                                .text_size(text::scaled(text::TITLE))
+                                .line_height(text::scaled(text::TITLE_LINE))
                                 .child("Rustphin"),
                         )
                         .child(
                             div()
                                 .font_family(text::FAMILY_DATA)
-                                .text_size(px(text::SMALL))
+                                .text_size(text::scaled(text::SMALL))
                                 .text_color(theme.text_muted)
                                 .child(concat!("Version ", env!("CARGO_PKG_VERSION"))),
                         )
@@ -583,7 +614,7 @@ impl SettingsDialog {
                         div()
                             .min_w_0()
                             .font_family(text::FAMILY_DATA)
-                            .text_size(px(text::SMALL))
+                            .text_size(text::scaled(text::SMALL))
                             .child(shown_path)
                             .into_any_element(),
                     ),
@@ -629,7 +660,7 @@ pub fn group(label: &'static str, rows: Vec<AnyElement>, theme: Theme) -> AnyEle
                 .border_color(theme.border)
                 .font_family(text::FAMILY_DATA)
                 .font_weight(gpui_kit::FontWeight::MEDIUM)
-                .text_size(px(text::LABEL))
+                .text_size(text::scaled(text::LABEL))
                 .text_color(theme.text_muted)
                 .child(label.to_uppercase()),
         )
@@ -745,7 +776,7 @@ mod tests {
 
     #[test]
     fn up_and_down_move_through_the_list_and_stop_at_its_ends() {
-        assert_eq!(Page::General.step(1), Page::Views);
+        assert_eq!(Page::General.step(1), Page::Appearance);
         assert_eq!(Page::About.step(-1), Page::Views);
         assert_eq!(Page::General.step(-1), Page::General);
         assert_eq!(Page::About.step(1), Page::About);

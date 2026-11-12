@@ -29,7 +29,7 @@ S11 — Hardening for daily use (in progress)
   - [x] W-106b — Shared settings store (`preferences.rs`: one entity, newest write wins), the dialog with its page list (tabs when narrow), About, Ctrl+Shift+, and "Workspace: Settings…". Done 2026-11-12 (see VALIDATION.md).
   - [x] W-106c1 — General page: start (restore, home, chosen folder), folders from other applications (new tab or new window), default file manager, terminal (KDE's or a command), one or two clicks. Done 2026-11-12 (see VALIDATION.md).
   - [x] W-106c2 — Views page (default view and size, per-folder views, order, hidden files, details columns, dates, sizes, previews). Done 2026-11-12 (see VALIDATION.md). Dates offer ISO and "Today 14:32"; the plan's "system format" is not offered (no locale date data in the build) and waits for the maintainer's call.
-  - [ ] W-106d — Appearance (window look, title bar, faded hidden files, text size).
+  - [x] W-106d — Appearance (window look, title bar, faded hidden files, text size). Done 2026-11-12 (see VALIDATION.md). Hidden files fade from 60 % (not the plan's 30 %): fainter fails WCAG AA; the choice is raising them towards 100 %.
   - [ ] W-106e — Confirmations and Places.
   - [ ] W-106f — Toolbar customisation.
   - [ ] W-106g — Shortcuts (read-only).

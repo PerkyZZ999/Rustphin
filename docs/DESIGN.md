@@ -682,6 +682,14 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   "from KDE's settings", or the command chosen here with a field and "Use
   KDE's"; "Use another…" opens the field, up to 360 px wide) and Open files and folders with
   (A double click, A single click; "As KDE is set" until one is chosen).
+  **Appearance:** "Window" holds Look (Glass, Opaque; "Blur shows only
+  where the desktop offers it.") and Title bar (Rustphin's own, KDE's;
+  "Applies to new windows."); "Text and files" holds Text size (Smaller,
+  Normal, Larger: the interface's text one step down or up, 11 or 14 px
+  body text; file names follow the View size) and "Hidden files are drawn
+  at" (a slider from 60 % to 100 % in 5 % steps, 60 % by default, with the
+  value in `data-sm`; fainter, a hidden name under the pointer falls below
+  WCAG AA in the glass theme over a white window, so 60 % is the floor).
   **Views:** "Default view" holds View (Icons, Compact, Details), Size (the
   View menu's slider, 200 px, with the icon size in `data-sm`) and "Remember
   the view for each folder"; "Order" holds Sort by (drop-down) with A to Z
@@ -1087,8 +1095,9 @@ except where the list below says otherwise; each W-079 step adds its line.
   banner, as does a folder that vanished.
 - Settings (W-106b, W-106c1): the dialog, its page list and the tabs below
   720 px, the action row, the controls (segments, drop-downs, small buttons,
-  hints, checkboxes, the slider), General, Views and About are built; the
-  other pages arrive with W-106d–g, each with its "Reset to defaults".
+  hints, checkboxes, the slider), General, Appearance, Views and About are
+  built; the other pages arrive with W-106e–g, each with its "Reset to
+  defaults".
 
 Carried over unchanged from the earlier design and implemented: the Actions
 palette's **Recover original names after interruption** for the current folder

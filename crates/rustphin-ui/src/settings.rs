@@ -26,7 +26,83 @@ const ZOOM_FROM_VERSION_1: [usize; 5] = [0, 1, 2, 4, 6];
 pub struct Settings {
     version: u32,
     general: General,
+    appearance: Appearance,
     view: View,
+}
+
+/// How the window looks (W-106d). The design stays dark.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+struct Appearance {
+    #[serde(deserialize_with = "lenient")]
+    look: Look,
+    #[serde(deserialize_with = "lenient")]
+    title_bar: TitleBar,
+    #[serde(deserialize_with = "lenient")]
+    text_size: TextSize,
+    /// Hidden entries' opacity, in percent.
+    #[serde(deserialize_with = "lenient_hidden")]
+    hidden_opacity: u32,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            look: Look::default(),
+            title_bar: TitleBar::default(),
+            text_size: TextSize::default(),
+            hidden_opacity: HIDDEN_OPACITY_PERCENT,
+        }
+    }
+}
+
+/// Hidden entries' opacity by default, in percent.
+pub const HIDDEN_OPACITY_PERCENT: u32 = 60;
+
+/// Glass or solid surfaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Look {
+    /// Translucent, blurred where the desktop offers blur.
+    #[default]
+    Glass,
+    /// Solid everywhere.
+    Opaque,
+}
+
+/// Who draws the title bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TitleBar {
+    /// Rustphin's own (W-096).
+    #[default]
+    Rustphin,
+    /// The desktop's.
+    Kde,
+}
+
+/// The interface's text, one step down or up the type scale.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TextSize {
+    /// One step down: 11 px body text.
+    Smaller,
+    /// The design's sizes: 12 px body text.
+    #[default]
+    Normal,
+    /// One step up: 14 px body text.
+    Larger,
+}
+
+impl TextSize {
+    /// What every interface text size is multiplied by.
+    pub fn scale(self) -> f32 {
+        match self {
+            Self::Smaller => 11. / 12.,
+            Self::Normal => 1.,
+            Self::Larger => 14. / 12.,
+        }
+    }
 }
 
 /// How Rustphin starts and works with the rest of the desktop.
@@ -86,6 +162,20 @@ pub enum Click {
 fn lenient_true<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
     let value = toml::Value::deserialize(deserializer)?;
     Ok(value.as_bool().unwrap_or(true))
+}
+
+/// Like [`lenient`] for the hidden entries' opacity, kept readable.
+fn lenient_hidden<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
+    let value = toml::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_integer()
+        .and_then(|percent| u32::try_from(percent).ok())
+        .map_or(HIDDEN_OPACITY_PERCENT, clamp_hidden))
+}
+
+/// A hidden opacity within what the contrast tests allow.
+fn clamp_hidden(percent: u32) -> u32 {
+    percent.clamp(crate::theme::HIDDEN_OPACITY_MIN_PERCENT, 100)
 }
 
 /// Like [`lenient`] for the preview limit, which is at least 1 MB.
@@ -217,6 +307,7 @@ impl Settings {
         Self {
             version: VERSION,
             general: General::default(),
+            appearance: Appearance::default(),
             view: View {
                 mode: match mode {
                     ViewMode::Icons => Mode::Icons,
@@ -363,6 +454,49 @@ impl Settings {
     /// Chooses how files open; `None` follows KDE.
     pub fn set_click(&mut self, click: Option<Click>) {
         self.general.click = click;
+        self.version = VERSION;
+    }
+
+    /// Glass or opaque.
+    pub fn look(&self) -> Look {
+        self.appearance.look
+    }
+
+    /// Who draws the title bar.
+    pub fn title_bar(&self) -> TitleBar {
+        self.appearance.title_bar
+    }
+
+    /// The interface's text size.
+    pub fn text_size(&self) -> TextSize {
+        self.appearance.text_size
+    }
+
+    /// Hidden entries' opacity, in percent, always readable.
+    pub fn hidden_opacity(&self) -> u32 {
+        clamp_hidden(self.appearance.hidden_opacity)
+    }
+
+    /// Chooses the Appearance page's values; the opacity is kept readable.
+    pub fn set_appearance(
+        &mut self,
+        look: Look,
+        title_bar: TitleBar,
+        text_size: TextSize,
+        hidden_opacity: u32,
+    ) {
+        self.appearance = Appearance {
+            look,
+            title_bar,
+            text_size,
+            hidden_opacity: clamp_hidden(hidden_opacity),
+        };
+        self.version = VERSION;
+    }
+
+    /// Puts the Appearance page back as it was before anything was chosen.
+    pub fn reset_appearance(&mut self) {
+        self.appearance = Appearance::default();
         self.version = VERSION;
     }
 
@@ -670,5 +804,34 @@ mod tests {
         assert_eq!(settings.mode(), ViewMode::Details);
         // The General page is another page's.
         assert_eq!(settings.start().0, Start::Home);
+    }
+
+    #[test]
+    fn appearance_survives_and_hidden_fading_stays_readable() {
+        let mut settings = sample();
+        settings.set_appearance(Look::Opaque, TitleBar::Kde, TextSize::Larger, 80);
+        let loaded = Settings::parse(&settings.to_toml());
+        assert_eq!(loaded, settings);
+        assert_eq!(loaded.look(), Look::Opaque);
+        assert_eq!(loaded.title_bar(), TitleBar::Kde);
+        assert_eq!(loaded.text_size(), TextSize::Larger);
+        assert_eq!(loaded.hidden_opacity(), 80);
+        // Too faint to read is raised to the readable floor, in the file too.
+        settings.set_appearance(Look::Glass, TitleBar::Rustphin, TextSize::Normal, 10);
+        assert_eq!(
+            settings.hidden_opacity(),
+            crate::theme::HIDDEN_OPACITY_MIN_PERCENT
+        );
+        let faint =
+            Settings::parse("version = 3\n[appearance]\nhidden_opacity = 5\nlook = \"neon\"\n");
+        assert_eq!(
+            faint.hidden_opacity(),
+            crate::theme::HIDDEN_OPACITY_MIN_PERCENT
+        );
+        assert_eq!(faint.look(), Look::Glass);
+        assert_eq!(Settings::default().hidden_opacity(), HIDDEN_OPACITY_PERCENT);
+        settings.reset_appearance();
+        assert_eq!(settings.text_size(), TextSize::Normal);
+        assert_eq!(TextSize::Larger.scale() * 12., 14.);
     }
 }

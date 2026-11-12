@@ -52,8 +52,8 @@ pub fn panel(
         .shadow(vec![theme.floating_shadow()])
         .text_color(theme.text)
         .font_family(text::FAMILY_BODY)
-        .text_size(px(text::BODY))
-        .line_height(px(text::LINE))
+        .text_size(text::scaled(text::BODY))
+        .line_height(text::scaled(text::LINE))
 }
 
 /// The tallest a panel may be: the window less the 16-pixel margins.
@@ -93,8 +93,8 @@ pub fn title_row(
                 .truncate()
                 .font_family(text::FAMILY_HEADING)
                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                .text_size(px(text::HEADING))
-                .line_height(px(text::HEADING_LINE))
+                .text_size(text::scaled(text::HEADING))
+                .line_height(text::scaled(text::HEADING_LINE))
                 .child(title.into()),
         )
         .child(
@@ -145,7 +145,7 @@ pub fn button(id: &'static str, label: impl Into<SharedString>) -> Button {
         .with_size(px(space::LG * 5.))
         .h(px(size::BUTTON))
         .accessibility_label(label.clone())
-        .child(div().text_size(px(text::BODY)).child(label))
+        .child(div().text_size(text::scaled(text::BODY)).child(label))
 }
 
 /// A dialog button that leads with the action's 16-pixel icon, 8 pixels
@@ -166,7 +166,7 @@ pub fn button_with_icon(
                 .flex()
                 .items_center()
                 .gap(px(space::SM))
-                .text_size(px(text::BODY))
+                .text_size(text::scaled(text::BODY))
                 .child(Icon::new(icon).size(px(size::ICON)).flex_none())
                 .child(label),
         )
@@ -198,7 +198,7 @@ pub fn fact(
             div()
                 .min_w_0()
                 .font_family(text::FAMILY_DATA)
-                .text_size(px(text::DATA))
+                .text_size(text::scaled(text::DATA))
                 .child(value),
         )
 }

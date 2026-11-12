@@ -66,7 +66,7 @@ pub(crate) fn column(id: &'static str, theme: Theme) -> gpui_kit::Stateful<gpui_
         .border_color(theme.border_accent)
         .shadow(vec![theme.floating_shadow()])
         .font_family(text::FAMILY_BODY)
-        .text_size(px(text::BODY))
+        .text_size(text::scaled(text::BODY))
 }
 
 /// How far down a second menu starts so its first row lines up with the
@@ -157,7 +157,7 @@ pub(crate) fn row(
                 div()
                     .flex_none()
                     .font_family(text::FAMILY_DATA)
-                    .text_size(px(text::SMALL))
+                    .text_size(text::scaled(text::SMALL))
                     .text_color(quiet)
                     .child(key),
             )

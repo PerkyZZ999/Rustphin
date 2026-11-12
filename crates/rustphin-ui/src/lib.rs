@@ -30,6 +30,7 @@ mod remote;
 mod rename_dialog;
 mod session;
 mod settings;
+mod settings_appearance;
 mod settings_controls;
 mod settings_dialog;
 mod settings_general;
@@ -245,9 +246,13 @@ fn open_window(
         window_min_size: Some(size(px(480.), px(320.))),
         window_background: WindowBackgroundAppearance::Opaque,
         app_id: Some("rustphin".into()),
-        // Rustphin draws its own title bar (W-096); a compositor that
-        // insists on its own frame still gets one, and the bar steps aside.
-        window_decorations: Some(gpui_kit::WindowDecorations::Client),
+        // Rustphin draws its own title bar (W-096) unless Settings asks for
+        // KDE's; a compositor that insists on its own frame still gets one,
+        // and the bar steps aside.
+        window_decorations: Some(match settings.title_bar() {
+            settings::TitleBar::Rustphin => gpui_kit::WindowDecorations::Client,
+            settings::TitleBar::Kde => gpui_kit::WindowDecorations::Server,
+        }),
         ..Default::default()
     };
     let opened = cx.open_window(window_options, |window, cx| {
@@ -267,7 +272,11 @@ fn open_window(
             )
         });
         if !options.force_opaque {
-            workspace.update(cx, |workspace, cx| workspace.follow_blur(window, cx));
+            let opaque = settings.look() == settings::Look::Opaque;
+            workspace.update(cx, |workspace, cx| {
+                workspace.follow_blur(window, cx);
+                workspace.choose_opaque(opaque, window, cx);
+            });
         }
         if !shown.is_empty() {
             workspace.update(cx, |workspace, _| workspace.show_later(shown));

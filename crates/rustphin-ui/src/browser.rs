@@ -1714,7 +1714,7 @@ impl Browser {
                     div()
                         .flex_none()
                         .font_family(text::FAMILY_DATA)
-                        .text_size(px(text::SMALL))
+                        .text_size(text::scaled(text::SMALL))
                         .text_color(theme.text_muted)
                         .child(key),
                 )
@@ -1791,14 +1791,14 @@ impl Browser {
                         div()
                             .font_family(text::FAMILY_DATA)
                             .font_weight(gpui_kit::FontWeight::MEDIUM)
-                            .text_size(px(text::SMALL))
+                            .text_size(text::scaled(text::SMALL))
                             .text_color(theme.text_muted)
                             .child("SIZE"),
                     )
                     .child(
                         div()
                             .font_family(text::FAMILY_DATA)
-                            .text_size(px(text::SMALL))
+                            .text_size(text::scaled(text::SMALL))
                             .text_color(theme.text_muted)
                             .child(format!("{icon:.0} px")),
                     ),
@@ -2558,7 +2558,7 @@ impl Browser {
                     ),
             )
             .child(
-                div().text_size(px(text::SMALL)).text_color(theme.text_muted)
+                div().text_size(text::scaled(text::SMALL)).text_color(theme.text_muted)
                     .child("Items stay here until the trash is emptied."),
             )
     }
@@ -2912,7 +2912,7 @@ impl Browser {
                     .bg(theme.content)
                     .border_1()
                     .border_color(theme.border_strong)
-                    .text_size(px(text::DATA))
+                    .text_size(text::scaled(text::DATA))
                     .child(
                         Icon::new(if shows_trash {
                             gpui_kit::assets::IconName::Trash
@@ -3119,7 +3119,7 @@ impl Browser {
                         .flex()
                         .items_center()
                         .gap(px(space::SM))
-                        .text_size(px(text::BODY))
+                        .text_size(text::scaled(text::BODY))
                         .child("Actions")
                         .child(
                             Icon::new(IconName::ChevronDown)
@@ -3131,13 +3131,13 @@ impl Browser {
                                 div()
                                     .flex()
                                     .items_center()
-                                    .h(px(text::LINE))
+                                    .h(text::scaled(text::LINE))
                                     .ml(px(space::XS))
                                     .pl(px(space::SM))
                                     .border_l_1()
                                     .border_color(theme.border_strong)
                                     .font_family(text::FAMILY_DATA)
-                                    .text_size(px(text::SMALL))
+                                    .text_size(text::scaled(text::SMALL))
                                     .text_color(theme.text_muted)
                                     .child("Ctrl+Shift+P"),
                             )
@@ -3184,7 +3184,7 @@ impl Browser {
             .border_b_1()
             .border_color(theme.border)
             .font_family(text::FAMILY_DATA)
-            .text_size(px(text::DATA))
+            .text_size(text::scaled(text::DATA))
             .text_color(if active { theme.text } else { theme.text_muted })
             // A click on the bar makes this the side the toolbar acts on.
             .on_mouse_down(
@@ -3383,8 +3383,8 @@ impl Browser {
                     .flex_none()
                     .font_family(text::FAMILY_HEADING)
                     .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                    .text_size(px(text::TITLE))
-                    .line_height(px(text::TITLE_LINE))
+                    .text_size(text::scaled(text::TITLE))
+                    .line_height(text::scaled(text::TITLE_LINE))
                     .text_color(theme.text)
                     .child(HEADING),
             )
@@ -3810,7 +3810,7 @@ impl Browser {
             .px(px(space::SM))
             .border_b_1()
             .border_color(theme.border)
-            .text_size(px(text::BODY))
+            .text_size(text::scaled(text::BODY))
             .child(
                 self.heading("Name", SortKey::Name, options, theme, cx)
                     .flex_1()
@@ -4211,8 +4211,8 @@ impl Browser {
                     .flex_none()
                     .font_family(text::FAMILY_HEADING)
                     .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                    .text_size(px(text::TITLE))
-                    .line_height(px(text::TITLE_LINE))
+                    .text_size(text::scaled(text::TITLE))
+                    .line_height(text::scaled(text::TITLE_LINE))
                     .text_color(theme.text)
                     .child(heading),
             )
@@ -4316,8 +4316,8 @@ impl Browser {
                     .flex_none()
                     .font_family(text::FAMILY_HEADING)
                     .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                    .text_size(px(text::TITLE))
-                    .line_height(px(text::TITLE_LINE))
+                    .text_size(text::scaled(text::TITLE))
+                    .line_height(text::scaled(text::TITLE_LINE))
                     .text_color(theme.text)
                     .child(heading),
             )
@@ -4472,7 +4472,7 @@ impl Browser {
             .border_t_1()
             .border_color(theme.border)
             .font_family(text::FAMILY_DATA)
-            .text_size(px(text::SMALL))
+            .text_size(text::scaled(text::SMALL))
             .text_color(theme.text_muted)
             .child(
                 div()
@@ -5067,8 +5067,8 @@ impl Render for Browser {
             .overflow_hidden()
             .text_color(theme.text)
             .font_family(text::FAMILY_BODY)
-            .text_size(px(text::BODY))
-            .line_height(px(text::LINE))
+            .text_size(text::scaled(text::BODY))
+            .line_height(text::scaled(text::LINE))
             .when_some(self.in_split, |view, active| {
                 view.child(self.path_bar(active, theme, cx))
             })
@@ -5235,7 +5235,7 @@ impl Render for DragPreview {
             .bg(theme.selection)
             .text_color(theme.on_selection)
             .font_family(text::FAMILY_BODY)
-            .text_size(px(text::BODY))
+            .text_size(text::scaled(text::BODY))
             .child(icon)
             .child(self.label.clone())
     }
@@ -5625,7 +5625,7 @@ fn free_text(total: u64, free: u64, volume: Option<&str>) -> String {
 /// except while selected, where the selection's own contrast must hold.
 fn entry_opacity(hidden: bool, cut: bool, selected: bool) -> Option<f32> {
     let hidden = if hidden && !selected {
-        crate::theme::HIDDEN_OPACITY
+        crate::theme::hidden_opacity()
     } else {
         1.
     };

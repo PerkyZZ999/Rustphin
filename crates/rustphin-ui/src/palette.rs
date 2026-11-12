@@ -393,15 +393,15 @@ impl Palette {
                     .child(
                         div()
                             .truncate()
-                            .text_size(px(text::NAME))
+                            .text_size(text::scaled(text::NAME))
                             .child(name.to_owned()),
                     )
                     .child(
                         div()
                             .truncate()
                             .font_family(text::FAMILY_DATA)
-                            .text_size(px(text::SMALL))
-                            .line_height(px(text::LINE - space::XS))
+                            .text_size(text::scaled(text::SMALL))
+                            .line_height(text::scaled(text::LINE - space::XS))
                             .text_color(quiet)
                             .child(trail),
                     ),
@@ -410,7 +410,7 @@ impl Palette {
                 div()
                     .flex_none()
                     .font_family(text::FAMILY_DATA)
-                    .text_size(px(text::SMALL))
+                    .text_size(text::scaled(text::SMALL))
                     .text_color(quiet)
                     .child(candidate.shortcut.clone()),
             )
@@ -524,8 +524,8 @@ impl Render for Palette {
                     .border_color(theme.border_accent)
                     .text_color(theme.text)
                     .font_family(text::FAMILY_BODY)
-                    .text_size(px(text::BODY))
-                    .line_height(px(text::LINE))
+                    .text_size(text::scaled(text::BODY))
+                    .line_height(text::scaled(text::LINE))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         div()
@@ -537,14 +537,14 @@ impl Render for Palette {
                                 div()
                                     .font_family(text::FAMILY_HEADING)
                                     .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                    .text_size(px(text::HEADING))
-                                    .line_height(px(text::HEADING_LINE))
+                                    .text_size(text::scaled(text::HEADING))
+                                    .line_height(text::scaled(text::HEADING_LINE))
                                     .child("Actions"),
                             )
                             .child(
                                 div()
                                     .font_family(text::FAMILY_DATA)
-                                    .text_size(px(text::SMALL))
+                                    .text_size(text::scaled(text::SMALL))
                                     .text_color(theme.text_muted)
                                     .child("Ctrl+Shift+P"),
                             ),
@@ -555,7 +555,7 @@ impl Render for Palette {
                             .min_h(px(size::PALETTE_FIELD))
                             .gap(px(space::SM))
                             .bg(theme.content)
-                            .text_size(px(text::NAME))
+                            .text_size(text::scaled(text::NAME))
                             .prefix(
                                 gpui_kit::component::Icon::new(gpui_kit::assets::IconName::Search)
                                     .size(px(size::ICON))
@@ -588,7 +588,7 @@ impl Render for Palette {
                                 .id("palette-notice")
                                 .role(Role::Status)
                                 .aria_label(status.clone())
-                                .text_size(px(text::SMALL))
+                                .text_size(text::scaled(text::SMALL))
                                 .text_color(theme.text_muted)
                                 .child(status),
                         )

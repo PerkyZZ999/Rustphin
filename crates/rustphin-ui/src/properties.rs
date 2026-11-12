@@ -289,15 +289,15 @@ impl PropertiesDialog {
                             .truncate()
                             .font_family(text::FAMILY_HEADING)
                             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                            .text_size(px(text::HEADING))
-                            .line_height(px(text::HEADING_LINE))
+                            .text_size(text::scaled(text::HEADING))
+                            .line_height(text::scaled(text::HEADING_LINE))
                             .child(self.title.clone()),
                     )
                     .child(
                         div()
                             .truncate()
                             .font_family(text::FAMILY_DATA)
-                            .text_size(px(text::DATA))
+                            .text_size(text::scaled(text::DATA))
                             .text_color(theme.text_muted)
                             .child(type_label),
                     ),
@@ -488,7 +488,7 @@ impl PropertiesDialog {
                     .truncate()
                     .font_family(text::FAMILY_DATA)
                     .font_weight(gpui_kit::FontWeight::MEDIUM)
-                    .text_size(px(text::LABEL))
+                    .text_size(text::scaled(text::LABEL))
                     .text_color(theme.text_muted)
                     // `label-sm` is set in capitals; the group's name keeps
                     // the original spelling for assistive technology.
@@ -513,7 +513,7 @@ impl PropertiesDialog {
         // 28-pixel rows, as the design's checkbox rows.
         div().flex().items_center().h(px(size::CHECK_ROW)).child(
             Checkbox::new(format!("perm-{class}-{label}"))
-                .text_size(px(text::BODY))
+                .text_size(text::scaled(text::BODY))
                 .label(label)
                 .accessibility_label(format!("{} {label}", PERMISSION_CLASSES[class as usize]))
                 .checked(checked)
@@ -576,7 +576,7 @@ fn fact(label: &str, value: String, theme: Theme) -> impl IntoElement {
                 .flex_1()
                 .min_w_0()
                 .font_family(text::FAMILY_DATA)
-                .text_size(px(text::DATA))
+                .text_size(text::scaled(text::DATA))
                 .text_color(theme.text)
                 .child(value),
         )

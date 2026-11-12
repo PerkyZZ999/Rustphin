@@ -495,3 +495,15 @@ Isolated home with `Pics/small.png` (131 KB) and `Pics/big.png` (7.6 MB of noise
 | VW4 | In Docs: Details, Dates "Today …", Decimal, untick Type; Escape | Details without the Type column; "Today 10:59"; "5.0 kB", the status line and the devices in kB/GB |
 | VW5 | Tick Remember the view for each folder; Escape; Ctrl+1; Alt+Up; Alt+Left | Docs turns to icons and `views.toml` holds Docs as icons; the home folder shows the default (details); back in Docs, icons again |
 | VW6 | Settings, Views, Reset to defaults | `[view]` back to details, size 2, no per-folder views, all columns, ISO, binary, previews up to 50 MB |
+
+### Appearance page (W-106d)
+
+Isolated home with `Box/.hidden-note`, `Box/.cache-dir` and `Box/visible.txt`, hidden files shown (`show_hidden = true` in the settings file before launch). Isolated sessions offer no blur, so glass and opaque look the same there; blur is reviewed on the real desktop.
+
+| ID | Steps | Expected |
+|---|---|---|
+| AP1 | Settings, Down to Appearance | Window (Look Glass with its hint, Title bar Rustphin's own with "Applies to new windows."), Text and files (Text size Normal, hidden files at 60 %) |
+| AP2 | Larger | Every interface text grows at once: the dialog, the places panel, toolbar and status line; long device lines end in an ellipsis; nothing overlaps |
+| AP3 | Click the slider's right end; Opaque; KDE's; Escape | 100 %, and the hidden entries are no longer faded; the file holds `look = "opaque"`, `title_bar = "kde"`, `text_size = "larger"`, `hidden_opacity = 100` |
+| AP4 | Quit and start again | KWin draws the title bar; Rustphin's bar steps aside; the text is still larger |
+| AP5 | Settings, Appearance, Reset to defaults | Glass, Rustphin's own, Normal (the text shrinks at once), 60 % |

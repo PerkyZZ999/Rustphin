@@ -62,8 +62,7 @@ pub fn init(loaded: Loaded, cx: &mut App) {
     let newer = loaded.settings.is_from_newer_version();
     let writer = loaded.path.filter(|_| !newer).map(Writer::new);
     let folder_writer = loaded.folder_path.filter(|_| !newer).map(Writer::new);
-    let (dates, units) = loaded.settings.formats();
-    crate::format::set_style(units, dates);
+    apply_globals(&loaded.settings);
     let entity = cx.new(|_| Preferences {
         settings: loaded.settings,
         writer,
@@ -74,6 +73,15 @@ pub fn init(loaded: Loaded, cx: &mut App) {
         view_epoch: 0,
     });
     cx.set_global(Shared(entity));
+}
+
+/// Sets what every view reads without a context: date and size style,
+/// text size, hidden entries' fading.
+fn apply_globals(settings: &Settings) {
+    let (dates, units) = settings.formats();
+    crate::format::set_style(units, dates);
+    crate::theme::text::set_scale(settings.text_size().scale());
+    crate::theme::set_hidden_opacity(settings.hidden_opacity() as f32 / 100.);
 }
 
 /// The shared settings.
@@ -119,9 +127,19 @@ impl Preferences {
         if next == self.settings {
             return;
         }
+        let redraw = (next.text_size(), next.hidden_opacity(), next.formats())
+            != (
+                self.settings.text_size(),
+                self.settings.hidden_opacity(),
+                self.settings.formats(),
+            );
         self.settings = next;
-        let (dates, units) = self.settings.formats();
-        crate::format::set_style(units, dates);
+        apply_globals(&self.settings);
+        if redraw {
+            // Text, fading and formats show in views that do not observe
+            // the settings themselves.
+            cx.refresh_windows();
+        }
         if let Some(writer) = &self.writer {
             let job = writer.job(self.settings.to_toml());
             cx.background_executor()

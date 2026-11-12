@@ -102,7 +102,7 @@ impl SettingsDialog {
                     .child(
                         div()
                             .font_family(text::FAMILY_DATA)
-                            .text_size(px(text::SMALL))
+                            .text_size(text::scaled(text::SMALL))
                             .child(format!("{} px", mode.layout(zoom).icon as u32)),
                     )
                     .into_any_element(),

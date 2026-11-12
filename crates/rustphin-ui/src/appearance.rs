@@ -11,6 +11,10 @@ pub(super) struct Appearance {
     effect_attached: bool,
     translucent: bool,
     unavailable: bool,
+    /// The desktop offers blur now.
+    available: bool,
+    /// Settings, Appearance chose the opaque look (W-106d).
+    opaque_chosen: bool,
 }
 
 impl Workspace {
@@ -66,14 +70,41 @@ impl Workspace {
             }
             Ok(available)
         });
-        let translucent = match available {
+        let available = match available {
             Ok(available) => available,
             Err(reason) => {
                 tracing::info!(%reason, "using the opaque theme");
                 false
             }
         };
-        appearance.unavailable = !translucent;
+        appearance.available = available;
+        appearance.unavailable = !available;
+        self.show_look(window, cx);
+    }
+
+    /// Chooses the opaque look, or glass where the desktop blurs
+    /// (Settings, Appearance). The blur effect stays attached either way:
+    /// attaching it again later would be a protocol error.
+    pub(crate) fn choose_opaque(
+        &mut self,
+        opaque: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(appearance) = self.appearance.as_mut()
+            && appearance.opaque_chosen != opaque
+        {
+            appearance.opaque_chosen = opaque;
+            self.show_look(window, cx);
+        }
+    }
+
+    /// Draws glass when the desktop blurs and the opaque look is not chosen.
+    fn show_look(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(appearance) = self.appearance.as_mut() else {
+            return;
+        };
+        let translucent = appearance.available && !appearance.opaque_chosen;
         if appearance.translucent != translucent {
             appearance.translucent = translucent;
             window.set_background_appearance(if translucent {
@@ -93,7 +124,8 @@ impl Workspace {
     pub(super) fn blur_status(&self, theme: Theme) -> Option<impl IntoElement + use<>> {
         self.appearance
             .as_ref()
-            .filter(|state| state.unavailable)
+            // Not when the opaque look was chosen: nothing is missing then.
+            .filter(|state| state.unavailable && !state.opaque_chosen)
             .map(|_| {
                 let label = "Background blur unavailable; using the opaque theme.";
                 div()
@@ -115,7 +147,7 @@ impl Workspace {
                     .border_t_1()
                     .border_color(theme.border)
                     .bg(theme.chrome)
-                    .text_size(px(text::BODY))
+                    .text_size(text::scaled(text::BODY))
                     .text_color(theme.text_muted)
                     .child(
                         gpui_kit::component::Icon::new(gpui_kit::component::IconName::Info)
