@@ -1,5 +1,7 @@
 # Compress and extract (W-111): plan for approval
 
+**Approved 2026-11-13 with all five recommendations (D-032, R-021).**
+
 The maintainer asked on 2026-11-13 for compressing and extracting from the context menu, with several choices: extract here, into a new folder, and into a folder followed by removing the archive. This plan says what Dolphin offers, how Rustphin would do it, and what the maintainer needs to decide.
 
 ## What Dolphin does

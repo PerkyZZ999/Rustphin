@@ -190,6 +190,17 @@ Conventions:
   - [ ] With "keep running" off, Rustphin behaves as before W-110.
 - **Validation:** private-bus tests of the hand-over and `--quit`; unit tests of the autostart entry; isolated-session scenarios for closing, reopening, a second launch and quitting; memory and wake-up measurements with no window.
 
+### R-021 — Compress and extract (after the MVP, D-032)
+- **Priority:** could (requested by the maintainer on 2026-11-13, beyond the MVP)
+- **Acceptance:**
+  - [ ] Extract › offers Extract here (one top-level item lands as it is, otherwise a folder named after the archive), Extract into "name/", Extract and trash archive (trash only after everything extracted) and Extract to… for ZIP, TAR (plain, .gz, .bz2, .xz, .zst) and 7Z; other formats go to Ark, 7-Zip or unrar when installed, with a readable message when none is.
+  - [ ] Compress › makes "name.zip" and "name.tar.gz" named as Dolphin does; Compress to… offers ZIP, TAR.GZ, TAR.XZ, TAR.ZST and 7Z at three levels.
+  - [ ] Name clashes go through the conflict question; nothing is overwritten without a choice; a stopped or failed operation leaves no partial result.
+  - [ ] Progress and Stop in the operation bar; Undo moves what was made to the trash, and restores a trashed archive.
+  - [ ] A hostile archive cannot write outside its destination, create devices or set-ID files, or fill the disk unnoticed; a damaged archive or wrong password ends with a readable reason.
+  - [ ] Encrypted ZIP and 7Z ask for a password, which is never logged or kept.
+- **Validation:** core tests with fake `Fs` and fault injection; hostile-archive fixtures; the `archive_entry` fuzz target; isolated-session scenarios for each entry, a clash, Stop, Undo and a password.
+
 ## MVP — non-functional
 
 ### R-101 — Responsiveness at scale

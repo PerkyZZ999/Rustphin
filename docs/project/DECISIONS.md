@@ -290,3 +290,11 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** as BACKGROUND_PLAN.md proposes, with its five recommendations. One Rustphin per session owns the session-bus name `org.rustphin.Rustphin`; later launches hand their request to it and exit. With "Keep Rustphin running after its last window closes" on (the default), closing the last window leaves the process running with no window and no tray icon. "Also start it when you log in" is off by default and, when on, writes one autostart entry. Ctrl+Q quits Rustphin entirely (every window and the process), after the usual question when several tabs are open; a window's close button closes that window only. Work W-110a–f, requirement R-020.
 - **Confirmed by / date:** The maintainer, 2026-11-13 ("Let's go with your recommendations for the decisions I agree with all of them")
 - **Supersedes / superseded by:** adds scope beyond the MVP at the maintainer's request; follows Nautilus rather than Dolphin, whose `--daemon` keeps no window process running
+
+## D-032 — Compress and extract, as planned in ARCHIVE_PLAN.md
+- **Status:** decided
+- **Date:** 2026-11-13
+- **Context:** The maintainer asked for compressing and extracting from the context menu (W-111). docs/project/ARCHIVE_PLAN.md is the plan, with five open decisions.
+- **Decision:** as ARCHIVE_PLAN.md proposes, with its five recommendations. Rustphin's own operation engine reads and writes ZIP, TAR (plain, .gz, .bz2, .xz, .zst) and 7Z; other formats are handed to Ark, else 7-Zip or unrar, when installed. Extract › Extract here, Extract into "name/", Extract and trash archive, Extract to…; Compress › Compress to "name.zip" (first), Compress to "name.tar.gz", Compress to…. Creating encrypted archives is later work; opening them is in. After extracting, the result is selected in the current view; no folder is opened. Work W-111a–g, requirement R-021.
+- **Confirmed by / date:** The maintainer, 2026-11-13 ("Approve, build both")
+- **Supersedes / superseded by:** adds scope beyond the MVP at the maintainer's request
