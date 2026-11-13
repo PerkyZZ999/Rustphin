@@ -49,7 +49,13 @@ unused-allowed-license = "allow"
 confidence-threshold = 0.8
 # LLVM's libFuzzer runtime is used only by the separate fuzz workspace.
 # Its NCSA terms are permissive BSD-style terms compatible with GPLv3.
-exceptions = [{ name = "libfuzzer-sys", allow = ["NCSA"] }]
+# libbz2-rs-sys, the pure-Rust bzip2 used for ZIP, TAR.BZ2 and 7Z archives
+# (W-111, D-032), keeps bzip2's own licence (bzip2-1.0.6): permissive
+# zlib/BSD-style terms, compatible with GPLv3. Allowed for that crate only.
+exceptions = [
+    { name = "libfuzzer-sys", allow = ["NCSA"] },
+    { name = "libbz2-rs-sys", allow = ["bzip2-1.0.6"] },
+]
 
 [bans]
 multiple-versions = "warn"

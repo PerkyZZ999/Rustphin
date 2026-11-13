@@ -124,6 +124,31 @@ pub enum Request {
         /// Entries to delete. A symbolic link is removed, not what it points to.
         paths: Vec<PathBuf>,
     },
+    /// Unpack `archive` into the directory `into` (W-111, D-032), laid out
+    /// as `layout` says; with `trash_archive`, put the archive in the trash
+    /// once everything was extracted.
+    Extract {
+        /// The archive.
+        archive: PathBuf,
+        /// Existing directory to extract into.
+        into: PathBuf,
+        /// Where the contents go.
+        layout: Layout,
+        /// Trash the archive afterwards.
+        trash_archive: bool,
+    },
+    /// Pack each of `sources`, with everything inside it, into the new
+    /// archive `archive` (W-111). Nothing is ever replaced.
+    Compress {
+        /// Entries to pack, each under its own name.
+        sources: Vec<PathBuf>,
+        /// The archive to make; must not exist.
+        archive: PathBuf,
+        /// Its format.
+        format: crate::archive::Format,
+        /// How hard to compress.
+        level: crate::archive::Level,
+    },
     /// Give `path` these permission bits. Other attributes stay as they are.
     SetMode {
         /// The entry to change.
@@ -202,6 +227,30 @@ pub enum OpError {
     /// The destination is not a directory.
     #[error("\"{}\" is not a folder", .0.display())]
     NotADirectory(PathBuf),
+    /// Rustphin cannot open or make this kind of archive itself.
+    #[error("\"{}\" is not an archive Rustphin can open", .0.display())]
+    NotAnArchive(PathBuf),
+    /// The archive is damaged or not what it claims to be.
+    #[error("\"{}\" is damaged: {reason}", path.display())]
+    Damaged {
+        /// The archive.
+        path: PathBuf,
+        /// What the reader found.
+        reason: String,
+    },
+    /// The password was wrong every time it was asked for.
+    #[error("the password for \"{}\" was not right", .0.display())]
+    WrongPassword(PathBuf),
+    /// The archive declares more than the destination has free.
+    #[error("not enough free space in \"{}\": {needed} bytes are needed and {free} are free", path.display())]
+    NotEnoughSpace {
+        /// The destination.
+        path: PathBuf,
+        /// Bytes the archive holds.
+        needed: u64,
+        /// Bytes free.
+        free: u64,
+    },
     /// The filesystem refused.
     #[error("\"{}\": {source}", path.display())]
     Io {
@@ -300,6 +349,12 @@ pub trait Controller {
     fn conflict(&mut self, conflict: &Conflict) -> Resolution;
     /// Decides what happens after an entry failed.
     fn failure(&mut self, failure: &Failure) -> Recovery;
+    /// Asks for the password of the encrypted `archive`; `wrong` when the
+    /// one given before was not right. `None` stops the operation. Without
+    /// an answer, encrypted archives are not opened.
+    fn password(&mut self, _archive: &Path, _wrong: bool) -> Option<String> {
+        None
+    }
 }
 
 /// One file in a [`Change::BatchRenamed`].
@@ -521,6 +576,18 @@ pub fn run(
             engine.set_mode(path, *mode)?;
             true
         }
+        Request::Extract {
+            archive,
+            into,
+            layout,
+            trash_archive,
+        } => engine.extract(archive, into, *layout, *trash_archive)?,
+        Request::Compress {
+            sources,
+            archive,
+            format,
+            level,
+        } => engine.compress(sources, archive, *format, *level)?,
     };
     Ok(Outcome {
         completed,
@@ -1521,6 +1588,10 @@ enum Placed {
     LeftOut,
 }
 
+mod archive;
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod archive_tests;
 mod batch;
 #[cfg(any(test, feature = "test-support"))]
 pub mod faults;
@@ -1530,6 +1601,7 @@ mod undo;
 mod undo_tests;
 mod worker;
 
+pub use archive::Layout;
 pub use undo::{History, Record, UndoError, UndoFailure, undo};
 pub use worker::{Finished, OpEvent, OpId, Operations, PROGRESS_INTERVAL};
 #[cfg(test)]

@@ -51,3 +51,10 @@ path = "fuzz_targets/admin_entry.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "archive_entry"
+path = "fuzz_targets/archive_entry.rs"
+test = false
+doc = false
+bench = false

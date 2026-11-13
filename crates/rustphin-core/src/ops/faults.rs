@@ -50,12 +50,20 @@ pub struct FaultFs {
     /// Called before each changing call with its number, to play another
     /// program acting at that moment.
     meddler: Option<Box<dyn Fn(usize) + Send + Sync>>,
+    /// Free space to report instead of the real filesystem's.
+    free_space: Option<u64>,
 }
 
 impl FaultFs {
     /// No faults.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Reports `bytes` as the free space everywhere.
+    pub fn with_free_space(mut self, bytes: u64) -> Self {
+        self.free_space = Some(bytes);
+        self
     }
 
     /// Makes the changing call number `step` (from 0) suffer `fault`.
@@ -291,6 +299,24 @@ impl Fs for FaultFs {
     fn set_attributes(&self, path: &Path, info: &FileInfo) -> io::Result<()> {
         self.plain_step()?;
         crate::fs::set_attributes_with_sync(path, info, || self.directory_sync_step())
+    }
+
+    fn open_read(&self, path: &Path) -> io::Result<Box<dyn crate::fs::ReadSeek>> {
+        self.alive()?;
+        RealFs.open_read(path)
+    }
+
+    fn create_new_file(&self, path: &Path, mode: u32) -> io::Result<Box<dyn crate::fs::NewFile>> {
+        self.plain_step()?;
+        RealFs.create_new_file(path, mode)
+    }
+
+    fn free_space(&self, path: &Path) -> io::Result<u64> {
+        self.alive()?;
+        match self.free_space {
+            Some(bytes) => Ok(bytes),
+            None => RealFs.free_space(path),
+        }
     }
 
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {

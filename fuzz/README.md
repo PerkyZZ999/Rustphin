@@ -8,6 +8,7 @@ rust-tc fuzz places
 rust-tc fuzz desktop
 rust-tc fuzz images
 rust-tc fuzz admin_entry
+rust-tc fuzz archive_entry
 ```
 
 Each campaign defaults to 30 seconds after compilation, a 4,096-byte input
@@ -45,3 +46,9 @@ same dependency/licence policy as the application. It does not run campaigns;
 run those explicitly after relevant parser changes. The fuzz lockfile starts
 from the application versions; harness-only dependency updates are reviewed
 separately. No UI toolkit is linked into the harness.
+- `archive_entry`: archive entries are untrusted (W-111, D-032). A first byte
+  below 128 checks the entry rules: an accepted name is relative with only
+  plain parts (no `..`, no root), and a link accepted as staying inside never
+  starts at the root. Otherwise the rest is handed to the reader of one of
+  the seven formats, which must read or refuse it without panicking, reading
+  at most 64 KiB of each entry. Seeds: names with `..`, a ZIP and a TAR.

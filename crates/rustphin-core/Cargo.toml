@@ -15,7 +15,14 @@ workspace = true
 test-support = []
 
 [dependencies]
+bzip2.workspace = true
+flate2.workspace = true
 flume.workspace = true
+lzma-rust2.workspace = true
+sevenz-rust2.workspace = true
+tar.workspace = true
+zip.workspace = true
+zstd.workspace = true
 notify.workspace = true
 rayon.workspace = true
 regex.workspace = true

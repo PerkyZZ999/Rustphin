@@ -55,6 +55,23 @@ pub struct FileInfo {
 /// cancellation checked, once per step.
 pub const COPY_STEP: usize = 4 * 1024 * 1024;
 
+/// A file open for reading with seeking: an archive being read.
+pub trait ReadSeek: io::Read + io::Seek + Send {}
+impl<T: io::Read + io::Seek + Send> ReadSeek for T {}
+
+/// A new file being written: an archive being made, or an entry being
+/// extracted.
+pub trait NewFile: io::Write + io::Seek + Send {
+    /// Syncs the content to the disk; the file is complete after this.
+    fn finish(self: Box<Self>) -> io::Result<()>;
+}
+
+impl NewFile for fs::File {
+    fn finish(self: Box<Self>) -> io::Result<()> {
+        self.sync_all()
+    }
+}
+
 /// Filesystem access used by the core.
 ///
 /// The methods that change the filesystem are deliberately small steps, so a
@@ -161,6 +178,24 @@ pub trait Fs: Send + Sync + 'static {
     /// Gives `path` the permission bits and modification time in `info`.
     /// For a directory, syncs it through a handle opened before changing modes.
     fn set_attributes(&self, _path: &Path, _info: &FileInfo) -> io::Result<()> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
+    /// Opens the regular file `path` for reading, with seeking.
+    fn open_read(&self, _path: &Path) -> io::Result<Box<dyn ReadSeek>> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
+    /// Creates the new file `path` with permission bits `mode` (less the
+    /// umask) for writing. Fails with [`io::ErrorKind::AlreadyExists`] when
+    /// something is there. Its content is on the disk only after
+    /// [`NewFile::finish`]; after an error the caller removes it.
+    fn create_new_file(&self, _path: &Path, _mode: u32) -> io::Result<Box<dyn NewFile>> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
+    /// Bytes free for this user on the filesystem holding `path`.
+    fn free_space(&self, _path: &Path) -> io::Result<u64> {
         Err(io::ErrorKind::Unsupported.into())
     }
 
@@ -354,6 +389,31 @@ impl Fs for RealFs {
 
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         fs::read(path)
+    }
+
+    fn open_read(&self, path: &Path) -> io::Result<Box<dyn ReadSeek>> {
+        let file = fs::File::open(path)?;
+        if !file.metadata()?.is_file() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "not a regular file",
+            ));
+        }
+        Ok(Box::new(file))
+    }
+
+    fn create_new_file(&self, path: &Path, mode: u32) -> io::Result<Box<dyn NewFile>> {
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(mode)
+            .open(path)?;
+        Ok(Box::new(file))
+    }
+
+    fn free_space(&self, path: &Path) -> io::Result<u64> {
+        let stats = rustix::fs::statvfs(path)?;
+        Ok(stats.f_bavail.saturating_mul(stats.f_frsize))
     }
 
     fn read_bounded(&self, path: &Path, limit: usize) -> io::Result<Vec<u8>> {
