@@ -22,11 +22,11 @@ use std::{
 const MAX_THREADS: usize = 16;
 
 /// How many font files are sampled to tell whether the fonts are already
-/// in memory, and the average time to open one and read its first 4 KB
-/// below which they are taken to be: microseconds from memory, a large
-/// fraction of a millisecond from a cold compressed disk.
+/// in memory, and the time to open one and read its first 4 KB above which
+/// it is taken to come from the disk: tens of microseconds from memory, a
+/// large fraction of a millisecond from a cold compressed disk.
 const PROBE_FILES: usize = 32;
-const CACHED_READ: Duration = Duration::from_micros(50);
+const SLOW_READ: Duration = Duration::from_micros(150);
 
 /// The folders fontdb scans, in its order: the `<dir>` entries of the
 /// fontconfig files it reads (`FONTCONFIG_FILE`, or the user's and the
@@ -143,24 +143,50 @@ fn walk_dir(
     true
 }
 
-/// Whether the first font files under `dirs` read as fast as from memory,
-/// so the fonts are probably cached and reading them ahead would only
-/// compete with the app starting.
-fn already_in_memory(dirs: &[PathBuf]) -> bool {
-    let mut sample = Vec::with_capacity(PROBE_FILES);
+/// The font files under `dirs`, in the order fontdb loads them.
+pub fn font_files(dirs: &[PathBuf]) -> Vec<PathBuf> {
+    let mut files = Vec::new();
     walk(dirs, |path| {
-        sample.push(path);
-        sample.len() < PROBE_FILES
+        files.push(path);
+        true
     });
-    let started = Instant::now();
-    for path in &sample {
-        let mut head = [0; 4096];
-        if let Ok(mut file) = std::fs::File::open(path) {
-            let _ = std::io::Read::read(&mut file, &mut head);
-        }
-    }
-    let count = u32::try_from(sample.len()).unwrap_or(u32::MAX);
-    started.elapsed() < CACHED_READ * count.max(1)
+    files
+}
+
+/// Up to `count` positions spread evenly over a list of `len`, the first at
+/// `start` within the first step. Memory pressure evicts fonts unevenly, so
+/// the sample covers the whole list; and since reading a file keeps it in
+/// memory, a different `start` each launch keeps the sample itself from
+/// staying cached while the rest is evicted (W-110 found that).
+fn sample_positions(len: usize, count: usize, start: usize) -> Vec<usize> {
+    let step = (len / count.max(1)).max(1);
+    (0..count)
+        .map(|index| start % step + index * step)
+        .filter(|&position| position < len)
+        .collect()
+}
+
+/// Whether every sampled read was fast enough to have come from memory.
+fn looks_in_memory(reads: &[Duration]) -> bool {
+    reads.iter().all(|read| *read < SLOW_READ)
+}
+
+/// Whether a sample of `files`, spread over the list from `start`, reads as
+/// fast as from memory, so reading them all ahead would only compete with
+/// the app starting.
+fn already_in_memory(files: &[PathBuf], start: usize) -> bool {
+    let reads: Vec<Duration> = sample_positions(files.len(), PROBE_FILES, start)
+        .into_iter()
+        .map(|position| {
+            let started = Instant::now();
+            let mut head = [0; 4096];
+            if let Ok(mut file) = std::fs::File::open(&files[position]) {
+                let _ = std::io::Read::read(&mut file, &mut head);
+            }
+            started.elapsed()
+        })
+        .collect();
+    looks_in_memory(&reads)
 }
 
 /// What a pre-read did.
@@ -172,10 +198,10 @@ pub struct Report {
     pub faces: usize,
 }
 
-/// Reads the font files under `dirs` with up to `threads` threads, each
+/// Reads `files` with up to `threads` threads, in their order, each
 /// parsing them as fontdb does so the same parts of each file are read.
 /// Returns when every file has been read.
-pub fn read_all(dirs: &[PathBuf], threads: usize) -> Report {
+pub fn read_files(files: Vec<PathBuf>, threads: usize) -> Report {
     let (send, receive) = flume::unbounded::<PathBuf>();
     let workers: Vec<_> = (0..threads.max(1))
         .filter_map(|index| {
@@ -206,7 +232,11 @@ pub fn read_all(dirs: &[PathBuf], threads: usize) -> Report {
         // own scan still works.
         return Report { files: 0, faces: 0 };
     }
-    walk(dirs, |path| send.send(path).is_ok());
+    for path in files {
+        if send.send(path).is_err() {
+            break;
+        }
+    }
     drop(send);
     workers
         .into_iter()
@@ -227,12 +257,13 @@ pub enum Outcome {
 }
 
 /// Reads the font files under `dirs` ahead with up to `threads` threads,
-/// unless a sample shows they are already in memory.
-pub fn warm(dirs: &[PathBuf], threads: usize) -> Outcome {
-    if already_in_memory(dirs) {
+/// unless a sample spread from `start` shows they are already in memory.
+pub fn warm(dirs: &[PathBuf], threads: usize, start: usize) -> Outcome {
+    let files = font_files(dirs);
+    if already_in_memory(&files, start) {
         Outcome::AlreadyInMemory
     } else {
-        Outcome::Read(read_all(dirs, threads))
+        Outcome::Read(read_files(files, threads))
     }
 }
 
@@ -250,7 +281,11 @@ pub fn start(done: impl FnOnce(Outcome, Duration, usize) + Send + 'static) -> st
             lower_priority();
             let started = Instant::now();
             let dirs = font_dirs(|name| std::env::var_os(name));
-            done(warm(&dirs, threads), started.elapsed(), threads);
+            // Any number that changes between launches will do.
+            let start = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |since| since.subsec_nanos() as usize);
+            done(warm(&dirs, threads, start), started.elapsed(), threads);
         })
         .map(drop)
 }
@@ -334,6 +369,28 @@ mod tests {
     }
 
     #[test]
+    fn the_sample_spans_the_whole_list_and_moves_between_launches() {
+        let first = sample_positions(9_000, 32, 0);
+        assert_eq!(first.len(), 32);
+        assert_eq!(first[0], 0);
+        // The last sample lies near the list's end, not near its start.
+        assert!(*first.last().unwrap() > 9_000 * 9 / 10);
+        let next = sample_positions(9_000, 32, 100);
+        assert!(first.iter().all(|position| !next.contains(position)));
+        // A short list is sampled whole.
+        assert_eq!(sample_positions(5, 32, 7), [0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn one_slow_read_means_the_fonts_are_not_all_in_memory() {
+        let fast = Duration::from_micros(20);
+        let mut reads = vec![fast; 32];
+        assert!(looks_in_memory(&reads));
+        reads[31] = Duration::from_millis(1);
+        assert!(!looks_in_memory(&reads));
+    }
+
+    #[test]
     fn fonts_just_written_are_in_memory_and_not_read_again() {
         let root = tempfile::tempdir().unwrap();
         let font = font_bytes();
@@ -341,7 +398,7 @@ mod tests {
             std::fs::write(root.path().join(format!("{index}.ttf")), &font).unwrap();
         }
         assert_eq!(
-            warm(&[root.path().to_path_buf()], 4),
+            warm(&[root.path().to_path_buf()], 4, 0),
             Outcome::AlreadyInMemory
         );
     }
@@ -354,7 +411,7 @@ mod tests {
             std::fs::write(root.path().join(format!("{index}.ttf")), &font).unwrap();
         }
         std::fs::write(root.path().join("broken.ttf"), b"not a font").unwrap();
-        let report = read_all(&[root.path().to_path_buf()], 4);
+        let report = read_files(font_files(&[root.path().to_path_buf()]), 4);
         assert_eq!(
             report,
             Report {

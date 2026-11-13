@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-13 — W-109c The pre-read's in-memory check had a blind spot
+- **Found:** while measuring W-110, a start logged "font files already in memory; not pre-read" and GPUI's font scan still took 8.6 s. The check read the first 32 font files of every launch; reading them kept exactly those files cached while memory pressure from other programs evicted the other 9,000.
+- **Fix:** `font_warmup.rs` lists every font file, samples 32 spread evenly over the list from a starting point that changes each launch (`sample_positions`), and pre-reads unless every sampled read takes under 150 µs (`looks_in_memory`). `read_files` reads the listed files in order.
+- **Tests:** 9 in `font_warmup` (2 new), each new one proved by breaking the code: sampling only the first files, or the same files every launch, fails `the_sample_spans_the_whole_list_and_moves_between_launches`; tolerating a slow read fails `one_slow_read_means_the_fonts_are_not_all_in_memory`.
+- **Measured (isolated session, release, machine under memory pressure; first frame / end of GPUI's font scan):** fonts cached: 0.61–0.86 s / 0.17–0.39 s, skipped. All fonts evicted: 3.75 and 4.22 s / 3.16 and 3.58 s, pre-read. Evicted and then the first 32 files read back (the old blind spot): 3.68 and 3.77 s / 3.17 and 3.20 s, pre-read; the W-109b build skipped there and took 8.47 s / 7.71 s.
+- **Waiver:** none
+
 ### 2026-11-13 — W-112 Name field hid its first letter
 - **Cause:** the inline name field (new folder, new file, rename) is sized to its text plus padding, outline and 4 px for the caret. GPUI-Kit's single-line input (gpui-base 0.7.3, `RIGHT_MARGIN` 10 px) scrolls its text left once the caret is closer than 10 px to its right edge, so typing scrolled the name about 6 px and cut the first letter ("Wonder" read "Vonder"; seen in an isolated session).
 - **Fix:** `browser.rs` `rename_field_width` leaves `INPUT_CARET_MARGIN` (10 px, the toolkit's margin) for the caret.
