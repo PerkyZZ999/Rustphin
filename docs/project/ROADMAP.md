@@ -109,6 +109,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **W-110, background mode:** after its last window closes Rustphin keeps running without a window and can start hidden at login, as Dolphin's daemon mode, so new windows and folders sent by other applications open at once. Follows W-109: reading fonts in parallel brought a cold start to about 3 s, and only a resident process removes it. Costs memory while idle; needs a Settings switch and a way to quit for good.
 - **W-111, compress and extract:** "Extract" and "Compress" in the context menu as Dolphin offers them through Ark: extract here, into a new folder, into a chosen folder, or into a new folder then trash the archive; compress here as ZIP or TAR.GZ, or to a chosen name and format.
 - **Before building:** each gets a requirement with acceptance criteria and a plan for the maintainer to approve; both add scope beyond the MVP.
+- **2026-11-13:** W-110's plan is [`BACKGROUND_PLAN.md`](BACKGROUND_PLAN.md): one Rustphin per session that keeps running without windows (as Nautilus does; Dolphin's `--daemon` only relays D-Bus requests to new processes), launches handed to it, start at login as a Settings switch; work W-110a–f and five decisions for the maintainer.
 
 ## Traceability
 

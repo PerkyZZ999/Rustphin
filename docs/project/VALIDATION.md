@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-13 — W-110 Background mode: findings for the plan
+- **Dolphin's source (master: `main.cpp`, `global.cpp`, `dbusinterface.cpp`, read through a fetch agent):** `--daemon` returns before any window is made and only serves D-Bus; `ShowFolders`/`ShowItems` call `attachToExistingInstance`, else `openNewWindow`, which starts a new `dolphin` process through `KIO::ApplicationLauncherJob`. Nothing keeps a windowed Dolphin resident. On this machine `org.kde.dolphin.FileManager1.service` runs `dolphin --daemon`; Nautilus's runs `nautilus --gapplication-service`.
+- **Throwaway test (not committed; isolated session, release build):** GPUI quits when its last window closes unless `set_quit_mode(QuitMode::Explicit)`. Without it the process exited even though Rustphin's own handler did not quit. With it, Ctrl+Q closed the window and the process stayed; a window opened 3 s later showed its folder 27 ms after the request (17:24:27.302 → .329), complete on screen.
+- **Memory:** one window 139–146 MB resident (RssAnon about 40 MB, RssFile about 100 MB); no window 139.5 MB; after reopening 145 MB (RssAnon 45.6 MB). Nothing was released on close in the test.
+- **Not verified:** window focus for windows opened by a running Rustphin (GPUI logs "activate is not implemented on Linux"); idle CPU wake-ups.
+- **Waiver:** none
+
 ### 2026-11-13 — W-109c The pre-read's in-memory check had a blind spot
 - **Found:** while measuring W-110, a start logged "font files already in memory; not pre-read" and GPUI's font scan still took 8.6 s. The check read the first 32 font files of every launch; reading them kept exactly those files cached while memory pressure from other programs evicted the other 9,000.
 - **Fix:** `font_warmup.rs` lists every font file, samples 32 spread evenly over the list from a starting point that changes each launch (`sample_positions`), and pre-reads unless every sampled read takes under 150 µs (`looks_in_memory`). `read_files` reads the listed files in order.
