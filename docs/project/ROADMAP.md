@@ -103,6 +103,13 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **2026-11-12:** The maintainer asked for the whole Settings window (General, Appearance, Customizations, About, …) to be planned first. The proposal is [`SETTINGS_PLAN.md`](SETTINGS_PLAN.md): eight pages, storage, order of work W-106a–g and five decisions for the maintainer.
 - **Status:** plan and mockups approved 2026-11-12 (D-029, R-019); built the same day as W-106b–g (all eight pages). Three differences from the plan accepted (D-030). R-019 is open on Tab through the controls and a second window following changes.
 
+## Next — Background mode and archives (W-110, W-111)
+
+- **Requested:** The maintainer, 2026-11-13, as the next tasks.
+- **W-110, background mode:** after its last window closes Rustphin keeps running without a window and can start hidden at login, as Dolphin's daemon mode, so new windows and folders sent by other applications open at once. Follows W-109: reading fonts in parallel brought a cold start to about 3 s, and only a resident process removes it. Costs memory while idle; needs a Settings switch and a way to quit for good.
+- **W-111, compress and extract:** "Extract" and "Compress" in the context menu as Dolphin offers them through Ark: extract here, into a new folder, into a chosen folder, or into a new folder then trash the archive; compress here as ZIP or TAR.GZ, or to a chosen name and format.
+- **Before building:** each gets a requirement with acceptance criteria and a plan for the maintainer to approve; both add scope beyond the MVP.
+
 ## Traceability
 
 | Requirement | Slice(s) | Validation |

@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-13 — W-112 Name field hid its first letter
+- **Cause:** the inline name field (new folder, new file, rename) is sized to its text plus padding, outline and 4 px for the caret. GPUI-Kit's single-line input (gpui-base 0.7.3, `RIGHT_MARGIN` 10 px) scrolls its text left once the caret is closer than 10 px to its right edge, so typing scrolled the name about 6 px and cut the first letter ("Wonder" read "Vonder"; seen in an isolated session).
+- **Fix:** `browser.rs` `rename_field_width` leaves `INPUT_CARET_MARGIN` (10 px, the toolkit's margin) for the caret.
+- **Test:** `the_rename_field_never_scrolls_its_name_out_of_view` failed before the fix ("only 4 px for the caret") and passes after it.
+- **On screen (isolated session, release build):** F10 then "Wonder" shows the whole word with its padding; a 47-character name shows whole while typing and after Home; F2 on `note.txt` typing "Wanted" shows "Wanted.txt" whole.
+- **Waiver:** none
+
 ### 2026-11-13 — W-109b Parallel font pre-read
 - **Why:** GPUI's scan opens 9,018 font files one at a time. On this btrfs root with zstd compression each header read waits for a compressed block, so the scan is latency-bound: 7.2–7.8 s cold on one thread, 2.7–2.8 s on 16 threads (throwaway prototype parsing the same files with fontdb 0.23, fonts evicted with `posix_fadvise DONTNEED`).
 - **Code:** `rustphin-platform/src/font_warmup.rs`: the fontconfig folders fontdb reads, walked in its order with its extensions; up to 16 threads parse each file with fontdb (the version GPUI uses), so the same parts are read; started first thing in `rustphin_ui::run`, logged by the UI. If the first 32 files' first 4 KB read at under 50 µs each, the fonts are taken to be in memory and nothing more is read. New dependencies `fontdb` 0.23 and `fontconfig-parser` 0.5 (MIT, already built inside GPUI); rustix gains its `thread` feature.

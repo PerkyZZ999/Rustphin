@@ -3590,7 +3590,7 @@ impl Browser {
                 .text_system()
                 .layout_line(&value, px(name_text), &[run], None)
                 .width;
-            let width = text_width + px(space::XS * 2. + size::HAIRLINE * 2. + space::XS);
+            let width = px(rename_field_width(f32::from(text_width)));
             div()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 // Solid and in the normal text colour, whatever the row's state.
@@ -5683,6 +5683,20 @@ fn select_names(selection: &mut Selection, snapshot: &Snapshot, names: &[Vec<u8>
     }
 }
 
+/// How far GPUI-Kit's single-line input keeps its caret from the right
+/// edge: closer, and it scrolls the text left (gpui-base 0.7.3
+/// `input::base::element::RIGHT_MARGIN`). Not a design value: a field
+/// sized to its text must leave this much after it, or the first letters
+/// are pushed out of view.
+const INPUT_CARET_MARGIN: f32 = 10.;
+
+/// The width of the rename field for a name `text_width` wide: the text,
+/// the field's padding and outline, and the room the input keeps for its
+/// caret.
+fn rename_field_width(text_width: f32) -> f32 {
+    text_width + space::XS * 2. + size::HAIRLINE * 2. + INPUT_CARET_MARGIN
+}
+
 /// Whether `selection` covers all `len` bytes of a field's text.
 fn selects_everything(selection: &std::ops::Range<usize>, len: usize) -> bool {
     selection.start == 0 && selection.end == len
@@ -5775,6 +5789,21 @@ impl Columns {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_rename_field_never_scrolls_its_name_out_of_view() {
+        // Inside the field: the width less its padding and outline. The
+        // caret after the name must stay clear of the input's margin, or
+        // the input scrolls and hides the first letters.
+        for text_width in [0., 7.5, 42., 300.] {
+            let inner = rename_field_width(text_width) - space::XS * 2. - size::HAIRLINE * 2.;
+            assert!(
+                inner - text_width >= INPUT_CARET_MARGIN,
+                "{text_width}: only {} px for the caret",
+                inner - text_width
+            );
+        }
+    }
     use super::*;
 
     #[test]
