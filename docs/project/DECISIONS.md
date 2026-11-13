@@ -282,3 +282,11 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** accepted as built. Hidden files fade from 60 % to 100 %, not 30 %: fainter, a hidden name under the pointer falls below WCAG AA (tested). Dates are ISO or "Today 14:32"; no "system format", which would need locale date data the build does not have. Toolbar items move between and along the Toolbar page's lists by buttons and double-click, not by dragging.
 - **Confirmed by / date:** The maintainer, 2026-11-12 ("Accept them")
 - **Supersedes / superseded by:** amends D-029 on these three points only
+
+## D-031 — Background mode, as planned in BACKGROUND_PLAN.md
+- **Status:** decided
+- **Date:** 2026-11-13
+- **Context:** cold starts spend seconds in the toolkit's font scan (W-109); the maintainer asked for Rustphin to stay running so windows open at once (W-110). docs/project/BACKGROUND_PLAN.md is the plan, with five open decisions.
+- **Decision:** as BACKGROUND_PLAN.md proposes, with its five recommendations. One Rustphin per session owns the session-bus name `org.rustphin.Rustphin`; later launches hand their request to it and exit. With "Keep Rustphin running after its last window closes" on (the default), closing the last window leaves the process running with no window and no tray icon. "Also start it when you log in" is off by default and, when on, writes one autostart entry. Ctrl+Q quits Rustphin entirely (every window and the process), after the usual question when several tabs are open; a window's close button closes that window only. Work W-110a–f, requirement R-020.
+- **Confirmed by / date:** The maintainer, 2026-11-13 ("Let's go with your recommendations for the decisions I agree with all of them")
+- **Supersedes / superseded by:** adds scope beyond the MVP at the maintainer's request; follows Nautilus rather than Dolphin, whose `--daemon` keeps no window process running

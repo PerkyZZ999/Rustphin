@@ -1,5 +1,7 @@
 # Background mode (W-110): plan for approval
 
+**Approved 2026-11-13 with all five recommendations (D-031, R-020).**
+
 The maintainer asked on 2026-11-13 for Rustphin to stay running after its last window closes and to be able to start at login, so that windows open at once. This plan says what that means, what was measured before writing it, how it would be built, and what the maintainer needs to decide.
 
 ## Why

@@ -178,6 +178,18 @@ Conventions:
   - [x] About shows the version, the licence text, credits and where Rustphin keeps its files; nothing is fetched from the network. (W-106b, ST2–ST4.)
 - **Validation:** unit tests of the settings model (defaults, parsing, migration from version 2); isolated desktop scenarios per page; mockups approved by the maintainer first (W-106a).
 
+### R-020 — Background mode (after the MVP, D-031)
+- **Priority:** could (requested by the maintainer on 2026-11-13, beyond the MVP)
+- **Acceptance:**
+  - [ ] With "keep running" on, closing the last window leaves Rustphin running, and the next window (launcher, a folder sent by another application, the command line) shows its folder within 200 ms of the request on a warm machine, whatever the font cache holds.
+  - [ ] One Rustphin process runs per session; a second launch hands its request to it and exits without starting the UI toolkit; if the running one does not answer within 2 s, the launch starts its own.
+  - [ ] With no window open, Rustphin's own memory (RssAnon) is at most 60 MB and it uses no CPU while nothing happens.
+  - [ ] Ctrl+Q, the palette's Quit and `rustphin --quit` end the process; closing windows does not.
+  - [ ] The login switch adds or removes exactly one autostart entry and changes nothing else.
+  - [ ] New windows get the focus when the request carries an activation token.
+  - [ ] With "keep running" off, Rustphin behaves as before W-110.
+- **Validation:** private-bus tests of the hand-over and `--quit`; unit tests of the autostart entry; isolated-session scenarios for closing, reopening, a second launch and quitting; memory and wake-up measurements with no window.
+
 ## MVP — non-functional
 
 ### R-101 — Responsiveness at scale
