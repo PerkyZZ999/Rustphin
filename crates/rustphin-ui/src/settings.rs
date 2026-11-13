@@ -244,6 +244,16 @@ struct General {
     /// How files open; KDE's setting when absent.
     #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient")]
     click: Option<Click>,
+    /// Keep running after the last window closes (W-110, D-031); on when
+    /// absent.
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "lenient")]
+    keep_running: Option<bool>,
+    /// Start without a window when the user logs in (W-110c).
+    #[serde(
+        skip_serializing_if = "std::ops::Not::not",
+        deserialize_with = "lenient"
+    )]
+    start_at_login: bool,
 }
 
 /// What Rustphin shows when it starts without folders to open.
@@ -571,6 +581,29 @@ impl Settings {
         self.version = VERSION;
     }
 
+    /// Whether Rustphin keeps running after its last window closes.
+    pub fn keep_running(&self) -> bool {
+        self.general.keep_running.unwrap_or(true)
+    }
+
+    /// Chooses whether Rustphin keeps running without windows.
+    pub fn set_keep_running(&mut self, keep: bool) {
+        self.general.keep_running = Some(keep);
+        self.version = VERSION;
+    }
+
+    /// Whether Rustphin starts without a window at login. Only meaningful
+    /// while it keeps running.
+    pub fn start_at_login(&self) -> bool {
+        self.general.start_at_login && self.keep_running()
+    }
+
+    /// Chooses whether Rustphin starts at login.
+    pub fn set_start_at_login(&mut self, start: bool) {
+        self.general.start_at_login = start;
+        self.version = VERSION;
+    }
+
     /// How files open, when chosen here; `None` follows KDE.
     pub fn click(&self) -> Option<Click> {
         self.general.click
@@ -767,6 +800,24 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn rustphin_keeps_running_by_default_and_starts_at_login_only_when_asked() {
+        let fresh = Settings::default();
+        assert!(fresh.keep_running());
+        assert!(!fresh.start_at_login());
+        let mut chosen = Settings::default();
+        chosen.set_start_at_login(true);
+        let read = Settings::parse(&chosen.to_toml());
+        assert!(read.keep_running() && read.start_at_login());
+        // Login start means nothing once Rustphin no longer keeps running.
+        chosen.set_keep_running(false);
+        let read = Settings::parse(&chosen.to_toml());
+        assert!(!read.keep_running() && !read.start_at_login());
+        // A damaged value keeps the default.
+        let damaged = Settings::parse("version = 3\n[general]\nkeep_running = \"yes\"\n");
+        assert!(damaged.keep_running());
+    }
     use super::*;
 
     fn sample() -> Settings {

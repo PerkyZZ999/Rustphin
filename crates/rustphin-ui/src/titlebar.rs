@@ -150,9 +150,10 @@ pub fn title_bar(
             .on_click(|_, window, _| window.zoom_window()),
         ))
         .child(keep_press(
-            // As Ctrl+Q: the window may ask first (Settings, Confirmations).
+            // The window may ask first (Settings, Confirmations); only this
+            // window closes, while Ctrl+Q quits Rustphin (D-031).
             window_button("window-close", IconName::X, "Close window").on_click(|_, window, cx| {
-                window.dispatch_action(Box::new(crate::workspace::Quit), cx);
+                window.dispatch_action(Box::new(crate::workspace::CloseWindow), cx);
             }),
         ));
     Some(bar.into_any_element())

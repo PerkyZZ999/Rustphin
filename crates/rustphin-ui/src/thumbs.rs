@@ -138,6 +138,14 @@ impl Thumbs {
         }
     }
 
+    /// Lets go of everything while no window is open (W-110b): waiting
+    /// requests and what is known. The thumbnails stay in the disk cache.
+    pub fn release(&mut self) {
+        self.drop_waiting();
+        self.known = HashMap::new();
+        self.waiting = HashSet::new();
+    }
+
     /// Forgets what is known about the files directly inside `folder`, so
     /// they are checked again: called when the folder's contents changed.
     pub fn forget_folder(&mut self, folder: &Path) {

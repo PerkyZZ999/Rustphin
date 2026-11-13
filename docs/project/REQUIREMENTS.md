@@ -181,13 +181,13 @@ Conventions:
 ### R-020 — Background mode (after the MVP, D-031)
 - **Priority:** could (requested by the maintainer on 2026-11-13, beyond the MVP)
 - **Acceptance:**
-  - [ ] With "keep running" on, closing the last window leaves Rustphin running, and the next window (launcher, a folder sent by another application, the command line) shows its folder within 200 ms of the request on a warm machine, whatever the font cache holds.
-  - [ ] One Rustphin process runs per session; a second launch hands its request to it and exits without starting the UI toolkit; if the running one does not answer within 2 s, the launch starts its own.
-  - [ ] With no window open, Rustphin's own memory (RssAnon) is at most 60 MB and it uses no CPU while nothing happens.
-  - [ ] Ctrl+Q, the palette's Quit and `rustphin --quit` end the process; closing windows does not.
-  - [ ] The login switch adds or removes exactly one autostart entry and changes nothing else.
-  - [ ] New windows get the focus when the request carries an activation token.
-  - [ ] With "keep running" off, Rustphin behaves as before W-110.
+  - [x] With "keep running" on, closing the last window leaves Rustphin running, and the next window (launcher, a folder sent by another application, the command line) shows its folder within 200 ms of the request on a warm machine, whatever the font cache holds. (W-110b: 41 ms after a close, 94 ms after a background start; BG3, BG4, BG7.)
+  - [x] One Rustphin process runs per session; a second launch hands its request to it and exits without starting the UI toolkit; if the running one does not answer within 2 s, the launch starts its own. (W-110a: 12 ms hand-over on screen; the time limit unit-tested.)
+  - [x] With no window open, Rustphin's own memory (RssAnon) is at most 60 MB and it uses no CPU while nothing happens. (W-110e: 41 MB after closing, 11.6 MB after a background start; no CPU over 5 s.)
+  - [x] Ctrl+Q, the palette's Quit and `rustphin --quit` end the process; closing windows does not. (BG3, BG5, BG8.)
+  - [x] The login switch adds or removes exactly one autostart entry and changes nothing else. (Unit-tested; BG6.)
+  - [ ] New windows get the focus when the request carries an activation token. (W-110d: the token reaches the compositor in a protocol test; KWin's focus not yet seen on the real desktop.)
+  - [x] With "keep running" off, Rustphin behaves as before W-110. (BG9.)
 - **Validation:** private-bus tests of the hand-over and `--quit`; unit tests of the autostart entry; isolated-session scenarios for closing, reopening, a second launch and quitting; memory and wake-up measurements with no window.
 
 ### R-021 — Compress and extract (after the MVP, D-032)

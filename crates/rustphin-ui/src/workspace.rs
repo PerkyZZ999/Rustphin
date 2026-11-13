@@ -91,6 +91,7 @@ actions!(
         CopyToOtherView,
         MoveToOtherView,
         Quit,
+        CloseWindow,
         ActivateTab1,
         ActivateTab2,
         ActivateTab3,
@@ -1939,10 +1940,24 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &MoveToOtherView, _, cx| {
                 this.transfer_to_other_view(Transfer::Move, cx);
             }))
-            // Quitting is closing the window, with the same session save,
-            // after asking when Settings says to and there are several tabs.
-            .on_action(cx.listener(|this, _: &Quit, window, cx| {
+            // Quitting asks first when Settings says to and there are several
+            // tabs; it closes the window, or ends Rustphin in background mode.
+            // The title bar's close button closes this window only; in
+            // background mode Rustphin stays running (D-031).
+            .on_action(cx.listener(|this, _: &CloseWindow, window, cx| {
                 if this.may_close(cx) {
+                    window.remove_window();
+                }
+            }))
+            .on_action(cx.listener(|this, _: &Quit, window, cx| {
+                if !this.may_close(cx) {
+                    return;
+                }
+                if crate::instance::keeps_running(cx) {
+                    // Background mode: Quit ends Rustphin, every window
+                    // with it (D-031); closing a window only closes it.
+                    cx.defer(crate::instance::quit);
+                } else {
                     window.remove_window();
                 }
             }))

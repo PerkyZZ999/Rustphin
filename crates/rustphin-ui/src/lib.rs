@@ -88,6 +88,29 @@ pub fn start(start: Start) -> std::process::ExitCode {
     if start.command == Command::Quit {
         return instance::quit_running();
     }
+    if start.command == Command::Background {
+        // At login: become the running Rustphin without a window, or do
+        // nothing when one already runs.
+        return match rustphin_platform::instance::Instance::claim() {
+            Ok(running) => {
+                run_as(
+                    Options {
+                        starts: Vec::new(),
+                        home: start.home,
+                        force_opaque: start.force_opaque,
+                    },
+                    Some(running),
+                    true,
+                );
+                std::process::ExitCode::SUCCESS
+            }
+            Err(rustphin_platform::instance::ClaimError::Taken) => std::process::ExitCode::SUCCESS,
+            Err(error) => {
+                tracing::warn!(%error, "cannot run in the background");
+                std::process::ExitCode::FAILURE
+            }
+        };
+    }
     let instance = match instance::claim(&start.starts) {
         instance::Claim::HandedOver => return std::process::ExitCode::SUCCESS,
         instance::Claim::Running(instance) => Some(instance),
@@ -100,17 +123,23 @@ pub fn start(start: Start) -> std::process::ExitCode {
             force_opaque: start.force_opaque,
         },
         instance,
+        false,
     );
     std::process::ExitCode::SUCCESS
 }
 
 /// Runs the application until its last window closes.
 pub fn run(options: Options) {
-    run_as(options, None);
+    run_as(options, None, false);
 }
 
-/// [`run`], as the running Rustphin when `instance` holds the bus name.
-fn run_as(options: Options, mut instance: Option<rustphin_platform::instance::Instance>) {
+/// [`run`], as the running Rustphin when `instance` holds the bus name;
+/// with no window when `background` (W-110c).
+fn run_as(
+    options: Options,
+    mut instance: Option<rustphin_platform::instance::Instance>,
+    background: bool,
+) {
     // The toolkit's own font scan runs one file at a time; read the same
     // files on several threads first, so it finds them in memory (W-109b).
     let warmup = rustphin_platform::font_warmup::start(|outcome, elapsed, threads| {
@@ -215,6 +244,15 @@ fn run_as(options: Options, mut instance: Option<rustphin_platform::instance::In
             if let Some(running) = instance.take() {
                 instance::serve(running, cx);
             }
+            // Keep the login entry pointing at this program (W-110c).
+            if settings.start_at_login() {
+                cx.background_spawn(async {
+                    if let Err(error) = rustphin_platform::autostart::set_for_this_program(true) {
+                        tracing::warn!(%error, "could not refresh the login entry");
+                    }
+                })
+                .detach();
+            }
             remote::init(cx);
             // D-020: restore batch renames an earlier run left half done.
             recovery::start(&session, cx);
@@ -231,9 +269,15 @@ fn run_as(options: Options, mut instance: Option<rustphin_platform::instance::In
             menu_view::bind_keys(cx);
             workspace::bind_keys(cx);
             sidebar::bind_keys(cx);
+            // Rustphin decides when to quit, not the toolkit (W-110b).
+            cx.set_quit_mode(gpui_kit::QuitMode::Explicit);
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
-                    cx.quit();
+                    if instance::keeps_running(cx) {
+                        instance::without_windows(cx);
+                    } else {
+                        cx.quit();
+                    }
                 }
             })
             .detach();
@@ -241,7 +285,11 @@ fn run_as(options: Options, mut instance: Option<rustphin_platform::instance::In
             cx.spawn(async move |cx| {
                 warming.await;
                 let text_system = cx.update(|cx| {
-                    open_window(&options, settings, session, session_path, Vec::new(), cx);
+                    if background {
+                        tracing::info!("started in the background; no window");
+                    } else {
+                        open_window(&options, settings, session, session_path, Vec::new(), cx);
+                    }
                     cx.text_system().clone()
                 });
                 // The faces later screens use, while the window is up.

@@ -69,7 +69,7 @@ Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 | Places panel shown | F9 | F9 | — |
 | Add folder to Places | (none) | Ctrl+Shift+D (Ctrl+D until D-021), button, drag | K2, K18 |
 | Focus places panel | Ctrl+P | Ctrl+P | K9 |
-| Quit | Ctrl+Q | Ctrl+Q (same as closing the window) | K9 |
+| Quit | Ctrl+Q | Ctrl+Q: ends Rustphin, every window, when it keeps running (D-031); otherwise closes the window | K9, BG5 |
 | New window | Ctrl+N | not offered (one window) | — |
 | Command palette | KDE command bar (from KXmlGui, not Dolphin source) | Ctrl+Shift+P | Q1 |
 | Settings | Ctrl+Shift+, (Configure Dolphin) | Ctrl+Shift+, | ST1 |

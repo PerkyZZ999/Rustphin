@@ -102,6 +102,39 @@ pub(crate) fn target(cx: &mut App) -> Option<Entity<Workspace>> {
         .and_then(|(_, workspace)| workspace.upgrade())
 }
 
+/// The window a request went to: the active one, else the newest.
+fn target_window(cx: &mut App) -> Option<AnyWindowHandle> {
+    let active = cx.active_window();
+    let open = cx.default_global::<OpenWorkspaces>();
+    open.0
+        .retain(|(_, workspace)| workspace.upgrade().is_some());
+    open.0
+        .iter()
+        .find(|(window, _)| Some(*window) == active)
+        .or(open.0.last())
+        .map(|(window, _)| *window)
+}
+
+/// The newest window.
+fn newest_window(cx: &mut App) -> Option<AnyWindowHandle> {
+    let open = cx.default_global::<OpenWorkspaces>();
+    open.0
+        .retain(|(_, workspace)| workspace.upgrade().is_some());
+    open.0.last().map(|(window, _)| *window)
+}
+
+/// Gives `window` the launch's activation token, so KWin lets it take the
+/// focus (W-110d), once it has drawn a frame.
+fn activate(window: AnyWindowHandle, token: String, cx: &mut App) {
+    let _ = window.update(cx, |_, window, _| {
+        window.on_next_frame(move |window, _| {
+            if let Err(error) = rustphin_platform::activation::activate(window, window, &token) {
+                tracing::info!(%error, "the window could not be given the focus");
+            }
+        });
+    });
+}
+
 /// Every open window.
 fn windows(cx: &mut App) -> Vec<AnyWindowHandle> {
     let open = cx.default_global::<OpenWorkspaces>();
@@ -116,31 +149,61 @@ fn show(shown: Vec<Shown>, cx: &mut App) {
         return;
     }
     match target(cx) {
-        Some(workspace) => workspace.update(cx, |workspace, cx| workspace.queue_shows(shown, cx)),
-        None => crate::open_window_showing(shown, cx),
+        Some(workspace) if !shown_in_new_window(cx) => {
+            workspace.update(cx, |workspace, cx| workspace.queue_shows(shown, cx));
+        }
+        // No window, or General says "In a new window" (W-106c).
+        _ => crate::open_window_showing(shown, cx),
     }
+}
+
+/// Whether General shows other applications' folders in a new window.
+fn shown_in_new_window(cx: &App) -> bool {
+    crate::preferences::preferences(cx)
+        .read(cx)
+        .settings()
+        .shown_folders()
+        == crate::settings::ShownIn::Window
 }
 
 /// Answers one request from another launch.
 fn answer(request: Request, cx: &mut App) {
     match request {
-        Request::Open { folders, .. } if folders.is_empty() => {
-            if target(cx).is_some() {
-                crate::open_new_window(cx);
+        Request::Open {
+            folders,
+            activation,
+        } => {
+            let window = if folders.is_empty() {
+                if target(cx).is_some() {
+                    crate::open_new_window(cx);
+                } else {
+                    crate::open_start_window(cx);
+                }
+                newest_window(cx)
             } else {
-                crate::open_start_window(cx);
+                let had_window = target(cx).is_some();
+                show(
+                    folders
+                        .into_iter()
+                        .map(|folder| Shown {
+                            folder,
+                            select: Vec::new(),
+                        })
+                        .collect(),
+                    cx,
+                );
+                // Tabs go to the target window; with none, or when
+                // Settings opens them in a new window, the newest has them.
+                if had_window && !shown_in_new_window(cx) {
+                    target_window(cx)
+                } else {
+                    newest_window(cx)
+                }
+            };
+            if let (Some(window), Some(token)) = (window, activation) {
+                activate(window, token, cx);
             }
         }
-        Request::Open { folders, .. } => show(
-            folders
-                .into_iter()
-                .map(|folder| Shown {
-                    folder,
-                    select: Vec::new(),
-                })
-                .collect(),
-            cx,
-        ),
         Request::Quit => quit(cx),
     }
 }
@@ -191,6 +254,24 @@ pub(crate) fn serve_file_manager(service: ServiceHandle, cx: &mut App) {
         }
     })
     .detach();
+}
+
+/// Whether closing the last window leaves Rustphin running: it is the
+/// running Rustphin (others hand their launches to it) and Settings keeps
+/// it running (D-031).
+pub(crate) fn keeps_running(cx: &App) -> bool {
+    cx.has_global::<Running>()
+        && crate::preferences::preferences(cx)
+            .read(cx)
+            .settings()
+            .keep_running()
+}
+
+/// The last window has closed and Rustphin stays: let go of what only
+/// windows need.
+pub(crate) fn without_windows(cx: &mut App) {
+    tracing::info!("last window closed; Rustphin keeps running");
+    crate::thumbs::thumbs(cx).update(cx, |thumbs, _| thumbs.release());
 }
 
 /// The running Rustphin's bus name, held for the life of the process.

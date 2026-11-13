@@ -1,4 +1,4 @@
-//! Other running copies of Rustphin, read from `/proc`.
+//! Other running copies of Rustphin, and this one's memory, read from `/proc`.
 
 use std::{fs, path::Path};
 
@@ -19,6 +19,19 @@ pub fn others_running(name: &str) -> bool {
         Some((pid, comm.to_owned(), state))
     });
     any_other(processes, own, name)
+}
+
+/// This process's own memory in bytes: `RssAnon` in `/proc/self/status`,
+/// the memory nobody else shares and the kernel cannot simply drop.
+pub fn own_memory() -> Option<u64> {
+    rss_anon(&fs::read_to_string("/proc/self/status").ok()?)
+}
+
+/// `RssAnon` of a `/proc/<pid>/status` text, in bytes.
+fn rss_anon(status: &str) -> Option<u64> {
+    let line = status.lines().find(|line| line.starts_with("RssAnon:"))?;
+    let kilobytes: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
+    kilobytes.checked_mul(1024)
 }
 
 /// The program name and state letter of a `/proc/<pid>/stat` line:
@@ -44,6 +57,15 @@ fn any_other(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn own_memory_is_the_anonymous_resident_size() {
+        let status =
+            "Name:\trustphin\nVmRSS:\t  139504 kB\nRssAnon:\t   40120 kB\nRssFile:\t   99384 kB\n";
+        assert_eq!(rss_anon(status), Some(40_120 * 1024));
+        assert_eq!(rss_anon("Name:\trustphin\n"), None);
+        assert!(own_memory().is_some_and(|bytes| bytes > 0));
+    }
     use super::*;
 
     #[test]

@@ -175,16 +175,24 @@ fn looks_in_memory(reads: &[Duration]) -> bool {
 /// fast as from memory, so reading them all ahead would only compete with
 /// the app starting.
 fn already_in_memory(files: &[PathBuf], start: usize) -> bool {
+    sample_reads_fast(files, start, time_head_read)
+}
+
+/// How long opening `path` and reading its first 4 KB takes.
+fn time_head_read(path: &Path) -> Duration {
+    let started = Instant::now();
+    let mut head = [0; 4096];
+    if let Ok(mut file) = std::fs::File::open(path) {
+        let _ = std::io::Read::read(&mut file, &mut head);
+    }
+    started.elapsed()
+}
+
+/// Whether the sampled `files`, each timed by `time`, all read fast.
+fn sample_reads_fast(files: &[PathBuf], start: usize, time: impl Fn(&Path) -> Duration) -> bool {
     let reads: Vec<Duration> = sample_positions(files.len(), PROBE_FILES, start)
         .into_iter()
-        .map(|position| {
-            let started = Instant::now();
-            let mut head = [0; 4096];
-            if let Ok(mut file) = std::fs::File::open(&files[position]) {
-                let _ = std::io::Read::read(&mut file, &mut head);
-            }
-            started.elapsed()
-        })
+        .map(|position| time(&files[position]))
         .collect();
     looks_in_memory(&reads)
 }
@@ -391,16 +399,34 @@ mod tests {
     }
 
     #[test]
-    fn fonts_just_written_are_in_memory_and_not_read_again() {
-        let root = tempfile::tempdir().unwrap();
-        let font = font_bytes();
-        for index in 0..PROBE_FILES {
-            std::fs::write(root.path().join(format!("{index}.ttf")), &font).unwrap();
-        }
-        assert_eq!(
-            warm(&[root.path().to_path_buf()], 4, 0),
-            Outcome::AlreadyInMemory
-        );
+    fn the_decision_rests_on_the_sampled_files_read_times() {
+        // Timings are given, not measured, so the test does not depend on
+        // how busy the machine is.
+        let files: Vec<PathBuf> = (0..100)
+            .map(|index| PathBuf::from(format!("/f/{index}.ttf")))
+            .collect();
+        let sampled = std::cell::RefCell::new(Vec::new());
+        let fast = |path: &Path| {
+            sampled.borrow_mut().push(path.to_path_buf());
+            Duration::from_micros(10)
+        };
+        assert!(sample_reads_fast(&files, 0, fast));
+        let expected: Vec<PathBuf> = sample_positions(100, PROBE_FILES, 0)
+            .into_iter()
+            .map(|position| files[position].clone())
+            .collect();
+        assert_eq!(*sampled.borrow(), expected);
+        // One sampled file on a cold disk is enough to read them all.
+        let cold = Path::new("/f/93.ttf");
+        assert!(expected.iter().any(|path| path == cold));
+        let one_slow = |path: &Path| {
+            if path == cold {
+                Duration::from_millis(2)
+            } else {
+                Duration::from_micros(10)
+            }
+        };
+        assert!(!sample_reads_fast(&files, 0, one_slow));
     }
 
     #[test]

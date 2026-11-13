@@ -553,3 +553,19 @@ Isolated home with `~/.config/rustphin/place-groups.toml` holding two empty grou
 | SC1 | Settings, Shortcuts | "The keys Rustphin understands. Changing them comes later.", a search field, then Navigation (Back Backspace, Forward Alt+Right, … Open terminal here Shift+F4), View and the other categories, each key in a key cap; no Reset to defaults |
 | SC2 | Type `f2` | Files: Rename selection F2; Places: Rename selected place or group F2 |
 | SC3 | Type `zzz` after it | "No shortcut matches. Try another word." |
+
+### Background mode (W-110, D-031)
+
+Run in an isolated session: it has its own session bus, so the test Rustphin owns `org.rustphin.Rustphin` there and never meets the maintainer's.
+
+| ID | Steps | Expected |
+|---|---|---|
+| BG1 | Start Rustphin on a folder; then run `rustphin <folder>/alpha` | The second launch exits 0 within milliseconds; "alpha" opens as a tab in the running window; one process |
+| BG2 | Run `rustphin` with a window open | A second window at home (or the start folder); still one process |
+| BG3 | Close the last window with its ✕ | The process stays, asleep; the log says "last window closed; Rustphin keeps running"; RssAnon at most 60 MB; no CPU time over 5 s |
+| BG4 | Then run `rustphin` | A window within 200 ms of the launch, with the saved session's tabs |
+| BG5 | Ctrl+Q in a window | Every window closes and the process ends |
+| BG6 | Settings, General, tick "Also start it when you log in", then untick it | `~/.config/autostart/rustphin.desktop` appears with `Exec="<program>" --background` and `X-Rustphin-Autostart=true`, then is gone; the page shows "Rustphin uses N MB of memory now." |
+| BG7 | `rustphin --background`; then `rustphin <folder>` | No window at first (RssAnon about 12 MB); then a window on the folder within 200 ms |
+| BG8 | `rustphin --quit` | The running Rustphin closes its windows and ends; with none running it prints "Rustphin is not running." and exits 0 |
+| BG9 | General: untick "Keep Rustphin running…", close the last window | The process ends, as before W-110 |

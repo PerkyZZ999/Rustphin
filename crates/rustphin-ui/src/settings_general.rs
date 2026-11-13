@@ -175,6 +175,7 @@ impl SettingsDialog {
                 cx,
             ),
         ));
+        starting.push(self.background_row(&settings, theme, cx));
 
         let mut desktop = vec![setting_row(
             "Default file manager",
@@ -226,6 +227,60 @@ impl SettingsDialog {
             group("Starting", starting, theme),
             group("Desktop", desktop, theme),
         ]
+    }
+
+    /// Background mode (W-110, D-031): keep running after the last window,
+    /// and start at login, with what Rustphin's memory is now.
+    fn background_row(
+        &self,
+        settings: &crate::settings::Settings,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let pick_keep: Pick<bool> = Rc::new(|_, keep, _, cx| {
+            preferences(cx).update(cx, |store, cx| {
+                store.update(|settings| settings.set_keep_running(keep), cx);
+            });
+            if !keep {
+                apply_login_start(false, cx);
+            }
+        });
+        let pick_login: Pick<bool> = Rc::new(|_, start, _, cx| {
+            preferences(cx).update(cx, |store, cx| {
+                store.update(|settings| settings.set_start_at_login(start), cx);
+            });
+            apply_login_start(start, cx);
+        });
+        let memory = rustphin_platform::process::own_memory()
+            .map(|bytes| format!("Rustphin uses {} MB of memory now.", bytes / (1024 * 1024)));
+        let mut column = div()
+            .flex()
+            .flex_col()
+            .gap(px(crate::theme::space::XS))
+            .child(controls::checkbox(
+                "settings-keep-running",
+                "Keep Rustphin running after its last window closes",
+                settings.keep_running(),
+                pick_keep,
+                cx,
+            ));
+        if settings.keep_running() {
+            column = column.child(controls::checkbox(
+                "settings-start-at-login",
+                "Also start it when you log in",
+                settings.start_at_login(),
+                pick_login,
+                cx,
+            ));
+        }
+        column = column.child(controls::hint(
+            "New windows then open at once. Quit with Ctrl+Q.",
+            theme,
+        ));
+        if let Some(memory) = memory {
+            column = column.child(controls::hint(memory, theme));
+        }
+        setting_row("In the background", column.into_any_element())
     }
 
     /// The folder the window shows, as the settings save a location.
@@ -440,4 +495,27 @@ impl SettingsDialog {
         }
         rows
     }
+}
+
+/// Adds or removes the login entry in the background; a failure is said
+/// in the notice bar with what to do.
+fn apply_login_start(start: bool, cx: &mut Context<SettingsDialog>) {
+    let task = cx
+        .background_spawn(async move { rustphin_platform::autostart::set_for_this_program(start) });
+    cx.spawn(async move |_, cx| {
+        if let Err(error) = task.await {
+            cx.update(|cx| {
+                crate::operations::hub(cx).update(cx, |hub, cx| {
+                    hub.say(
+                        format!(
+                            "Could not change starting at login: {error}. Check ~/.config/autostart."
+                        ),
+                        true,
+                        cx,
+                    );
+                });
+            });
+        }
+    })
+    .detach();
 }
