@@ -18,6 +18,7 @@ test-support = []
 bzip2.workspace = true
 flate2.workspace = true
 flume.workspace = true
+jiff.workspace = true
 lzma-rust2.workspace = true
 sevenz-rust2.workspace = true
 tar.workspace = true

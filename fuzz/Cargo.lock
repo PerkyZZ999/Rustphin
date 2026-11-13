@@ -1406,6 +1406,7 @@ dependencies = [
  "bzip2",
  "flate2",
  "flume",
+ "jiff",
  "lzma-rust2",
  "notify",
  "rayon",

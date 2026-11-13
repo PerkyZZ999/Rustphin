@@ -90,6 +90,15 @@ pub enum Question {
         /// Why.
         message: String,
     },
+    /// An archive is encrypted (W-111e).
+    Password {
+        /// The operation that asks.
+        id: OpId,
+        /// The archive.
+        archive: PathBuf,
+        /// The password given before was not right.
+        wrong: bool,
+    },
     /// Permanent deletion needs the user's explicit yes.
     ConfirmDelete {
         /// What would be deleted.
@@ -205,6 +214,11 @@ pub struct Hub {
     _clipboard_watch: Option<clipboard::WatchGuard>,
     /// Counts notices, so a timer only dismisses the one it was set for.
     notice_serial: u64,
+    /// Extractions and compressions whose results are selected when done.
+    reveal: HashSet<OpId>,
+    /// What the latest of them made, numbered so views select it once
+    /// (W-111, D-032: the result is selected, no folder opens).
+    pub created: (u64, Vec<PathBuf>),
 }
 
 struct GlobalHub(Entity<Hub>);
@@ -271,6 +285,8 @@ pub fn init(cx: &mut App) {
             told_unshared: false,
             _clipboard_watch: watch,
             notice_serial: 0,
+            reveal: HashSet::new(),
+            created: (0, Vec::new()),
         }
     });
     cx.set_global(GlobalHub(hub));
@@ -421,6 +437,16 @@ impl Hub {
     pub fn recover(&mut self, recovery: Recovery, cx: &mut Context<Self>) {
         if let Some(Question::Failed { id, .. }) = self.questions.front() {
             self.runner_of(*id).recover(*id, recovery);
+            self.questions.pop_front();
+            cx.notify();
+        }
+    }
+
+    /// Answers the password question being shown; `None` stops the
+    /// operation. The password is handed on and not kept here.
+    pub fn give_password(&mut self, password: Option<String>, cx: &mut Context<Self>) {
+        if let Some(Question::Password { id, .. }) = self.questions.front() {
+            self.runner_of(*id).give_password(*id, password);
             self.questions.pop_front();
             cx.notify();
         }
@@ -756,6 +782,9 @@ impl Hub {
     fn on_event(&mut self, event: OpEvent, cx: &mut Context<Self>) {
         match event {
             OpEvent::Started { id, request, undo } => {
+                if !undo && matches!(request, Request::Extract { .. } | Request::Compress { .. }) {
+                    self.reveal.insert(id);
+                }
                 let (label, done) = self
                     .labels
                     .remove(&id)
@@ -790,7 +819,26 @@ impl Hub {
                 self.questions
                     .push_back(Question::Failed { id, path, message });
             }
+            OpEvent::Password { id, archive, wrong } => {
+                self.questions
+                    .push_back(Question::Password { id, archive, wrong });
+            }
             OpEvent::Finished { id, result } => {
+                if self.reveal.remove(&id)
+                    && let Finished::Done(outcome) = &result
+                {
+                    let made: Vec<PathBuf> = outcome
+                        .changes
+                        .iter()
+                        .filter_map(|change| match change {
+                            rustphin_core::ops::Change::Copied { to, .. } => Some(to.clone()),
+                            _ => None,
+                        })
+                        .collect();
+                    if !made.is_empty() {
+                        self.created = (self.created.0 + 1, made);
+                    }
+                }
                 if id.as_u64() >= ADMIN_FIRST_ID {
                     self.admin_changes += 1;
                 }
@@ -801,9 +849,9 @@ impl Hub {
                     .map(|index| self.running.remove(index));
                 // Questions it can no longer hear the answer to.
                 self.questions.retain(|question| match question {
-                    Question::Conflict { id: asker, .. } | Question::Failed { id: asker, .. } => {
-                        *asker != id
-                    }
+                    Question::Conflict { id: asker, .. }
+                    | Question::Failed { id: asker, .. }
+                    | Question::Password { id: asker, .. } => *asker != id,
                     Question::ConfirmDelete { .. }
                     | Question::ConfirmTrash { .. }
                     | Question::ConfirmEmpty { .. }
@@ -1024,6 +1072,8 @@ fn activity_verb(request: &Request) -> &'static str {
         Request::Rename { .. }
         | Request::RenameBatch { .. }
         | Request::RecoverRenameBatch { .. } => "rename",
+        Request::Extract { .. } => "extract",
+        Request::Compress { .. } => "compress",
         _ => "change",
     }
 }
@@ -1039,6 +1089,8 @@ fn activity_icon(request: &Request) -> gpui_kit::assets::IconName {
         Request::Rename { .. }
         | Request::RenameBatch { .. }
         | Request::RecoverRenameBatch { .. } => I::Pencil,
+        Request::Extract { .. } => I::PackageOpen,
+        Request::Compress { .. } => I::FileArchive,
         _ => I::Loader,
     }
 }

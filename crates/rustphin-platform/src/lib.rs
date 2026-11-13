@@ -7,6 +7,7 @@
 pub mod activation;
 pub mod admin;
 pub mod apps;
+pub mod archive_tool;
 pub mod autostart;
 pub mod blur;
 pub mod clipboard;

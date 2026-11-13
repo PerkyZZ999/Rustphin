@@ -3,7 +3,7 @@
 
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex, MutexGuard,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -64,6 +64,16 @@ pub enum OpEvent {
         /// Why, in words for the user.
         message: String,
     },
+    /// An archive is encrypted. The operation waits for
+    /// [`Operations::give_password`].
+    Password {
+        /// The operation.
+        id: OpId,
+        /// The archive.
+        archive: PathBuf,
+        /// The password given before was not right.
+        wrong: bool,
+    },
     /// The operation is over.
     Finished {
         /// The operation.
@@ -92,6 +102,8 @@ pub const PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
 enum Answer {
     Resolution(Resolution),
     Recovery(Recovery),
+    /// A password, or none to stop. Never logged.
+    Password(Option<String>),
 }
 
 struct Running {
@@ -190,6 +202,12 @@ impl Operations {
     /// Answers the [`OpEvent::Failed`] operation `id` is waiting on.
     pub fn recover(&self, id: OpId, recovery: Recovery) {
         self.answer(id, Answer::Recovery(recovery));
+    }
+
+    /// Answers the [`OpEvent::Password`] operation `id` is waiting on;
+    /// `None` stops it.
+    pub fn give_password(&self, id: OpId, password: Option<String>) {
+        self.answer(id, Answer::Password(password));
     }
 
     fn answer(&self, id: OpId, answer: Answer) {
@@ -337,7 +355,7 @@ impl Controller for ChannelController {
                 Ok(Answer::Resolution(resolution)) => return resolution,
                 Ok(Answer::Recovery(Recovery::Cancel)) | Err(_) => return cancel,
                 // An answer to a different kind of question: keep waiting.
-                Ok(Answer::Recovery(_)) => {}
+                Ok(Answer::Recovery(_) | Answer::Password(_)) => {}
             }
         }
     }
@@ -355,7 +373,25 @@ impl Controller for ChannelController {
             match self.answers.recv() {
                 Ok(Answer::Recovery(recovery)) => return recovery,
                 Err(_) => return Recovery::Cancel,
-                Ok(Answer::Resolution(_)) => {}
+                Ok(Answer::Resolution(_) | Answer::Password(_)) => {}
+            }
+        }
+    }
+
+    fn password(&mut self, archive: &Path, wrong: bool) -> Option<String> {
+        let asked = self.events.send(OpEvent::Password {
+            id: self.id,
+            archive: archive.to_owned(),
+            wrong,
+        });
+        if asked.is_err() {
+            return None;
+        }
+        loop {
+            match self.answers.recv() {
+                Ok(Answer::Password(password)) => return password,
+                Ok(Answer::Recovery(Recovery::Cancel)) | Err(_) => return None,
+                Ok(Answer::Recovery(_) | Answer::Resolution(_)) => {}
             }
         }
     }

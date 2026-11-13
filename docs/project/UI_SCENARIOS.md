@@ -569,3 +569,20 @@ Run in an isolated session: it has its own session bus, so the test Rustphin own
 | BG7 | `rustphin --background`; then `rustphin <folder>` | No window at first (RssAnon about 12 MB); then a window on the folder within 200 ms |
 | BG8 | `rustphin --quit` | The running Rustphin closes its windows and ends; with none running it prints "Rustphin is not running." and exits 0 |
 | BG9 | General: untick "Keep Rustphin running…", close the last window | The process ends, as before W-110 |
+
+### Compress and extract (W-111, D-032)
+
+Test archives are made in the isolated home (`zip`, `tar`, `7z`, `gzip`; an AES ZIP with `7z a -p`). Extract to… opens the desktop's folder dialog, which runs outside the isolation and starts in the real home: type a folder inside the isolated home and never pick one elsewhere.
+
+| ID | Steps | Expected |
+|---|---|---|
+| AR1 | Right-click a ZIP whose entries share one top folder; Extract › Extract here | That folder appears, selected; "Extracted "name.zip"." with Undo; no `.rustphin-part-*` left |
+| AR2 | Extract › Extract into "name/" | `name/` holding the archive's entries, selected |
+| AR3 | Extract › Extract and trash archive where the folder already exists; Keep both; then Ctrl+Z | The conflict question names both folders and offers "name (1)"; the archive goes to the trash only after extracting; Undo brings it back and trashes "name (1)" |
+| AR4 | Extract an AES ZIP: type a wrong password, Enter, then the right one | The question returns saying the password was wrong; every letter typed lands in the field (none answer the dialog); the file extracts; the log holds neither password |
+| AR5 | Select a folder; Compress › Compress to "folder.zip"; open the menu again | The ZIP appears, selected, with Undo; `unzip -l` shows local times; the second menu offers "folder (1).zip" |
+| AR6 | Compress › Compress to…; keep a taken name, then pick TAR.GZ, then 7Z with a typed name, Enter | Taken: the note says so in the danger colour and Compress is disabled; a free name: "Makes "…" in "…"." with the format's hint; Enter makes the archive, selected (`7z l` lists it) |
+| AR7 | Extract › Extract here on `notes.txt.gz` (no TAR inside) | The submenu says Extract into "notes.txt/"; Ark extracts `notes.txt`; the notice says "Ark extracted …" |
+| AR8 | Extract › Extract to…, type a folder in the isolated home | The archive extracts there; nothing appears anywhere else |
+| AR9 | Select two archives; Extract › Extract each into its own folder; Keep both for each clash | Two operations run side by side, each with its own question; both folders appear |
+| AR10 | In the trash, and acting as administrator | No Extract or Compress entries |

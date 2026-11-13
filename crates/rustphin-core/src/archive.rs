@@ -14,6 +14,8 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+use jiff::tz::TimeZone;
+
 use crate::fs::ReadSeek;
 
 /// The archive formats Rustphin reads, and writes.
@@ -254,7 +256,7 @@ pub fn read_entries(
     visit: Visit<'_>,
 ) -> Result<(), ReadError> {
     match format {
-        Format::Zip => read_zip(source, password, totals, visit),
+        Format::Zip => read_zip(source, password, &TimeZone::system(), totals, visit),
         Format::SevenZ => read_seven_z(source, password, totals, visit),
         Format::Tar => read_tar(source, visit),
         Format::TarGz => read_tar(flate2::read::MultiGzDecoder::new(source), visit),
@@ -270,6 +272,7 @@ pub fn read_entries(
 fn read_zip(
     source: Box<dyn ReadSeek>,
     password: Option<&str>,
+    zone: &TimeZone,
     totals: Totals<'_>,
     visit: Visit<'_>,
 ) -> Result<(), ReadError> {
@@ -315,7 +318,7 @@ fn read_zip(
             name: file.name_raw().to_vec(),
             kind,
             mode: mode.map(|mode| mode & 0o7777),
-            modified: file.last_modified().map(zip_time),
+            modified: modified_of(&file, zone),
             size: file.size(),
         };
         if visit(&header, &mut file)?.is_break() {
@@ -325,47 +328,52 @@ fn read_zip(
     Ok(())
 }
 
-/// A ZIP time (local, no zone) as seconds since 1970, taken as UTC.
-fn zip_time(time: zip::DateTime) -> i64 {
-    days_from_civil(
-        i64::from(time.year()),
-        i64::from(time.month()),
-        i64::from(time.day()),
-    ) * 86_400
-        + i64::from(time.hour()) * 3_600
-        + i64::from(time.minute()) * 60
-        + i64::from(time.second())
+/// When a ZIP entry was last changed, in seconds since 1970: its extended
+/// stamp, which is exact, or else its plain time read as local time.
+fn modified_of<R: Read>(file: &zip::read::ZipFile<'_, R>, zone: &TimeZone) -> Option<i64> {
+    file.extra_data_fields()
+        .find_map(|field| match field {
+            zip::extra_fields::ExtraField::ExtendedTimestamp(stamp) => stamp.mod_time(),
+            _ => None,
+        })
+        .map(i64::from)
+        .or_else(|| file.last_modified().and_then(|time| zip_time(time, zone)))
 }
 
-/// Days since 1970-01-01 of a proleptic Gregorian date (Howard Hinnant's
-/// algorithm).
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = if month <= 2 { year - 1 } else { year };
-    let era = year.div_euclid(400);
-    let year_of_era = year - era * 400;
-    let month_index = (month + 9) % 12;
-    let day_of_year = (153 * month_index + 2) / 5 + day - 1;
-    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-    era * 146_097 + day_of_era - 719_468
+/// A ZIP time, which has no zone, as seconds since 1970 when read in `zone`.
+fn zip_time(time: zip::DateTime, zone: &TimeZone) -> Option<i64> {
+    let civil = jiff::civil::DateTime::new(
+        i16::try_from(time.year()).ok()?,
+        i8::try_from(time.month()).ok()?,
+        i8::try_from(time.day()).ok()?,
+        i8::try_from(time.hour()).ok()?,
+        i8::try_from(time.minute()).ok()?,
+        i8::try_from(time.second()).ok()?,
+        0,
+    )
+    .ok()?;
+    zone.to_ambiguous_timestamp(civil)
+        .compatible()
+        .ok()
+        .map(jiff::Timestamp::as_second)
 }
 
-/// The civil date of days since 1970-01-01.
-fn civil_from_days(days: i64) -> (i64, u32, u32) {
-    let days = days + 719_468;
-    let era = days.div_euclid(146_097);
-    let day_of_era = days - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_index = (5 * day_of_year + 2) / 153;
-    let day = (day_of_year - (153 * month_index + 2) / 5 + 1) as u32;
-    let month = if month_index < 10 {
-        month_index + 3
-    } else {
-        month_index - 9
-    } as u32;
-    let year = year_of_era + era * 400 + i64::from(month <= 2);
-    (year, month, day)
+/// The ZIP time of `modified` (seconds since 1970) in `zone`, kept within
+/// the years a ZIP time can hold.
+fn dos_time(modified: i64, zone: &TimeZone) -> zip::DateTime {
+    let Ok(stamp) = jiff::Timestamp::from_second(modified) else {
+        return zip::DateTime::default();
+    };
+    let civil = zone.to_datetime(stamp);
+    zip::DateTime::from_date_and_time(
+        u16::try_from(civil.year().clamp(1980, 2107)).unwrap_or(1980),
+        civil.month().unsigned_abs(),
+        civil.day().unsigned_abs(),
+        civil.hour().unsigned_abs(),
+        civil.minute().unsigned_abs(),
+        civil.second().unsigned_abs(),
+    )
+    .unwrap_or_default()
 }
 
 fn read_tar(reader: impl Read, visit: Visit<'_>) -> Result<(), ReadError> {
@@ -518,7 +526,15 @@ pub fn write_archive<W: Write + Seek>(
     left_out: &mut dyn FnMut(&Source, &'static str),
 ) -> io::Result<()> {
     match format {
-        Format::Zip => write_zip(level, out, entries, open, written, left_out),
+        Format::Zip => write_zip(
+            level,
+            out,
+            entries,
+            &TimeZone::system(),
+            open,
+            written,
+            left_out,
+        ),
         Format::SevenZ => write_seven_z(level, out, entries, open, written, left_out),
         Format::Tar => write_tar(out, entries, open, written).map(drop),
         Format::TarGz => {
@@ -630,38 +646,44 @@ fn write_tar<W: Write>(
     builder.into_inner()
 }
 
-fn zip_options(level: Level, entry: &Source) -> zip::write::SimpleFileOptions {
-    let time = {
-        let days = entry.modified.div_euclid(86_400);
-        let seconds = entry.modified.rem_euclid(86_400);
-        let (year, month, day) = civil_from_days(days);
-        zip::DateTime::from_date_and_time(
-            u16::try_from(year.clamp(1980, 2107)).unwrap_or(1980),
-            month as u8,
-            day as u8,
-            (seconds / 3_600) as u8,
-            (seconds % 3_600 / 60) as u8,
-            (seconds % 60) as u8,
-        )
-        .unwrap_or_default()
-    };
+fn zip_options(
+    level: Level,
+    entry: &Source,
+    zone: &TimeZone,
+) -> zip::write::FullFileOptions<'static, 'static> {
+    let time = dos_time(entry.modified, zone);
     let compression = match level {
         Level::Fast => 1,
         Level::Normal => 6,
         Level::Smallest => 9,
     };
-    zip::write::SimpleFileOptions::default()
+    let mut options = zip::write::FullFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
         .compression_level(Some(compression))
         .unix_permissions(entry.mode & 0o7777)
         .last_modified_time(time)
-        .large_file(entry.size >= u64::from(u32::MAX))
+        .large_file(entry.size >= u64::from(u32::MAX));
+    // The extended stamp (Info-ZIP "UT": a flag byte saying only the
+    // modification time follows, then that time) says exactly when, as Ark,
+    // unzip and 7-Zip read it. Times it cannot hold are left to the plain one.
+    if let Ok(seconds) = u32::try_from(entry.modified) {
+        let mut stamp = vec![1_u8];
+        stamp.extend_from_slice(&seconds.to_le_bytes());
+        // The field is well formed, so this cannot be refused; were it, the
+        // plain time alone still says when.
+        let _ = options.add_extra_field(EXTENDED_TIMESTAMP, stamp, false);
+    }
+    options
 }
+
+/// The Info-ZIP extended timestamp field's id.
+const EXTENDED_TIMESTAMP: u16 = 0x5455;
 
 fn write_zip<W: Write + Seek>(
     level: Level,
     out: &mut W,
     entries: &[Source],
+    zone: &TimeZone,
     open: Open<'_>,
     written: Written<'_>,
     left_out: &mut dyn FnMut(&Source, &'static str),
@@ -676,7 +698,7 @@ fn write_zip<W: Write + Seek>(
             left_out(entry, "ZIP archives need names that are valid text");
             continue;
         };
-        let options = zip_options(level, entry);
+        let options = zip_options(level, entry, zone);
         match &entry.kind {
             Kind::Directory => archive
                 .add_directory(format!("{name}/"), options)

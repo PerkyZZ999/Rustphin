@@ -3,8 +3,11 @@
 //! This crate renders snapshots published by `rustphin-core` and sends it
 //! commands. It never reads the filesystem itself.
 
+mod archive_tools;
+mod archives;
 mod browser;
 mod commands;
+mod compress_dialog;
 mod controls;
 mod diagnostics;
 mod dialog;

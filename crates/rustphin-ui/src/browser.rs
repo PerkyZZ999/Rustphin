@@ -116,6 +116,13 @@ actions!(
         Copy,
         CopyLocation,
         Duplicate,
+        ExtractHere,
+        ExtractIntoFolder,
+        ExtractAndTrash,
+        ExtractTo,
+        CompressZip,
+        CompressTarGz,
+        CompressChoose,
         Cut,
         Paste,
         OpenContextMenu,
@@ -318,6 +325,18 @@ pub enum BrowserEvent {
         /// Names in the folder that are not selected.
         staying: Vec<OsString>,
     },
+    /// Ask for the name, format and level of a new archive of `sources`
+    /// in `folder` (W-111d).
+    Compress {
+        /// Entries to pack.
+        sources: Vec<PathBuf>,
+        /// Where the archive goes.
+        folder: PathBuf,
+        /// The name it is offered, without ending.
+        base: String,
+        /// Every name in the folder, so the dialog can avoid them.
+        taken: Vec<Vec<u8>>,
+    },
 }
 
 impl EventEmitter<BrowserEvent> for Browser {}
@@ -361,6 +380,8 @@ pub struct Browser {
     /// The copies a duplicate this view asked for will create: selected
     /// together once all of them show up, as Dolphin does.
     select_all_when_seen: Vec<Vec<u8>>,
+    /// The hub's latest `created` already selected.
+    created_seen: u64,
     /// An entry whose renaming starts at the next redraw, when a window is at hand.
     rename_requested: Option<Vec<u8>>,
     /// Take the keyboard focus back at the next redraw.
@@ -464,7 +485,10 @@ impl Browser {
             cx.subscribe_in(&filter_input, window, Self::on_filter_input),
             cx.subscribe_in(&rename_input, window, Self::on_rename_input),
             // Cut entries are drawn dimmed, and the clipboard changes elsewhere.
-            cx.observe(&hub(cx), |_, _, cx| cx.notify()),
+            cx.observe(&hub(cx), |this, hub, cx| {
+                this.select_created(&hub, cx);
+                cx.notify();
+            }),
             // Thumbnails arrive from background threads.
             cx.observe(&thumbs(cx), |_, _, cx| cx.notify()),
         ];
@@ -528,6 +552,7 @@ impl Browser {
             rename_input,
             select_when_seen: None,
             select_all_when_seen: Vec::new(),
+            created_seen: 0,
             rename_requested: None,
             refocus: false,
             trash_dir: None,
@@ -1061,6 +1086,26 @@ impl Browser {
             .read(cx)
             .clip()
             .is_some_and(|clip| !clip.paths.is_empty());
+        let (all_archives, extract_folder, compress_names) = match snapshot {
+            Some(snapshot) if !rows.is_empty() => {
+                let all_archives = rows.iter().all(|&row| {
+                    !snapshot.is_container(row) && self.archive_opener(snapshot, row).is_some()
+                });
+                let extract_folder =
+                    (rows.len() == 1).then(|| crate::archives::folder_for(snapshot.name(rows[0])));
+                let entries: Vec<(&[u8], bool)> = rows
+                    .iter()
+                    .map(|&row| (snapshot.name(row), snapshot.is_container(row)))
+                    .collect();
+                let listed = snapshot.listed_names();
+                (
+                    all_archives,
+                    extract_folder,
+                    crate::archives::quick_names(&entries, |name| listed.contains(name)),
+                )
+            }
+            _ => (false, None, Default::default()),
+        };
         menu::MenuFacts {
             on_selection,
             count: rows.len(),
@@ -1070,7 +1115,169 @@ impl Browser {
             can_paste,
             applications,
             types_ready: self.types.is_some(),
+            all_archives,
+            extract_folder,
+            compress_names,
         }
+    }
+
+    /// Selects what the latest extraction or compression made, once, when
+    /// it is in the folder shown (W-111, D-032).
+    fn select_created(&mut self, hub: &Entity<crate::operations::Hub>, cx: &mut Context<Self>) {
+        let (serial, made) = &hub.read(cx).created;
+        if *serial == self.created_seen {
+            return;
+        }
+        self.created_seen = *serial;
+        let Some(here) = self.location() else {
+            return;
+        };
+        let names: Vec<Vec<u8>> = made
+            .iter()
+            .filter(|path| path.parent() == Some(here.as_path()))
+            .filter_map(|path| path.file_name())
+            .map(|name| name.as_bytes().to_vec())
+            .collect();
+        if !names.is_empty() {
+            // Selected once the listing shows them, as for duplicates.
+            self.select_all_when_seen = names;
+            cx.notify();
+        }
+    }
+
+    /// Who opens row `row` as an archive, if anything does (W-111).
+    fn archive_opener(&self, snapshot: &Snapshot, row: usize) -> Option<crate::archives::Opener> {
+        let name = snapshot.name(row);
+        let mime = self
+            .types
+            .as_ref()
+            .map(|types| types.mime_type(name, false));
+        crate::archives::opener(name, mime)
+    }
+
+    /// Extracts the selected archives (W-111): beside them, into a new
+    /// folder each, then to the trash, or into a folder chosen in KDE's
+    /// folder dialog.
+    fn extract_selected(&mut self, how: menu::ExtractHow, cx: &mut Context<Self>) {
+        use rustphin_core::ops::Layout;
+        let Some(snapshot) = self.current_snapshot().cloned() else {
+            return;
+        };
+        let rows = self.selection.rows(&snapshot);
+        let archives: Vec<(PathBuf, crate::archives::Opener)> = rows
+            .iter()
+            .filter(|&&row| !snapshot.is_container(row))
+            .filter_map(|&row| {
+                self.archive_opener(&snapshot, row)
+                    .map(|opener| (snapshot.entry_path(row), opener))
+            })
+            .collect();
+        if archives.is_empty() {
+            hub(cx).update(cx, |hub, cx| {
+                hub.say("Select an archive to extract.".to_owned(), false, cx);
+            });
+            return;
+        }
+        let Some(here) = self.location() else {
+            return;
+        };
+        let (layout, trash) = match how {
+            menu::ExtractHow::Here | menu::ExtractHow::To => (Layout::Here, false),
+            menu::ExtractHow::NewFolder => (Layout::NewFolder, false),
+            menu::ExtractHow::AndTrash => (Layout::Here, true),
+        };
+        if how != menu::ExtractHow::To {
+            Self::start_extracting(archives, here, layout, trash, cx);
+            return;
+        }
+        let chosen = cx.prompt_for_paths(gpui_kit::PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some("Extract here".into()),
+        });
+        cx.spawn(async move |_, cx| {
+            if let Ok(Ok(Some(mut folders))) = chosen.await
+                && let Some(into) = folders.pop()
+            {
+                cx.update(|cx| Self::start_extracting(archives, into, layout, trash, cx));
+            }
+        })
+        .detach();
+    }
+
+    /// Hands each archive to the engine, or to another tool (W-111f).
+    fn start_extracting(
+        archives: Vec<(PathBuf, crate::archives::Opener)>,
+        into: PathBuf,
+        layout: rustphin_core::ops::Layout,
+        trash: bool,
+        cx: &mut App,
+    ) {
+        for (archive, opener) in archives {
+            match opener {
+                crate::archives::Opener::Rustphin => hub(cx).update(cx, |hub, _| {
+                    hub.start(Request::Extract {
+                        archive,
+                        into: into.clone(),
+                        layout,
+                        trash_archive: trash,
+                    });
+                }),
+                crate::archives::Opener::Other => {
+                    crate::archive_tools::extract(archive, into.clone(), layout, trash, cx);
+                }
+            }
+        }
+    }
+
+    /// Compresses the selection into "name.zip" or "name.tar.gz" beside
+    /// it, or asks for the name, format and level (W-111).
+    fn compress_selected(&mut self, how: menu::CompressHow, cx: &mut Context<Self>) {
+        use rustphin_core::archive::{Format, Level};
+        let Some(snapshot) = self.current_snapshot().cloned() else {
+            return;
+        };
+        let rows = self.selection.rows(&snapshot);
+        if rows.is_empty() {
+            hub(cx).update(cx, |hub, cx| {
+                hub.say("Select what to compress.".to_owned(), false, cx);
+            });
+            return;
+        }
+        let Some(folder) = self.location() else {
+            return;
+        };
+        let sources: Vec<PathBuf> = rows.iter().map(|&row| snapshot.entry_path(row)).collect();
+        let entries: Vec<(&[u8], bool)> = rows
+            .iter()
+            .map(|&row| (snapshot.name(row), snapshot.is_container(row)))
+            .collect();
+        let listed = snapshot.listed_names();
+        // The same names the menu showed.
+        let [zip, tar_gz] = crate::archives::quick_names(&entries, |name| listed.contains(name));
+        let (format, name) = match how {
+            menu::CompressHow::Zip => (Format::Zip, zip),
+            menu::CompressHow::TarGz => (Format::TarGz, tar_gz),
+            menu::CompressHow::Choose => {
+                let taken = listed.iter().map(|name| name.to_vec()).collect();
+                cx.emit(BrowserEvent::Compress {
+                    sources,
+                    folder,
+                    base: crate::archives::compress_base(&entries),
+                    taken,
+                });
+                return;
+            }
+        };
+        hub(cx).update(cx, |hub, _| {
+            hub.start(Request::Compress {
+                sources,
+                archive: folder.join(name),
+                format,
+                level: Level::Normal,
+            });
+        });
     }
 
     /// Where a keyboard-opened menu appears: under the focused entry, kept
@@ -1221,6 +1428,14 @@ impl Browser {
                 // Creating focuses the new name once it appears.
             }
             MenuCommand::Properties => self.open_properties(window, cx),
+            MenuCommand::Extract(how) => {
+                self.extract_selected(how, cx);
+                self.focus.focus(window, cx);
+            }
+            MenuCommand::Compress(how) => {
+                self.compress_selected(how, cx);
+                self.focus.focus(window, cx);
+            }
         }
         cx.notify();
     }
@@ -5006,6 +5221,27 @@ impl Render for Browser {
             .on_action(cx.listener(|this, _: &GoUp, _, cx| this.go_up(cx)))
             .on_action(cx.listener(|this, _: &CopyLocation, _, cx| this.copy_location(cx)))
             .on_action(cx.listener(|this, _: &Duplicate, _, cx| this.duplicate_selected(cx)))
+            .on_action(cx.listener(|this, _: &ExtractHere, _, cx| {
+                this.extract_selected(menu::ExtractHow::Here, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtractIntoFolder, _, cx| {
+                this.extract_selected(menu::ExtractHow::NewFolder, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtractAndTrash, _, cx| {
+                this.extract_selected(menu::ExtractHow::AndTrash, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ExtractTo, _, cx| {
+                this.extract_selected(menu::ExtractHow::To, cx);
+            }))
+            .on_action(cx.listener(|this, _: &CompressZip, _, cx| {
+                this.compress_selected(menu::CompressHow::Zip, cx);
+            }))
+            .on_action(cx.listener(|this, _: &CompressTarGz, _, cx| {
+                this.compress_selected(menu::CompressHow::TarGz, cx);
+            }))
+            .on_action(cx.listener(|this, _: &CompressChoose, _, cx| {
+                this.compress_selected(menu::CompressHow::Choose, cx);
+            }))
             .on_action(cx.listener(|this, _: &GoHome, _, cx| {
                 if let Some(home) = rustphin_platform::xdg::home() {
                     this.go_to(home, cx);

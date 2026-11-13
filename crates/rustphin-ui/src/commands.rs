@@ -119,6 +119,23 @@ fn build() -> Vec<Command> {
             b::CopyLocation
         ),
         command!("Files: Duplicate here", "Ctrl+D", Browser, b::Duplicate),
+        command!("Files: Extract here", "", Browser, b::ExtractHere),
+        command!(
+            "Files: Extract into a new folder",
+            "",
+            Browser,
+            b::ExtractIntoFolder
+        ),
+        command!(
+            "Files: Extract and trash archive",
+            "",
+            Browser,
+            b::ExtractAndTrash
+        ),
+        command!("Files: Extract to\u{2026}", "", Browser, b::ExtractTo),
+        command!("Files: Compress to ZIP", "", Browser, b::CompressZip),
+        command!("Files: Compress to TAR.GZ", "", Browser, b::CompressTarGz),
+        command!("Files: Compress to\u{2026}", "", Browser, b::CompressChoose),
         command!(
             "Files: Copy selection to the other view",
             "Shift+F5",

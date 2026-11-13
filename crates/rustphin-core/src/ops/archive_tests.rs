@@ -669,3 +669,31 @@ fn the_archive_stays_when_anything_was_left_out_or_cancelled() {
     assert!(!cancelled.completed);
     assert!(plain.exists(), "a cancelled extraction keeps its archive");
 }
+
+#[test]
+fn folders_the_archive_only_implies_get_the_usual_rights() {
+    let d = dirs();
+    fs::write(
+        d.src.join("deep.zip"),
+        zip_of(&[("top/inner/a.txt", "a")], None),
+    )
+    .unwrap();
+
+    run(
+        &RealFs,
+        &NoTrash,
+        &extract(&d.src.join("deep.zip"), &d.dst, Layout::Here),
+        &mut Archivist::default(),
+    )
+    .unwrap();
+
+    for folder in ["top", "top/inner"] {
+        let mode = fs::metadata(d.dst.join(folder))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode & 0o700, 0o700, "{folder}: {mode:o}");
+        assert_ne!(mode & 0o055, 0, "{folder} is not private: {mode:o}");
+    }
+}

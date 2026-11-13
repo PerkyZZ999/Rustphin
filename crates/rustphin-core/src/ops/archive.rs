@@ -341,7 +341,9 @@ impl Engine<'_> {
             if made.contains(&path) {
                 continue;
             }
-            match self.fs.create_dir(&path, 0o700) {
+            // The temporary folder above is private; inside it, folders get
+            // the user's usual rights (0777 less the umask).
+            match self.fs.create_dir(&path, 0o777) {
                 Ok(()) => {}
                 Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                     if self.fs.info(&path)?.kind != EntryKind::Directory {

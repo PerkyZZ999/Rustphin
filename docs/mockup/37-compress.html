@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1040">
+<title>37 · Compress to… · Rustphin mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/rp.css">
+<style>
+body { margin: 0; background: #05080f; color: #e6ebf5; font: 400 14px/20px Inter, sans-serif; }
+.scene { padding: 24px; }
+.scene h1 { font: 600 16px/24px "Space Grotesk", sans-serif; margin: 0 0 4px; }
+.scene p.cap { margin: 0 0 16px; color: #9aa6bd; max-width: 720px; }
+.stage { position: relative; width: 640px; height: 440px; border: 1px solid #263048; border-radius: 2px; }
+.stage .dlg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 520px; }
+.row { display: grid; grid-template-columns: 96px 1fr; gap: 8px 16px; align-items: center; }
+.row + .row { margin-top: 16px; }
+.lab { color: var(--text-muted); }
+.note { margin-top: 16px; color: var(--text-muted); font: 400 12px/16px var(--f-ui); }
+.note.err { color: var(--danger-bright, #ff8c8c); }
+.mono { font-family: var(--f-data, "JetBrains Mono", monospace); }
+</style>
+</head>
+<body>
+<section class="scene">
+<h1>37a · Compress to…, as it opens</h1>
+<p class="cap">Opened from the context menu's Compress › Compress to… or the palette on three selected files. The name is the one Dolphin would give (the common start of the names); the field holds the keyboard. Format and level are segmented controls. The line under them says exactly what will be made and where. Enter compresses; Escape cancels.</p>
+<div class="rp stage scrim">
+<div aria-label="Compress 3 items" class="float dlg" role="dialog">
+<div class="dlg-title"><span class="ic i-archive"></span><h2>Compress 3 items</h2><button aria-label="Cancel (Esc)" class="ibtn"><span class="ic i-x"></span></button></div>
+<div class="dlg-body">
+<div class="row"><span class="lab">Name</span><input class="field is-focus" value="invoice-2026" aria-label="Archive name"></div>
+<div class="row"><span class="lab">Format</span>
+<div class="seg-row" role="radiogroup" aria-label="Format">
+<button class="seg-btn is-on" role="radio" aria-checked="true">ZIP</button><button class="seg-btn" role="radio">TAR.GZ</button><button class="seg-btn" role="radio">TAR.XZ</button><button class="seg-btn" role="radio">TAR.ZST</button><button class="seg-btn" role="radio">7Z</button>
+</div></div>
+<div class="row"><span class="lab">Compression</span>
+<div class="seg-row" role="radiogroup" aria-label="Compression">
+<button class="seg-btn" role="radio">Fast</button><button class="seg-btn is-on" role="radio" aria-checked="true">Normal</button><button class="seg-btn" role="radio">Smallest</button>
+</div></div>
+<p class="note">Makes <span class="mono">invoice-2026.zip</span> in “Documents”. ZIP opens everywhere, including Windows and phones.</p>
+</div>
+<div class="dlg-actions">
+<button class="btn btn-outline">Cancel (Esc)</button>
+<button class="btn btn-primary">Compress (Enter)</button>
+</div>
+</div>
+</div>
+</section>
+
+<section class="scene">
+<h1>37b · A name that is taken</h1>
+<p class="cap">The name and format give a file that already exists in the folder. The note says so and what to do; Compress is disabled (shown, not hidden) until the name is free. Nothing is ever replaced.</p>
+<div class="rp stage scrim">
+<div aria-label="Compress 3 items" class="float dlg" role="dialog">
+<div class="dlg-title"><span class="ic i-archive"></span><h2>Compress 3 items</h2><button aria-label="Cancel (Esc)" class="ibtn"><span class="ic i-x"></span></button></div>
+<div class="dlg-body">
+<div class="row"><span class="lab">Name</span><input class="field is-focus" value="invoice-2026" aria-label="Archive name"></div>
+<div class="row"><span class="lab">Format</span>
+<div class="seg-row" role="radiogroup" aria-label="Format">
+<button class="seg-btn" role="radio">ZIP</button><button class="seg-btn is-on" role="radio" aria-checked="true">TAR.GZ</button><button class="seg-btn" role="radio">TAR.XZ</button><button class="seg-btn" role="radio">TAR.ZST</button><button class="seg-btn" role="radio">7Z</button>
+</div></div>
+<div class="row"><span class="lab">Compression</span>
+<div class="seg-row" role="radiogroup" aria-label="Compression">
+<button class="seg-btn" role="radio">Fast</button><button class="seg-btn is-on" role="radio" aria-checked="true">Normal</button><button class="seg-btn" role="radio">Smallest</button>
+</div></div>
+<p class="note err">“invoice-2026.tar.gz” already exists in “Documents”. Choose another name.</p>
+</div>
+<div class="dlg-actions">
+<button class="btn btn-outline">Cancel (Esc)</button>
+<button aria-disabled="true" class="btn btn-primary is-dis">Compress (Enter)</button>
+</div>
+</div>
+</div>
+</section>
+</body>
+</html>

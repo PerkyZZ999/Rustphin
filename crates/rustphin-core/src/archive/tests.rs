@@ -61,17 +61,97 @@ fn links_must_point_inside_the_destination() {
     assert!(!link_stays_inside(Path::new("link"), b""));
 }
 
+/// Five hours behind UTC, as Toronto is in winter.
+fn five_hours_behind() -> TimeZone {
+    TimeZone::fixed(jiff::tz::offset(-5))
+}
+
+/// 2023-11-14 22:13:20 UTC: the time `sample` gives every entry.
+const SAMPLE_TIME: i64 = 1_700_000_000;
+
+fn zip_of_sample(zone: &TimeZone) -> Vec<u8> {
+    let (_dir, entries) = sample();
+    let open: Open<'_> = &|path| Ok(Box::new(std::fs::File::open(path)?));
+    let mut out = Cursor::new(Vec::new());
+    write_zip(
+        Level::Fast,
+        &mut out,
+        &entries,
+        zone,
+        open,
+        &mut |_| ControlFlow::Continue(()),
+        &mut |_, reason| panic!("left out: {reason}"),
+    )
+    .unwrap();
+    out.into_inner()
+}
+
+fn zip_modified(bytes: Vec<u8>, name: &[u8], zone: &TimeZone) -> Option<i64> {
+    let mut modified = None;
+    read_zip(
+        Box::new(Cursor::new(bytes)),
+        None,
+        zone,
+        &mut |_, _| ControlFlow::Continue(()),
+        &mut |header, _| {
+            if header.name == name {
+                modified = header.modified;
+            }
+            Ok(ControlFlow::Continue(()))
+        },
+    )
+    .unwrap();
+    modified
+}
+
 #[test]
-fn dates_survive_the_conversion_both_ways() {
-    for days in [0, 1, 59, 60, 365, 11_016, 19_000, 20_770, -1, -719_468] {
-        let (year, month, day) = civil_from_days(days);
-        assert_eq!(
-            days_from_civil(year, i64::from(month), i64::from(day)),
-            days
-        );
-    }
-    assert_eq!(civil_from_days(0), (1970, 1, 1));
-    assert_eq!(days_from_civil(2026, 11, 13), 20_770);
+fn zip_times_are_written_in_local_time_with_the_exact_time_beside_them() {
+    // Other programs show a ZIP's plain time as it is, as local time; the
+    // extended stamp beside it holds the exact moment.
+    let bytes = zip_of_sample(&five_hours_behind());
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+    let file = archive.by_name("top/a.txt").unwrap();
+    let time = file.last_modified().unwrap();
+    assert_eq!(
+        (
+            time.year(),
+            time.month(),
+            time.day(),
+            time.hour(),
+            time.minute()
+        ),
+        (2023, 11, 14, 17, 13)
+    );
+    let stamp = file.extra_data_fields().find_map(|field| match field {
+        zip::extra_fields::ExtraField::ExtendedTimestamp(stamp) => stamp.mod_time(),
+        _ => None,
+    });
+    assert_eq!(stamp, Some(1_700_000_000));
+}
+
+#[test]
+fn a_zip_time_is_read_from_its_exact_stamp_or_else_as_local_time() {
+    // With the stamp, the reader's own zone does not matter.
+    let bytes = zip_of_sample(&five_hours_behind());
+    let far_east = TimeZone::fixed(jiff::tz::offset(9));
+    assert_eq!(
+        zip_modified(bytes, b"top/a.txt", &far_east),
+        Some(SAMPLE_TIME)
+    );
+    // Without one, as most Windows tools write them, the plain time is local.
+    let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let time = zip::DateTime::from_date_and_time(2023, 11, 14, 17, 13, 20).unwrap();
+    out.start_file(
+        "plain.txt",
+        zip::write::SimpleFileOptions::default().last_modified_time(time),
+    )
+    .unwrap();
+    out.write_all(b"plain").unwrap();
+    let bytes = out.finish().unwrap().into_inner();
+    assert_eq!(
+        zip_modified(bytes, b"plain.txt", &five_hours_behind()),
+        Some(SAMPLE_TIME)
+    );
 }
 
 /// Files to write: name → content; folders end in `/`.
@@ -85,7 +165,7 @@ fn sample() -> (tempfile::TempDir, Vec<Source>) {
             name: name.as_bytes().to_vec(),
             kind: Kind::File,
             mode: 0o640,
-            modified: 1_700_000_000,
+            modified: SAMPLE_TIME,
             size: content.len() as u64,
         }
     };
@@ -95,7 +175,7 @@ fn sample() -> (tempfile::TempDir, Vec<Source>) {
             name: b"top".to_vec(),
             kind: Kind::Directory,
             mode: 0o750,
-            modified: 1_700_000_000,
+            modified: SAMPLE_TIME,
             size: 0,
         },
         file("top/a.txt", b"alpha"),

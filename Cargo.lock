@@ -5873,6 +5873,7 @@ dependencies = [
  "bzip2",
  "flate2",
  "flume 0.11.1",
+ "jiff",
  "lzma-rust2",
  "notify",
  "proptest",

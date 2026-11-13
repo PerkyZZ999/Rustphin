@@ -59,6 +59,11 @@ const DIALOG_CONTEXT: &str = "Dialog";
 /// shortcuts).
 const DIALOG_KEYS: &str = "Dialog && !SettingsDialog";
 
+/// Where the dialogs' single-letter keys (S, K, R, A, C, O) apply: as
+/// [`DIALOG_KEYS`], but not while a text field in the dialog has the
+/// keyboard, such as an archive's password (W-111e): the letters are typed.
+const DIALOG_LETTERS: &str = "Dialog && !SettingsDialog && !Input";
+
 actions!(
     workspace,
     [
@@ -241,12 +246,12 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("escape", DialogCancel, Some(DIALOG_KEYS)),
         // A text field inside a dialog has its own context. Escape still cancels.
         KeyBinding::new("escape", DialogCancel, Some("Dialog > Input")),
-        KeyBinding::new("s", DialogSkip, Some(DIALOG_KEYS)),
-        KeyBinding::new("k", DialogKeepBoth, Some(DIALOG_KEYS)),
-        KeyBinding::new("r", DialogReplace, Some(DIALOG_KEYS)),
-        KeyBinding::new("a", DialogToggleAll, Some(DIALOG_KEYS)),
-        KeyBinding::new("c", DialogCopy, Some(DIALOG_KEYS)),
-        KeyBinding::new("o", DialogOpen, Some(DIALOG_KEYS)),
+        KeyBinding::new("s", DialogSkip, Some(DIALOG_LETTERS)),
+        KeyBinding::new("k", DialogKeepBoth, Some(DIALOG_LETTERS)),
+        KeyBinding::new("r", DialogReplace, Some(DIALOG_LETTERS)),
+        KeyBinding::new("a", DialogToggleAll, Some(DIALOG_LETTERS)),
+        KeyBinding::new("c", DialogCopy, Some(DIALOG_LETTERS)),
+        KeyBinding::new("o", DialogOpen, Some(DIALOG_LETTERS)),
     ]);
 }
 
@@ -304,6 +309,10 @@ pub struct Workspace {
     dialog_focus: FocusHandle,
     /// The question and facts scroll independently of their heading/actions.
     question_scroll: ScrollHandle,
+    /// The password field while an archive's password is asked for
+    /// (W-111e); dropped after each answer, so nothing typed lingers.
+    password_input: Option<Entity<gpui_kit::component::input::InputState>>,
+    _password_enter: Option<Subscription>,
     /// The tab strip, which scrolls sideways when the tabs do not fit.
     tab_scroll: ScrollHandle,
     /// The tab last scrolled into view, to follow changes of tab.
@@ -340,6 +349,8 @@ pub struct Workspace {
     settings_subscription: Option<Subscription>,
     /// Batch rename, when several files are being renamed together.
     pub(crate) rename: Option<crate::rename_dialog::RenameDialog>,
+    /// Compress to… (W-111d), while open.
+    pub(crate) compress: Option<crate::compress_dialog::CompressDialog>,
     /// Folders other applications asked to be shown, applied on the next frame.
     pending_shows: Vec<rustphin_platform::file_manager::Shown>,
     /// Folders to show in this window whatever the settings say: those a
@@ -411,13 +422,18 @@ impl Workspace {
             title: String::new(),
             dialog_focus: cx.focus_handle(),
             question_scroll: ScrollHandle::new(),
+            password_input: None,
+            _password_enter: None,
             tab_scroll: ScrollHandle::new(),
             tab_in_view: None,
             dialog_open: false,
             apply_to_all: false,
             zone: TimeZone::system(),
             // Progress, questions and messages change outside this view.
-            _hub: cx.observe(&hub(cx), |_, _, cx| cx.notify()),
+            _hub: cx.observe_in(&hub(cx), window, |this, hub, window, cx| {
+                this.sync_password_field(&hub, window, cx);
+                cx.notify();
+            }),
             sidebar: sidebar.clone(),
             sidebar_visible: true,
             admin_fs: None,
@@ -440,6 +456,7 @@ impl Workspace {
             settings: None,
             settings_subscription: None,
             rename: None,
+            compress: None,
             pending_shows: Vec::new(),
             shows_here: Vec::new(),
             launch: None,
@@ -573,6 +590,21 @@ impl Workspace {
             } => {
                 self.open_properties(path.clone(), type_label.clone(), look.clone(), cx);
             }
+            BrowserEvent::Compress {
+                sources,
+                folder,
+                base,
+                taken,
+            } => {
+                self.open_compress(
+                    sources.clone(),
+                    folder.clone(),
+                    base.clone(),
+                    taken.clone(),
+                    window,
+                    cx,
+                );
+            }
             BrowserEvent::OpenWith { id, path } => {
                 self.open_with(id.clone(), path.clone(), cx);
             }
@@ -623,6 +655,7 @@ impl Workspace {
         if self.properties.is_some()
             || self.launch.is_some()
             || self.rename.is_some()
+            || self.compress.is_some()
             || !hub(cx).read(cx).questions.is_empty()
         {
             return;
@@ -1149,6 +1182,7 @@ impl Workspace {
         if self.palette.is_some()
             || self.settings.is_some()
             || self.rename.is_some()
+            || self.compress.is_some()
             || self.properties.is_some()
             || self.launch.is_some()
             || !hub(cx).read(cx).questions.is_empty()
@@ -1710,6 +1744,7 @@ impl Render for Workspace {
             && self.settings.is_none()
             && self.launch.is_none()
             && self.rename.is_none()
+            && self.compress.is_none()
             && hub(cx).read(cx).questions.is_empty()
         {
             let path = self.pending_properties.remove(0);
@@ -1773,7 +1808,12 @@ impl Render for Workspace {
         if dialog_open {
             self.rename = None;
         }
-        if dialog_open && !self.dialog_focus.is_focused(window) {
+        // A password question keeps the keyboard in its field (W-111e).
+        let password_question = matches!(
+            hub.read(cx).questions.front(),
+            Some(Question::Password { .. })
+        );
+        if dialog_open && !password_question && !self.dialog_focus.is_focused(window) {
             let focus = self.dialog_focus.clone();
             cx.defer_in(window, move |_, window, cx| focus.focus(window, cx));
         } else if !dialog_open && self.dialog_open {
@@ -2071,6 +2111,13 @@ impl Render for Workspace {
             .children(self.blur_status(theme))
             .children(self.settings.clone())
             .children(dialog)
+            .when(self.compress.is_some(), |workspace| {
+                let element = self
+                    .compress
+                    .as_ref()
+                    .map(|dialog| dialog.render(theme, window, cx));
+                workspace.children(element)
+            })
             .when(self.rename.is_some(), |workspace| {
                 let element = self
                     .rename
@@ -2850,6 +2897,7 @@ impl Workspace {
             Question::ConfirmDelete { .. } => "This does not use the trash. It cannot be undone. Cancel or Escape leaves it as it is.".to_owned(),
             Question::ConfirmEmpty { .. } => "Everything in the trash is deleted for good. It cannot be undone. Cancel or Escape leaves it as it is.".to_owned(),
             Question::ConfirmTrash { .. } => "It can be restored from the trash. Cancel or Escape leaves it where it is.".to_owned(),
+            Question::Password { .. } => "Type the archive's password. It is used for this archive only and not saved. Stop or Escape cancels.".to_owned(),
         };
         let cancel = |label: &'static str| {
             dialog::button("dialog-cancel", label)
@@ -2969,6 +3017,46 @@ impl Workspace {
                         "dialog-accept",
                         gpui_kit::assets::IconName::RotateCw,
                         "Try again (Enter)",
+                    )
+                    .primary()
+                    .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
+                ],
+            ),
+            Question::Password { archive, wrong, .. } => (
+                I::LockKeyhole,
+                if *wrong {
+                    format!(
+                        "Wrong password for \u{201c}{}\u{201d}",
+                        folder_label(archive)
+                    )
+                } else {
+                    format!("\u{201c}{}\u{201d} is encrypted", folder_label(archive))
+                },
+                if *wrong {
+                    "That password did not open it. Type it again; nothing has been extracted."
+                        .to_owned()
+                } else {
+                    "Type its password to extract it. It is used for this archive only and is not saved.".to_owned()
+                },
+                self.password_input
+                    .iter()
+                    .map(|input| {
+                        crate::input::named(
+                            gpui_kit::component::input::Input::new(input).min_h(px(size::BUTTON)),
+                            input,
+                            "Archive password",
+                            window,
+                            cx,
+                        )
+                        .into_any_element()
+                    })
+                    .collect(),
+                vec![
+                    cancel("Stop (Esc)"),
+                    dialog::button_with_icon(
+                        "dialog-accept",
+                        gpui_kit::assets::IconName::PackageOpen,
+                        "Extract (Enter)",
                     )
                     .primary()
                     .on_click(cx.listener(|this, _, _, cx| this.answer(Answer::Accept, cx))),
@@ -3184,10 +3272,51 @@ impl Workspace {
             )
     }
 
+    /// Makes the password field when a password question comes to the
+    /// front, with the keyboard in it at once (made while drawing, its
+    /// focus would wait for the next key, and the first letters would go
+    /// to the file list); drops it when the question goes (W-111e).
+    fn sync_password_field(
+        &mut self,
+        hub: &Entity<operations::Hub>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let asks = matches!(
+            hub.read(cx).questions.front(),
+            Some(Question::Password { .. })
+        );
+        if asks && self.password_input.is_none() {
+            let input = cx.new(|cx| {
+                gpui_kit::component::input::InputState::new(window, cx)
+                    .masked(true)
+                    .placeholder("Password")
+            });
+            self._password_enter = Some(cx.subscribe(
+                &input,
+                |this, _, event: &gpui_kit::component::input::InputEvent, cx| {
+                    if let gpui_kit::component::input::InputEvent::PressEnter { .. } = event {
+                        this.answer(Answer::Accept, cx);
+                    }
+                },
+            ));
+            gpui_kit::Focusable::focus_handle(input.read(cx), cx).focus(window, cx);
+            self.password_input = Some(input);
+        } else if !asks && self.password_input.is_some() {
+            self.password_input = None;
+            self._password_enter = None;
+        }
+    }
+
     /// Applies a dialog button or its key to the question being shown.
     /// Answers that do not fit the question are ignored.
     fn answer(&mut self, answer: Answer, cx: &mut Context<Self>) {
         let all = self.apply_to_all;
+        // Taken out of the field here; the field itself is dropped below.
+        let password = self
+            .password_input
+            .as_ref()
+            .map(|input| input.read(cx).value().to_string());
         hub(cx).update(cx, |hub, cx| match (hub.questions.front(), answer) {
             (Some(Question::Conflict { conflict, .. }), answer) => {
                 let choice = match answer {
@@ -3199,6 +3328,13 @@ impl Workspace {
                 };
                 hub.resolve(choice, all, cx);
             }
+            // An empty field is not an answer: Enter waits for a password.
+            (Some(Question::Password { .. }), Answer::Accept)
+                if password.as_deref().is_some_and(str::is_empty) => {}
+            (Some(Question::Password { .. }), Answer::Accept) => {
+                hub.give_password(password.clone(), cx);
+            }
+            (Some(Question::Password { .. }), Answer::Cancel) => hub.give_password(None, cx),
             (Some(Question::Failed { .. }), Answer::Accept) => hub.recover(Recovery::Retry, cx),
             (Some(Question::Failed { .. }), Answer::Skip) => hub.recover(Recovery::Skip, cx),
             (Some(Question::Failed { .. }), Answer::Cancel) => hub.recover(Recovery::Cancel, cx),
@@ -3218,6 +3354,7 @@ impl Workspace {
             _ => {}
         });
         self.apply_to_all = false;
+        // The password field goes with its question (`sync_password_field`).
         self.question_scroll.set_offset(gpui_kit::Point::default());
         cx.notify();
     }
@@ -3361,6 +3498,24 @@ fn set_panel_width(width: f32, cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    #[allow(clippy::unwrap_used)] // The contexts are fixed, valid text.
+    fn dialog_letters_are_typed_in_a_text_field_and_keys_elsewhere() {
+        let predicate = gpui_kit::KeyBindingContextPredicate::parse(DIALOG_LETTERS).unwrap();
+        let context = |name: &str| gpui_kit::KeyContext::parse(name).unwrap();
+        let on_buttons = [context("Workspace"), context("Dialog")];
+        let in_field = [context("Workspace"), context("Dialog"), context("Input")];
+        // As the keymap matches a binding: at some depth of the focus path.
+        assert!(
+            predicate.depth_of(&on_buttons).is_some(),
+            "S, K, R… answer the question"
+        );
+        assert!(
+            predicate.depth_of(&in_field).is_none(),
+            "letters go into the field"
+        );
+    }
 
     #[test]
     fn tabs_keep_their_width_shrink_evenly_then_stop_at_the_narrowest() {

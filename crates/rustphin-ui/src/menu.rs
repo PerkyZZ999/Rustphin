@@ -55,6 +55,10 @@ pub enum MenuCommand {
     Delete,
     /// Show properties for the one selected entry.
     Properties,
+    /// Extract the selected archives (W-111).
+    Extract(ExtractHow),
+    /// Compress the selection into a new archive (W-111).
+    Compress(CompressHow),
     /// Bring the selection back from the trash.
     Restore,
     /// Ask before emptying the trash being shown.
@@ -72,6 +76,30 @@ pub enum MenuCommand {
         /// Which picture the row shows.
         kind: TemplateKind,
     },
+}
+
+/// How the Extract menu unpacks (W-111, D-032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExtractHow {
+    /// As Ark's "Extract here".
+    Here,
+    /// Into a new folder named after the archive.
+    NewFolder,
+    /// As "Extract here", then the archive goes to the trash.
+    AndTrash,
+    /// Into a folder chosen in KDE's folder dialog.
+    To,
+}
+
+/// What the Compress menu makes (W-111, D-032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompressHow {
+    /// "name.zip" beside the selection.
+    Zip,
+    /// "name.tar.gz" beside the selection.
+    TarGz,
+    /// Name, format and level chosen in a dialog.
+    Choose,
 }
 
 /// What kind of file a New menu entry creates, for its icon.
@@ -146,6 +174,8 @@ impl MenuCommand {
             Self::NewFolder => "F10",
             Self::NewFile => "Ctrl+Alt+N",
             Self::OpenWith(_)
+            | Self::Extract(_)
+            | Self::Compress(_)
             | Self::Restore
             | Self::EmptyTrash
             | Self::OpenTrash(_)
@@ -181,6 +211,12 @@ impl MenuCommand {
             Self::MoveToTrash | Self::EmptyTrash | Self::OpenTrash(_) => I::Trash,
             Self::Delete => I::CircleX,
             Self::Properties => I::Info,
+            Self::Extract(ExtractHow::Here) => I::PackageOpen,
+            Self::Extract(ExtractHow::NewFolder) => I::FolderArchive,
+            Self::Extract(ExtractHow::AndTrash) => I::ArchiveX,
+            Self::Extract(ExtractHow::To) => I::FolderInput,
+            Self::Compress(CompressHow::Zip | CompressHow::TarGz) => I::FileArchive,
+            Self::Compress(CompressHow::Choose) => I::Archive,
             Self::Restore => I::ArchiveRestore,
             Self::NewFolder => I::FolderPlus,
             Self::NewFile => I::FilePlus,
@@ -231,6 +267,12 @@ pub struct MenuFacts {
     pub applications: Vec<AppChoice>,
     /// The type database has been read.
     pub types_ready: bool,
+    /// Every selected entry is an archive something can open (W-111).
+    pub all_archives: bool,
+    /// The folder "Extract into" makes, when one archive is selected.
+    pub extract_folder: Option<String>,
+    /// The files Compress's two quick entries make, ZIP then TAR.GZ.
+    pub compress_names: [String; 2],
 }
 
 /// The menu for these facts. Empty when nothing in it can be chosen.
@@ -326,8 +368,74 @@ fn selection_menu(facts: &MenuFacts) -> Vec<MenuEntry> {
     }
     entries.push(item("Delete…", MenuCommand::Delete, true));
     entries.push(MenuEntry::Separator);
+    if !facts.in_trash && !facts.as_administrator {
+        let archives = archive_menus(facts);
+        if !archives.is_empty() {
+            entries.extend(archives);
+            entries.push(MenuEntry::Separator);
+        }
+    }
     entries.push(item("Properties", MenuCommand::Properties, one));
     entries
+}
+
+/// Extract › for archives, and Compress › for anything but one archive,
+/// as Dolphin shows Ark's menus (W-111, D-032).
+fn archive_menus(facts: &MenuFacts) -> Vec<MenuEntry> {
+    let mut menus = Vec::new();
+    if facts.all_archives {
+        let several = facts.count > 1;
+        let into = match &facts.extract_folder {
+            Some(folder) if !several => format!("Extract into \u{201c}{folder}/\u{201d}"),
+            _ => "Extract each into its own folder".to_owned(),
+        };
+        menus.push(MenuEntry::Submenu {
+            label: "Extract".to_owned(),
+            items: vec![
+                item("Extract here", MenuCommand::Extract(ExtractHow::Here), true),
+                item(&into, MenuCommand::Extract(ExtractHow::NewFolder), true),
+                item(
+                    if several {
+                        "Extract and trash archives"
+                    } else {
+                        "Extract and trash archive"
+                    },
+                    MenuCommand::Extract(ExtractHow::AndTrash),
+                    true,
+                ),
+                item(
+                    "Extract to\u{2026}",
+                    MenuCommand::Extract(ExtractHow::To),
+                    true,
+                ),
+            ],
+        });
+    }
+    // One archive alone is not offered for compressing again, as in Dolphin.
+    if !(facts.all_archives && facts.count == 1) {
+        let [zip, tar_gz] = &facts.compress_names;
+        menus.push(MenuEntry::Submenu {
+            label: "Compress".to_owned(),
+            items: vec![
+                item(
+                    &format!("Compress to \u{201c}{zip}\u{201d}"),
+                    MenuCommand::Compress(CompressHow::Zip),
+                    true,
+                ),
+                item(
+                    &format!("Compress to \u{201c}{tar_gz}\u{201d}"),
+                    MenuCommand::Compress(CompressHow::TarGz),
+                    true,
+                ),
+                item(
+                    "Compress to\u{2026}",
+                    MenuCommand::Compress(CompressHow::Choose),
+                    true,
+                ),
+            ],
+        });
+    }
+    menus
 }
 
 fn open_with(facts: &MenuFacts) -> MenuEntry {
@@ -577,9 +685,88 @@ mod tests {
                 icon: None,
             }],
             types_ready: true,
+            all_archives: false,
+            extract_folder: None,
+            compress_names: ["notes.zip".into(), "notes.tar.gz".into()],
         };
         change(&mut facts);
         facts
+    }
+
+    /// The labels inside the submenu called `name`.
+    fn submenu<'a>(entries: &'a [MenuEntry], name: &str) -> Option<Vec<&'a str>> {
+        entries.iter().find_map(|entry| match entry {
+            MenuEntry::Submenu { label, items } if label == name => Some(
+                items
+                    .iter()
+                    .map(|item| match item {
+                        MenuEntry::Item { label, .. } => label.as_str(),
+                        _ => "",
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn one_archive_offers_extract_and_not_compress_as_in_dolphin() {
+        let entries = context_menu(&facts(|f| {
+            f.all_archives = true;
+            f.extract_folder = Some("Holiday".into());
+        }));
+        assert_eq!(
+            submenu(&entries, "Extract").unwrap(),
+            [
+                "Extract here",
+                "Extract into \u{201c}Holiday/\u{201d}",
+                "Extract and trash archive",
+                "Extract to\u{2026}"
+            ]
+        );
+        assert!(submenu(&entries, "Compress").is_none());
+        // Before Properties, in a group of its own.
+        let at = labels(&entries)
+            .iter()
+            .position(|label| *label == "Extract")
+            .unwrap();
+        assert_eq!(labels(&entries)[at + 1], "");
+        assert_eq!(labels(&entries)[at + 2], "Properties");
+    }
+
+    #[test]
+    fn other_selections_offer_compress_named_after_them_and_never_in_the_trash() {
+        let entries = context_menu(&facts(|f| {
+            f.count = 3;
+            f.compress_names = ["invoice-2026 (1).zip".into(), "invoice-2026.tar.gz".into()];
+        }));
+        assert!(submenu(&entries, "Extract").is_none());
+        assert_eq!(
+            submenu(&entries, "Compress").unwrap(),
+            [
+                "Compress to \u{201c}invoice-2026 (1).zip\u{201d}",
+                "Compress to \u{201c}invoice-2026.tar.gz\u{201d}",
+                "Compress to\u{2026}"
+            ]
+        );
+        let several_archives = context_menu(&facts(|f| {
+            f.count = 2;
+            f.all_archives = true;
+        }));
+        assert_eq!(
+            submenu(&several_archives, "Extract").unwrap()[1],
+            "Extract each into its own folder"
+        );
+        assert!(submenu(&several_archives, "Compress").is_some());
+        for hidden in [
+            facts(|f| f.in_trash = true),
+            facts(|f| f.as_administrator = true),
+        ] {
+            let entries = context_menu(&hidden);
+            assert!(
+                submenu(&entries, "Compress").is_none() && submenu(&entries, "Extract").is_none()
+            );
+        }
     }
 
     #[test]
@@ -692,6 +879,8 @@ mod tests {
                 "Move to trash",
                 "Delete…",
                 "",
+                "Compress",
+                "",
                 "Properties"
             ]
         );
@@ -721,12 +910,14 @@ mod tests {
         ));
         assert!(entries.iter().all(|entry| !matches!(
             entry,
-            MenuEntry::Submenu { .. }
-                | MenuEntry::Item {
-                    command: MenuCommand::Rename,
-                    enabled: true,
-                    ..
-                }
+            MenuEntry::Submenu { label, .. } if label == "Open with"
+        ) && !matches!(
+            entry,
+            MenuEntry::Item {
+                command: MenuCommand::Rename,
+                enabled: true,
+                ..
+            }
         )));
         assert!(entries.iter().any(|entry| matches!(
             entry,
@@ -749,11 +940,10 @@ mod tests {
                 ..
             }
         ));
-        assert!(
-            entries
-                .iter()
-                .all(|entry| !matches!(entry, MenuEntry::Submenu { .. }))
-        );
+        // No application list for a folder (Compress is its own submenu).
+        assert!(entries.iter().all(
+            |entry| !matches!(entry, MenuEntry::Submenu { label, .. } if label == "Open with")
+        ));
     }
 
     #[test]
@@ -859,13 +1049,12 @@ mod tests {
                 ..
             }
         ));
+        // Up wraps to the last row that can be chosen: Compress
+        // (Properties is for one entry only).
         assert_eq!(on_key(&entries, &mut state, MenuKey::Up), MenuEffect::Stay);
         assert!(matches!(
             &entries[state.cursor],
-            MenuEntry::Item {
-                command: MenuCommand::Delete,
-                ..
-            }
+            MenuEntry::Submenu { label, .. } if label == "Compress"
         ));
         let single = context_menu(&facts(|_| {}));
         let mut state = initial(&single).unwrap();

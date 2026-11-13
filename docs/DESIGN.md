@@ -737,6 +737,23 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   Before the first change
   there is no file: the path adds "(made when you first change a setting)"
   and the button is unavailable.
+- **Compress and extract (W-111, D-032, mockup 37):** the context menu
+  gains Extract › for archives (`package-open` Extract here,
+  `folder-archive` Extract into "name/", `archive-x` Extract and trash
+  archive, `folder-input` Extract to…) and Compress › for anything else
+  (`file-archive` Compress to "name.zip" and "name.tar.gz", each the exact
+  name it will make, `archive` Compress to…), just before Properties; neither
+  in the trash nor as administrator. Compress to… is a 560 px dialog with the
+  usual title row (`archive`, "Compress "name"" or "Compress N items"): rows
+  with a 96 px `text-muted` label for Name (a 32 px field holding the
+  keyboard), Format (ZIP, TAR.GZ, TAR.XZ, TAR.ZST, 7Z) and Compression (Fast,
+  Normal, Smallest) as 32 px segmented rows like batch rename's, the chosen
+  one in `primary`; then a `body-sm` note saying what will be made and where,
+  with the format's one-line hint, or in `danger` why it cannot be (a taken
+  name, an empty one); Cancel (Esc) and Compress (Enter), which is disabled
+  while the note is an error. A password question uses the operation
+  question's layout with `lock-keyhole`, a masked field focused at once, and
+  "Extract (Enter)".
 - **View menu (W-107):** the View button opens a 240 px panel with the
   context menu's surface, under the button's right edge: the three modes as
   rows (icon, name, key: Icons Ctrl+1, Compact Ctrl+2, Details Ctrl+3), the

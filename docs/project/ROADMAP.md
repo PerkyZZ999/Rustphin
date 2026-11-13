@@ -111,6 +111,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Before building:** each gets a requirement with acceptance criteria and a plan for the maintainer to approve; both add scope beyond the MVP.
 - **2026-11-13:** W-110's plan is [`BACKGROUND_PLAN.md`](BACKGROUND_PLAN.md): one Rustphin per session that keeps running without windows (as Nautilus does; Dolphin's `--daemon` only relays D-Bus requests to new processes), launches handed to it, start at login as a Settings switch; work W-110a–f and five decisions for the maintainer. Approved with all five recommendations (D-031, R-020).
 - **2026-11-13:** W-111's plan is [`ARCHIVE_PLAN.md`](ARCHIVE_PLAN.md): Ark's Extract and Compress submenus with the maintainer's extra "into a new folder", done by Rustphin's own engine for ZIP, TAR and 7Z with Ark for other formats (recommended); work W-111a–g and five decisions. The maintainer reviews it, then both plans are built.
+- **Status:** both built 2026-11-13. W-110a–f done (R-020; KWin focus from a real launcher token and a login start need the maintainer's desktop). W-111a–g done (R-021 ticked; RAR and ISO through a real tool not tried). Follow-up W-113: Extract to… should start in the folder shown.
 
 ## Traceability
 
@@ -134,6 +135,9 @@ Each slice ends with something the author can run and use, and with its acceptan
 | R-016 Batch rename | S9 | test, ui-test |
 | R-017 Default file manager | S10 | test, manual |
 | R-018 Context menu and properties | S10 | ui-test, manual |
+| R-019 Settings window | W-106 | test, ui-test |
+| R-020 Background mode | W-110 | test, ui-test, manual |
+| R-021 Compress and extract | W-111 | test, fuzz, ui-test |
 | R-101 Responsiveness at scale | S1, S2 | bench, ui-test |
 | R-102 Memory | S2 | bench |
 | R-103 Data safety | S4 | test |
