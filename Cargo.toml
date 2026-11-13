@@ -33,6 +33,10 @@ roxmltree = "0.21"
 zbus = "5"
 image = { version = "0.25", default-features = false, features = ["bmp", "gif", "jpeg", "png", "webp"] }
 md-5 = "0.10"
+# Font pre-read (W-109b): the versions and file reading GPUI's text system
+# uses (cosmic-text 0.19), so the same parts of each font are read. MIT.
+fontdb = { version = "0.23", default-features = false, features = ["std", "fs", "memmap"] }
+fontconfig-parser = "0.5"
 png = "0.18"
 
 # UI toolkit, pinned exactly (decision D-001). Upgrade only as a planned work item.

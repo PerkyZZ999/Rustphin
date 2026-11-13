@@ -20,11 +20,13 @@ undocumented_unsafe_blocks = "deny"
 
 [dependencies]
 flume.workspace = true
+fontconfig-parser.workspace = true
+fontdb.workspace = true
 image.workspace = true
 md-5.workspace = true
 png.workspace = true
 jiff.workspace = true
-rustix = { workspace = true, features = ["process", "fs", "net", "event"] }
+rustix = { workspace = true, features = ["process", "fs", "net", "event", "thread"] }
 rustphin-core.workspace = true
 raw-window-handle.workspace = true
 roxmltree.workspace = true

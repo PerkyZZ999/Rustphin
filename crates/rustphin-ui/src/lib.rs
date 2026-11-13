@@ -71,6 +71,26 @@ pub struct Options {
 
 /// Runs the application until its last window closes.
 pub fn run(options: Options) {
+    // The toolkit's own font scan runs one file at a time; read the same
+    // files on several threads first, so it finds them in memory (W-109b).
+    let warmup = rustphin_platform::font_warmup::start(|outcome, elapsed, threads| {
+        let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
+        match outcome {
+            rustphin_platform::font_warmup::Outcome::Read(report) => tracing::info!(
+                files = report.files,
+                faces = report.faces,
+                threads,
+                elapsed_ms,
+                "font files pre-read"
+            ),
+            rustphin_platform::font_warmup::Outcome::AlreadyInMemory => {
+                tracing::info!(elapsed_ms, "font files already in memory; not pre-read")
+            }
+        }
+    });
+    if let Err(error) = warmup {
+        tracing::warn!(%error, "could not start reading the fonts ahead");
+    }
     // A small file read once before the window exists.
     let settings_path =
         rustphin_platform::config::config_dir().map(|dir| dir.join("settings.toml"));

@@ -11,6 +11,7 @@ pub mod clipboard;
 pub mod config;
 pub mod devices;
 pub mod file_manager;
+pub mod font_warmup;
 pub mod icons;
 pub mod kdeglobals;
 pub mod mime;
