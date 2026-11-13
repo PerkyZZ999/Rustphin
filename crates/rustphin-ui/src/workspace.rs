@@ -10,10 +10,9 @@ use std::{
 use rustphin_platform::admin::{AdminError, AdminFs, AdminHelper};
 
 use gpui_kit::{
-    AnyElement, App, AppContext as _, Context, Entity, FocusHandle, Global,
-    InteractiveElement as _, IntoElement, KeyBinding, MouseButton, ParentElement as _, Render,
-    Role, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
-    Window, actions,
+    AnyElement, App, AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _,
+    IntoElement, KeyBinding, MouseButton, ParentElement as _, Render, Role, ScrollHandle,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, actions,
     component::{
         Disableable as _, Icon, IconName, Sizable as _,
         button::{Button, ButtonVariants as _},
@@ -51,10 +50,6 @@ use crate::{
 
 #[path = "appearance.rs"]
 mod appearance;
-
-/// Keeps the file-manager service connected for the life of the application.
-pub(crate) struct ShowService(pub(crate) rustphin_platform::file_manager::ServiceHandle);
-impl Global for ShowService {}
 
 const KEY_CONTEXT: &str = "Workspace";
 /// A dialog that is waiting for an answer.
@@ -463,35 +458,6 @@ impl Workspace {
             weak.update(cx, |this, cx| this.may_close(cx))
                 .unwrap_or(true)
         });
-        if let Some(service) = cx.try_global::<ShowService>() {
-            let incoming = service.0.receiver();
-            cx.spawn(async move |this, cx| {
-                loop {
-                    let queue = incoming.clone();
-                    let next = cx
-                        .background_spawn(async move { queue.recv_async().await })
-                        .await;
-                    let Ok(call) = next else { break };
-                    if this
-                        .update(cx, |this, cx| {
-                            match call {
-                                rustphin_platform::file_manager::Call::Show(shown) => {
-                                    this.pending_shows.extend(shown);
-                                }
-                                rustphin_platform::file_manager::Call::Properties(paths) => {
-                                    this.pending_properties.extend(paths);
-                                }
-                            }
-                            cx.notify();
-                        })
-                        .is_err()
-                    {
-                        break;
-                    }
-                }
-            })
-            .detach();
-        }
         workspace.focus_active(window, cx);
         workspace
     }
@@ -1198,6 +1164,23 @@ impl Workspace {
     }
 
     /// Shows `shown` in this window once it is drawn.
+    /// Folders another launch or application asked to show; where they
+    /// open follows General, "folders from other applications".
+    pub(crate) fn queue_shows(
+        &mut self,
+        shown: Vec<rustphin_platform::file_manager::Shown>,
+        cx: &mut Context<Self>,
+    ) {
+        self.pending_shows.extend(shown);
+        cx.notify();
+    }
+
+    /// Paths another application asked to see the properties of.
+    pub(crate) fn queue_properties(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        self.pending_properties.extend(paths);
+        cx.notify();
+    }
+
     pub(crate) fn show_later(&mut self, shown: Vec<rustphin_platform::file_manager::Shown>) {
         self.shows_here.extend(shown);
     }

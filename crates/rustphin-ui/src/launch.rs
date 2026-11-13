@@ -10,6 +10,54 @@ use std::{
 
 use rustphin_platform::uri::path_from_uri;
 
+/// What a launch asks for (W-110, D-031).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Command {
+    /// Open a window, or the folders named.
+    Open,
+    /// `--background`: start without a window, to stay running.
+    Background,
+    /// `--quit`: end the running Rustphin.
+    Quit,
+}
+
+/// A launch: its command and the folders it names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Launch {
+    /// What to do.
+    pub command: Command,
+    /// The folders named, as [`launch_targets`] reads them.
+    pub targets: Vec<PathBuf>,
+}
+
+/// Reads the command line: `--quit` and `--background` before the paths,
+/// `--` ending the options so a folder may start with dashes. Another
+/// argument starting with `--` is ignored with a warning.
+pub fn parse_launch<I, S>(args: I, cwd: &Path) -> Launch
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let mut command = Command::Open;
+    let mut paths = Vec::new();
+    let mut options_ended = false;
+    for arg in args.into_iter().skip(1) {
+        let arg = arg.as_ref();
+        if !options_ended && arg.as_bytes().starts_with(b"--") {
+            match arg.as_bytes() {
+                b"--" => options_ended = true,
+                b"--quit" => command = Command::Quit,
+                b"--background" => command = Command::Background,
+                _ => tracing::warn!(option = %arg.to_string_lossy(), "ignoring an unknown option"),
+            }
+            continue;
+        }
+        paths.push(arg.to_os_string());
+    }
+    let targets = paths.iter().filter_map(|arg| target(arg, cwd)).collect();
+    Launch { command, targets }
+}
+
 /// The folders named by `args`, skipping the program name.
 ///
 /// A `file:` URL becomes its local path. Anything else is a path, and a
@@ -51,6 +99,23 @@ fn target(arg: &OsStr, cwd: &Path) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn options_are_read_and_dashes_after_a_double_dash_are_a_path() {
+        let cwd = Path::new("/home/someone");
+        let quit = parse_launch(["rustphin", "--quit"], cwd);
+        assert_eq!(quit.command, Command::Quit);
+        assert!(quit.targets.is_empty());
+        let background = parse_launch(["rustphin", "--background", "/srv"], cwd);
+        assert_eq!(background.command, Command::Background);
+        assert_eq!(background.targets, [PathBuf::from("/srv")]);
+        let dashes = parse_launch(["rustphin", "--", "--quit"], cwd);
+        assert_eq!(dashes.command, Command::Open);
+        assert_eq!(dashes.targets, [PathBuf::from("/home/someone/--quit")]);
+        let unknown = parse_launch(["rustphin", "--fast", "docs"], cwd);
+        assert_eq!(unknown.command, Command::Open);
+        assert_eq!(unknown.targets, [PathBuf::from("/home/someone/docs")]);
+    }
 
     #[test]
     fn no_arguments_opens_nothing_explicit() {

@@ -7,7 +7,7 @@ use std::{
 
 use tracing_subscriber::EnvFilter;
 
-fn main() {
+fn main() -> std::process::ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_env("RUSTPHIN_LOG").unwrap_or_else(|_| "info".into()))
         .with_writer(std::io::stderr)
@@ -17,18 +17,15 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/"));
     let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
-    // Each argument is a tab. With none, the previous session's tabs come back.
+    // Each path is a tab. With none, the previous session's tabs come back.
     // A path that names a file opens the folder that contains it.
-    let starts = rustphin_ui::launch_targets(env::args_os(), &cwd)
-        .into_iter()
-        .map(folder_tab)
-        .collect();
-
-    rustphin_ui::run(rustphin_ui::Options {
-        starts,
+    let launch = rustphin_ui::parse_launch(env::args_os(), &cwd);
+    rustphin_ui::start(rustphin_ui::Start {
+        command: launch.command,
+        starts: launch.targets.into_iter().map(folder_tab).collect(),
         home,
         force_opaque: env::var_os("RUSTPHIN_OPAQUE").is_some_and(|value| value != "0"),
-    });
+    })
 }
 
 /// A directory stays as it is. An existing file becomes the folder around it,

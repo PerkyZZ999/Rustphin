@@ -15,6 +15,7 @@ mod format;
 mod groups;
 mod history;
 mod input;
+mod instance;
 mod launch;
 mod layout;
 mod location;
@@ -56,7 +57,7 @@ use gpui_kit::{
 
 use crate::{session::Session, settings::Settings, theme::Theme, workspace::Workspace};
 
-pub use launch::launch_targets;
+pub use launch::{Command, Launch, launch_targets, parse_launch};
 
 /// How the application should start.
 #[derive(Debug, Clone)]
@@ -69,8 +70,47 @@ pub struct Options {
     pub force_opaque: bool,
 }
 
+/// What a launch needs: its command, the folders named, home and the look.
+pub struct Start {
+    /// What the command line asked for.
+    pub command: Command,
+    /// Folders to open as tabs. Empty restores the previous session.
+    pub starts: Vec<PathBuf>,
+    /// The folder to show when there is neither a start folder nor a session.
+    pub home: PathBuf,
+    /// Draw opaque surfaces even when the compositor could blur.
+    pub force_opaque: bool,
+}
+
+/// Starts Rustphin, or hands the launch to the one already running
+/// (W-110a): `--quit` ends it, anything else opens a window in it.
+pub fn start(start: Start) -> std::process::ExitCode {
+    if start.command == Command::Quit {
+        return instance::quit_running();
+    }
+    let instance = match instance::claim(&start.starts) {
+        instance::Claim::HandedOver => return std::process::ExitCode::SUCCESS,
+        instance::Claim::Running(instance) => Some(instance),
+        instance::Claim::Alone => None,
+    };
+    run_as(
+        Options {
+            starts: start.starts,
+            home: start.home,
+            force_opaque: start.force_opaque,
+        },
+        instance,
+    );
+    std::process::ExitCode::SUCCESS
+}
+
 /// Runs the application until its last window closes.
 pub fn run(options: Options) {
+    run_as(options, None);
+}
+
+/// [`run`], as the running Rustphin when `instance` holds the bus name.
+fn run_as(options: Options, mut instance: Option<rustphin_platform::instance::Instance>) {
     // The toolkit's own font scan runs one file at a time; read the same
     // files on several threads first, so it finds them in memory (W-109b).
     let warmup = rustphin_platform::font_warmup::start(|outcome, elapsed, threads| {
@@ -151,6 +191,7 @@ pub fn run(options: Options) {
             cx.set_global(WindowDefaults {
                 home: options.home.clone(),
                 force_opaque: options.force_opaque,
+                session_path: session_path.clone(),
             });
             // One store of settings for every window (D-029).
             preferences::init(
@@ -171,12 +212,15 @@ pub fn run(options: Options) {
                 });
             }
             history::init(cx);
+            if let Some(running) = instance.take() {
+                instance::serve(running, cx);
+            }
             remote::init(cx);
             // D-020: restore batch renames an earlier run left half done.
             recovery::start(&session, cx);
             if let Some(service) = rustphin_platform::file_manager::ServiceHandle::session() {
                 tracing::info!("listening for requests to show files");
-                cx.set_global(workspace::ShowService(service));
+                instance::serve_file_manager(service, cx);
             } else {
                 tracing::info!("not listening for requests to show files");
             }
@@ -233,6 +277,8 @@ fn start_folders(options: &Options, settings: &Settings) -> Vec<PathBuf> {
 struct WindowDefaults {
     home: PathBuf,
     force_opaque: bool,
+    /// Where the session is saved; the start window saves it.
+    session_path: Option<PathBuf>,
 }
 
 impl gpui_kit::Global for WindowDefaults {}
@@ -262,6 +308,66 @@ pub(crate) fn open_window_showing(
         Session::folders(vec![first]),
         None,
         shown,
+        cx,
+    );
+}
+
+/// The window a plain launch opens when no window is open: what the start
+/// settings choose, the saved session included, saving it again as the
+/// first window did (W-110a).
+pub(crate) fn open_start_window(cx: &mut App) {
+    let Some(defaults) = cx.try_global::<WindowDefaults>() else {
+        return;
+    };
+    let options = Options {
+        starts: Vec::new(),
+        home: defaults.home.clone(),
+        force_opaque: defaults.force_opaque,
+    };
+    let session_path = defaults.session_path.clone();
+    let settings = preferences::preferences(cx).read(cx).settings().clone();
+    let starts = start_folders(&options, &settings);
+    let saved = session_path
+        .as_deref()
+        .map_or(Ok(None), rustphin_platform::config::read);
+    let restored = session::restore(saved, &starts);
+    let session_path = session_path.filter(|_| restored.can_save());
+    open_window(
+        &options,
+        settings,
+        restored.session,
+        session_path,
+        Vec::new(),
+        cx,
+    );
+}
+
+/// The window a plain launch opens beside open ones, as Dolphin's new
+/// window: the start folder, or home when the start restores a session.
+pub(crate) fn open_new_window(cx: &mut App) {
+    let Some(defaults) = cx.try_global::<WindowDefaults>() else {
+        return;
+    };
+    let home = defaults.home.clone();
+    let settings = preferences::preferences(cx).read(cx).settings().clone();
+    let options = Options {
+        starts: Vec::new(),
+        home: home.clone(),
+        force_opaque: defaults.force_opaque,
+    };
+    let folder = match settings.start() {
+        (settings::Start::Folder, Some(folder)) => match location::Location::from_saved(folder) {
+            Some(location::Location::Folder(path)) => path,
+            _ => home,
+        },
+        _ => home,
+    };
+    open_window(
+        &options,
+        settings,
+        Session::folders(vec![folder]),
+        None,
+        Vec::new(),
         cx,
     );
 }
@@ -305,6 +411,7 @@ fn open_window(
                 cx,
             )
         });
+        instance::register(window.window_handle(), workspace.downgrade(), cx);
         if !options.force_opaque {
             let opaque = settings.look() == settings::Look::Opaque;
             workspace.update(cx, |workspace, cx| {
