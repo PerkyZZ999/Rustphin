@@ -127,7 +127,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 documents describe but the interface does not yet do is built. Asked for by the
 maintainer on 2026-11-14.
 
-**Colour scheme (W-147):**
+**Colour scheme (W-147, done 2026-11-14, D-038):**
 - Base colours are dark charcoal, with black and grey tints for every surface:
   window, chrome, content, panels, menus, dialogs, rows, borders.
 - Royal blue is kept only as a small brand accent: primary buttons and glows

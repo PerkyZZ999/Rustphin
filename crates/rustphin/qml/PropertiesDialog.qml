@@ -41,11 +41,7 @@ Popup {
     Overlay.modal: Rectangle {
         color: Tokens.colors.scrim
     }
-    background: Rectangle {
-        radius: Tokens.metrics.radius
-        color: Tokens.colors.raised
-        border.color: Tokens.colors.border_strong
-    }
+    background: FloatingSurface {}
     Component.onCompleted: {
         info.open(path)
         open()

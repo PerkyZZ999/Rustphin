@@ -37,11 +37,7 @@ Popup {
     Overlay.modal: Rectangle {
         color: Tokens.colors.scrim
     }
-    background: Rectangle {
-        radius: Tokens.metrics.radius
-        color: Tokens.colors.raised
-        border.color: Tokens.colors.border_strong
-    }
+    background: FloatingSurface {}
     Component.onCompleted: {
         settings.start(shownFolder)
         open()
@@ -154,6 +150,13 @@ Popup {
                     background: Rectangle {
                         radius: Tokens.metrics.radius
                         color: pageRow.chosen ? Tokens.colors.selection : pageRow.hovered ? Tokens.colors.hover : "transparent"
+
+                        Rectangle {
+                            visible: pageRow.chosen
+                            width: Tokens.metrics.selection_bar
+                            height: parent.height
+                            color: Tokens.colors.accent
+                        }
                     }
                     contentItem: RowLayout {
                         spacing: Tokens.metrics.space_sm

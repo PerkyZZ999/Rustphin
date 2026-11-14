@@ -80,11 +80,8 @@ Menu {
 
     width: Tokens.metrics.menu
     padding: Tokens.metrics.space_xs
-    background: Rectangle {
+    background: FloatingSurface {
         implicitWidth: Tokens.metrics.menu
-        radius: Tokens.metrics.radius
-        color: Tokens.colors.raised
-        border.color: Tokens.colors.border_strong
     }
 
     Component {
@@ -104,11 +101,8 @@ Menu {
         Menu {
             width: Tokens.metrics.menu
             padding: Tokens.metrics.space_xs
-            background: Rectangle {
+            background: FloatingSurface {
                 implicitWidth: Tokens.metrics.menu
-                radius: Tokens.metrics.radius
-                color: Tokens.colors.raised
-                border.color: Tokens.colors.border_strong
             }
             delegate: MenuRow {}
         }

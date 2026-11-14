@@ -43,11 +43,7 @@ Popup {
     Overlay.modal: Rectangle {
         color: Tokens.colors.scrim
     }
-    background: Rectangle {
-        radius: Tokens.metrics.radius
-        color: Tokens.colors.raised
-        border.color: Tokens.colors.border_strong
-    }
+    background: FloatingSurface {}
     Component.onCompleted: batch.start(dialog.ticket)
     onClosed: batch.cancel()
 
@@ -107,6 +103,15 @@ Popup {
             color: segment.on ? Tokens.colors.selection : segment.hovered ? Tokens.colors.hover : "transparent"
             border.color: segment.visualFocus ? Tokens.colors.accent : Tokens.colors.border_strong
             border.width: segment.visualFocus ? 2 : 1
+
+            // The chosen segment's royal-blue edge (D-038).
+            Rectangle {
+                visible: segment.on
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: Tokens.metrics.selection_bar
+                color: Tokens.colors.accent
+            }
         }
     }
 

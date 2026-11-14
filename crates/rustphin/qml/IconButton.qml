@@ -36,7 +36,7 @@ ToolButton {
     }
     background: Rectangle {
         radius: Tokens.metrics.radius
-        color: button.checked || button.down ? Tokens.colors.current : button.hovered ? button.hoverFill : "transparent"
+        color: button.checked || button.down ? Tokens.colors.selection : button.hovered ? button.hoverFill : "transparent"
         border.width: button.visualFocus ? 2 : 0
         border.color: Tokens.colors.accent
     }

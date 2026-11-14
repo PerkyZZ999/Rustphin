@@ -123,7 +123,7 @@ item). R-106 requires this.
 
 ### Places panel
 
-1. The current place (primary fill).
+1. The current place (selection fill and royal-blue edge).
 2. Places and groups, in the user's order.
 3. Remote places and devices, with usage figures.
 4. Section titles, in small capitals, quieter than the rows.
@@ -289,13 +289,13 @@ Pick one word and use it everywhere: menu, palette, tooltip, notices.
 | Component | Used on | Behaviour differences |
 |---|---|---|
 | Solid floating surface (raised, `border-strong` outline) | Palette, context menu and its submenus, New, trash and places menus, View menu, all dialogs | Menus open at the pointer or under their button; the palette under the toolbar; dialogs centred over the scrim |
-| Selection look (primary fill, light text) | Entry rows and cells, the current place, palette results, the current Settings page, dialog segments | Entries and palette results add a bright bar; menus use the hover fill instead |
-| Focus bar or outline | Rows (bar when selected, accent outline when not), places rows (outline), fields and buttons (outline) | |
+| Selection look (neutral `selection` fill, light text, 2 px royal-blue edge) | Entry rows and cells, the current place, palette results, the current Settings page, dialog segments | The edge is on the leading side (segments: along the bottom); menus use the hover fill instead (D-038) |
+| Focus outline | Rows (1 px `primary-bright` outline, with the `current` fill when not selected), places rows (outline), fields and buttons (2 px ring) | |
 | Icon button | Title bar, toolbar, tab close and "+", New group, eject, dismiss, Stop, Settings steppers and lists | Toggles show the subtle fill when on |
 | Outlined button | Actions, Trash actions, Undo, Details, state actions, Stop acting as administrator, dialog secondary buttons | |
 | Default button | Default action of a dialog (Apply, Rename, Compress, a question's default) | Destructive defaults use the error colours |
 | Window line (icon, sentence, actions, dismiss) | Activity line, notice line | A problem uses the error surface |
-| Progress or usage bar | Activity line, device rows | Activity: cyan, 6 px; device: cyan (error past 90 %), 4 px |
+| Progress or usage bar | Activity line, device rows | Activity: `progress` (lightened royal blue), 6 px; device: `text-muted` (error past 90 %), 4 px |
 | Scrolling dialog body | Every dialog | |
 | State block (icon, heading, reason, actions) | Empty, loading, hidden-only, filter-empty, unreadable folder | |
 | Text field | Location (editing), filter, palette search, rename field, batch-rename rules, Compress name, group names, Settings fields | The rename field sits inside a row |

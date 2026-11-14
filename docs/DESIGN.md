@@ -1,43 +1,50 @@
 ---
 version: alpha
-name: Rustphin Obsidian
-description: Navy obsidian glass with royal-blue accents for the Rustphin file manager on KDE Plasma Wayland (Qt 6 and QML). Adopted by the W-079 design pass from the HTML mockups in docs/mockup/; the tokens equal crates/rustphin-view/src/colors.rs and metrics.rs.
+name: Rustphin Charcoal
+description: Charcoal glass with a royal-blue accent on default buttons and glows for the Rustphin file manager on KDE Plasma Wayland (Qt 6 and QML). Adopted by the W-079 design pass from the HTML mockups in docs/mockup/; the tokens equal crates/rustphin-view/src/colors.rs and metrics.rs.
 colors:
   # Surfaces over the compositor-blurred desktop (glass mode). Stacked: window, then chrome or content.
-  window-glass: "rgba(13, 21, 36, 0.80)"
-  chrome-glass: "rgba(18, 27, 45, 0.50)"
-  chrome-raised-glass: "rgba(26, 34, 54, 0.55)"
-  content-glass: "rgba(14, 23, 39, 0.62)"
+  window-glass: "rgba(20, 21, 22, 0.80)"
+  chrome-glass: "rgba(24, 25, 27, 0.50)"
+  chrome-raised-glass: "rgba(32, 33, 36, 0.55)"
+  content-glass: "rgba(17, 18, 19, 0.62)"
   # Solid replacements when blur is unavailable or switched off (opaque mode).
-  window-solid: "#0D1524"
-  chrome-solid: "#121B2D"
-  chrome-raised-solid: "#1A2236"
-  content-solid: "#0E1727"
+  window-solid: "#141516"
+  chrome-solid: "#18191B"
+  chrome-raised-solid: "#202124"
+  content-solid: "#111213"
   # Menus, palette, dialogs: always solid.
-  surface-raised: "#111A2C"
-  scrim: "rgba(4, 7, 14, 0.60)"
+  surface-raised: "#1D1E21"
+  scrim: "rgba(0, 0, 0, 0.60)"
   # Text.
-  text: "#E6E9F2"
-  text-muted: "#AEB8CC"
-  text-disabled: "#7C869A"
-  # Royal blue.
-  primary: "#2D4CC8"
-  primary-hover: "#2843B4"
-  on-primary: "#F5F7FC"
-  primary-subtle: "#1D2E6A"
-  primary-bright: "#8FA8FF"
+  text: "#ECECED"
+  text-muted: "#AEB1B8"
+  text-disabled: "#7D8087"
+  # Royal blue, the one accent: default buttons, outlines and glows.
+  primary: "#4169E1"
+  primary-hover: "#3A5DC8"
+  on-primary: "#FFFFFF"
+  primary-bright: "#7B98F2"
+  progress: "#7B98F2"
+  border-accent: "rgba(65, 105, 225, 0.55)"
+  glow: "rgba(65, 105, 225, 0.20)"
+  # Neutral states: selection, the current entry, pressed controls.
+  selection: "#3B3D42"
+  selection-hover: "#45474D"
+  on-selection: "#F5F5F6"
+  current: "#2A2C30"
+  hover: "rgba(255, 255, 255, 0.06)"
   # Status signals.
-  secondary: "#3BCFF0"
   tertiary: "#10B981"
   error: "#FF9B9B"
-  error-surface: "#37202B"
+  error-surface: "#3A1F22"
   error-border: "rgba(255, 155, 155, 0.45)"
-  # Lines, tracks and states.
+  destructive: "#C42F2F"
+  destructive-hover: "#AB2929"
+  # Lines and tracks.
   border: "rgba(255, 255, 255, 0.07)"
   border-strong: "rgba(255, 255, 255, 0.14)"
-  border-accent: "rgba(80, 115, 235, 0.55)"
-  track: "#333D52"
-  hover: "rgba(255, 255, 255, 0.07)"
+  track: "#34363B"
 typography:
   headline-md:
     fontFamily: Space Grotesk
@@ -143,7 +150,7 @@ components:
     width: 48px
     height: 32px
   toolbar-toggle-on:
-    backgroundColor: "{colors.primary-subtle}"
+    backgroundColor: "{colors.selection}"
     textColor: "{colors.text}"
   toolbar-button-hover:
     backgroundColor: "{colors.hover}"
@@ -209,8 +216,8 @@ components:
     height: 28px
     padding: "{spacing.md}"
   place-row-current:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.on-selection}"
   section-heading:
     textColor: "{colors.text-muted}"
     typography: "{typography.label-sm}"
@@ -223,7 +230,7 @@ components:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-sm}"
   usage-bar:
-    backgroundColor: "{colors.secondary}"
+    backgroundColor: "{colors.text-muted}"
     height: 4px
   usage-bar-full:
     backgroundColor: "{colors.error}"
@@ -281,11 +288,14 @@ components:
   entry-row-hover:
     backgroundColor: "{colors.hover}"
   entry-row-selected:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.on-selection}"
   entry-row-selected-hover:
-    backgroundColor: "{colors.primary-hover}"
-    textColor: "{colors.on-primary}"
+    backgroundColor: "{colors.selection-hover}"
+    textColor: "{colors.on-selection}"
+  entry-row-current:
+    backgroundColor: "{colors.current}"
+    textColor: "{colors.text}"
   entry-data-cell:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-md}"
@@ -301,6 +311,7 @@ components:
     padding: "{spacing.md}"
   button-primary-hover:
     backgroundColor: "{colors.primary-hover}"
+    textColor: "{colors.on-primary}"
   button-outlined:
     textColor: "{colors.text}"
     typography: "{typography.body-md}"
@@ -308,10 +319,15 @@ components:
     height: 32px
     padding: "{spacing.md}"
   button-destructive:
-    backgroundColor: "{colors.error-surface}"
-    textColor: "{colors.error}"
+    backgroundColor: "{colors.destructive}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.body-md}"
     rounded: "{rounded.sm}"
     height: 32px
+    padding: "{spacing.md}"
+  button-destructive-hover:
+    backgroundColor: "{colors.destructive-hover}"
+    textColor: "{colors.on-primary}"
   input:
     backgroundColor: "{colors.content-solid}"
     textColor: "{colors.text}"
@@ -365,8 +381,8 @@ components:
     height: 52px
     padding: "{spacing.md}"
   palette-result-selected:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.on-selection}"
   palette-trail:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-sm}"
@@ -416,8 +432,8 @@ components:
   settings-page-list:
     width: 200px
   settings-page-current:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.on-selection}"
   setting-row:
     textColor: "{colors.text}"
     typography: "{typography.body-md}"
@@ -440,7 +456,7 @@ components:
     height: 44px
     padding: "{spacing.md}"
   progress-bar:
-    backgroundColor: "{colors.secondary}"
+    backgroundColor: "{colors.progress}"
     rounded: "{rounded.sm}"
     height: 6px
   progress-track:
@@ -487,8 +503,8 @@ components:
   status-selection-only-max:
     width: 440px
   drag-chip:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.on-selection}"
     typography: "{typography.body-sm}"
     rounded: "{rounded.sm}"
     height: 28px
@@ -497,7 +513,7 @@ components:
 
 # Rustphin design
 
-This is the design reference for Rustphin (D-017). The tokens in the front
+This is the design reference for Rustphin (D-017; its colours D-038). The tokens in the front
 matter are authoritative. `crates/rustphin-view/src/colors.rs` implements the
 colours (with the contrast tests) and `metrics.rs` the spacing, sizes and type
 scale; `crates/rustphin/src/tokens.rs` hands both to QML as the `Tokens`
@@ -509,18 +525,21 @@ Token names in code differ from the names here; the mapping is:
 
 | Here | `colors.rs` / QML | Here | `colors.rs` / QML |
 |---|---|---|---|
-| `window-*` | `window` | `primary` | `selection` |
-| `chrome-*` | `chrome` | `primary-hover` | `selection_hover` |
-| `chrome-raised-*` | `chrome_raised` | `on-primary` | `on_selection` |
-| `content-*` | `content` | `primary-subtle` | `current` |
-| `surface-raised` | `raised` | `primary-bright` | `accent` |
-| `secondary` | `activity` | `error` | `danger` |
-| `tertiary` | `success` | `error-surface` | `danger_surface` |
-| `border-strong` | `border_strong` | `error-border` | `danger_border` |
-| `border-accent` | `border_accent` | `text-disabled` | `text_disabled` |
+| `window-*` | `window` | `primary` | `button_primary` |
+| `chrome-*` | `chrome` | `primary-hover` | `button_primary_hover` |
+| `chrome-raised-*` | `chrome_raised` | `on-primary` | `on_button` |
+| `content-*` | `content` | `primary-bright` | `accent` |
+| `surface-raised` | `raised` | `progress` | `activity` |
+| `selection` | `selection` | `destructive` | `button_destructive` |
+| `selection-hover` | `selection_hover` | `destructive-hover` | `button_destructive_hover` |
+| `on-selection` | `on_selection` | `error` | `danger` |
+| `current` | `current` | `error-surface` | `danger_surface` |
+| `tertiary` | `success` | `error-border` | `danger_border` |
+| `border-strong` | `border_strong` | `text-disabled` | `text_disabled` |
+| `border-accent` | `border_accent` | `glow` | `glow` |
 
-`Colors::obsidian(translucent)` picks the glass or the solid value of each
-surface; `scrim`, `border*`, `hover` and `error-border` are the same in both.
+`Colors::charcoal(translucent)` picks the glass or the solid value of each
+surface; every other colour is the same in both.
 In `metrics.rs`, `space::XS…LG` are the spacing tokens, `size::RADIUS` is
 `rounded.sm`, `text::BODY`, `NAME`, `SMALL`, `DATA`, `LABEL`, `TITLE` and
 `HEADING` are the type sizes (`text::LINE`, `HEADING_LINE`, `TITLE_LINE` the
@@ -533,8 +552,9 @@ with the notes in `mockup/00-what-changed.html`. The decisions behind them are
 in [`project/DESIGN_BRIEF.md`](project/DESIGN_BRIEF.md). The original
 reference picture is [`mockup.png`](mockup.png); colours marked "measured"
 were taken from it. The mockups were drawn at the W-079 density; D-026 and
-W-096 have since made the type and the rows smaller, so where a mockup and
-this document disagree on a size, this document holds.
+W-096 have since made the type and the rows smaller, and they draw the navy
+colours that D-038 replaced with charcoal, so where a mockup and this
+document disagree on a size or a colour, this document holds.
 
 ## Overview
 
@@ -544,14 +564,17 @@ geometric, legible and calm, with nothing decorative competing with the files.
 
 Three ideas hold it together:
 
-- **Obsidian glass.** The window is dark navy glass over the desktop, which the
+- **Charcoal glass.** The window is dark charcoal glass over the desktop, which the
   compositor blurs (KDE's `KWindowEffects`, asked for by the C++ shell). Chrome
   (title bar, toolbar, tabs, places, status) is recessed glass; the file list
   sits on a more solid pane so columns of text stay readable over anything
   behind.
-- **Royal blue as the only energy.** One accent marks selection, focus, the
-  current place and the default action. Cyan and emerald appear only as status
-  signals; salmon only for errors.
+- **Royal blue, used sparingly.** Everything else is charcoal, black and
+  grey. Royal blue is the one accent and appears only on the default button,
+  on focus rings, on the outline and glow of menus and dialogs, as the 2 px
+  edge of a selection (and of the current place and the active tab), and as
+  the progress bar. Emerald marks success; salmon and red mean errors and
+  destructive actions.
 - **Progressive disclosure.** The default window shows places, the location,
   the files and a status line. Banners, progress, notices and the filter
   appear when they have something to say; every command is in the Actions
@@ -564,10 +587,10 @@ boxes. Zooming out reaches 24-pixel rows.
 ## Colors
 
 - **Glass surfaces** (`window-glass`, `chrome-glass`, `chrome-raised-glass`,
-  `content-glass`) are navy obsidian at partial opacity, stacked: window first,
-  then chrome or content on top of it. Never put text directly on bare
-  `window-glass`; it is the backdrop for the others. The navy tint is measured
-  from the reference (`#0D1726` list, `#11192A` places, `#1B2035` tab strip).
+  `content-glass`) are neutral charcoal at partial opacity, stacked: window
+  first, then chrome or content on top of it. Never put text directly on bare
+  `window-glass`; it is the backdrop for the others. The tints carry no hue
+  (D-038): `#111213` list, `#18191B` chrome and places, `#202124` tab strip.
 - **Solid surfaces** (`window-solid`, `chrome-solid`, `chrome-raised-solid`,
   `content-solid`) replace the glass in opaque mode: when KWin does not offer
   blur, or `RUSTPHIN_OPAQUE` is set to anything but `0`. The choice is made
@@ -585,33 +608,46 @@ boxes. Zooming out reaches 24-pixel rows.
   (the Actions key, menu chevrons). `text` and `text-muted` meet 4.5:1 on every
   surface, including glass over a white window; `text-disabled` meets 3:1.
   The tests in `colors.rs` check every pair, glass over white and opaque.
-- **Primary** (`primary`, with `on-primary` text; measured selection fill
-  `#2744B5`–`#2E4FCC`) fills the selected entries, the current place in the
-  places panel, the selected palette result, the current Settings page, the
-  chosen segment in dialogs and the place drag chip. `primary-hover` is a
-  selected entry or palette result under the pointer.
-- **Primary subtle** (`primary-subtle`, measured `#1D2E6A`) is the pressed or
-  checked state of icon buttons (toolbar toggles such as Show hidden files and
-  Filter) and the pressed state of outlined buttons.
-- **Primary bright** (`primary-bright`) is the accent line on dark surfaces:
-  the focused entry's bar, focus outlines on buttons and fields, the active
-  tab's top line, the active split pane's path-bar underline, the drop target
-  outline, the rubber band and the View menu's check. It meets 3:1 against
-  every surface.
-- **Secondary** (cyan, measured `#39D2F3`) is live activity and capacity: the
-  progress bar, the activity icon and device usage bars, all on `track`. A
-  volume more than 90 % full draws its usage bar in `error`. **Tertiary**
-  (emerald) marks a completed operation. Neither is decoration.
-- **Error** text and icons on `error-surface` with an `error-border` outline
-  and a warning icon; colour never carries the message alone. Used by the
-  folder's re-read banner, a notice that reports a problem, the administrator
-  bar, the Close button's hover in the title bar and a folder that cannot be
-  opened.
+- **Royal blue** has exactly these uses and no others:
+  - `primary` (`#4169E1`) fills a dialog's default button, with `on-primary`
+    (white) words, 4.9:1; `primary-hover` under the pointer or pressed.
+  - `primary-bright` (`#7B98F2`, royal blue lightened just enough to reach
+    3:1 on every surface and on the selection fill) draws the lines: focus
+    rings on buttons, fields and checkboxes (2 px), the focused entry's or
+    place's 1 px outline, the 2 px selection edge, the active tab's top edge,
+    the active split pane's path-bar underline, the outline of a drop target
+    and of the rubber band.
+  - `border-accent` (royal blue at 55 %) is the 1 px outline of menus, the
+    View menu, the palette and dialogs, and `glow` (royal blue at 20 %) the
+    2 px halo just outside it.
+  - `progress` (the same lightened blue) is the filled part of the activity
+    line's progress bar.
+  No text, interface icon, check mark or large fill is blue.
+- **Selection is neutral** (`selection`, `#3B3D42`, with `on-selection` text,
+  10:1): it fills the selected entries, the current place in the places
+  panel, the selected palette result, the current Settings page, a list's
+  cursor row, the chosen segment in dialogs, a checked or pressed icon
+  button, a pressed outlined button and the place drag chip.
+  `selection-hover` is a selected entry or palette result under the pointer.
+  Selected entries, the current place, the selected palette result and the
+  current Settings page also carry a 2 px `primary-bright` edge on their
+  leading side, and the chosen segment one along its bottom, so the state is
+  never told by a grey alone. `current` (`#2A2C30`) is the quiet fill of the
+  focused entry when it is not selected.
+- **Hover** is white at 6 %, under the pointer on rows, buttons and tabs.
+- **Usage bars** of devices are `text-muted` on `track`; a volume more than
+  90 % full draws its bar in `error`. **Tertiary** (emerald) marks a
+  completed operation. Neither is decoration.
+- **Error** text and icons on `error-surface` (a dark red-grey) with an
+  `error-border` outline and a warning icon; colour never carries the message
+  alone. Used by the folder's re-read banner, a notice that reports a
+  problem, the administrator bar, the Close button's hover in the title bar
+  and a folder that cannot be opened. **Destructive** (`#C42F2F`, white words,
+  5.5:1; `destructive-hover` under the pointer) fills a destructive default
+  button such as "Delete for good".
 - **Borders** are hairlines: `border` between regions and as menu
-  separators; `border-strong` around outlined controls, text fields, menus,
-  the palette and dialogs, and as the window's own frame when not maximised;
-  `border-accent` is the 1 px outline of the focused entry or place when it is
-  not selected.
+  separators; `border-strong` around outlined controls, text fields and
+  checkboxes, and as the window's own frame when not maximised.
 - **File-type icons** come from the system icon theme (`image://theme`); they
   are not tokens.
 
@@ -710,7 +746,7 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   fewer when they do not fit; the leading ones collapse into "…". Clicking a
   crumb opens it; clicking beside the crumbs, Ctrl+L, Alt+D or F6 turns the
   field into a text field with the whole location selected and a 2 px
-  `primary-bright` outline. Enter opens what was typed; Escape, leaving the
+  `primary-bright` focus ring. Enter opens what was typed; Escape, leaving the
   field, or Ctrl+L again returns to the crumbs and the list.
 - **Path bar (split view):** the side's location in `data-md`, elided in the
   middle; the active side on `chrome-raised` in `text` with a 2 px
@@ -744,8 +780,7 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
 - **View menu (W-107):** the View button opens a 240 px popup on the
   context menu's surface under the button: the three modes as 32 px rows
   (icon, name, key: Icons `layout-grid` Ctrl+1, Compact `columns-3` Ctrl+2,
-  Details `layout-list` Ctrl+3), the current one with a `primary-bright`
-  `check`; a hairline; then a row with "SIZE" in `label-sm`, the level's icon
+  Details `layout-list` Ctrl+3), the current one with a `text` `check`; a hairline; then a row with "SIZE" in `label-sm`, the level's icon
   size in `data-sm` ("24 px") and two icon buttons, Smaller (`zoom-out`,
   Ctrl+−) and Larger (`zoom-in`, Ctrl+=). Choosing a mode closes the popup;
   the size buttons apply at once; Escape or a click elsewhere closes it.
@@ -778,7 +813,8 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   32 px rows with a 16 px icon and the name: General (`settings`), Appearance
   (`palette`), Views (`layout-grid`), Toolbar (`panel-top`), Places
   (`panel-left`), Confirmations (`circle-check`), Shortcuts (`keyboard`),
-  About (`info`); the current page in `primary` with `on-primary` text,
+  About (`info`); the current page in `selection` with `on-selection` text
+  and a 2 px `primary-bright` edge on its left,
   others `hover` under the pointer; Up and Down move through it. A page: its
   name in `headline-sm` and one sentence in `text-muted`, then groups under
   `label-sm` capitals; each setting a 32 px row with its label in a 184 px
@@ -844,7 +880,8 @@ Depth comes from stacked planes and edge lines, not soft shadows.
 - **Level 2, content pane:** `content-glass` under the file views, the
   location field, the active tab and text fields.
 - **Level 3, floating surfaces:** `surface-raised`, solid, outlined with a
-  1 px `border-strong` line. Modal dialogs and the palette dim the window with
+  1 px `border-accent` line and a 2 px `glow` halo outside it (the one place
+  royal blue surrounds a surface; no soft shadow). Modal dialogs and the palette dim the window with
   `scrim`; menus and the View menu do not.
 
 Blur exists only between level 0 and the window. In opaque mode every glass
@@ -866,11 +903,12 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   tooltip "Close tab (Ctrl+W)", "+" tooltip "New tab (Ctrl+T)".
 - **Icon buttons** (`IconButton.qml`): a 16 px Lucide icon in `text`
   (`text-disabled` when unavailable) on a 32 px square by default; `hover`
-  under the pointer, `primary-subtle` while pressed or checked, a 2 px
-  `primary-bright` outline on keyboard focus. Every one has a tooltip.
+  under the pointer, `selection` while pressed or checked, a 2 px
+  `primary-bright` ring on keyboard focus. Every one has a tooltip.
 - **Outlined buttons** (`OutlinedButton.qml`): 32 px, 12 px side padding,
   `body-md` in `text`, a 1 px `border-strong` outline; `hover` under the
-  pointer, `primary-subtle` while pressed. An optional 16 px icon goes 8 px
+  pointer, `selection` while pressed, a 2 px `primary-bright` ring on keyboard
+  focus. An optional 16 px icon goes 8 px
   before the words, the same icon the action has in menus and the toolbar
   (W-097): Rename `pencil`, Undo `undo-2`, Back `arrow-left`, Up `arrow-up`,
   Home folder `house`, Show hidden `eye`, Clear filter `funnel-x`, Stop
@@ -878,10 +916,12 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   Compress `file-archive`. Cancel, Close and Stop stay words only.
 - **Default and destructive buttons:** a dialog's safe default is
   `button-primary`; a destructive default uses `button-destructive`; the
-  others are outlined. Every dialog button shows its key ("Close (Esc)",
-  "Apply (Enter)", "Skip (S)"). A disabled default keeps its fill at half
-  opacity with `text-disabled` words. (The build fills them differently; see
-  "Implementation status".)
+  others are outlined. `button-primary` is `primary` with `on-primary` words
+  (`primary-hover` under the pointer or pressed); `button-destructive` is
+  `destructive` with `on-primary` words (`destructive-hover`). Keyboard focus
+  draws a 2 px `on-primary` ring inside the fill. Every dialog button shows its
+  key ("Close (Esc)", "Apply (Enter)", "Skip (S)"). A disabled default keeps
+  its fill at half opacity with `text-disabled` words.
 - **Actions button:** an outlined button: "Actions" in `text-muted` and the
   key "Ctrl+Shift+P" in `data-sm` `text-disabled`; opens the palette. Tooltip
   "Actions (Ctrl+Shift+P)".
@@ -902,9 +942,9 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   emptied." in `body-sm` `text-muted`.
 - **Places panel:** place rows with a 16 px icon in `text-muted` and the name
   in `body-md` `text`; hover fills `hover`; the current place (the folder the
-  active pane shows) is filled `primary` with `on-primary` icon and name; the
-  focused row has a 1 px `border-accent` outline while the panel has the
-  keyboard. Section headings (groups, "Devices", "Remote") in `label-sm`
+  active pane shows) is filled `selection` with `on-selection` icon and name
+  and a 2 px `primary-bright` edge on its left; the focused row has a 1 px
+  `primary-bright` outline while the panel has the keyboard. Section headings (groups, "Devices", "Remote") in `label-sm`
   capitals `text-muted` after a 12 px chevron that points down when open and
   right when folded; a folded heading shows its count ("PHOTOS (3)", "DEVICES
   (2)", W-127). Places in a group are indented one step. Hidden places, when
@@ -926,7 +966,7 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   Show or Hide hidden places. Volumes have no menu.
 - **Device rows:** 48 px: a 20 px `hard-drive` or `usb` icon, the name, the
   figures ("1.8 of 3.6 TiB free", "Not mounted", "Working…" while mounting or
-  ejecting) in `data-sm` `text-muted`, and a 4 px usage bar (`secondary` on
+  ejecting) in `data-sm` `text-muted`, and a 4 px usage bar (`text-muted` on
   `track`, `error` past 90 %). Removable volumes (never the one holding the
   home folder) have a 28 px eject icon button (`arrow-up-from-line`, tooltip
   "Unmount or remove safely (E)"). Clicking an unmounted volume mounts and
@@ -936,11 +976,11 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   so direction is never colour alone. Clicking a heading sorts; clicking
   again reverses.
 - **Entries (rows and cells):** icon or thumbnail, then the name in
-  `body-lg`. Hover fills `hover`. Selected: `primary` fill (`primary-hover`
-  under the pointer) with `on-primary` text and data; the focused selected
-  entry also has a 2 px `primary-bright` bar 4 px in from its left edge.
-  Focused but unselected: a 1 px `border-accent` outline while the pane has
-  the keyboard. Hidden entries are drawn at the opacity Settings chooses
+  `body-lg`. Hover fills `hover`. Selected: `selection` fill
+  (`selection-hover` under the pointer) with `on-selection` text and data and
+  a 2 px `primary-bright` edge along the fill's left side. The focused entry
+  has a 1 px `primary-bright` outline while the pane has the keyboard and,
+  when not selected, the `current` fill. Hidden entries are drawn at the opacity Settings chooses
   (60 % by default) unless selected; cut entries at half opacity. Symbolic
   links: italic name and a 12 px `link` badge in the icon's corner. Data cells
   in `text-muted`; sizes right-aligned; folders show "—".
@@ -974,22 +1014,22 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   Compress to… is a 560 px dialog titled with `file-archive`: Name (a 32 px
   field holding the keyboard), Format (ZIP, TAR.GZ, TAR.XZ, TAR.ZST, 7Z) and
   Compression (Fast, Normal, Smallest) as segmented rows, the chosen segment
-  in `primary`; a note saying what will be made and where, or why it cannot
+  in `selection` with a 2 px `primary-bright` edge along its bottom; a note saying what will be made and where, or why it cannot
   be; Cancel (Esc) and Compress (Enter), unavailable while the note is an
   error. A password question has a masked field focused at once and
   "Extract (Enter)".
 - **Actions palette** (`Palette.qml`): up to 640 px wide, 8 px padding, its
   top edge under the toolbar, over the scrim. A 40 px search field on
-  `content` with a 2 px `primary-bright` outline, a `search` icon and the
+  `content` with a 2 px `primary-bright` focus ring, a `search` icon and the
   placeholder "Search actions, places, tabs and recent folders…". Results
   52 px: a 20 px icon, the name in `body-md`, a trail in `data-sm` ("View ›
   Show hidden files"), the key right-aligned. The selected result is filled
-  `primary` (`primary-hover` under the pointer) with `on-primary` text and a
-  2 px `primary-bright` bar on its left; others take `hover` under the
+  `selection` (`selection-hover` under the pointer) with `on-selection` text
+  and a 2 px `primary-bright` edge on its left; others take `hover` under the
   pointer. Up, Down and Tab move, Enter runs, Escape closes. With no result:
   "Nothing matches. Try fewer letters." in `body-sm` `text-muted`.
-- **Dialogs:** `surface-raised` with a `border-strong` outline, over the
-  scrim. Properties, batch rename, Compress to… and Settings open with a
+- **Dialogs:** `surface-raised` with a 1 px `border-accent` outline and the
+  2 px `glow` halo outside it, over the scrim. Properties, batch rename, Compress to… and Settings open with a
   48 px title row: an icon, the title in `headline-sm` and a close icon
   button; questions and the problems list start with their title. The body
   scrolls between title and actions; the action row is on `chrome`. Text fields (`input`) are 32 px on `content` with a
@@ -1006,7 +1046,7 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   box changes.
 - **Batch rename** (`BatchDialog.qml`, mockups 15–16): 640 px, title row with
   `pencil`. Three modes (Replace, Pattern, Case) as a segmented row, the
-  chosen one in `primary`; the rule fields (Text to find and Replace with,
+  chosen one in `selection` with its `primary-bright` edge; the rule fields (Text to find and Replace with,
   Regular expression; Pattern with Start and Step, "# is the counter…"; Lower
   case, Upper case, Capitalise words); the preview as two `data-md` columns,
   Current name and New name; names that cannot be used are in `error`, with
@@ -1034,11 +1074,11 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
 - **Checkboxes:** the Qt Quick Controls Basic indicator with a 2 px
   `primary-bright` outline on keyboard focus; the label is clickable.
 - **Activity line** (`NoticeBar.qml`): on `chrome-raised`: the operation's
-  icon in `secondary` (`copy`, `move`, `trash`, `undo-2` for restoring,
+  icon in `text-muted` (`copy`, `move`, `trash`, `undo-2` for restoring,
   `pencil`, `package-open`, `file-archive`, `loader` otherwise), the sentence
   ("Copying 12 items to “Pictures”…", "(and N more)" while several run) in
   `body-md` over the figures ("6 of 12 · 742.0 MiB of 1.2 GiB · 48.6 MiB/s")
-  in `data-sm` `text-muted`, a 6 px progress bar (`secondary` on `track`, at
+  in `data-sm` `text-muted`, a 6 px progress bar (`progress` on `track`, at
   least 80 px and a fifth of the window; it sweeps while the size is
   unknown), and a Stop icon button (`circle-stop`, tooltip "Stop this
   operation"). It appears after 300 ms (`operation_board::QUIET_PERIOD`).
@@ -1063,7 +1103,7 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   and Home folder. The status line names the reason.
 - **Rename field:** 28 px inside the row, on `content` with a 2 px
   `primary-bright` outline, the name in its list size, the stem selected
-  (`primary` selection). Enter or leaving the field keeps the name; Escape
+  (`selection` with `on-selection`). Enter or leaving the field keeps the name; Escape
   cancels.
 - **Tooltips:** after 600 ms of hover, the label then the key in
   parentheses.
@@ -1072,8 +1112,7 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   and a drop on the folder itself outlines the pane in 2 px `primary-bright`.
   A drop asks "Move or copy?" unless Ctrl (copy) or Shift (move) is held.
   Places are dragged as a `drag-chip` with the place's name.
-- **Rubber band:** a 1 px `primary-bright` outline over `primary-bright` at
-  15 % opacity.
+- **Rubber band:** a 1 px `primary-bright` outline over `hover`.
 - **Scrollbars:** the Qt Quick Controls Basic scrollbar, shown as needed:
   vertical in the details and icons views, horizontal in the compact view.
 - **Interface icons:** the bundled Lucide SVGs (`crates/rustphin/icons`),
@@ -1102,14 +1141,25 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
 - Don't put text on bare `window-glass`, and don't go below 10 px (capital
   labels only; other text at least 11 px).
 - Don't add a radius other than 2 px.
-- Don't use `primary` fills for decoration: they mean selected, current or
-  chosen.
+- Don't use royal blue for anything but the default button, focus rings,
+  floating surfaces' outline and glow, selection edges and progress (D-038);
+  never for text, icons or large fills.
 - Don't follow the system colour scheme; do use the system icon theme for file
   types.
 
 ## Changes from the earlier design
 
-W-079 (2026-11-08) replaced a neutral-obsidian design with this navy one:
+W-147 (2026-11-14, D-038) replaced the navy colours with charcoal: every
+surface lost its blue tint; selection, the current place, the selected
+palette result and the current Settings page went from a royal-blue fill to
+the neutral `selection` grey with a 2 px `primary-bright` edge; `primary` is
+now the default button's fill (`#2D4CC8` → `#4169E1`, white words) and the
+new `destructive` the destructive one's; `primary-subtle` and `secondary`
+(cyan) were retired, the progress bar and focus rings took the lightened
+royal blue, usage bars and the activity icon went neutral; menus and dialogs
+took the `border-accent` outline and `glow`.
+
+W-079 (2026-11-08) replaced a neutral-obsidian design with a navy one:
 new `primary-subtle`, `chrome-raised-*`, `text-disabled`, `error-border` and
 `track` tokens; selection `#3457D5` → `#2D4CC8`; `text-muted` `#C3CAD9` →
 `#AEB8CC`; menu icons and keys, palette icons and trails, Properties'
@@ -1138,12 +1188,6 @@ problems dialog and Settings with all eight pages.
 
 Where the build differs from this document today:
 
-- **Default and destructive buttons** (`OutlinedButton.qml`): the default
-  button is filled with `primary-bright` and the destructive one with
-  `error`, both with `on-primary` words, and neither changes under the
-  pointer. Those pairs are about 2.1:1 and 1.9:1, below WCAG AA, and are not
-  in the contrast tests; the buttons should take `button-primary` and
-  `button-destructive` as specified.
 - **Settings that are stored but not applied:** Appearance's Look (Glass or
   Opaque) and Title bar (Rustphin's own or KDE's). The theme is chosen only
   by whether KWin offers blur and by `RUSTPHIN_OPAQUE`, and the window always
@@ -1152,8 +1196,6 @@ Where the build differs from this document today:
   in a narrow window (`size::SETTINGS_NARROW` is not used).
 - **Blur status:** no line says that blur is unavailable; the opaque theme
   is used silently (`size::BLUR_STATUS` is not used).
-- **Floating surfaces** have a `border-strong` outline; the `border-accent`
-  outline and the glow the mockups draw are not built.
 - **Tooltips and scrollbars** use the Qt Quick Controls Basic style, not the
   tokens (`size::SCROLLBAR` and `SCROLLBAR_INSET` are handed to QML but not
   read).
@@ -1179,5 +1221,6 @@ room below.
 Lint with `npx @google/design.md lint docs/DESIGN.md`. Contrast is checked by
 the tests in `colors.rs` (glass over white and opaque, and the hidden-entry
 opacities Settings offers). The linter's remaining warnings are `border`,
-`border-strong`, `border-accent` and `error-border`, used as outline colours,
-which the format's component properties cannot express; the prose says where.
+`border-strong`, `border-accent`, `glow` and `error-border`, used as outline
+colours, which the format's component properties cannot express; the prose
+says where.

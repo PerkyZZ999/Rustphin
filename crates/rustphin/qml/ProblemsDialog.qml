@@ -36,11 +36,7 @@ Popup {
     focus: true
     padding: Tokens.metrics.space_lg
     onOpened: closeButton.forceActiveFocus()
-    background: Rectangle {
-        radius: Tokens.metrics.radius
-        color: Tokens.colors.raised
-        border.color: Tokens.colors.border_strong
-    }
+    background: FloatingSurface {}
     Overlay.modal: Rectangle {
         color: Tokens.colors.scrim
     }

@@ -30,7 +30,7 @@ impl Default for TokensRust {
         let translucent = glass_wanted(std::env::var_os("RUSTPHIN_OPAQUE").as_deref())
             && qobject::rustphin_blur_available();
         let mut colors = QMap::default();
-        for (name, color) in Colors::obsidian(translucent).named() {
+        for (name, color) in Colors::charcoal(translucent).named() {
             colors.insert(
                 QString::from(name),
                 QVariant::from(&QString::from(color.qml().as_str())),
@@ -196,5 +196,44 @@ mod tests {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), count);
+    }
+
+    #[test]
+    fn every_colour_the_qml_reads_is_handed_to_it() -> std::io::Result<()> {
+        // A misspelt or retired token reads as `undefined` in QML and draws
+        // nothing, without a warning at build time.
+        let known: Vec<&str> = Colors::charcoal(false)
+            .named()
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
+        let qml = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("qml");
+        let mut checked = 0;
+        for file in std::fs::read_dir(&qml)? {
+            let path = file?.path();
+            if path.extension().is_none_or(|ext| ext != "qml") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path)?;
+            for (at, prefix) in source.match_indices("Tokens.colors.") {
+                let rest = &source[at + prefix.len()..];
+                let name: String = rest
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                assert!(
+                    known.contains(&name.as_str()),
+                    "{} reads Tokens.colors.{name}, which is not a colour",
+                    path.display()
+                );
+                checked += 1;
+            }
+        }
+        assert!(
+            checked > 100,
+            "only {checked} colour reads found in {}",
+            qml.display()
+        );
+        Ok(())
     }
 }

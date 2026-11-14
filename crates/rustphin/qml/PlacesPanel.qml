@@ -213,7 +213,15 @@ FocusScope {
                     radius: Tokens.metrics.radius
                     color: row.current ? Tokens.colors.selection : rowArea.containsMouse || drop.containsDrag ? Tokens.colors.hover : "transparent"
                     border.width: row.focused && list.activeFocus ? 1 : 0
-                    border.color: Tokens.colors.border_accent
+                    border.color: Tokens.colors.accent
+
+                    // The current place's royal-blue edge (D-038).
+                    Rectangle {
+                        visible: row.current
+                        width: Tokens.metrics.selection_bar
+                        height: parent.height
+                        color: Tokens.colors.accent
+                    }
                 }
                 RowLayout {
                     anchors.fill: parent
@@ -270,7 +278,7 @@ FocusScope {
                                 height: parent.height
                                 width: parent.width * Math.max(0, row.usage)
                                 radius: parent.radius
-                                color: row.usage > 0.9 ? Tokens.colors.danger : Tokens.colors.activity
+                                color: row.usage > 0.9 ? Tokens.colors.danger : Tokens.colors.text_muted
                             }
                         }
                     }

@@ -2,7 +2,7 @@
 
 Owner of every record: the maintainer. Evidence references point to VALIDATION.md and DISCOVERY.md.
 
-Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **locked** (confirmed by the maintainer); D-007 is superseded by D-017. On 2026-11-14 (W-114i) D-001 was superseded by D-034: the interface is Qt 6 and QML through cxx-qt. Changing one requires the change-impact loop. D-004, D-005 and D-012 to D-016 are **assumptions**: cheap to reverse, changeable without a change-impact loop.
+Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **locked** (confirmed by the maintainer); D-007 is superseded by D-017. On 2026-11-14 (W-114i) D-001 was superseded by D-034: the interface is Qt 6 and QML through cxx-qt; on the same day D-038 (locked) replaced D-017's navy colour values with charcoal. Changing one requires the change-impact loop. D-004, D-005 and D-012 to D-016 are **assumptions**: cheap to reverse, changeable without a change-impact loop.
 
 ---
 
@@ -172,7 +172,7 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Alternatives:** Adopt the draft unchanged (rejected by the user's choices above); keep D-007 without a design document (rejected: the user wants the document to lead).
 - **Reopen criteria:** The user wants a different accent, radius or type system; a light theme is added; a toolkit upgrade makes in-window blur possible.
 - **Confirmed by / date:** The maintainer, 2026-10-12
-- **Supersedes / superseded by:** supersedes D-007
+- **Supersedes / superseded by:** supersedes D-007. Its navy colour values (from W-079) are superseded by D-038 (charcoal, 2026-11-14); the royal-blue accent, 2-pixel corners, fonts, one dark theme and glass stay locked here
 
 ## D-018 — Network crates retained by the locked toolkit
 - **Status:** locked
@@ -340,3 +340,16 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** `main` is pushed to `https://github.com/PerkyZZ999/Rustphin.git` (remote `origin`), with the maintainer's go-ahead for each push. There is still no hosted CI: `rust-tc doctor`, run locally before every commit, remains the gate, and nothing is pushed that has not passed it. Build output, fuzz corpora and local tool state stay out of the repository, as `.gitignore` says.
 - **Confirmed by / date:** The maintainer, 2026-11-14 ("push our work on this github repo -> https://github.com/PerkyZZ999/Rustphin.git"; "you can also update the docs that says there is not remote or hosted CI")
 - **Supersedes / superseded by:** supersedes D-016
+
+## D-038 — Charcoal colour scheme
+- **Status:** locked
+- **Date:** 2026-11-14
+- **Context:** Since W-079 the theme was navy obsidian: every surface tinted blue, and royal blue filled the selection, the current place, the selected palette result and the current Settings page, with cyan for progress. The maintainer asked for a quieter base with the brand colour used sparingly. W-146 had also found the default and destructive dialog buttons below WCAG AA (about 2.1:1 and 1.9:1).
+- **Decision:** Every surface is neutral charcoal (content `#111213`, window `#141516`, chrome `#18191B`, tab strip `#202124`, menus and dialogs `#1D1E21`, track `#34363B`; glass keeps the alphas it had), text `#ECECED`, `#AEB1B8` muted and `#7D8087` disabled. Royal blue `#4169E1` is the one accent and is used only for: the default button's fill (white words), focus rings, the outline (`border-accent`, 55 %) and glow (20 %) of menus and dialogs, a 2 px edge on the leading side of a selection (and of the current place, the selected palette result, the current Settings page, the chosen segment and the top of the active tab), and the progress bar. Lines and the progress bar use royal blue lightened to `#7B98F2` (`primary-bright`) so they reach 3:1 on every surface. Selection is neutral (option B): `#3B3D42` with `#F5F5F6` text, `#45474D` under the pointer; the focused but unselected entry `#2A2C30`; hover white at 6 %. Destructive buttons fill `#C42F2F` with white words. Cyan is retired: device usage bars and the activity icon are neutral. Values and their use are in docs/DESIGN.md; `colors.rs` implements and tests them.
+- **Rationale:** A neutral base keeps file icons and thumbnails as the colour in the window; one accent kept to buttons, glows and thin edges reads as a brand rather than as the whole surface. Every text pair meets WCAG AA and every focus and state indicator 3:1, in glass (over a white window) and opaque modes.
+- **Evidence:** The contrast tests in `crates/rustphin-view/src/colors.rs`; the on-screen checks of W-147 (VALIDATION.md).
+- **Consequences:** The mockups in `docs/mockup/` keep the navy colours; DESIGN.md holds where they differ. Two values moved from the maintainer's starting point to pass the tests: `text-muted` `#A8ABB2` → `#AEB1B8` (4.26:1 → 4.56:1 on glass window over white) and the ring, edge and progress colour `#4169E1` → `#7B98F2` (the alternative the maintainer named for rings; `#4169E1` is 2.8:1 on glass chrome and 1.9:1 beside the selection-hover fill).
+- **Alternatives:** Option A, a dark royal-blue selection fill (not chosen); cyan or emerald progress (the maintainer chose royal blue).
+- **Reopen criteria:** The maintainer wants a different base or accent; a light theme is added.
+- **Confirmed by / date:** The maintainer, 2026-11-14 ("dark charcoal and black/gray tints as base color. With small accents/brands color of royal blue — only buttons and glows"; selection option B; progress in royal blue)
+- **Supersedes / superseded by:** supersedes D-017's navy colour values (W-079); D-017 stays locked for the accent, corners, fonts, one dark theme and glass

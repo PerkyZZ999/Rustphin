@@ -1,5 +1,5 @@
-//! The colour tokens of docs/DESIGN.md (the Obsidian theme), as plain
-//! numbers both interfaces draw with (W-114c, D-017). Each toolkit converts
+//! The colour tokens of docs/DESIGN.md (the charcoal theme, D-038), as
+//! plain numbers the interface draws with (W-114c, D-017). Each toolkit converts
 //! [`Color`] to its own type. The contrast tests here keep every pairing
 //! the design uses at WCAG AA.
 
@@ -70,14 +70,14 @@ pub struct Colors {
     /// background (`chrome-*`).
     pub chrome: Color,
     /// The tab strip, one step lighter than the chrome so the active tab,
-    /// drawn in the chrome's colour, reads as joined to the toolbar
+    /// drawn in the content's colour, reads as joined to the list
     /// (`chrome-raised-*`).
     pub chrome_raised: Color,
     /// The file list's surface, layered over the window background. More
     /// solid than the chrome so columns of text stay readable (`content-*`).
     pub content: Color,
-    /// Dialogs and other surfaces that float inside the window. Always solid
-    /// (`surface-raised`).
+    /// Menus, the palette and dialogs, which float inside the window. Always
+    /// solid (`surface-raised`).
     pub raised: Color,
     /// Dims the window behind a dialog.
     pub scrim: Color,
@@ -86,9 +86,11 @@ pub struct Colors {
     /// Outlines of controls: toolbar buttons, the location field, outlined
     /// buttons, checkboxes (`border-strong`).
     pub border_strong: Color,
-    /// Outline of floating surfaces and of the default button in a dialog.
+    /// Royal-blue outline of floating surfaces: menus, the palette, dialogs.
     pub border_accent: Color,
-    /// Live activity and capacity: progress and usage bars (`secondary`).
+    /// Royal-blue halo just outside [`Self::border_accent`].
+    pub glow: Color,
+    /// The filled part of a progress bar (`progress`).
     pub activity: Color,
     /// The empty part of a progress or usage bar (`track`).
     pub track: Color,
@@ -100,32 +102,43 @@ pub struct Colors {
     pub text_muted: Color,
     /// Text and icons of disabled controls (`text-disabled`).
     pub text_disabled: Color,
-    /// Accent for focus rings, selection bars and the active tab and pane on
-    /// dark surfaces (`primary-bright`).
+    /// Royal blue lightened to reach 3:1 on every surface: focus rings, the
+    /// focused entry's outline, the selection edge, the active tab's and
+    /// pane's line, drop and rubber-band outlines (`primary-bright`).
     pub accent: Color,
-    /// Fill of the selected row (`primary`).
+    /// Neutral fill of selected entries, the current place, the chosen
+    /// result, page or segment, and pressed or checked buttons.
     pub selection: Color,
-    /// Fill of a primary button under the pointer.
+    /// [`Self::selection`] under the pointer.
     pub selection_hover: Color,
-    /// Text on [`Self::selection`].
+    /// Text and icons on [`Self::selection`].
     pub on_selection: Color,
-    /// Fill of the current place: a location, quieter than a selection
-    /// (`primary-subtle`).
+    /// Quiet fill of the focused entry when it is not selected.
     pub current: Color,
     /// Fill under the pointer.
     pub hover: Color,
+    /// Fill of a dialog's default button: royal blue (`primary`).
+    pub button_primary: Color,
+    /// [`Self::button_primary`] under the pointer or pressed.
+    pub button_primary_hover: Color,
+    /// Fill of a destructive default button (`destructive`).
+    pub button_destructive: Color,
+    /// [`Self::button_destructive`] under the pointer or pressed.
+    pub button_destructive_hover: Color,
+    /// Words and icons on the filled buttons (`on-primary`).
+    pub on_button: Color,
     /// Text and icons of error messages.
     pub danger: Color,
     /// Background of error banners.
     pub danger_surface: Color,
-    /// Outline of error banners and destructive buttons (`error-border`).
+    /// Outline of error banners (`error-border`).
     pub danger_border: Color,
 }
 
 impl Colors {
     /// Every colour with its token name in code (`text_muted`), for
     /// interfaces that look colours up by name, such as QML.
-    pub fn named(&self) -> [(&'static str, Color); 24] {
+    pub fn named(&self) -> [(&'static str, Color); 30] {
         [
             ("window", self.window),
             ("chrome", self.chrome),
@@ -136,6 +149,7 @@ impl Colors {
             ("border", self.border),
             ("border_strong", self.border_strong),
             ("border_accent", self.border_accent),
+            ("glow", self.glow),
             ("activity", self.activity),
             ("track", self.track),
             ("success", self.success),
@@ -148,15 +162,20 @@ impl Colors {
             ("on_selection", self.on_selection),
             ("current", self.current),
             ("hover", self.hover),
+            ("button_primary", self.button_primary),
+            ("button_primary_hover", self.button_primary_hover),
+            ("button_destructive", self.button_destructive),
+            ("button_destructive_hover", self.button_destructive_hover),
+            ("on_button", self.on_button),
             ("danger", self.danger),
             ("danger_surface", self.danger_surface),
             ("danger_border", self.danger_border),
         ]
     }
 
-    /// The Obsidian theme: glass (`translucent`) over a blurred desktop, or
-    /// solid when blur is unavailable.
-    pub fn obsidian(translucent: bool) -> Self {
+    /// The charcoal theme (D-038): glass (`translucent`) over a blurred
+    /// desktop, or solid when blur is unavailable.
+    pub fn charcoal(translucent: bool) -> Self {
         let pick = |glass: u32, solid: u32| {
             if translucent {
                 Color::rgba(glass)
@@ -165,29 +184,35 @@ impl Colors {
             }
         };
         Self {
-            window: pick(0x0d1524cc, 0x0d1524),
-            chrome: pick(0x121b2d80, 0x121b2d),
-            chrome_raised: pick(0x1a22368c, 0x1a2236),
-            content: pick(0x0e17279e, 0x0e1727),
-            raised: Color::rgb(0x111a2c),
-            scrim: Color::rgba(0x04070e99),
+            window: pick(0x141516cc, 0x141516),
+            chrome: pick(0x18191b80, 0x18191b),
+            chrome_raised: pick(0x2021248c, 0x202124),
+            content: pick(0x1112139e, 0x111213),
+            raised: Color::rgb(0x1d1e21),
+            scrim: Color::rgba(0x00000099),
             border: Color::rgba(0xffffff12),
             border_strong: Color::rgba(0xffffff24),
-            border_accent: Color::rgba(0x5073eb8c),
-            activity: Color::rgb(0x3bcff0),
-            track: Color::rgb(0x333d52),
+            border_accent: Color::rgba(0x4169e18c),
+            glow: Color::rgba(0x4169e133),
+            activity: Color::rgb(0x7b98f2),
+            track: Color::rgb(0x34363b),
             success: Color::rgb(0x10b981),
-            text: Color::rgb(0xe6e9f2),
-            text_muted: Color::rgb(0xaeb8cc),
-            text_disabled: Color::rgb(0x7c869a),
-            accent: Color::rgb(0x8fa8ff),
-            selection: Color::rgb(0x2d4cc8),
-            selection_hover: Color::rgb(0x2843b4),
-            on_selection: Color::rgb(0xf5f7fc),
-            current: Color::rgb(0x1d2e6a),
-            hover: Color::rgba(0xffffff12),
+            text: Color::rgb(0xececed),
+            text_muted: Color::rgb(0xaeb1b8),
+            text_disabled: Color::rgb(0x7d8087),
+            accent: Color::rgb(0x7b98f2),
+            selection: Color::rgb(0x3b3d42),
+            selection_hover: Color::rgb(0x45474d),
+            on_selection: Color::rgb(0xf5f5f6),
+            current: Color::rgb(0x2a2c30),
+            hover: Color::rgba(0xffffff0f),
+            button_primary: Color::rgb(0x4169e1),
+            button_primary_hover: Color::rgb(0x3a5dc8),
+            button_destructive: Color::rgb(0xc42f2f),
+            button_destructive_hover: Color::rgb(0xab2929),
+            on_button: Color::rgb(0xffffff),
             danger: Color::rgb(0xff9b9b),
-            danger_surface: Color::rgb(0x37202b),
+            danger_surface: Color::rgb(0x3a1f22),
             danger_border: Color::rgba(0xff9b9b73),
         }
     }
@@ -241,6 +266,7 @@ mod tests {
         let tab_strip = over(theme.chrome_raised, window);
         let content = over(theme.content, window);
         let hover = over(theme.hover, content);
+        let line = over(theme.chrome_raised, window);
         for (name, foreground, background) in [
             ("text on window", theme.text, window),
             ("text on content", theme.text, content),
@@ -265,18 +291,43 @@ mod tests {
                 theme.text_muted,
                 over(theme.hover, tab_strip),
             ),
-            ("text on the current place", theme.text, theme.current),
             (
-                "muted text on the current place",
+                "the focused entry's name on its fill",
+                theme.text,
+                theme.current,
+            ),
+            (
+                "the focused entry's size and date on its fill",
                 theme.text_muted,
                 theme.current,
             ),
+            ("muted text under the pointer", theme.text_muted, hover),
             ("text on an error line", theme.danger, theme.danger_surface),
             ("text on selection", theme.on_selection, theme.selection),
             (
-                "text on hovered primary button",
+                "text on a selection under the pointer",
                 theme.on_selection,
                 theme.selection_hover,
+            ),
+            (
+                "words on the default button",
+                theme.on_button,
+                theme.button_primary,
+            ),
+            (
+                "words on the default button under the pointer",
+                theme.on_button,
+                theme.button_primary_hover,
+            ),
+            (
+                "words on a destructive button",
+                theme.on_button,
+                theme.button_destructive,
+            ),
+            (
+                "words on a destructive button under the pointer",
+                theme.on_button,
+                theme.button_destructive_hover,
             ),
             ("danger on its surface", theme.danger, theme.danger_surface),
             ("text on a dialog", theme.text, theme.raised),
@@ -309,19 +360,55 @@ mod tests {
                 "{name}: {ratio:.2}:1 is below WCAG AA (4.5:1)"
             );
         }
-        // Non-text indicators need 3:1 (WCAG 1.4.11): selection and focus
-        // bars, the active tab's underline, the current place's bar and icon,
-        // the filled part of progress and usage bars, the success icon.
-        // Disabled text is exempt from 1.4.3; DESIGN.md still keeps it at 3:1
-        // so unavailable controls stay legible.
+        // Non-text indicators need 3:1 (WCAG 1.4.11): focus rings and
+        // outlines, the selection edge beside the surface and beside the
+        // selection's own fill, the active tab's and pane's line, the filled
+        // part of progress and usage bars, the success icon. Disabled text is
+        // exempt from 1.4.3; DESIGN.md still keeps it at 3:1 so unavailable
+        // controls stay legible.
         for (name, foreground, background) in [
             ("accent on window", theme.accent, window),
             ("accent on chrome", theme.accent, chrome),
             ("accent on the tab strip", theme.accent, tab_strip),
             ("accent on content", theme.accent, content),
-            ("accent on the current place", theme.accent, theme.current),
+            ("focus ring on a dialog", theme.accent, theme.raised),
+            (
+                "focus ring under the pointer in a dialog",
+                theme.accent,
+                over(theme.hover, theme.raised),
+            ),
+            (
+                "focus outline on the focused entry",
+                theme.accent,
+                theme.current,
+            ),
+            ("focus outline under the pointer", theme.accent, hover),
+            (
+                "selection edge beside a selection",
+                theme.accent,
+                theme.selection,
+            ),
+            (
+                "selection edge beside a selection under the pointer",
+                theme.accent,
+                theme.selection_hover,
+            ),
+            (
+                "focus ring inside the default button",
+                theme.on_button,
+                theme.button_primary,
+            ),
+            (
+                "focus ring inside a destructive button",
+                theme.on_button,
+                theme.button_destructive,
+            ),
             ("progress on its track", theme.activity, theme.track),
+            ("progress on the activity line", theme.activity, line),
+            ("usage on its track", theme.text_muted, theme.track),
+            ("a nearly full volume's usage", theme.danger, theme.track),
             ("success on chrome", theme.success, chrome),
+            ("success on the notice line", theme.success, line),
             ("disabled text on chrome", theme.text_disabled, chrome),
             ("disabled text on content", theme.text_disabled, content),
             (
@@ -352,31 +439,63 @@ mod tests {
     fn floating_surfaces_stay_solid_in_the_translucent_theme() {
         // Blur is behind the window only (D-017), so menus, the palette
         // and dialogs must not let the content behind them show through.
-        let glass = Colors::obsidian(true);
+        let glass = Colors::charcoal(true);
         assert!(
             glass.window.a < 1.,
             "the glass window should be translucent"
         );
         assert_eq!(glass.raised.a, 1., "floating surfaces must be opaque");
-        assert_eq!(Colors::obsidian(false).raised, glass.raised);
+        assert_eq!(Colors::charcoal(false).raised, glass.raised);
+    }
+
+    #[test]
+    fn only_the_accent_and_status_colours_carry_a_hue() {
+        // D-038: surfaces, text and selection are charcoal and grey; royal
+        // blue is kept to buttons, rings, edges, glows and progress.
+        let hue = |c: Color| c.r.max(c.g).max(c.b) - c.r.min(c.g).min(c.b);
+        for theme in [Colors::charcoal(false), Colors::charcoal(true)] {
+            for (name, color) in theme.named() {
+                let accent = matches!(
+                    name,
+                    "border_accent"
+                        | "glow"
+                        | "activity"
+                        | "accent"
+                        | "button_primary"
+                        | "button_primary_hover"
+                        | "button_destructive"
+                        | "button_destructive_hover"
+                        | "success"
+                        | "danger"
+                        | "danger_surface"
+                        | "danger_border"
+                );
+                assert_eq!(
+                    hue(color) > 12. / 255.,
+                    accent,
+                    "{name} should {}carry a hue",
+                    if accent { "" } else { "not " }
+                );
+            }
+        }
     }
 
     #[test]
     fn opaque_theme_meets_contrast_minimums() {
-        assert_readable(Colors::obsidian(false));
+        assert_readable(Colors::charcoal(false));
     }
 
     #[test]
     fn translucent_theme_meets_contrast_minimums_over_a_white_window() {
-        assert_readable(Colors::obsidian(true));
+        assert_readable(Colors::charcoal(true));
     }
 
     #[test]
     fn every_fading_settings_offers_keeps_hidden_names_readable() {
         for percent in (HIDDEN_OPACITY_MIN_PERCENT..=100).step_by(5) {
             let hidden = percent as f32 / 100.;
-            assert_readable_with_hidden(Colors::obsidian(false), hidden);
-            assert_readable_with_hidden(Colors::obsidian(true), hidden);
+            assert_readable_with_hidden(Colors::charcoal(false), hidden);
+            assert_readable_with_hidden(Colors::charcoal(true), hidden);
         }
     }
 }

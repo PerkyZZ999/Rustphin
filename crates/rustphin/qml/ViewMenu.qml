@@ -15,11 +15,7 @@ Popup {
     width: Tokens.metrics.menu
     padding: Tokens.metrics.space_xs
     focus: true
-    background: Rectangle {
-        radius: Tokens.metrics.radius
-        color: Tokens.colors.raised
-        border.color: Tokens.colors.border_strong
-    }
+    background: FloatingSurface {}
 
     contentItem: ColumnLayout {
         spacing: 0
@@ -131,7 +127,7 @@ Popup {
             }
             Lucide {
                 name: row.chosen ? "check" : ""
-                colour: Tokens.colors.accent
+                colour: Tokens.colors.text
             }
         }
         onClicked: {

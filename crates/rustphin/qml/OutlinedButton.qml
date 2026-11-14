@@ -1,5 +1,5 @@
-// A text button with the design's outline; `primary` fills it with the
-// accent, `destructive` with the danger colour. An optional Lucide icon
+// A text button with the design's outline; `primary` fills it with royal
+// blue (a dialog's default), `destructive` with red. An optional Lucide icon
 // goes before the label.
 pragma ComponentBehavior: Bound
 
@@ -13,7 +13,9 @@ Button {
     property string iconName: ""
     property bool primary: false
     property bool destructive: false
-    readonly property color labelColour: !enabled ? Tokens.colors.text_disabled : primary || destructive ? Tokens.colors.on_selection : Tokens.colors.text
+    readonly property bool filled: primary || destructive
+    readonly property bool lit: hovered || down
+    readonly property color labelColour: !enabled ? Tokens.colors.text_disabled : filled ? Tokens.colors.on_button : Tokens.colors.text
 
     implicitHeight: Tokens.metrics.button
     leftPadding: Tokens.metrics.space_md
@@ -42,9 +44,10 @@ Button {
     background: Rectangle {
         radius: Tokens.metrics.radius
         // A disabled default keeps its fill at half opacity (DESIGN.md).
-        opacity: !plain.enabled && (plain.primary || plain.destructive) ? 0.5 : 1
-        color: plain.destructive ? (plain.down ? Qt.darker(Tokens.colors.danger, 1.2) : Tokens.colors.danger) : plain.primary ? (plain.down ? Qt.darker(Tokens.colors.accent, 1.2) : Tokens.colors.accent) : plain.down ? Tokens.colors.current : plain.hovered ? Tokens.colors.hover : "transparent"
-        border.width: plain.visualFocus ? 2 : (plain.primary || plain.destructive ? 0 : 1)
-        border.color: plain.visualFocus ? Tokens.colors.on_selection : Tokens.colors.border_strong
+        opacity: !plain.enabled && plain.filled ? 0.5 : 1
+        color: plain.destructive ? (plain.lit ? Tokens.colors.button_destructive_hover : Tokens.colors.button_destructive) : plain.primary ? (plain.lit ? Tokens.colors.button_primary_hover : Tokens.colors.button_primary) : plain.down ? Tokens.colors.selection : plain.hovered ? Tokens.colors.hover : "transparent"
+        border.width: plain.visualFocus ? 2 : (plain.filled ? 0 : 1)
+        // Focus: a white ring inside a filled button, royal blue otherwise.
+        border.color: plain.visualFocus ? (plain.filled ? Tokens.colors.on_button : Tokens.colors.accent) : Tokens.colors.border_strong
     }
 }

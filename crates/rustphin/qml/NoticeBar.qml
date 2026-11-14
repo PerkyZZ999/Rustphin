@@ -28,7 +28,7 @@ ColumnLayout {
 
             Lucide {
                 name: Operations.progressIcon
-                colour: Tokens.colors.activity
+                colour: Tokens.colors.text_muted
             }
             ColumnLayout {
                 Layout.fillWidth: true

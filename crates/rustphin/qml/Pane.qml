@@ -711,7 +711,7 @@ FocusScope {
                 y: Math.min(a.y, b.y)
                 width: Math.abs(a.x - b.x)
                 height: Math.abs(a.y - b.y)
-                color: Qt.alpha(Tokens.colors.accent, 0.15)
+                color: Tokens.colors.hover
                 border.color: Tokens.colors.accent
                 border.width: 1
             }
@@ -1045,14 +1045,6 @@ FocusScope {
             current: row.current
             renaming: row.renaming
         }
-        // The focused entry's bar, as in the mockups.
-        Rectangle {
-            visible: row.current && row.selected
-            x: Tokens.metrics.space_xs
-            width: Tokens.metrics.selection_bar
-            height: parent.height
-            color: Tokens.colors.accent
-        }
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: Tokens.metrics.space_lg
@@ -1185,17 +1177,28 @@ FocusScope {
         }
     }
 
-    // A row's or cell's fill: the selection, the hover, the focus outline.
+    // A row's or cell's fill: the selection with its royal-blue edge, the
+    // hover, the focused entry's fill and outline (DESIGN.md, D-038).
     component EntryFill: Rectangle {
+        id: fill
+
         required property int index
         required property bool selected
         required property bool current
         required property bool renaming
+        readonly property bool focused: current && pane.activeFocus
 
         radius: Tokens.metrics.radius
-        color: selected ? (pane.hoverIndex === index ? Tokens.colors.selection_hover : Tokens.colors.selection) : (pane.hoverIndex === index || renaming) ? Tokens.colors.hover : "transparent"
-        border.width: current && pane.activeFocus && !selected ? 1 : 0
-        border.color: Tokens.colors.border_accent
+        color: selected ? (pane.hoverIndex === index ? Tokens.colors.selection_hover : Tokens.colors.selection) : (pane.hoverIndex === index || renaming) ? Tokens.colors.hover : focused ? Tokens.colors.current : "transparent"
+        border.width: focused ? 1 : 0
+        border.color: Tokens.colors.accent
+
+        Rectangle {
+            visible: fill.selected
+            width: Tokens.metrics.selection_bar
+            height: parent.height
+            color: Tokens.colors.accent
+        }
     }
 
     Component {

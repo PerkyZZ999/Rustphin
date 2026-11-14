@@ -68,7 +68,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | N7 | Ctrl+H in the fixture | `.hidden` appears; status "18 items (…)"; press again to hide |
 | S1 | Click row 1, Ctrl+click rows 4 and 7 | Three separate rows selected; status "3 items selected (…)" before "17 items (…), 1 hidden" |
 | S2 | Click row 1, Shift+click row 4 | Rows 1–4 selected; "4 items selected (…)" |
-| S3 | Ctrl+Shift+A | The other 13 selected; the focused, unselected row keeps an accent bar |
+| S3 | Ctrl+Shift+A | The other 13 selected; the focused, unselected row keeps its accent outline and `current` fill |
 | S4 | Escape | Nothing selected; status "17 items (…), 1 hidden" with no selection part |
 | S5 | Click the last row, type `p` | Selection wraps to "Pictures" |
 | S6 | Shift+Down twice | Three consecutive rows selected |
@@ -123,7 +123,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | G5 | Tile Rustphin to the left (Super+Left), drag a file by its name into Dolphin's view | Dolphin shows its own Move/Copy/Link menu; "Copy Here" copies the file, name intact |
 | G6 | Press in a row's Size column and drag down across rows | A rubber band selects the rows, as before drags existed |
 | K1 | In a fresh isolated home, look at the left panel | The title "PLACES" with one "New group" button (tooltip "New group (Ctrl+Shift+G)"), and "No places yet. Add the folder shown with Ctrl+Shift+D, or drag a folder here." |
-| K2 | Ctrl+Shift+D; enter a folder; Ctrl+Shift+D | Both folders are listed; the one being shown has an accent bar and a highlighted row; `<isolated home>/.local/share/user-places.xbel` holds two `<bookmark>` elements |
+| K2 | Ctrl+Shift+D; enter a folder; Ctrl+Shift+D | Both folders are listed; the one being shown has the selection fill with a royal-blue edge; `<isolated home>/.local/share/user-places.xbel` holds two `<bookmark>` elements |
 | K3 | Tab (focus the panel), Ctrl+Shift+G, type `Work`, Return, Up, G | A heading "Work" with an arrow; the place above it moves under the heading, indented; `<isolated home>/.config/rustphin/place-groups.toml` lists the group with that place's identifier |
 | K4 | F2 on a place, type a new name, Return; then start `dolphin /tmp` in the session | Dolphin's Places lists both places, ungrouped, with the new name; within a second Rustphin's panel also lists the "Home" and "Trash" entries Dolphin added to the file |
 | K5 | Kill and relaunch Rustphin | The group and its place are back as they were |
@@ -264,7 +264,7 @@ filename contains a build hash. The child is an ignored test, so run it with
 |---|---|---|
 | M1 | Details (mockups 01, 05, 33) | Heading text and cells share columns (Size ends at 936, Modified starts at 952, Type at 1120); "↑" after the sorted heading; toolbar buttons have only an outline; the path is one string |
 | M2 | Palette with "hid" (04) | 40 px search field on the content fill with a bright outline and ring; no footer |
-| M3 | F2 on one name (07) | Hover fill and bar on the row; field as wide as the name; selection in `primary`; status "Renaming “…”: Enter keeps the new name, Esc cancels." |
+| M3 | F2 on one name (07) | Hover fill and bar on the row; field as wide as the name; selection in `selection`; status "Renaming “…”: Enter keeps the new name, Esc cancels." |
 | M4 | Properties (13) | Three equal permission columns; capital labels; checkbox rows 32 px apart |
 | M5 | Batch rename with a "/" (15) | Segments with icons; Find and Replace side by side; one problem note; new names in red |
 | M6 | Empty, only hidden, filter with no match (25–27) | 32 px icon, heading, text, 32 px button, at 8/8/12 px spacing |
@@ -287,7 +287,7 @@ filename contains a build hash. The child is an ignored test, so run it with
 |---|---|---|
 | TB1 | Start in the scene at 920 px | One toolbar under the title bar, as TB10: shield (dimmed), Back, Forward, Up, Reload, location, New (+ ⌄), terminal, View (the mode's icon and a chevron), Split, Show hidden, Filter, Actions; the tab strip ("Pictures", "+") over the files beside Places, whose title row lines up with it |
 | TB2 | Point at Split | Tooltip "Split view (F3)" |
-| TB3 | Click Show hidden | The eye lights up (`primary-subtle` fill, bright icon) and hidden entries show faded; Ctrl+H turns it off again from the keyboard |
+| TB3 | Click Show hidden | The eye lights up (`selection` fill) and hidden entries show faded; Ctrl+H turns it off again from the keyboard |
 | TB4 | Click Split; click the left path bar; double-click a folder | Two sides, each with a path bar; the 2 px line and the toolbar's location follow the side last clicked; Back lights up for it |
 | TB5 | Ctrl+L, Escape | The toolbar's location becomes a field with the path selected; Escape returns to the segments |
 | TB6 | Click Back in the toolbar | The active side goes back; Forward lights up |
