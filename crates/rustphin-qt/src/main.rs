@@ -36,6 +36,7 @@ mod shell;
 use std::{path::PathBuf, process::ExitCode};
 
 use cxx_qt_lib::{QGuiApplication, QString, QStringList};
+use rustphin_platform::file_manager::{Call, Shown};
 use rustphin_platform::instance::{self, ANSWER_TIME, ClaimError, HandOver, Instance, Request};
 use rustphin_view::launch::{Command, parse_launch};
 
@@ -62,6 +63,40 @@ fn folder_list(folders: &[PathBuf]) -> QStringList {
         .iter()
         .map(|folder| QString::from(folder.to_string_lossy().as_ref()))
         .collect()
+}
+
+/// What another application asked through FileManager1, as the shell's
+/// calls: each folder with the names to select, or the properties of paths.
+fn answer_file_manager(call: Call) {
+    match call {
+        Call::Show(shown) => {
+            let in_tabs =
+                prefs::settings().shown_folders() == rustphin_view::settings::ShownIn::Tab;
+            for (index, shown) in shown.iter().enumerate() {
+                let (folder, select) = reveal_args(shown);
+                // Later folders join the window the first one opened.
+                shell::qobject::rustphin_shell_reveal(&folder, &select, in_tabs || index > 0);
+            }
+        }
+        Call::Properties(paths) => {
+            if !paths.is_empty() {
+                shell::qobject::rustphin_shell_properties(&folder_list(&paths));
+            }
+        }
+    }
+}
+
+/// A shown folder and the names to select in it, as Qt text.
+fn reveal_args(shown: &Shown) -> (QString, QStringList) {
+    let names: QStringList = shown
+        .select
+        .iter()
+        .map(|name| QString::from(name.to_string_lossy().as_ref()))
+        .collect();
+    (
+        QString::from(shown.folder.to_string_lossy().as_ref()),
+        names,
+    )
 }
 
 fn main() -> ExitCode {
@@ -149,9 +184,24 @@ fn main() -> ExitCode {
             }
         });
     }
+    // Other applications' "show this file" requests (FileManager1), only
+    // in the process that serves later launches.
+    let file_manager = instance
+        .as_ref()
+        .and_then(|_| rustphin_platform::file_manager::ServiceHandle::session());
+    if let Some(service) = &file_manager {
+        tracing::info!("listening for requests to show files");
+        let calls = service.receiver();
+        std::thread::spawn(move || {
+            while let Ok(call) = calls.recv() {
+                post::on_qt(move || answer_file_manager(call));
+            }
+        });
+    }
     if let Some(app) = app.as_mut() {
         app.exec();
     }
+    drop(file_manager);
     drop(instance);
     ExitCode::SUCCESS
 }
@@ -175,6 +225,21 @@ mod tests {
             (Some("Rustphin is not running.".to_owned()), true)
         );
         assert!(!quit_outcome(&HandOver::NoAnswer("slow".into())).1);
+    }
+
+    #[test]
+    fn a_shown_file_reaches_qt_as_its_folder_and_name() {
+        let shown = Shown {
+            folder: PathBuf::from("/srv/data"),
+            select: vec!["report.pdf".into(), "notes.txt".into()],
+        };
+        let (folder, select) = reveal_args(&shown);
+        let names: Vec<String> = cxx_qt_lib::QList::<QString>::from(&select)
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(folder.to_string(), "/srv/data");
+        assert_eq!(names, ["report.pdf", "notes.txt"]);
     }
 
     #[test]

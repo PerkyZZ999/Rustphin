@@ -276,6 +276,24 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "isSelected"]
         fn is_selected(self: &FolderModel, row: i32) -> bool;
+        /// The selected entries as a `text/uri-list`, for a drag out.
+        #[qinvokable]
+        #[cxx_name = "selectedUris"]
+        fn selected_uris(self: &FolderModel) -> QString;
+        /// The row a drop over `row` goes into: `row` when it is a folder
+        /// that can receive, else −1 (the drop goes into the folder shown).
+        #[qinvokable]
+        #[cxx_name = "dropRow"]
+        fn drop_row(self: &FolderModel, row: i32) -> i32;
+        /// Whether this pane takes drops at all (not the trash).
+        #[qinvokable]
+        #[cxx_name = "takesDrops"]
+        fn takes_drops(self: &FolderModel) -> bool;
+        /// Copies or moves the dropped `uris` into the folder at `row`, or
+        /// the folder shown for −1. `action`: 0 ask, 1 copy, 2 move.
+        #[qinvokable]
+        #[cxx_name = "dropOn"]
+        fn drop_on(self: Pin<&mut FolderModel>, row: i32, uris: &QString, action: i32);
         /// Says something on the status line until the folder changes.
         #[qinvokable]
         fn say(self: Pin<&mut FolderModel>, words: &QString);

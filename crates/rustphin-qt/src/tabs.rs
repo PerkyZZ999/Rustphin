@@ -346,7 +346,13 @@ impl qobject::TabsModel {
         });
     }
 
-    fn restore(mut self: Pin<&mut Self>, folders: &QStringList, start: bool, home: &QString) {
+    fn restore(
+        mut self: Pin<&mut Self>,
+        folders: &QStringList,
+        select: &QStringList,
+        start: bool,
+        home: &QString,
+    ) {
         if self.rust().tabs.is_some() {
             return;
         }
@@ -389,13 +395,19 @@ impl qobject::TabsModel {
             tabs.push((vec![home.to_string_lossy().into_owned()], 0));
             active = 0;
         }
-        let items: Vec<Tab> = tabs
+        let mut items: Vec<Tab> = tabs
             .into_iter()
             .map(|(starts, pane)| {
                 let key = self.as_mut().rust_mut().key();
                 Tab::new(key, starts, pane)
             })
             .collect();
+        if let Some(first) = items.first_mut() {
+            first.select = QList::<QString>::from(select)
+                .iter()
+                .map(ToString::to_string)
+                .collect();
+        }
         let last = i32::try_from(items.len()).unwrap_or(1) - 1;
         self.as_mut()
             .begin_insert_rows(&QModelIndex::default(), 0, last);

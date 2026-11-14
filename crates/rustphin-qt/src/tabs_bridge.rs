@@ -99,11 +99,18 @@ pub mod qobject {
         #[cxx_name = "roleNames"]
         fn role_names(self: &TabsModel) -> QHash_i32_QByteArray;
 
-        /// Opens the window's first tabs: `folders` each in a tab, or with
-        /// none, the saved session when this is the start window and
-        /// Settings restores it, else `home`.
+        /// Opens the window's first tabs: `folders` each in a tab (the names
+        /// in `select` selected in the first), or with none, the saved
+        /// session when this is the start window and Settings restores it,
+        /// else `home`.
         #[qinvokable]
-        fn restore(self: Pin<&mut TabsModel>, folders: &QStringList, start: bool, home: &QString);
+        fn restore(
+            self: Pin<&mut TabsModel>,
+            folders: &QStringList,
+            select: &QStringList,
+            start: bool,
+            home: &QString,
+        );
         /// Opens a tab on `location` after the active one; `activate`
         /// makes it the active tab. Names in `select` are selected.
         #[qinvokable]

@@ -15,7 +15,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use jiff::tz::TimeZone;
 use rustphin_view::{
-    operations::{DropAction, fraction},
+    operations::fraction,
     questions::{self, Answer},
 };
 
@@ -173,11 +173,10 @@ impl qobject::Operations {
 
     fn drop_files(self: Pin<&mut Self>, uris: &QString, into: &QString, action: i32) {
         let sources = rustphin_platform::uri::paths_from_uri_list(uris.to_string().as_bytes());
-        let action = match action {
-            1 => Some(DropAction::Copy),
-            2 => Some(DropAction::Move),
-            _ => None,
-        };
-        hub::drop_files(sources, PathBuf::from(into.to_string()), action);
+        hub::drop_files(
+            sources,
+            PathBuf::from(into.to_string()),
+            crate::folder::drop_action(action),
+        );
     }
 }

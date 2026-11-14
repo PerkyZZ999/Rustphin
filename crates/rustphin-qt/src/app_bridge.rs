@@ -19,6 +19,12 @@ pub mod qobject {
         /// Shows another launch's folders: as tabs of the window last used
         /// when `in_tabs` and there is one, else in a new window. Qt thread.
         fn rustphin_shell_show(folders: &QStringList, activation: &QString, in_tabs: bool);
+        /// Shows `folder` with `select` selected, for another application:
+        /// a tab of the window last used when `in_tabs`, else a new window.
+        /// Qt thread.
+        fn rustphin_shell_reveal(folder: &QString, select: &QStringList, in_tabs: bool);
+        /// Opens Properties on `paths` in the window last used. Qt thread.
+        fn rustphin_shell_properties(paths: &QStringList);
         /// Closes every window and ends the process. Any thread.
         fn rustphin_shell_quit();
         /// Runs `run` on the GUI thread, from its event loop. Any thread.

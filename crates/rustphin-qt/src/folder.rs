@@ -1865,6 +1865,49 @@ impl qobject::FolderModel {
             .unwrap_or_default()
     }
 
+    fn selected_uris(&self) -> QString {
+        let paths: Vec<PathBuf> = self.rust().current().map_or_else(Vec::new, |snapshot| {
+            self.rust()
+                .selection
+                .rows(snapshot)
+                .into_iter()
+                .map(|row| snapshot.entry_path(row))
+                .collect()
+        });
+        QString::from(&rustphin_platform::uri::uri_list(&paths))
+    }
+
+    fn drop_row(&self, row: i32) -> i32 {
+        let rust = self.rust();
+        let folder = rust.trash_dir.is_none()
+            && rust.current().is_some_and(|snapshot| {
+                usize::try_from(row)
+                    .ok()
+                    .is_some_and(|row| row < snapshot.len() && snapshot.is_container(row))
+            });
+        if folder { row } else { -1 }
+    }
+
+    fn takes_drops(&self) -> bool {
+        self.rust().trash_dir.is_none() && self.rust().current().is_some()
+    }
+
+    fn drop_on(self: Pin<&mut Self>, row: i32, uris: &QString, action: i32) {
+        if !self.takes_drops() {
+            return;
+        }
+        let into = match usize::try_from(self.drop_row(row)) {
+            Ok(row) => self
+                .rust()
+                .current()
+                .map(|snapshot| snapshot.entry_path(row)),
+            Err(_) => Some(PathBuf::from(self.location().to_string())),
+        };
+        let Some(into) = into else { return };
+        let sources = rustphin_platform::uri::paths_from_uri_list(uris.to_string().as_bytes());
+        crate::hub::drop_files(sources, into, drop_action(action));
+    }
+
     fn is_selected(&self, row: i32) -> bool {
         self.rust().current().is_some_and(|snapshot| {
             usize::try_from(row)
@@ -2014,6 +2057,16 @@ impl qobject::FolderModel {
 
 /// Entries handed to the window's dialogs (Compress, batch rename,
 /// Extract to): QML gets a ticket, the paths stay here as bytes.
+/// What a drop does, from QML's number: 1 copy, 2 move, else ask.
+pub(crate) fn drop_action(action: i32) -> Option<rustphin_view::operations::DropAction> {
+    use rustphin_view::operations::DropAction;
+    match action {
+        1 => Some(DropAction::Copy),
+        2 => Some(DropAction::Move),
+        _ => None,
+    }
+}
+
 pub mod handed {
     use std::{cell::RefCell, ffi::OsString, path::PathBuf};
 
@@ -2385,7 +2438,11 @@ impl qobject::FolderModel {
                 trash,
                 ..handed::Handed::default()
             });
-            let json = serde_json::json!({ "folder": here.to_string_lossy() }).to_string();
+            let json = serde_json::json!({
+                "folder": here.to_string_lossy(),
+                "uri": rustphin_platform::uri::file_uri(&here),
+            })
+            .to_string();
             return self.as_mut().extract_to_requested(QString::from(&json));
         }
         start_extracting(archives, here, layout, trash);
@@ -2530,6 +2587,16 @@ fn sideways(flow: Flow) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use rustphin_view::operations::DropAction;
+
+    #[test]
+    fn a_drop_copies_with_ctrl_moves_with_shift_and_otherwise_asks() {
+        assert_eq!(super::drop_action(1), Some(DropAction::Copy));
+        assert_eq!(super::drop_action(2), Some(DropAction::Move));
+        assert_eq!(super::drop_action(0), None);
+        assert_eq!(super::drop_action(7), None);
+    }
+
     use super::*;
 
     #[test]

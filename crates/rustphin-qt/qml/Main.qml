@@ -13,6 +13,8 @@ Window {
 
     // The folders this window opens in tabs; none for a plain window.
     required property var startFolders
+    // Names selected in the first of them (another application asked).
+    property var startSelect: []
     // The window a launch opened first: it restores and saves the session.
     required property bool startWindow
     required property string home
@@ -30,6 +32,12 @@ Window {
     function openTabs(folders) {
         for (const folder of folders)
             tabs.open(folder, true, [])
+        requestActivate()
+    }
+
+    // Another application asked to show `folder` with `names` selected.
+    function reveal(folder, names) {
+        tabs.open(folder, true, names)
         requestActivate()
     }
 
@@ -83,7 +91,7 @@ Window {
         Tokens.blurWindows()
         Operations.watch()
         Preferences.watch()
-        tabs.restore(startFolders, startWindow, home)
+        tabs.restore(startFolders, startSelect, startWindow, home)
         Qt.callLater(focusActive)
     }
 
@@ -174,8 +182,10 @@ Window {
         } else if (kind === "batch") {
             batchLoader.active = true
         } else if (kind === "extractTo") {
-            extractFolder.currentFolder = "file://" + data.folder
-            extractFolder.open()
+            extractFolder.currentFolder = data.uri
+            // A window of its own: opened once the menu that asked is gone,
+            // or the menu is left open behind it and stops answering.
+            Qt.callLater(() => extractFolder.open())
         }
     }
 

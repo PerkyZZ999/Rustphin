@@ -34,13 +34,26 @@ Menu {
         }
     }
 
+    // Empties `target`. A submenu is taken out with its menu (Qt owns the
+    // item that holds it, which cannot be destroyed from here) and closed,
+    // or one left open behind a dialog keeps later menus away.
     function clear(target) {
-        while (target.count > 0)
-            target.takeItem(0).destroy()
+        while (target.count > 0) {
+            if (target.itemAt(0).subMenu) {
+                const sub = target.takeMenu(0)
+                clear(sub)
+                sub.close()
+                sub.destroy()
+            } else {
+                target.takeItem(0).destroy()
+            }
+        }
     }
 
     // Shows the menu at a point of `owner`.
     function openAt(owner: Item, x: real, y: real) {
+        // A menu another window interrupted may still count as open.
+        menu.close()
         clear(menu)
         if (json.length === 0)
             return

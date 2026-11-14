@@ -441,6 +441,17 @@ FocusScope {
                 property bool bandAdd: false
                 property point pressedAt
                 property bool moved: false
+                property bool dragging: false
+
+                // Hands the selection to the desktop as a drag (R-010):
+                // other applications receive its files as a URI list.
+                function startDrag() {
+                    dragging = true
+                    const item = pane.view.itemAtIndex(pressRow)
+                    dragOut.Drag.imageSource = item && item.icon ? "image://theme/" + item.icon : ""
+                    dragOut.Drag.mimeData = { "text/uri-list": folder.selectedUris() }
+                    dragOut.Drag.active = true
+                }
 
                 function contentPoint(x: real, y: real): point {
                     return pane.view.contentItem.mapFromItem(pointer, x, y)
@@ -501,6 +512,11 @@ FocusScope {
                     }
                     if (Math.abs(mouse.x - pressedAt.x) + Math.abs(mouse.y - pressedAt.y) > 4)
                         moved = true
+                    if (moved && !banding && !dragging && pressRow >= 0 && (mouse.buttons & Qt.LeftButton)
+                            && folder.isSelected(pressRow)) {
+                        startDrag()
+                        return
+                    }
                     if (banding) {
                         bandEnd = contentPoint(Math.max(0, Math.min(width, mouse.x)), Math.max(0, Math.min(height, mouse.y)))
                         folder.band(bandStart.x, bandStart.y, bandEnd.x, bandEnd.y, pane.lanes(), bandAdd)
@@ -508,6 +524,8 @@ FocusScope {
                     }
                 }
                 onReleased: mouse => {
+                    if (dragging)
+                        return
                     // A press on a selected entry kept the selection for a
                     // drag; without one, the click narrows it to the entry.
                     if (mouse.button === Qt.LeftButton && !banding && !moved && pressRow >= 0
@@ -531,6 +549,21 @@ FocusScope {
                     bandScroll.direction = 0
                 }
 
+                // What is dragged out; the desktop draws it under the pointer.
+                Item {
+                    id: dragOut
+
+                    Drag.dragType: Drag.Automatic
+                    Drag.supportedActions: Qt.CopyAction | Qt.MoveAction | Qt.LinkAction
+                    Drag.proposedAction: Qt.CopyAction
+                    Drag.imageSourceSize: Qt.size(Tokens.metrics.icon_large, Tokens.metrics.icon_large)
+                    Drag.onDragFinished: {
+                        Drag.active = false
+                        pointer.dragging = false
+                        pointer.pressRow = -1
+                    }
+                }
+
                 // The band scrolls the view while held past its edge.
                 Timer {
                     id: bandScroll
@@ -548,6 +581,55 @@ FocusScope {
                             view.contentY = Math.max(view.originY, Math.min(view.contentY + direction * 24, view.originY + view.contentHeight - view.height))
                     }
                 }
+            }
+
+            // Files dropped from Rustphin or another application: onto a
+            // folder they go into it, elsewhere into the folder shown.
+            // Ctrl copies, Shift moves; otherwise the drop asks.
+            DropArea {
+                id: dropZone
+
+                property int row: -1
+
+                anchors.fill: viewLoader
+                visible: viewLoader.visible
+                keys: ["text/uri-list"]
+                onEntered: drag => {
+                    if (!folder.takesDrops()) {
+                        drag.accepted = false
+                        return
+                    }
+                    drag.accept(Qt.CopyAction)
+                }
+                onPositionChanged: drag => {
+                    row = folder.dropRow(pointer.rowAt(drag.x, drag.y))
+                    pane.hoverIndex = row
+                }
+                onExited: {
+                    row = -1
+                    pane.hoverIndex = -1
+                }
+                onDropped: drop => {
+                    const action = (drop.modifiers & Qt.ControlModifier) ? 1
+                                 : (drop.modifiers & Qt.ShiftModifier) ? 2 : 0
+                    const uris = drop.urls.map(url => url.toString()).join("\r\n")
+                    folder.dropOn(folder.dropRow(pointer.rowAt(drop.x, drop.y)), uris, action)
+                    // Rustphin does the copying or moving; the source keeps
+                    // its files whatever was chosen.
+                    drop.accept(Qt.CopyAction)
+                    row = -1
+                    pane.hoverIndex = -1
+                }
+            }
+
+            // The folder shown receives the drop: its outline says so.
+            Rectangle {
+                anchors.fill: viewLoader
+                visible: dropZone.containsDrag && dropZone.row < 0
+                color: "transparent"
+                border.color: Tokens.colors.accent
+                border.width: 2
+                radius: Tokens.metrics.radius
             }
 
             // The rubber band, drawn in view coordinates.

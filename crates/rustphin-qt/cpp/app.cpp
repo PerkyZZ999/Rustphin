@@ -146,21 +146,26 @@ void activate(QWindow* window, const QString& activation)
 }
 
 // A window with a tab on each folder; with none, the start window (it
-// restores the session) when no window is open, else one at home.
-void openWindow(const QStringList& folders, const QString& activation)
+// restores the session) when no window is open, else one at home. Names
+// in `select` are selected in the first folder.
+QWindow* openWindow(const QStringList& folders, const QString& activation,
+    const QStringList& select = {})
 {
     const bool start = folders.isEmpty() && lastActive() == nullptr;
     QQmlApplicationEngine* windows = engine();
     windows->setInitialProperties({
         { QStringLiteral("startFolders"), folders },
+        { QStringLiteral("startSelect"), select },
         { QStringLiteral("startWindow"), start },
         { QStringLiteral("home"), shell().home },
     });
     windows->load(QUrl(QStringLiteral("qrc:/qt/qml/Rustphin/qml/Main.qml")));
     const QList<QObject*> roots = windows->rootObjects();
-    if (auto* window = roots.isEmpty() ? nullptr : qobject_cast<QWindow*>(roots.last())) {
+    auto* window = roots.isEmpty() ? nullptr : qobject_cast<QWindow*>(roots.last());
+    if (window != nullptr) {
         activate(window, activation);
     }
+    return window;
 }
 
 // The windows and the QML engine with them, all at once. Once the engine
@@ -225,6 +230,32 @@ void rustphin_shell_show(const QStringList& folders, const QString& activation, 
     }
     QMetaObject::invokeMethod(window, "openTabs", Q_ARG(QVariant, QVariant(folders)));
     activate(window, activation);
+}
+
+void rustphin_shell_reveal(const QString& folder, const QStringList& select, bool in_tabs)
+{
+    QWindow* window = in_tabs ? lastActive() : nullptr;
+    if (window == nullptr) {
+        openWindow({ folder }, QString(), select);
+        return;
+    }
+    QMetaObject::invokeMethod(window, "reveal", Q_ARG(QVariant, QVariant(folder)),
+        Q_ARG(QVariant, QVariant(select)));
+    activate(window, QString());
+}
+
+void rustphin_shell_properties(const QStringList& paths)
+{
+    QWindow* window = lastActive();
+    if (window == nullptr) {
+        window = openWindow({}, QString());
+    }
+    if (window != nullptr) {
+        QMetaObject::invokeMethod(window, "openDialog",
+            Q_ARG(QString, QStringLiteral("properties")),
+            Q_ARG(QVariant, QVariant(paths)));
+        activate(window, QString());
+    }
 }
 
 void rustphin_shell_quit()
