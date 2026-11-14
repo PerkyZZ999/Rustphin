@@ -33,6 +33,9 @@ pub mod qobject {
         #[qproperty(QString, location, READ, NOTIFY)]
         #[qproperty(QString, summary, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
+        #[qproperty(bool, can_go_back, cxx_name = "canGoBack", READ, NOTIFY)]
+        #[qproperty(bool, can_go_forward, cxx_name = "canGoForward", READ, NOTIFY)]
+        #[qproperty(bool, can_go_up, cxx_name = "canGoUp", READ, NOTIFY)]
         type FolderModel = super::FolderModelRust;
     }
 
@@ -60,6 +63,24 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "sortBy"]
         fn sort_by(self: Pin<&mut FolderModel>, column: i32, descending: bool);
+        /// Goes back in the history.
+        #[qinvokable]
+        fn back(self: Pin<&mut FolderModel>);
+        /// Goes forward in the history.
+        #[qinvokable]
+        fn forward(self: Pin<&mut FolderModel>);
+        /// Opens the parent folder.
+        #[qinvokable]
+        fn up(self: Pin<&mut FolderModel>);
+        /// Opens the home folder.
+        #[qinvokable]
+        fn home(self: Pin<&mut FolderModel>);
+        /// Lists the folder again.
+        #[qinvokable]
+        fn reload(self: Pin<&mut FolderModel>);
+        /// Opens the entry at `row` if it is a folder.
+        #[qinvokable]
+        fn activate(self: Pin<&mut FolderModel>, row: i32);
     }
 
     impl cxx_qt::Threading for FolderModel {}

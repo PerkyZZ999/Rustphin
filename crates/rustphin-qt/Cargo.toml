@@ -22,6 +22,8 @@ cxx.workspace = true
 cxx-qt.workspace = true
 cxx-qt-lib.workspace = true
 jiff.workspace = true
+rustphin-platform.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true
+qt-build-utils.workspace = true

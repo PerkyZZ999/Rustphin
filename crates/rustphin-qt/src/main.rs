@@ -5,6 +5,12 @@
 mod folder;
 mod tokens;
 
+// cxx-qt generates the unsafe FFI glue for the set-up call; the bridge file
+// holds declarations only (AGENTS.md, D-034).
+#[allow(unsafe_code)]
+#[path = "app_bridge.rs"]
+mod setup;
+
 use std::path::PathBuf;
 
 use cxx_qt_lib::{
@@ -34,6 +40,7 @@ fn main() {
             QVariant::from(&QString::from(folder.to_string_lossy().as_ref())),
         );
         engine.as_mut().set_initial_properties(&properties);
+        setup::qobject::rustphin_install(engine.as_mut());
         engine.load(&QUrl::from("qrc:/qt/qml/Rustphin/qml/Main.qml"));
     }
     if let Some(app) = app.as_mut() {

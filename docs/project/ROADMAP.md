@@ -117,7 +117,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 
 - **Requested:** The maintainer, 2026-11-13: move the interface from GPUI to Qt 6 and QML, with QtBridge for Rust.
 - **Plan:** [`QT_MIGRATION_PLAN.md`](QT_MIGRATION_PLAN.md). Gains are maturity and KDE integration (cold start, blur, file exchange with other applications, focus, text input, accessibility); speed targets are already met on GPUI. Recommended: a measured spike first (W-114a) with go/no-go criteria, cxx-qt as the bridge with QtBridge tried alongside, the Qt interface built beside the GPUI one until parity, then the switch (D-033, superseding D-001). Five decisions for the maintainer.
-- **Status:** A–D approved (D-033). Spike W-114a done 2026-11-13: cxx-qt passes 1–4 and 6–9 (startup 0.3–0.4 s against about 10 s), blur needs the maintainer's desktop. Switch decided (D-034, cxx-qt); W-114b next.
+- **Status:** A–D approved (D-033). Spike W-114a done 2026-11-13: cxx-qt passes 1–4 and 6–9 (startup 0.3–0.4 s against about 10 s), blur needs the maintainer's desktop. Switch decided (D-034, cxx-qt). Then W-116: a Qt quality pass with the desktop Qt skills, `qmllint` with the maintainer's BestPractices plugin and `qmlformat` (the maintainer, 2026-11-14).
 
 ## Traceability
 

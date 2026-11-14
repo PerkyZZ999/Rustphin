@@ -12,12 +12,17 @@ mod bridge;
 
 pub use bridge::qobject;
 
-use std::{pin::Pin, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    pin::Pin,
+    sync::Arc,
+};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 use jiff::tz::TimeZone;
 use rustphin_core::{DirectoryModel, ModelEvent, RealFs, Snapshot, SortKey, ViewOptions};
+use rustphin_platform::{mime::MimeDb, xdg};
 use rustphin_view::format;
 
 /// The roles QML reads, after Qt's own (`Qt::UserRole` is 0x100).
@@ -28,15 +33,17 @@ enum Role {
     Modified,
     Folder,
     Hidden,
+    Icon,
 }
 
 impl Role {
-    const ALL: [Role; 5] = [
+    const ALL: [Role; 6] = [
         Role::Name,
         Role::Size,
         Role::Modified,
         Role::Folder,
         Role::Hidden,
+        Role::Icon,
     ];
 
     fn from_number(number: i32) -> Option<Role> {
@@ -50,6 +57,7 @@ impl Role {
             Role::Modified => "modified",
             Role::Folder => "folder",
             Role::Hidden => "hidden",
+            Role::Icon => "icon",
         }
     }
 }
@@ -61,8 +69,13 @@ pub struct FolderModelRust {
     location: QString,
     summary: QString,
     problem: QString,
+    can_go_back: bool,
+    can_go_forward: bool,
+    can_go_up: bool,
     model: Option<DirectoryModel>,
     snapshot: Option<Arc<Snapshot>>,
+    /// The file types, once loaded in the background.
+    types: Option<Arc<MimeDb>>,
     options: ViewOptions,
     zone: TimeZone,
 }
@@ -75,8 +88,12 @@ impl Default for FolderModelRust {
             location: QString::default(),
             summary: QString::default(),
             problem: QString::default(),
+            can_go_back: false,
+            can_go_forward: false,
+            can_go_up: false,
             model: None,
             snapshot: None,
+            types: None,
             options: ViewOptions {
                 details: true,
                 ..ViewOptions::default()
@@ -99,6 +116,22 @@ fn summary_text(len: usize, loading: bool) -> String {
     } else {
         items
     }
+}
+
+/// The `image://theme/` id of an entry's icon: the theme's names for its
+/// type, most specific first, then the generic folder or file icon.
+fn icon_id(type_names: &[String], is_folder: bool) -> String {
+    let generic = if is_folder {
+        "folder"
+    } else {
+        "text-x-generic"
+    };
+    type_names
+        .iter()
+        .map(String::as_str)
+        .chain(std::iter::once(generic))
+        .collect::<Vec<_>>()
+        .join("|")
 }
 
 /// The sort a column asks for.
@@ -142,6 +175,13 @@ impl qobject::FolderModel {
             ),
             Role::Folder => QVariant::from(&snapshot.is_container(row)),
             Role::Hidden => QVariant::from(&snapshot.is_hidden(row)),
+            Role::Icon => {
+                let is_folder = snapshot.is_container(row);
+                let names = self.rust().types.as_ref().map_or_else(Vec::new, |types| {
+                    types.icon_names(types.mime_type(snapshot.name(row), is_folder))
+                });
+                text(&icon_id(&names, is_folder))
+            }
         }
     }
 
@@ -153,45 +193,141 @@ impl qobject::FolderModel {
         roles
     }
 
-    fn open(mut self: Pin<&mut Self>, path: &QString) {
-        if self.rust().model.is_none() {
-            match DirectoryModel::new(Arc::new(RealFs)) {
-                Ok((mut model, events)) => {
-                    // Sizes and dates are read for the details view.
-                    model.set_options(self.rust().options);
-                    self.as_mut().rust_mut().model = Some(model);
-                    let thread = self.qt_thread();
-                    std::thread::spawn(move || {
-                        // Ends when the model, and with it the sender, is gone.
-                        while let Ok(event) = events.recv() {
-                            let sent = match event {
-                                ModelEvent::Snapshot(snapshot) => {
-                                    thread.queue(move |model| model.show(snapshot))
-                                }
-                                ModelEvent::Failed { error, .. } => {
-                                    let words = error.to_string();
-                                    thread.queue(move |model| model.fail(&words))
-                                }
-                                ModelEvent::Moved { .. } => continue,
-                            };
-                            if sent.is_err() {
-                                break;
-                            }
-                        }
-                    });
-                }
-                Err(error) => {
-                    self.fail(&error.to_string());
-                    return;
+    /// Starts the core's model and the file types the first time; false
+    /// when the model could not start, which [`Self::fail`] has said.
+    fn start(mut self: Pin<&mut Self>) -> bool {
+        if self.rust().model.is_some() {
+            return true;
+        }
+        let (mut model, events) = match DirectoryModel::new(Arc::new(RealFs)) {
+            Ok(started) => started,
+            Err(error) => {
+                self.fail(None, &error.to_string());
+                return false;
+            }
+        };
+        // Sizes and dates are read for the details view.
+        model.set_options(self.rust().options);
+        self.as_mut().rust_mut().model = Some(model);
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            // Ends when the model, and with it the sender, is gone.
+            while let Ok(event) = events.recv() {
+                let sent = match event {
+                    ModelEvent::Snapshot(snapshot) => {
+                        thread.queue(move |model| model.show(snapshot))
+                    }
+                    ModelEvent::Failed { path, error, .. } => {
+                        let words = error.to_string();
+                        thread.queue(move |model| model.fail(Some(&path), &words))
+                    }
+                    ModelEvent::Moved { .. } => continue,
+                };
+                if sent.is_err() {
+                    break;
                 }
             }
+        });
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let types = Arc::new(MimeDb::load(&xdg::data_dirs()));
+            let _ = thread.queue(move |model| model.set_types(types));
+        });
+        true
+    }
+
+    fn open(self: Pin<&mut Self>, path: &QString) {
+        self.go_to(PathBuf::from(path.to_string()));
+    }
+
+    /// Opens `path` as a new step in the history.
+    fn go_to(mut self: Pin<&mut Self>, path: PathBuf) {
+        if !self.as_mut().start() {
+            return;
         }
-        let path = std::path::PathBuf::from(path.to_string());
-        self.as_mut().rust_mut().location = QString::from(path.to_string_lossy().as_ref());
-        self.as_mut().location_changed();
+        self.as_mut().set_location_text(&path);
         if let Some(model) = self.as_mut().rust_mut().model.as_mut() {
             model.open(&path);
         }
+        self.update_navigation();
+    }
+
+    /// Runs one of the model's navigation steps.
+    fn navigate(mut self: Pin<&mut Self>, step: fn(&mut DirectoryModel) -> Option<u64>) {
+        if let Some(model) = self.as_mut().rust_mut().model.as_mut() {
+            step(model);
+        }
+        self.update_navigation();
+    }
+
+    fn back(self: Pin<&mut Self>) {
+        self.navigate(DirectoryModel::back);
+    }
+
+    fn forward(self: Pin<&mut Self>) {
+        self.navigate(DirectoryModel::forward);
+    }
+
+    fn up(self: Pin<&mut Self>) {
+        self.navigate(DirectoryModel::up);
+    }
+
+    fn reload(self: Pin<&mut Self>) {
+        self.navigate(DirectoryModel::reload);
+    }
+
+    fn home(self: Pin<&mut Self>) {
+        if let Some(home) = std::env::var_os("HOME") {
+            self.go_to(PathBuf::from(home));
+        }
+    }
+
+    fn activate(self: Pin<&mut Self>, row: i32) {
+        let target = self.rust().snapshot.as_ref().and_then(|snapshot| {
+            let row = usize::try_from(row)
+                .ok()
+                .filter(|row| *row < snapshot.len())?;
+            snapshot.is_container(row).then(|| snapshot.entry_path(row))
+        });
+        if let Some(path) = target {
+            self.go_to(path);
+        }
+    }
+
+    /// Shows `path` as the location.
+    fn set_location_text(mut self: Pin<&mut Self>, path: &Path) {
+        let text = QString::from(path.to_string_lossy().as_ref());
+        if *self.location() != text {
+            self.as_mut().rust_mut().location = text;
+            self.as_mut().location_changed();
+        }
+    }
+
+    /// Updates which navigation steps are possible.
+    fn update_navigation(mut self: Pin<&mut Self>) {
+        let (back, forward) = self.rust().model.as_ref().map_or((false, false), |model| {
+            (model.can_go_back(), model.can_go_forward())
+        });
+        let up = Path::new(&self.location().to_string()).parent().is_some();
+        if *self.can_go_back() != back {
+            self.as_mut().rust_mut().can_go_back = back;
+            self.as_mut().can_go_back_changed();
+        }
+        if *self.can_go_forward() != forward {
+            self.as_mut().rust_mut().can_go_forward = forward;
+            self.as_mut().can_go_forward_changed();
+        }
+        if *self.can_go_up() != up {
+            self.as_mut().rust_mut().can_go_up = up;
+            self.as_mut().can_go_up_changed();
+        }
+    }
+
+    /// Takes the loaded file types and redraws the icons.
+    fn set_types(mut self: Pin<&mut Self>, types: Arc<MimeDb>) {
+        self.as_mut().begin_reset_model();
+        self.as_mut().rust_mut().types = Some(types);
+        self.as_mut().end_reset_model();
     }
 
     fn sort_by(mut self: Pin<&mut Self>, column: i32, descending: bool) {
@@ -220,6 +356,15 @@ impl qobject::FolderModel {
             rust.loading = loading;
         }
         self.as_mut().end_reset_model();
+        if let Some(path) = self
+            .rust()
+            .snapshot
+            .as_ref()
+            .map(|s| s.path().to_path_buf())
+        {
+            self.as_mut().set_location_text(&path);
+        }
+        self.as_mut().update_navigation();
         self.as_mut().count_changed();
         self.as_mut().loading_changed();
         self.as_mut().rust_mut().summary = QString::from(summary.as_str());
@@ -230,8 +375,12 @@ impl qobject::FolderModel {
         }
     }
 
-    /// Says why the folder could not be shown.
-    fn fail(mut self: Pin<&mut Self>, words: &str) {
+    /// Says why the folder (at `path`, when known) could not be shown.
+    fn fail(mut self: Pin<&mut Self>, path: Option<&Path>, words: &str) {
+        if let Some(path) = path {
+            self.as_mut().set_location_text(path);
+            self.as_mut().update_navigation();
+        }
         self.as_mut().rust_mut().problem =
             QString::from(format!("This folder could not be opened: {words}.").as_str());
         self.as_mut().problem_changed();
@@ -257,6 +406,28 @@ mod tests {
     fn the_summary_counts_items_and_says_when_loading() {
         assert_eq!(summary_text(1, false), "1 item");
         assert_eq!(summary_text(3, true), "3 items, loading…");
+    }
+
+    #[test]
+    fn an_icon_falls_back_from_the_types_names_to_the_generic_one() {
+        let names = vec!["text-plain".to_owned(), "text-x-generic".to_owned()];
+        assert_eq!(
+            icon_id(&names, false),
+            "text-plain|text-x-generic|text-x-generic"
+        );
+        assert_eq!(icon_id(&[], true), "folder");
+        assert_eq!(icon_id(&[], false), "text-x-generic");
+    }
+
+    #[test]
+    fn every_interface_icon_is_bundled() {
+        let icons = Path::new(env!("CARGO_MANIFEST_DIR")).join("icons");
+        let missing: Vec<String> = rustphin_view::icons::Icon::ALL
+            .iter()
+            .map(|icon| icon.lucide_name())
+            .filter(|name| !icons.join(format!("{name}.svg")).is_file())
+            .collect();
+        assert!(missing.is_empty(), "not in icons/: {missing:?}");
     }
 
     #[test]
