@@ -1187,8 +1187,9 @@ mod tests {
         }
 
         fn metadata(&self, path: &Path) -> io::Result<Metadata> {
-            // "item<n>" is n bytes long and was modified at second -n; every
-            // seventh entry cannot be read.
+            // "item<n>" was modified at second -n, and its size runs against
+            // name order: (n * 7919) % entries, a different size for each
+            // entry. Every seventh entry cannot be read.
             let n: u64 = path
                 .file_name()
                 .and_then(|name| name.to_str()?.strip_prefix("item")?.parse().ok())
@@ -1197,7 +1198,7 @@ mod tests {
                 return Err(io::ErrorKind::PermissionDenied.into());
             }
             Ok(Metadata {
-                size: n,
+                size: n * 7919 % self.entries as u64,
                 modified: -(n as i64),
             })
         }
@@ -1258,8 +1259,6 @@ mod tests {
         let shown = snapshot(&events, second);
         assert_eq!(shown.path(), Path::new("/second"));
         assert!(second > first);
-        // Nothing from the superseded request may arrive after the final snapshot.
-        assert!(events.recv_timeout(Duration::from_millis(200)).is_err());
     }
     #[test]
     fn results_of_a_superseded_request_are_not_published() {
@@ -1303,7 +1302,7 @@ mod tests {
         assert_eq!(
             detailed.metadata(3),
             Some(Metadata {
-                size: 3,
+                size: 3 * 7919 % 10,
                 modified: -3
             })
         );
@@ -1322,9 +1321,10 @@ mod tests {
             ..ViewOptions::default()
         };
         let shown = snapshot(&events, model.set_options(options).unwrap());
+        // Sizes are 5n mod 6: item1 is the largest, item0 the smallest.
         assert_eq!(
             names(&shown),
-            ["item5", "item4", "item3", "item2", "item1", "item0"]
+            ["item1", "item2", "item3", "item4", "item5", "item0"]
         );
     }
 
@@ -1620,8 +1620,15 @@ mod tests {
             assert_eq!(partial.name(0), b"item0");
             assert_eq!(partial.options().sort, SortKey::Size);
         }
-        // "item<n>" is n bytes long, so the largest comes first once sorted.
-        assert_eq!(done.name(0), format!("item{}", entries - 1).as_bytes());
+        let sizes: Vec<u64> = (0..done.len())
+            .filter_map(|row| done.metadata(row))
+            .map(|metadata| metadata.size)
+            .collect();
+        assert!(sizes.len() > entries / 2, "sizes missing: {}", sizes.len());
+        assert!(
+            sizes.is_sorted_by(|a, b| a >= b),
+            "not largest first: {sizes:?}"
+        );
     }
 
     #[test]
@@ -1791,23 +1798,59 @@ mod tests {
         assert!(told, "no Moved event");
     }
 
+    /// A filesystem of empty folders that keeps the paths it is watching
+    /// until their guards are dropped.
+    #[derive(Default)]
+    struct WatchListFs {
+        watched: Arc<Mutex<Vec<PathBuf>>>,
+    }
+
+    /// Takes its path off the list when dropped.
+    struct Unwatch {
+        watched: Arc<Mutex<Vec<PathBuf>>>,
+        path: PathBuf,
+    }
+
+    impl Drop for Unwatch {
+        fn drop(&mut self) {
+            lock(&self.watched).retain(|path| *path != self.path);
+        }
+    }
+
+    impl Fs for WatchListFs {
+        fn read_dir(
+            &self,
+            _: &Path,
+        ) -> io::Result<Box<dyn Iterator<Item = io::Result<RawEntry>> + '_>> {
+            Ok(Box::new(std::iter::empty()))
+        }
+
+        fn is_dir(&self, _: &Path) -> bool {
+            true
+        }
+
+        fn metadata(&self, _: &Path) -> io::Result<Metadata> {
+            Err(io::ErrorKind::NotFound.into())
+        }
+
+        fn watch(&self, path: &Path, _: Box<dyn Fn() + Send + Sync>) -> io::Result<WatchGuard> {
+            lock(&self.watched).push(path.to_path_buf());
+            Ok(Box::new(Unwatch {
+                watched: Arc::clone(&self.watched),
+                path: path.to_path_buf(),
+            }))
+        }
+    }
+
     #[test]
-    fn a_change_after_leaving_a_directory_is_ignored() {
-        let dir = tree();
-        let (mut model, events) = DirectoryModel::new(Arc::new(RealFs)).unwrap();
-        snapshot(&events, model.open(dir.path()));
-        let inner = snapshot(&events, model.open(dir.path().join("sub")));
+    fn leaving_a_directory_stops_watching_it() {
+        let fs = Arc::new(WatchListFs::default());
+        let (mut model, events) = DirectoryModel::new(Arc::clone(&fs) as Arc<dyn Fs>).unwrap();
+        snapshot(&events, model.open("/parent"));
 
-        // The parent is no longer watched: a change there must not disturb the view.
-        fs::write(dir.path().join("elsewhere.txt"), b"").unwrap();
-        fs::write(dir.path().join("sub/here.txt"), b"").unwrap();
+        snapshot(&events, model.open("/parent/sub"));
 
-        let (after, seen) = await_snapshot(&events, |s| s.row_of(b"here.txt").is_some());
-        assert_eq!(after.path(), inner.path());
-        let strayed = seen
-            .iter()
-            .any(|event| matches!(event, ModelEvent::Snapshot(s) if s.path() != inner.path()));
-        assert!(!strayed);
+        assert_eq!(*lock(&fs.watched), [PathBuf::from("/parent/sub")]);
     }
 
     #[test]

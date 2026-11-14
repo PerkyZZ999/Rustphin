@@ -11,12 +11,15 @@ use std::{
     path::Path,
 };
 
-const MAGIC: &[u8] = b"RUSTPHIN-RENAME\x01";
+const MAGIC: &[u8] = b"RUSTPHIN-RENAME";
+/// The layout's version, the byte after [`MAGIC`].
+const VERSION: u8 = 1;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 
 pub(super) fn save(fs: &dyn Fs, directory: &Path, slots: &[Slot]) -> io::Result<FileInfo> {
     let root = fs.info(&directory.join("."))?;
     let mut bytes = MAGIC.to_vec();
+    bytes.push(VERSION);
     bytes.extend_from_slice(&root.device.to_le_bytes());
     bytes.extend_from_slice(&root.inode.to_le_bytes());
     bytes.extend_from_slice(&(slots.len() as u64).to_le_bytes());
@@ -60,6 +63,11 @@ pub(super) fn load(fs: &dyn Fs, directory: &Path) -> io::Result<Option<(Vec<Slot
     let mut input = Input(&bytes);
     if input.take(MAGIC.len())? != MAGIC {
         return Err(invalid());
+    }
+    match input.take(1)?[0] {
+        VERSION => {}
+        version if version > VERSION => return Err(newer()),
+        _ => return Err(invalid()),
     }
     let root = fs.info(&directory.join("."))?;
     if input.u64()? != root.device || input.u64()? != root.inode {
@@ -136,6 +144,13 @@ fn invalid() -> io::Error {
     io::Error::new(
         io::ErrorKind::InvalidData,
         "invalid or changed batch-rename recovery record; no files were recovered",
+    )
+}
+
+fn newer() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::Unsupported,
+        "the batch-rename recovery record was written by a newer Rustphin; recover with that version. No files were recovered",
     )
 }
 

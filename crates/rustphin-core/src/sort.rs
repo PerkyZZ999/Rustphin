@@ -169,10 +169,10 @@ mod tests {
         let mut chunk = Chunk::default();
         let mut details = Vec::new();
         for (name, kind, size, modified) in [
-            ("zeta.txt", EntryKind::File, 30, 100),
+            ("zeta.txt", EntryKind::File, 10, 100),
             (".config", EntryKind::Directory, 9000, 400),
             ("alpha", EntryKind::Directory, 100, 300),
-            ("Beta.md", EntryKind::File, 10, 500),
+            ("Beta.md", EntryKind::File, 30, 500),
             ("gamma.TXT", EntryKind::File, 20, 200),
         ] {
             chunk.push(name.as_bytes(), kind, kind == EntryKind::Directory);
@@ -218,7 +218,7 @@ mod tests {
         };
         assert_eq!(
             names(&store, Some(&details), by_size),
-            [".config", "alpha", "Beta.md", "gamma.TXT", "zeta.txt"]
+            [".config", "alpha", "zeta.txt", "gamma.TXT", "Beta.md"]
         );
     }
 
@@ -233,7 +233,7 @@ mod tests {
         };
         assert_eq!(
             names(&store, Some(&details), options),
-            ["alpha", ".config", "zeta.txt", "gamma.TXT", "Beta.md"]
+            ["alpha", ".config", "Beta.md", "gamma.TXT", "zeta.txt"]
         );
     }
 
@@ -287,14 +287,16 @@ mod tests {
     #[test]
     fn entries_with_unreadable_details_sort_before_the_rest() {
         let (store, _) = sample();
+        // zeta.txt's details could not be read; it comes first although
+        // it is last by name.
         let details = Details::new(vec![
+            None,
+            None,
+            None,
             Some(Metadata {
                 size: 30,
                 modified: 0,
             }),
-            None,
-            None,
-            None,
             Some(Metadata {
                 size: 20,
                 modified: 0,
@@ -306,7 +308,7 @@ mod tests {
         };
         assert_eq!(
             names(&store, Some(&details), options),
-            ["alpha", "Beta.md", "gamma.TXT", "zeta.txt"]
+            ["alpha", "zeta.txt", "gamma.TXT", "Beta.md"]
         );
     }
 }

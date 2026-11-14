@@ -620,20 +620,30 @@ mod tests {
     }
 
     #[test]
-    fn staying_names_that_are_also_selected_do_not_block_a_swap_shaped_plan() {
-        // Full directory listing passed as `staying`, selection is both files.
-        // "ab" -> "ba" by reversing via a pattern that uses the original?
-        // replace "ab" with "ba" and "ba" stays if we only replace "ab".
+    fn a_name_kept_by_a_selected_file_is_occupied() {
+        // "cd" is selected but the rule leaves its name as it is.
         let preview = RenameRules::replace("ab", "cd", false)
             .preview(&names(&["ab", "cd"]), &names(&["ab", "cd", "other"]));
-        // ab -> cd, cd stays cd. cd is selected but not leaving, so it is occupied.
+
         assert!(
             row(&preview, 0)
                 .problems
-                .contains(&NameProblem::ExistingName)
+                .contains(&NameProblem::ExistingName),
+            "{preview:?}"
         );
-        let leaving = RenameRules::pattern("out-#", 1, 1)
-            .preview(&names(&["ab", "cd"]), &names(&["ab", "cd", "other"]));
-        assert!(leaving.can_apply(), "{leaving:?}");
+        assert!(!preview.can_apply());
+    }
+
+    #[test]
+    fn selected_files_leaving_their_names_free_them() {
+        // A swap: "out-2" takes "out-1" while "out-1" takes "out-2".
+        let preview = RenameRules::pattern("out-#", 1, 1).preview(
+            &names(&["out-2", "out-1"]),
+            &names(&["out-1", "out-2", "other"]),
+        );
+
+        assert_eq!(row(&preview, 0).to, "out-1");
+        assert_eq!(row(&preview, 1).to, "out-2");
+        assert!(preview.can_apply(), "{preview:?}");
     }
 }

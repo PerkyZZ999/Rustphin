@@ -45,8 +45,14 @@ fn swap() -> Vec<Entry> {
 /// slot carries the details of its origin as it is now (or of `a`, for an
 /// origin that does not exist), so a well-formed record recovers.
 fn encode(directory: &Path, count: u64, entries: &[Entry]) -> Vec<u8> {
+    encode_version(directory, 1, count, entries)
+}
+
+/// As [`encode`], with the layout version `version`.
+fn encode_version(directory: &Path, version: u8, count: u64, entries: &[Entry]) -> Vec<u8> {
     let root = RealFs.info(&directory.join(".")).unwrap();
-    let mut bytes = b"RUSTPHIN-RENAME\x01".to_vec();
+    let mut bytes = b"RUSTPHIN-RENAME".to_vec();
+    bytes.push(version);
     bytes.extend_from_slice(&root.device.to_le_bytes());
     bytes.extend_from_slice(&root.inode.to_le_bytes());
     bytes.extend_from_slice(&count.to_le_bytes());
@@ -104,6 +110,20 @@ fn a_well_formed_record_is_read_and_removed() {
     assert!(!d.src.join(RENAME_JOURNAL).exists());
 }
 
+#[test]
+fn a_record_from_a_newer_rustphin_is_refused_as_such() {
+    let d = folder_with_record(|dir| encode_version(dir, 2, 2, &swap()));
+    let before = tree(&d.src);
+
+    let error = recover_rename_batch(&RealFs, &d.src).unwrap_err();
+
+    assert!(
+        matches!(&error, OpError::Io { source, .. } if source.kind() == io::ErrorKind::Unsupported),
+        "{error:?}"
+    );
+    assert_eq!(tree(&d.src), before);
+}
+
 /// One test per way a record is damaged.
 macro_rules! refused {
     ($($name:ident: $make:expr;)*) => {$(
@@ -115,6 +135,7 @@ macro_rules! refused {
 }
 
 refused! {
+    an_unknown_older_version_is_refused: |dir: &Path| encode_version(dir, 0, 2, &swap());
     a_truncated_record_is_refused: |dir: &Path| {
         let mut bytes = encode(dir, 2, &swap());
         bytes.pop();

@@ -157,6 +157,12 @@ fn a_zip_time_is_read_from_its_exact_stamp_or_else_as_local_time() {
     );
 }
 
+/// 300,000 bytes that vary, so a reader that drops, repeats or reorders
+/// a block is caught.
+fn big_content() -> Vec<u8> {
+    (0..300_000u32).map(|n| (n * 31 % 251) as u8).collect()
+}
+
 /// Files to write: name → content; folders end in `/`.
 fn sample() -> (tempfile::TempDir, Vec<Source>) {
     let dir = tempfile::tempdir().unwrap();
@@ -182,7 +188,7 @@ fn sample() -> (tempfile::TempDir, Vec<Source>) {
             size: 0,
         },
         file("top/a.txt", b"alpha"),
-        file("top/big.bin", &vec![7; 300_000]),
+        file("top/big.bin", &big_content()),
     ];
     (dir, entries)
 }
@@ -243,7 +249,10 @@ fn every_format_rustphin_makes_reads_back_the_same() {
         let found = read_back(format, out.into_inner());
         assert_eq!(found.len(), 3, "{format:?}: {:?}", found.keys());
         assert_eq!(found[&b"top/a.txt".to_vec()].1, b"alpha", "{format:?}");
-        assert_eq!(found[&b"top/big.bin".to_vec()].1.len(), 300_000);
+        assert!(
+            found[&b"top/big.bin".to_vec()].1 == big_content(),
+            "{format:?}: big.bin differs"
+        );
         assert_eq!(found[&b"top".to_vec()].0, Kind::Directory, "{format:?}");
         assert_eq!(
             found[&b"top/a.txt".to_vec()].2,

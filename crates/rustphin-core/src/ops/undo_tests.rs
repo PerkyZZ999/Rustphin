@@ -314,17 +314,15 @@ fn a_refused_undo_touches_none_of_the_operations_entries() {
     file(d.src.join("c"), "newcomer");
     let before = (tree(&d.src), tree(&d.dst));
 
+    let occupied: fn(&UndoError) -> bool = |error| matches!(error, UndoError::Occupied(_));
+    let replaced: fn(&UndoError) -> bool = |error| matches!(error, UndoError::Replaced(_));
     for (changes, expected) in [
-        (&moved, "Occupied"),
-        (&copied, "Replaced"),
-        (&trashed, "Occupied"),
+        (&moved, occupied),
+        (&copied, replaced),
+        (&trashed, occupied),
     ] {
         let failure = undo(&RealFs, &trash, changes, &mut Script::default()).unwrap_err();
-        assert!(
-            format!("{:?}", failure.error).starts_with(expected),
-            "{:?}",
-            failure.error
-        );
+        assert!(expected(&failure.error), "{:?}", failure.error);
         assert_eq!(&failure.remaining, changes);
     }
 
@@ -666,7 +664,7 @@ fn request_for(step: &Step, root: &Path, mount: &Path) -> Option<Request> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 200, failure_persistence: None, ..ProptestConfig::default() })]
+    #![proptest_config(ProptestConfig { cases: 200, ..ProptestConfig::default() })]
 
     #[test]
     fn any_sequence_of_operations_is_undone_back_to_the_starting_tree(
