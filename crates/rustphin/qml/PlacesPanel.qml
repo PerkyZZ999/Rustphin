@@ -338,6 +338,12 @@ FocusScope {
                     drag.target: dragProxy
                     drag.threshold: 6
                     onPressed: mouse => {
+                        // The drag moves the chip by the pointer's travel:
+                        // start it under the pointer, or a first drag
+                        // drops where the chip last was (W-128).
+                        const at = rowArea.mapToItem(dragProxy.parent, mouse.x, mouse.y)
+                        dragProxy.x = at.x - dragProxy.Drag.hotSpot.x
+                        dragProxy.y = at.y - dragProxy.Drag.hotSpot.y
                         list.forceActiveFocus()
                         places.focusOn(row.index)
                         if (mouse.button === Qt.RightButton)
