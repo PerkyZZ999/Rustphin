@@ -497,6 +497,33 @@ stand-in and nothing else:
 | DV5 | On Data: Menu key, Copy location; paste into the location field (Ctrl+L, Ctrl+V) | "Copied the location of “Data”."; the field holds `<home>/drives/Data` |
 | DV6 | On Data (focused in the panel): E; then right-click Data, Unmount; then Mount | E does nothing (drive actions have no key); the stand-in prints Unmount for Data (no PowerOff: it is fixed), then Mount |
 
+## Transfer details (W-149)
+
+A copy has to last long enough to be seen, and it must really copy: on a
+filesystem that shares blocks (XFS, Btrfs) a copy inside one filesystem ends
+at once, and `/tmp` is memory. So copy between two filesystems, both in
+scratch folders that are no one's files (for example one under the
+repository's `target/` and one under `/var/tmp`), and delete them afterwards:
+
+- `big`: about 24 GiB, so it lasts some 20 s on fast disks. Make one file
+  with `head -c 1500M /dev/urandom` and the others from it with `cp
+  --reflink=always`, which costs no space on the source side.
+- `many`: 40 folders of 1,000 files of 4 KiB each (about a minute).
+- For TD6, put `many/dir39/file0999.txt` in the destination beforehand.
+
+Copy each with copy and paste (Ctrl+C, Ctrl+L to the destination, Ctrl+V), so
+both run at once.
+
+| ID | Steps | Expected |
+|---|---|---|
+| TD1 | Start the copy of `big` | After 300 ms the activity line: the sentence over "n of N · x of y", then from the first second the speed, and after about three seconds "about … left"; a Details button before Stop, with the tooltip "Show every running operation" |
+| TD2 | Click Details | "Running operations" over the dimmed window with one card: icon, sentence and Stop; the bar; "n of N items · x of y"; the path of the file being copied, elided in the middle; the speed and time remaining with "Peak …" on the right; under them the speed graph growing from the right; Close |
+| TD3 | Escape; start the copy of `many` as well; Ctrl+Shift+P, type "show running", Enter; then Tab | The line says "(and 1 more)"; the dialog opens with two cards, oldest first, each with its own figures and graph; Tab puts a royal-blue ring on a card's Stop |
+| TD4 | Click Stop on the second card | Only that operation stops: its card leaves, the other goes on, and the notice line (behind the dialog) reports the stopped one |
+| TD5 | Let the last operation end with the dialog open | The dialog closes itself; the notice line says what was done (with Undo when it can be undone) |
+| TD6 | Copy `many` onto the prepared destination, answer the first question with Merge (R), open the dialog and wait | "“dir39” already exists" opens over the transfer dialog; after Merge the transfer dialog is still there, and its graph shows the pause; the same for "“file0999.txt” already exists" |
+| TD7 | With nothing running: Ctrl+Shift+P, "show running", Enter | The dialog says "No operation is running. A copy, move or other operation that takes a while is shown here." with Close |
+
 ## Button icons (W-097)
 
 | ID | Steps | Expected |

@@ -1,5 +1,6 @@
 // The progress of a file operation and the latest notice, over the bottom
-// of the window: what is happening, how far, and Undo or Stop.
+// of the window: what is happening, how far, Details and Stop, then what
+// was done, with Undo.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -53,42 +54,15 @@ ColumnLayout {
                     text: Operations.progressDetail
                 }
             }
-            Rectangle {
+            ActivityBar {
                 Layout.preferredWidth: Math.max(Tokens.metrics.progress_min, bar.width / 5)
-                Layout.preferredHeight: Tokens.metrics.progress
-                radius: Tokens.metrics.radius
-                color: Tokens.colors.track
-
-                Rectangle {
-                    id: done
-
-                    height: parent.height
-                    radius: parent.radius
-                    color: Tokens.colors.activity
-                    width: Operations.progressFraction < 0 ? parent.width / 4 : parent.width * Operations.progressFraction
-                }
-                // An operation whose size is unknown sweeps to show it runs.
-                SequentialAnimation {
-                    running: Operations.progressFraction < 0 && Operations.progressVisible
-                    loops: Animation.Infinite
-                    onStopped: done.x = 0
-
-                    NumberAnimation {
-                        target: done
-                        property: "x"
-                        from: 0
-                        to: done.parent.width - done.width
-                        duration: 900
-                        easing.type: Easing.InOutQuad
-                    }
-                    NumberAnimation {
-                        target: done
-                        property: "x"
-                        to: 0
-                        duration: 900
-                        easing.type: Easing.InOutQuad
-                    }
-                }
+                fraction: Operations.progressFraction
+                running: Operations.progressVisible
+            }
+            OutlinedButton {
+                text: qsTr("Details")
+                tip: qsTr("Show every running operation")
+                onClicked: bar.transferDialog.open()
             }
             IconButton {
                 iconName: "circle-stop"
@@ -148,12 +122,17 @@ ColumnLayout {
         }
     }
 
-    // Keyboard focus goes back to the window when the problems dialog closes.
-    signal problemsClosed
+    // Keyboard focus goes back to the window when one of its dialogs closes.
+    signal dialogClosed
 
     // What the operation left out: a dialog over the window, kept out of
     // this layout.
     readonly property ProblemsDialog problemsDialog: ProblemsDialog {
-        onClosed: bar.problemsClosed()
+        onClosed: bar.dialogClosed()
+    }
+
+    // Every running operation, from the activity line's Details.
+    readonly property TransferDialog transferDialog: TransferDialog {
+        onClosed: bar.dialogClosed()
     }
 }

@@ -479,6 +479,20 @@ components:
   activity-figures:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-sm}"
+  transfer-dialog:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+    width: 480px
+    padding: "{spacing.lg}"
+  transfer-card:
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.md}"
+  speed-graph:
+    backgroundColor: "{colors.progress}"
+    height: 48px
   result-line:
     backgroundColor: "{colors.chrome-raised-solid}"
     textColor: "{colors.text}"
@@ -1109,11 +1123,53 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   icon in `text-muted` (`copy`, `move`, `trash`, `undo-2` for restoring,
   `pencil`, `package-open`, `file-archive`, `loader` otherwise), the sentence
   ("Copying 12 items to “Pictures”…", "(and N more)" while several run) in
-  `body-md` over the figures ("6 of 12 · 742.0 MiB of 1.2 GiB · 48.6 MiB/s")
-  in `data-sm` `text-muted`, a 6 px progress bar (`progress` on `track`, at
-  least 80 px and a fifth of the window; it sweeps while the size is
-  unknown), and a Stop icon button (`circle-stop`, tooltip "Stop this
-  operation"). It appears after 300 ms (`operation_board::QUIET_PERIOD`).
+  `body-md` over the figures ("4 of 12 · 51.2 MiB of 150.4 MiB · 48.6 MiB/s
+  · about 2 s left") in `data-sm` `text-muted`, a 6 px progress bar
+  (`progress` on `track`, at least 80 px and a fifth of the window; it sweeps
+  while the size is unknown), an outlined Details button (tooltip "Show every
+  running operation") that opens the transfer dialog, and a Stop icon button
+  (`circle-stop`, tooltip "Stop this operation"). It appears after 300 ms
+  (`operation_board::QUIET_PERIOD`) and shows the oldest operation.
+  - The speed is a smoothed one (`transfer::Meter`): what moved in each
+    whole second, averaged with a weight of 0.3 for the newest second, so one
+    slow or fast second does not make the figure jump. It is shown from the
+    first whole second. An operation measured in bytes shows "48.6 MiB/s";
+    one that only counts entries (deleting, trashing) shows "120 items/s".
+  - The time remaining is what is left divided by that speed. It is shown
+    only once three whole seconds were measured, the totals are known and
+    the speed is not zero: "about 2 s left" (exact below 10 s, then in steps
+    of 5 s), "about 3 min left", "about 1 h 20 min left" (steps of 5 min).
+- **Transfer dialog** (`TransferDialog.qml`, W-149): opened by Details on
+  the activity line, or from the keyboard by the palette's "Files: Show
+  running operations" (no key of its own); a dialog (480 px) titled "Running
+  operations" over the dimmed window, with one card per operation shown
+  (oldest first, after the same 300 ms), scrolling when the cards are taller
+  than the window allows, and an outlined Close (Esc). Tab moves between the
+  cards' Stop buttons and Close. A card is outlined in `border-strong` with
+  12 px padding and holds, top to bottom:
+  - the operation's icon in `text-muted`, its sentence in `body-md` and its
+    own Stop icon button (`circle-stop`, tooltip "Stop this operation");
+  - its 6 px progress bar across the card (it sweeps while the size is
+    unknown);
+  - what is done, in `data-sm` `text-muted`: "4 of 12 items · 51.2 MiB of
+    150.4 MiB";
+  - the entry being worked on now, its path elided in the middle, in
+    `data-sm` `text-muted` ("Preparing…" before the first one);
+  - the speed and the time remaining in `data-sm` `text` ("48.6 MiB/s ·
+    about 2 s left"; "Measuring the speed…" during the first second), with
+    the highest second on the right in `text-muted` ("Peak 52.0 MiB/s");
+  - under them the speed graph, 48 px high: one point per second for the
+    last 60 seconds, newest on the right, drawn as a 1 px `progress` line
+    over a `track` baseline, scaled to its highest second. Drawn with Qt
+    Quick Shapes, with no chart library. The speed is always also written
+    in figures, so the graph is never the only place it is shown.
+
+  A card leaves when its operation ends; the dialog closes itself when the
+  last one ends, as KDE's copy window does, and the notice line then reports
+  the result. A question (name conflict, failed entry, password) opens over
+  the dialog, which is still there once it is answered. Opened while nothing
+  runs, it says "No operation is running. A copy, move or other operation
+  that takes a while is shown here."
 - **Notice line:** 44 px after an operation ends, or while connecting to a
   remote folder: an emerald `circle-check`, the sentence ("Copied 12 items to
   “Pictures”."), an outlined "Undo (Ctrl+Z)" when it can be undone, Details
@@ -1220,8 +1276,9 @@ the three views with the zoom table, selection, rubber band, rename in place
 and thumbnails, the status line, the filter bar, the in-place states, the
 re-read and trash banners, the administrator bar, the context, New, trash
 and View menus with submenu icons (W-118), the palette, the activity and
-notice lines, Properties, batch rename, Compress to…, the questions, the
-problems dialog and Settings with all eight pages.
+notice lines, the transfer dialog (W-149), Properties, batch rename,
+Compress to…, the questions, the problems dialog and Settings with all eight
+pages.
 
 Where the build differs from this document today:
 

@@ -11,6 +11,8 @@ Button {
     id: plain
 
     property string iconName: ""
+    // What the button does, when its word alone does not say.
+    property string tip: ""
     property bool primary: false
     property bool destructive: false
     readonly property bool filled: primary || destructive
@@ -21,6 +23,10 @@ Button {
     leftPadding: Tokens.metrics.space_md
     rightPadding: Tokens.metrics.space_md
     Accessible.name: text
+    Accessible.description: tip
+    ToolTip.visible: hovered && tip.length > 0
+    ToolTip.delay: 600
+    ToolTip.text: tip
 
     contentItem: Row {
         spacing: Tokens.metrics.space_sm

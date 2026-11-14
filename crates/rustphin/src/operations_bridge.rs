@@ -23,6 +23,7 @@ pub mod qobject {
         #[qproperty(QString, progress_icon, cxx_name = "progressIcon")]
         #[qproperty(f64, progress_fraction, cxx_name = "progressFraction")]
         #[qproperty(i32, running_count, cxx_name = "runningCount")]
+        #[qproperty(QString, transfers)]
         #[qproperty(QString, question)]
         #[qproperty(QString, notice)]
         #[qproperty(bool, notice_error, cxx_name = "noticeError")]
@@ -45,6 +46,10 @@ pub mod qobject {
         /// Stops the operation shown.
         #[qinvokable]
         fn cancel(self: Pin<&mut Operations>);
+        /// Stops the operation numbered `id` (a transfer card's).
+        #[qinvokable]
+        #[cxx_name = "cancelOperation"]
+        fn cancel_operation(self: Pin<&mut Operations>, id: &QString);
         /// Reverts the latest operation.
         #[qinvokable]
         fn undo(self: Pin<&mut Operations>);

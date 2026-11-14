@@ -139,6 +139,8 @@ pub mod size {
     pub const PROGRESS: f32 = 6.;
     /// Narrowest a progress bar gets in the activity line.
     pub const PROGRESS_MIN: f32 = 80.;
+    /// Height of a transfer card's speed graph.
+    pub const SPEED_GRAPH: f32 = 48.;
     /// Height of an activity or result line under the panes.
     pub const LINE: f32 = 44.;
     /// Height of a text button in lines and dialogs.

@@ -178,6 +178,9 @@ Window {
         case "stop-operations":
             Operations.cancel()
             break
+        case "show-operations":
+            noticeBar.transferDialog.open()
+            break
         case "dismiss-notice":
             Operations.dismissNotice()
             break
@@ -451,8 +454,10 @@ Window {
             }
         }
         NoticeBar {
+            id: noticeBar
+
             Layout.fillWidth: true
-            onProblemsClosed: root.focusActive()
+            onDialogClosed: root.focusActive()
         }
     }
 

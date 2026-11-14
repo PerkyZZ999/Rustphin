@@ -14,6 +14,7 @@ use std::{pin::Pin, time::Instant};
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use jiff::tz::TimeZone;
+use rustphin_core::ops::OpId;
 use rustphin_view::{operations::Problems, questions::Answer};
 
 use crate::hub;
@@ -26,6 +27,8 @@ pub struct OperationsRust {
     progress_icon: QString,
     progress_fraction: f64,
     running_count: i32,
+    /// The transfer dialog's cards as JSON (`transfer::Card`).
+    transfers: QString,
     question: QString,
     notice: QString,
     notice_error: bool,
@@ -49,6 +52,7 @@ impl Default for OperationsRust {
             progress_icon: QString::default(),
             progress_fraction: -1.,
             running_count: 0,
+            transfers: QString::default(),
             question: QString::default(),
             notice: QString::default(),
             notice_error: false,
@@ -94,13 +98,14 @@ impl qobject::Operations {
             (
                 progress,
                 board.running_count(),
+                serde_json::to_string(&board.transfers(now)).unwrap_or_default(),
                 question,
                 board.notice().cloned(),
                 board.problems().map(Problems::json),
                 board.can_paste(),
             )
         });
-        let (progress, running, question, notice, problems, can_paste) = state;
+        let (progress, running, transfers, question, notice, problems, can_paste) = state;
         let (label, detail, icon, part) = progress.unwrap_or_default();
         self.as_mut().set_progress_visible(!label.is_empty());
         self.as_mut().set_progress_label(QString::from(&label));
@@ -109,6 +114,7 @@ impl qobject::Operations {
         self.as_mut().set_progress_fraction(part);
         self.as_mut()
             .set_running_count(i32::try_from(running).unwrap_or(i32::MAX));
+        self.as_mut().set_transfers(QString::from(&transfers));
         self.as_mut()
             .set_question(QString::from(&question.unwrap_or_default()));
         self.as_mut().set_notice(QString::from(
@@ -129,6 +135,12 @@ impl qobject::Operations {
 
     fn cancel(self: Pin<&mut Self>) {
         hub::cancel(None);
+    }
+
+    fn cancel_operation(self: Pin<&mut Self>, id: &QString) {
+        if let Ok(number) = id.to_string().parse() {
+            hub::cancel(Some(OpId::from_u64(number)));
+        }
     }
 
     fn undo(self: Pin<&mut Self>) {

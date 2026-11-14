@@ -135,6 +135,7 @@ fn metric_values() -> Vec<(&'static str, f32)> {
         ("palette_icon", size::PALETTE_ICON),
         ("progress", size::PROGRESS),
         ("progress_min", size::PROGRESS_MIN),
+        ("speed_graph", size::SPEED_GRAPH),
         ("control_line", size::LINE),
         ("button", size::BUTTON),
         ("properties_label", size::PROPERTIES_LABEL),

@@ -60,7 +60,8 @@ opens a tab or a window as Settings, General says.
       - Status line: selection · folder totals · free space
       - → *Context menu*
   - **Window lines** (`NoticeBar.qml`, only while there is something to say)
-    - Activity line while an operation runs, with Stop
+    - Activity line while an operation runs, with Details (→ *Transfer
+      dialog*) and Stop
     - Notice line after one ends (Undo, Details → *Problems dialog*) or while
       "Connecting to <address>…"
 - **Floating surfaces** (solid; the palette and dialogs over a dimmed window)
@@ -81,6 +82,8 @@ opens a tab or a window as Settings, General says.
       trash? (when Settings asks), Delete for good?, Empty the trash?, Close
       the window? (several tabs, when Settings asks)
     - Problems (what an operation left out, and why)
+    - Transfers (every running operation: progress, speed, time remaining,
+      the current entry, a speed graph, Stop)
 
 ## Navigation Model
 
@@ -183,6 +186,14 @@ groups separated by hairlines:
 2. One row per entry left out: its path and the reason in words.
 3. Close.
 
+### Transfer dialog
+
+1. Title: "Running operations".
+2. One card per operation, oldest first: what it is doing and its Stop; its
+   progress bar; items and bytes done, speed and time remaining; the entry
+   being worked on now; the speed over the last minute.
+3. Close. The dialog also closes by itself when the last operation ends.
+
 ### Settings
 
 1. The page list on the left, the current page filled.
@@ -232,7 +243,11 @@ groups separated by hairlines:
 2. User drags the selection across, or uses Copy/Cut and Paste, or Shift+F5 /
    Shift+F6 (copy or move to the other view).
    - Drop without a modifier → *Move or copy?*
-3. After 300 ms the activity line shows progress, counts, speed and Stop.
+3. After 300 ms the activity line shows progress, counts, speed, the time
+   remaining, Details and Stop.
+   - Details, or "Files: Show running operations" in the palette →
+     *Transfer dialog*: every running operation on its own card, each with
+     its own Stop.
 4. A name already exists → *Name conflict* (Skip, Replace or Merge, Keep both,
    "Do the same for all other conflicts").
 5. An entry fails → *Failed entry* (Skip, Try again, Stop).
@@ -308,7 +323,7 @@ Pick one word and use it everywhere: menu, palette, tooltip, notices.
 | Outlined button | Actions, Trash actions, Undo, Details, state actions, Stop acting as administrator, dialog secondary buttons | |
 | Default button | Default action of a dialog (Apply, Rename, Compress, a question's default) | Destructive defaults use the error colours |
 | Window line (icon, sentence, actions, dismiss) | Activity line, notice line | A problem uses the error surface |
-| Progress or usage bar | Activity line, drive cards | Both `progress` (lightened royal blue) on `track`: activity 6 px; drive card 4 px, `error` from 90 % used (D-039) |
+| Progress or usage bar | Activity line, transfer cards, drive cards | Both `progress` (lightened royal blue) on `track`: activity 6 px; drive card 4 px, `error` from 90 % used (D-039) |
 | Scrolling dialog body | Every dialog | |
 | State block (icon, heading, reason, actions) | Empty, loading, hidden-only, filter-empty, unreadable folder | |
 | Text field | Location (editing), filter, palette search, rename field, batch-rename rules, Compress name, group names, Settings fields | The rename field sits inside a row |
@@ -328,7 +343,7 @@ Pick one word and use it everywhere: menu, palette, tooltip, notices.
 - **Recent folders and palette history:** bounded, local, clearable from the
   palette (R-108).
 - **Operations:** several may run at once; the activity line shows the
-  newest with "(and N more)".
+  oldest with "(and N more)", and the transfer dialog shows them all.
 - **Problems:** an operation that left many entries out lists them all in
   the problems dialog, which scrolls; the notice stays one line.
 

@@ -8,7 +8,6 @@ use std::{
     ffi::OsStr,
     os::unix::ffi::{OsStrExt as _, OsStringExt as _},
     path::{Path, PathBuf},
-    time::Duration,
 };
 
 use rustphin_core::{
@@ -17,7 +16,7 @@ use rustphin_core::{
 };
 use rustphin_platform::clipboard::FileClip;
 
-use crate::format::{self, count, plural};
+use crate::format::{count, plural};
 pub use crate::naming::free_name;
 
 /// What a drop does with the dropped entries.
@@ -353,28 +352,6 @@ pub fn fraction(progress: &Progress) -> Option<f32> {
     }
 }
 
-/// The progress line under an activity: items, bytes and rate.
-pub fn detail(progress: &Progress, elapsed: Duration) -> String {
-    let mut text = format!(
-        "{} of {}",
-        count(progress.items_done as usize),
-        count(progress.items_total as usize)
-    );
-    if progress.bytes_total > 0 {
-        text.push_str(&format!(
-            " · {} of {}",
-            format::size(progress.bytes_done),
-            format::size(progress.bytes_total)
-        ));
-        let seconds = elapsed.as_secs_f64();
-        if seconds > 0.5 && progress.bytes_done > 0 {
-            let rate = (progress.bytes_done as f64 / seconds) as u64;
-            text.push_str(&format!(" · {}/s", format::size(rate)));
-        }
-    }
-    text
-}
-
 /// The names that duplicating `names` side by side creates, in order, given
 /// which names `exists` in the folder: what the engine will choose, so the
 /// view can select the copies once they appear, as Dolphin does.
@@ -606,14 +583,9 @@ mod tests {
             ..Progress::default()
         };
         assert_eq!(fraction(&progress), Some(0.25));
-        assert_eq!(detail(&progress, Duration::from_secs(2)), "1 of 4");
         progress.bytes_done = 1024 * 1024;
         progress.bytes_total = 4 * 1024 * 1024;
         assert_eq!(fraction(&progress), Some(0.25));
-        assert_eq!(
-            detail(&progress, Duration::from_secs(2)),
-            "1 of 4 · 1.0 MiB of 4.0 MiB · 512.0 KiB/s"
-        );
         assert_eq!(fraction(&Progress::default()), None);
     }
 
@@ -750,17 +722,6 @@ mod tests {
         assert_eq!(fraction(&progress((1, 4), (3, 4))), Some(0.75));
         assert_eq!(fraction(&progress((1, 4), (0, 0))), Some(0.25));
         assert_eq!(fraction(&progress((0, 0), (0, 0))), None);
-    }
-
-    #[test]
-    fn the_rate_is_shown_only_once_bytes_have_moved_for_half_a_second() {
-        let half = Duration::from_millis(500);
-        let moving = progress((1, 2), (1000, 2000));
-        assert!(!detail(&moving, half).contains("/s"), "not yet");
-        assert!(detail(&moving, half * 2).ends_with("/s"));
-        let still = progress((1, 2), (0, 2000));
-        assert!(!detail(&still, half * 4).contains("/s"), "nothing moved");
-        assert!(!detail(&progress((1, 2), (0, 0)), half * 4).contains(" · "));
     }
 
     #[test]

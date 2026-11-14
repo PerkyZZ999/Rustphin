@@ -33,6 +33,7 @@ use rustphin_view::{
     },
     operations::{DropAction, Listed, droppable},
     selection_actions::HandOff,
+    transfer::SAMPLE,
 };
 
 use crate::{
@@ -54,6 +55,8 @@ pub struct Hub {
     _clipboard_watch: Option<clipboard::WatchGuard>,
     watchers: Vec<CxxQtThread<OperationsObject>>,
     panes: Vec<CxxQtThread<FolderModel>>,
+    /// Whether [`tick`] is due: it runs while an operation does.
+    ticking: bool,
 }
 
 thread_local! {
@@ -146,6 +149,7 @@ impl Hub {
             _clipboard_watch: watch,
             watchers: Vec::new(),
             panes: Vec::new(),
+            ticking: false,
         }
     }
 
@@ -194,7 +198,20 @@ impl Hub {
             post::after(delay, || change(|_| {}));
         }
         schedule(expiry);
+        if !self.ticking && self.board.running_count() > 0 {
+            self.ticking = true;
+            post::after(SAMPLE, tick);
+        }
     }
+}
+
+/// Lets the board measure the running operations' speed, once a second
+/// while any runs (W-149): a stalled one sends no progress to measure by.
+fn tick() {
+    change(|hub| match hub.board.tick(Instant::now()) {
+        Some(delay) => post::after(delay, tick),
+        None => hub.ticking = false,
+    });
 }
 
 /// Hands the engine's events to the hub on the Qt thread.

@@ -23,10 +23,11 @@ use rustphin_platform::clipboard::FileClip;
 
 use crate::{
     operations::{
-        Listed, Notice, Problems, activity, activity_icon, activity_verb, cut_sets, detail,
-        fraction, past, pick_up_notice, result_notice,
+        Listed, Notice, Problems, activity, activity_icon, activity_verb, cut_sets, fraction, past,
+        pick_up_notice, result_notice,
     },
     questions::{self, Answer, Question},
+    transfer::{self, Card, Meter},
 };
 
 /// How long an operation may run before its progress is shown. Most finish
@@ -59,6 +60,13 @@ struct Running {
     progress: Progress,
     icon: String,
     verb: &'static str,
+    meter: Meter,
+}
+
+impl Running {
+    fn shown(&self, now: Instant) -> bool {
+        now.saturating_duration_since(self.started) >= QUIET_PERIOD
+    }
 }
 
 /// The progress line of the operation shown.
@@ -182,6 +190,7 @@ impl OperationBoard {
                     progress: Progress::default(),
                     icon: activity_icon(&request).lucide_name(),
                     verb: activity_verb(&request),
+                    meter: Meter::new(),
                 });
                 FollowUp {
                     redraw_after: Some(QUIET_PERIOD),
@@ -190,6 +199,7 @@ impl OperationBoard {
             }
             OpEvent::Progress { id, progress } => {
                 if let Some(running) = self.running.iter_mut().find(|running| running.id == id) {
+                    running.meter.observe(&progress, now);
                     running.progress = progress;
                 }
                 FollowUp::default()
@@ -526,21 +536,47 @@ impl OperationBoard {
         self.running.len()
     }
 
+    /// Measures every running operation's speed up to `now`, and says how
+    /// long to wait before the next call; nothing once none is running.
+    /// Speeds and times remaining change only here and with progress.
+    pub fn tick(&mut self, now: Instant) -> Option<Duration> {
+        for running in &mut self.running {
+            running.meter.advance(now);
+        }
+        (!self.running.is_empty()).then_some(transfer::SAMPLE)
+    }
+
     /// The progress line of the oldest operation that has run long enough
     /// by `now` to be worth showing.
     pub fn progress(&self, now: Instant) -> Option<ProgressLine> {
         self.running
             .iter()
-            .find(|running| now.saturating_duration_since(running.started) >= QUIET_PERIOD)
+            .find(|running| running.shown(now))
             .map(|running| ProgressLine {
                 label: running.label.clone(),
-                detail: detail(
-                    &running.progress,
-                    now.saturating_duration_since(running.started),
-                ),
+                detail: transfer::figures(&running.progress, &running.meter),
                 icon: running.icon.clone(),
                 fraction: fraction(&running.progress),
             })
+    }
+
+    /// A card for each operation that has run long enough by `now` to be
+    /// worth showing, oldest first: the transfer dialog (W-149).
+    pub fn transfers(&self, now: Instant) -> Vec<Card> {
+        self.running
+            .iter()
+            .filter(|running| running.shown(now))
+            .map(|running| Card {
+                id: running.id.as_u64().to_string(),
+                label: running.label.clone(),
+                icon: running.icon.clone(),
+                fraction: fraction(&running.progress).unwrap_or(-1.),
+                done: transfer::done_text(&running.progress),
+                pace: transfer::pace_text(&running.meter),
+                current: transfer::current_text(&running.progress),
+                graph: running.meter.graph(),
+            })
+            .collect()
     }
 
     /// The question in front, as it is put.
@@ -961,6 +997,145 @@ mod tests {
             "Copying \u{201c}report.pdf\u{201d} to \u{201c}b\u{201d}"
         );
         assert_eq!(board.to_cancel(None), Some(id(1)));
+    }
+
+    fn progressed(id: OpId, bytes_done: u64, bytes_total: u64) -> OpEvent {
+        OpEvent::Progress {
+            id,
+            progress: Progress {
+                items_done: 1,
+                items_total: 3,
+                bytes_done,
+                bytes_total,
+                current: "/a/report.pdf".into(),
+            },
+        }
+    }
+
+    /// Feeds operation `id` `per_second` bytes in each of the `seconds`
+    /// after `start`, ticking the board as the hub does.
+    fn run_steadily(
+        board: &mut OperationBoard,
+        id: OpId,
+        start: Instant,
+        per_second: u64,
+        seconds: u32,
+    ) {
+        let total = 100 * 1024 * 1024;
+        let _ = board.on_event(progressed(id, 0, total), start);
+        for second in 1..=seconds {
+            let now = start + transfer::SAMPLE * second;
+            let _ = board.on_event(progressed(id, per_second * u64::from(second), total), now);
+            let _ = board.tick(now);
+        }
+    }
+
+    #[test]
+    fn the_board_asks_to_be_ticked_only_while_something_runs() {
+        let now = Instant::now();
+        let mut board = OperationBoard::new();
+        assert_eq!(board.tick(now), None);
+
+        let _ = board.on_event(started(id(1), copy("/b")), now);
+        assert_eq!(board.tick(now), Some(transfer::SAMPLE));
+
+        let _ = board.on_event(cancelled(id(1)), now);
+        assert_eq!(board.tick(now), None);
+    }
+
+    #[test]
+    fn the_progress_line_tells_the_speed_and_then_the_time_remaining() {
+        const MIB: u64 = 1024 * 1024;
+        let now = Instant::now();
+        let mut board = OperationBoard::new();
+        let _ = board.on_event(started(id(1), copy("/b")), now);
+        let _ = board.on_event(progressed(id(1), 0, 100 * MIB), now);
+        let detail = |board: &OperationBoard, at| board.progress(at).unwrap().detail;
+        assert_eq!(
+            detail(&board, now + QUIET_PERIOD),
+            "1 of 3 · 0 B of 100.0 MiB"
+        );
+
+        run_steadily(&mut board, id(1), now, 10 * MIB, 1);
+        assert_eq!(
+            detail(&board, now + transfer::SAMPLE),
+            "1 of 3 · 10.0 MiB of 100.0 MiB · 10.0 MiB/s"
+        );
+
+        run_steadily(&mut board, id(1), now, 10 * MIB, 3);
+        assert_eq!(
+            detail(&board, now + transfer::SAMPLE * 3),
+            "1 of 3 · 30.0 MiB of 100.0 MiB · 10.0 MiB/s · about 7 s left"
+        );
+    }
+
+    #[test]
+    fn a_tick_without_progress_slows_the_speed_shown() {
+        const MIB: u64 = 1024 * 1024;
+        let now = Instant::now();
+        let mut board = OperationBoard::new();
+        let _ = board.on_event(started(id(1), copy("/b")), now);
+        run_steadily(&mut board, id(1), now, 10 * MIB, 3);
+
+        let later = now + transfer::SAMPLE * 4;
+        let _ = board.tick(later);
+        assert_eq!(
+            board.progress(later).unwrap().detail,
+            "1 of 3 · 30.0 MiB of 100.0 MiB · 7.0 MiB/s · about 10 s left"
+        );
+    }
+
+    #[test]
+    fn every_operation_shown_has_its_own_card_until_it_ends() {
+        const MIB: u64 = 1024 * 1024;
+        let now = Instant::now();
+        let mut board = OperationBoard::new();
+        let _ = board.on_event(started(id(1), copy("/b")), now);
+        let _ = board.on_event(started(id(2), copy("/c")), now);
+        run_steadily(&mut board, id(1), now, 10 * MIB, 4);
+        run_steadily(&mut board, id(2), now, 20 * MIB, 4);
+        let later = now + transfer::SAMPLE * 4;
+
+        let cards = board.transfers(later);
+        assert_eq!(cards.len(), 2);
+        assert_eq!(
+            cards[0],
+            Card {
+                id: "1".to_owned(),
+                label: "Copying \u{201c}report.pdf\u{201d} to \u{201c}b\u{201d}".to_owned(),
+                icon: "copy".to_owned(),
+                fraction: 0.4,
+                done: "1 of 3 items · 40.0 MiB of 100.0 MiB".to_owned(),
+                pace: "10.0 MiB/s · about 6 s left".to_owned(),
+                current: "/a/report.pdf".to_owned(),
+                graph: transfer::Graph {
+                    points: vec![1.; 4],
+                    peak: "Peak 10.0 MiB/s".to_owned(),
+                    span: transfer::GRAPH_SAMPLES,
+                },
+            }
+        );
+        assert_eq!(cards[1].id, "2");
+        assert_eq!(cards[1].pace, "20.0 MiB/s · about 1 s left");
+
+        let _ = board.on_event(cancelled(id(1)), later);
+        let cards = board.transfers(later);
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].id, "2");
+    }
+
+    #[test]
+    fn an_operation_gets_a_card_only_after_the_quiet_period() {
+        let now = Instant::now();
+        let mut board = OperationBoard::new();
+        let _ = board.on_event(started(id(1), copy("/b")), now);
+        assert_eq!(board.transfers(now + QUIET_PERIOD / 2), Vec::new());
+
+        let cards = board.transfers(now + QUIET_PERIOD);
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].fraction, -1.);
+        assert_eq!(cards[0].current, "Preparing…");
+        assert_eq!(cards[0].pace, "");
     }
 
     #[test]

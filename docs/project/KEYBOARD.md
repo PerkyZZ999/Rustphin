@@ -119,5 +119,6 @@ is in the panel's menu and the palette.
 - Changing keys: Settings, Shortcuts lists them read-only.
 - Commands with no key, reached through menus, the toolbar or the palette:
   folders first, sorting by a column, Extract and Compress, Recover original
-  names, the trash's actions (open, restore, empty), stopping operations and
-  dismissing the notice.
+  names, the trash's actions (open, restore, empty), showing the running
+  operations (the transfer dialog, W-149), stopping operations and dismissing
+  the notice.

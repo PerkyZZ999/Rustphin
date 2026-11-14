@@ -10,10 +10,10 @@ that was in flight, and what the maintainer asked for next.
 
 - **Version:** 0.1.0. Qt 6 and QML interface through cxx-qt; Rust 1.100.
 - **Repository:** pushed to `https://github.com/PerkyZZ999/Rustphin.git`,
-  branch `main`, public (D-037). The last pushed commit is `ca6c6e3` (W-147,
-  the charcoal colour scheme). W-148 and W-148b are pushed too. Push only when the maintainer asks, and only
-  commits that passed `rust-tc doctor`. No hosted CI.
-- **Gate:** `rust-tc doctor` passes at `ed9a765`, with 950 tests and 3 skipped.
+  branch `main`, public (D-037). The last pushed commit is `e8c0e92`
+  (W-148b). Push only when the maintainer asks, and only commits that passed
+  `rust-tc doctor`. No hosted CI.
+- **Gate:** `rust-tc doctor` passes with 973 tests and 3 skipped (W-149).
 - **Installed build:** `~/.local/bin/rustphin` is the build from before W-147.
   After installing a new one, the maintainer runs `rustphin --quit` once.
 - **Public repository:** never write the maintainer's personal name, home
@@ -21,53 +21,17 @@ that was in flight, and what the maintainer asked for next.
   maintainer", `~`, or sibling-relative paths. The whole history was
   rewritten once to remove them.
 
-## Done but not pushed: W-148, drive cards and a drive context menu
+## Done but not pushed: W-149, transfer details
 
-Committed locally as `ed9a765`, after the last push (`ca6c6e3`). `rust-tc
-doctor` passed at that commit with 950 tests and 3 skipped. The on-screen
-checks ran against the stand-in UDisks2 service
-(`crates/rustphin-platform/examples/fake_udisks2.rs`, UI_SCENARIOS DV1–DV6),
-never against real drives.
+Committed locally after the last push (`e8c0e92`, W-148b). The activity
+line shows a smoothed speed and the time remaining and has a Details button;
+Details (or the palette's "Files: Show running operations") opens the
+transfer dialog with one card per running operation. The measuring and the
+wording are `transfer` in rustphin-view; VALIDATION.md has the evidence
+(UI_SCENARIOS TD1–TD7 replayed on screen).
 
-**Settled by the maintainer afterwards (W-148b):** D-039 is confirmed (usage
-bars in royal blue). The E key was removed: drive actions (Mount, Unmount,
-Safely remove) are only in the drive's right-click menu, with no key.
-
-Not done: `docs/screenshots/rustphin.png` does not show the drive cards yet,
-and real drives were not tried (R-013).
-
-## Next: W-149, transfer details (agreed, not started)
-
-The maintainer chose to keep the activity band above the status line (the
-"Option 1" mockup), not to move it into the status bar.
-
-1. **The band** (`NoticeBar.qml`, as in mockup 09) stays compact and gains:
-   - Time remaining in its figures, for example "4 of 12 · 51.2 MiB of
-     150.4 MiB · 48.6 MiB/s · about 2 s left". Base it on a smoothed rate,
-     and show it only once the rate is steady and the sizes are known.
-   - A **Details** button before Stop, reachable by keyboard and with a
-     tooltip.
-2. **A transfer dialog**, styled like the other floating surfaces, with one
-   card per running operation. Each card shows:
-   - its sentence and its own progress bar;
-   - items and bytes done;
-   - speed and time remaining;
-   - **the file being worked on now** (`Progress::current`, elided in the
-     middle);
-   - a **small speed graph** of about the last 60 s, drawn in QML (Canvas or
-     Shape) with no chart library;
-   - its own Stop button.
-
-   Decide, following KDE, what happens when the last operation ends.
-3. **Where the logic lives.** The rate smoothing, the time-remaining wording
-   and the graph samples go in rustphin-view, beside `OperationBoard`. Test
-   them with injected time and never read the wall clock. The hub only
-   forwards progress, and `Operations` hands the list to QML.
-4. **Docs first.** Update WORK_ITEMS.md and ROADMAP.md (S12), DESIGN.md,
-   INFORMATION_ARCHITECTURE.md, and add a UI scenario with two concurrent
-   transfers, stopping one from the dialog.
-5. **Testing note.** `/tmp` is fast. Use many files or several GiB so a
-   transfer lasts long enough to see.
+Still open from W-148: `docs/screenshots/rustphin.png` does not show the
+drive cards, and real drives were not tried (R-013).
 
 ## Then
 
@@ -79,7 +43,7 @@ The maintainer chose to keep the activity band above the status line (the
   - W-117: the Qt leftovers.
 - **Also open:** W-115 (memory on reloading a huge folder), the keyboard
   pass, and the maintainer's real-desktop checks (see STATE.md).
-- **Before release work:** after W-149, push, reinstall
+- **Before release work:** push when asked, reinstall
   (`rust-tc build`, `install -m 755 target/release/rustphin
   ~/.local/bin/rustphin`, tell the maintainer to run `rustphin --quit`), then
   **plan the v0.2.0 roadmap with the maintainer**. They asked for that
@@ -101,6 +65,11 @@ The maintainer chose to keep the activity band above the status line (the
   with red and blue swapped; the plain `screenshot` tool's PNGs are right.
   Judge colours by measuring pixels against the tokens (`magick file.png
   -crop 1x1+X+Y -format "%[pixel:p{0,0}]" info:`).
+- **Transfers on screen** need a copy between two filesystems (UI_SCENARIOS
+  "Transfer details"): inside one XFS or Btrfs filesystem a copy shares
+  blocks and ends at once.
+- **Stopping a test instance:** `kill <pid>`. `pkill -f target/debug/rustphin`
+  from a shell command also matches that shell's own command line.
 - **Fuzzing** cannot run here: the installed nightly is 1.97, below 1.100.
 - **Original history:** a backup of the history before the rewrite is at
   `../Rustphin-history-backup.git`. It is never to be pushed.
