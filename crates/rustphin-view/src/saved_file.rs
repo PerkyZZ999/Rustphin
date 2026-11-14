@@ -15,6 +15,8 @@ pub enum SavedFile {
     Settings,
     /// `place-groups.toml`.
     Groups,
+    /// `views.toml`, each folder's own view.
+    FolderViews,
 }
 
 impl SavedFile {
@@ -23,6 +25,7 @@ impl SavedFile {
         match self {
             Self::Settings => "Settings",
             Self::Groups => "Place groups",
+            Self::FolderViews => "Folder views",
         }
     }
 
@@ -31,6 +34,7 @@ impl SavedFile {
         match self {
             Self::Settings => "Saving settings",
             Self::Groups => "Saving place groups",
+            Self::FolderViews => "Saving folder views",
         }
     }
 
@@ -39,6 +43,7 @@ impl SavedFile {
         match self {
             Self::Settings => "settings.toml",
             Self::Groups => "place-groups.toml",
+            Self::FolderViews => "views.toml",
         }
     }
 }

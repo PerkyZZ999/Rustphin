@@ -52,6 +52,33 @@ struct Saved {
 }
 
 impl FolderViews {
+    /// Reads the saved file, if there is one, as [`crate::saved_file`]
+    /// keeps them: a file that could not be read, is not TOML, or was
+    /// written in a newer format comes with the issue that keeps it from
+    /// being written over this run (W-143). Entries that cannot be
+    /// understood are left out, as by [`Self::parse`].
+    pub fn read(
+        saved: std::io::Result<Option<String>>,
+    ) -> (Self, Option<crate::saved_file::FileIssue>) {
+        use crate::saved_file::FileIssue;
+        let text = match saved {
+            Ok(Some(text)) => text,
+            Ok(None) => return (Self::default(), None),
+            Err(error) => return (Self::default(), Some(FileIssue::Read(error))),
+        };
+        let file: File = match toml::from_str(&text) {
+            Ok(file) => file,
+            Err(error) => {
+                return (
+                    Self::default(),
+                    Some(FileIssue::Damaged(error.message().to_owned())),
+                );
+            }
+        };
+        let newer = (file.version > VERSION).then_some(FileIssue::NewerVersion(file.version));
+        (Self::parse(&text), newer)
+    }
+
     /// Reads `views.toml` text; whatever cannot be understood is left out.
     pub fn parse(text: &str) -> Self {
         let file: File = toml::from_str(text).unwrap_or_default();

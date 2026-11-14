@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-14 — W-143 A damaged folder-views file is kept, not overwritten
+- **Problem (left open by W-140):** `views.toml`, each folder's remembered view, was read leniently and saved over on the next view change, so a file that could not be read, was not TOML, or came from a newer Rustphin was replaced with what this run knew.
+- **Fix:** `FolderViews::read` reports the issue as `Settings::read` does (`saved_file::FileIssue`); the store keeps no writer for such a file and tells the user ("Folder views are damaged. Saving folder views is off; the file was kept. …"); the settings notice comes first when both are kept.
+- **Tests:** `a_readable_views_file_is_saved_to`, `a_damaged_views_file_is_kept_and_the_user_told`, `an_unreadable_or_newer_views_file_is_kept`; the last two fail when the writer ignores the issue.
+- **Not verified:** on screen (same path as W-140's settings case, which was seen on screen).
+- **Tests:** `rust-tc doctor` PASS, 928 tests (3 skipped).
+- **Waiver:** none
+
 ### 2026-11-14 — W-142 Surviving view and core mutants, and the audit's remaining gaps
 - **Change:** tests only; no bug found. 68 new tests (857 → 925).
 - **OperationBoard (the audit's data-safety pairings):** a failure answered Accept is retried, Skip skips, Cancel/Replace/Copy cancel; a password given goes to its operation, a declined one sends `None` whatever was typed; `delete` always asks and starts a `Delete` only on Accept (nothing asked for no paths); a delete, trash or empty-trash confirmation answered Cancel, Skip, Copy or Replace starts nothing and goes; an accepted empty-trash starts a `Delete` worded "Emptying the trash"; a drop answered Accept moves, Copy copies, Cancel nothing, and a drop with a known choice starts at once. Also: progress goes to its own operation; an operation that left nothing out shows no problems; "nothing to undo" is said and expires; administrator runs are 2^40 apart; reading the clipboard says whether it changed; only the cut entries themselves are cut; a question uses its own operation's verb ("Couldn't move …"); a message said until withdrawn is shown first.

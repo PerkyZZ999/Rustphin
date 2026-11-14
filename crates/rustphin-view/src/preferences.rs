@@ -34,6 +34,8 @@ pub struct Loaded {
     pub folder_views: FolderViews,
     /// Where they are saved.
     pub folder_path: Option<PathBuf>,
+    /// Why the folders' views file is kept as it is, if so.
+    pub folder_issue: Option<FileIssue>,
 }
 
 impl Loaded {
@@ -52,11 +54,14 @@ impl Loaded {
             rustphin_platform::kdeglobals::read(rustphin_platform::xdg::config_home().as_deref())
                 .is_some_and(|text| rustphin_platform::kdeglobals::single_click(&text));
         let folder_path = rustphin_platform::config::state_dir().map(|dir| dir.join("views.toml"));
-        let folder_views = folder_path
-            .as_deref()
-            .and_then(|path| rustphin_platform::config::read(path).ok().flatten())
-            .map(|text| FolderViews::parse(&text))
-            .unwrap_or_default();
+        let (folder_views, folder_issue) = FolderViews::read(
+            folder_path
+                .as_deref()
+                .map_or(Ok(None), rustphin_platform::config::read),
+        );
+        if let Some(issue) = &folder_issue {
+            tracing::warn!(%issue, "the folder views file is kept for this run");
+        }
         Self {
             settings,
             issue,
@@ -65,6 +70,7 @@ impl Loaded {
             kde_single_click,
             folder_views,
             folder_path,
+            folder_issue,
         }
     }
 }
@@ -89,6 +95,7 @@ pub struct Store {
     kde_single_click: bool,
     folder_views: FolderViews,
     folder_writer: Option<Writer>,
+    folder_issue: Option<FileIssue>,
     view_epoch: u64,
 }
 
@@ -102,7 +109,13 @@ impl Store {
         let kept = newer || loaded.issue.is_some();
         let store = Self {
             writer: loaded.path.filter(|_| !kept).map(Writer::new),
-            folder_writer: loaded.folder_path.filter(|_| !newer).map(Writer::new),
+            // The folders' views are kept as the settings are: not over a
+            // file this run could not read whole (W-143).
+            folder_writer: loaded
+                .folder_path
+                .filter(|_| !newer && loaded.folder_issue.is_none())
+                .map(Writer::new),
+            folder_issue: loaded.folder_issue,
             settings: loaded.settings,
             issue: loaded.issue,
             told: false,
@@ -166,6 +179,18 @@ impl Store {
         self.issue
             .as_ref()
             .map(|issue| issue.notice(SavedFile::Settings))
+            .or_else(|| {
+                self.folder_issue
+                    .as_ref()
+                    .map(|issue| issue.notice(SavedFile::FolderViews))
+            })
+    }
+
+    /// Where the folders' views are saved; `None` when they are not.
+    pub fn folder_views_path(&self) -> Option<&Path> {
+        self.folder_writer
+            .as_ref()
+            .map(|writer| writer.path.as_path())
     }
 
     /// Whether a settings file exists.
@@ -395,6 +420,54 @@ mod tests {
                 .unwrap()
                 .starts_with("Settings could not be read.")
         );
+    }
+
+    fn views_at(dir: &Path, saved: std::io::Result<Option<String>>) -> Loaded {
+        let (folder_views, folder_issue) = FolderViews::read(saved);
+        Loaded {
+            folder_views,
+            folder_issue,
+            folder_path: Some(dir.join("views.toml")),
+            ..Loaded::default()
+        }
+    }
+
+    #[test]
+    fn a_readable_views_file_is_saved_to() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::new(views_at(dir.path(), Ok(Some("version = 1\n".to_owned()))));
+        assert_eq!(
+            store.folder_views_path(),
+            Some(dir.path().join("views.toml").as_path())
+        );
+    }
+
+    #[test]
+    fn a_damaged_views_file_is_kept_and_the_user_told() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::new(views_at(
+            dir.path(),
+            Ok(Some("folders = [ not toml".to_owned())),
+        ));
+        assert_eq!(
+            store.folder_views_path(),
+            None,
+            "nothing is written over the file"
+        );
+        let notice = store.take_notice().unwrap();
+        assert!(notice.starts_with("Folder views are damaged."), "{notice}");
+    }
+
+    #[test]
+    fn an_unreadable_or_newer_views_file_is_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let unreadable = Store::new(views_at(
+            dir.path(),
+            Err(std::io::ErrorKind::PermissionDenied.into()),
+        ));
+        let newer = Store::new(views_at(dir.path(), Ok(Some("version = 9\n".to_owned()))));
+        assert_eq!(unreadable.folder_views_path(), None);
+        assert_eq!(newer.folder_views_path(), None);
     }
 
     #[test]
