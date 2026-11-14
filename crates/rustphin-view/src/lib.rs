@@ -19,6 +19,7 @@ pub mod location;
 pub mod menu;
 pub mod metrics;
 pub mod naming;
+pub mod operation_board;
 pub mod operations;
 pub mod palette;
 pub mod pane;

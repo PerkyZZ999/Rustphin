@@ -9,15 +9,12 @@ mod bridge;
 
 pub use bridge::qobject;
 
-use std::{path::PathBuf, pin::Pin};
+use std::{path::PathBuf, pin::Pin, time::Instant};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use jiff::tz::TimeZone;
-use rustphin_view::{
-    operations::fraction,
-    questions::{self, Answer},
-};
+use rustphin_view::{operations::Problems, questions::Answer};
 
 use crate::hub;
 
@@ -68,22 +65,6 @@ impl Default for OperationsRust {
     }
 }
 
-/// The problems behind a notice as JSON: the operation, then each entry
-/// left out and why.
-fn problems_json(problems: &rustphin_view::operations::Problems) -> String {
-    let entries: Vec<serde_json::Value> = problems
-        .entries
-        .iter()
-        .map(|skipped| {
-            serde_json::json!({
-                "path": skipped.path.display().to_string(),
-                "reason": skipped.reason,
-            })
-        })
-        .collect();
-    serde_json::json!({ "title": problems.title, "entries": entries }).to_string()
-}
-
 impl qobject::Operations {
     fn watch(mut self: Pin<&mut Self>) {
         if self.rust().watching {
@@ -96,28 +77,27 @@ impl qobject::Operations {
 
     pub(crate) fn refresh(mut self: Pin<&mut Self>) {
         let zone = self.rust().zone.clone();
+        let now = Instant::now();
         let state = hub::with(|hub| {
-            let shown = hub.running.iter().find(|running| running.is_visible());
-            let progress = shown.map(|running| {
+            let board = &hub.board;
+            let progress = board.progress(now).map(|line| {
                 (
-                    running.label.clone(),
-                    running.detail(),
-                    running.icon.clone(),
-                    fraction(&running.progress).map_or(-1., f64::from),
+                    line.label,
+                    line.detail,
+                    line.icon,
+                    line.fraction.map_or(-1., f64::from),
                 )
             });
-            let question = hub.questions.front().map(|question| {
-                let verb = question.asker().map_or("change", |id| hub.verb_of(id));
-                let shown = questions::show(question, verb, &zone);
-                serde_json::to_string(&shown).unwrap_or_default()
-            });
+            let question = board
+                .question(&zone)
+                .map(|shown| serde_json::to_string(&shown).unwrap_or_default());
             (
                 progress,
-                hub.running.len(),
+                board.running_count(),
                 question,
-                hub.notice.clone(),
-                hub.problems.as_ref().map(problems_json),
-                hub.has_clip(),
+                board.notice().cloned(),
+                board.problems().map(Problems::json),
+                board.can_paste(),
             )
         });
         let (progress, running, question, notice, problems, can_paste) = state;

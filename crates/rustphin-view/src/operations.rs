@@ -1,6 +1,7 @@
 //! What file operations are called on screen: activity lines, notices,
-//! progress details and the names new entries get (W-114b2). The running
-//! state lives with the interface (its operations hub); the words live here.
+//! progress details and the names new entries get (W-114b2). What is
+//! running and shown is decided by [`crate::operation_board`] (W-124); the
+//! words live here.
 
 use std::{
     collections::HashSet,
@@ -47,6 +48,24 @@ pub struct Problems {
     pub title: String,
     /// The entries left out and why.
     pub entries: Vec<rustphin_core::ops::Skipped>,
+}
+
+impl Problems {
+    /// As JSON for the details dialog: the operation, then each entry left
+    /// out and why.
+    pub fn json(&self) -> String {
+        let entries: Vec<serde_json::Value> = self
+            .entries
+            .iter()
+            .map(|skipped| {
+                serde_json::json!({
+                    "path": skipped.path.display().to_string(),
+                    "reason": skipped.reason,
+                })
+            })
+            .collect();
+        serde_json::json!({ "title": self.title, "entries": entries }).to_string()
+    }
 }
 
 /// What a question's list of names shows beside a name, from the folder

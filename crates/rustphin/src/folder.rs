@@ -352,7 +352,7 @@ impl Default for FolderModelRust {
             new_files: rustphin_platform::templates::built_in(),
             menu_entries: Vec::new(),
             clip_serial: 0,
-            created_serial: crate::hub::with(|hub| hub.created.0),
+            created_serial: crate::hub::with(|hub| hub.board.created().0),
             admin_changes: 0,
         };
         rust.apply_layout();
@@ -1829,8 +1829,15 @@ impl qobject::FolderModel {
 
 impl qobject::FolderModel {
     pub(crate) fn hub_changed(mut self: Pin<&mut Self>) {
-        let (clip, created, admin) =
-            crate::hub::with(|hub| (hub.clip_serial, hub.created.clone(), hub.admin_changes));
+        let (clip, created, admin) = crate::hub::with(|hub| {
+            let board = &hub.board;
+            let (serial, made) = board.created();
+            (
+                board.clip_serial(),
+                (serial, made.to_vec()),
+                board.admin_changes(),
+            )
+        });
         if self.rust().clip_serial != clip {
             self.as_mut().rust_mut().clip_serial = clip;
             self.as_mut().rows_changed(&[Role::Opacity]);
@@ -2039,7 +2046,7 @@ impl qobject::FolderModel {
                 .collect(),
             _ => Vec::new(),
         };
-        let can_paste = crate::hub::with(|hub| hub.has_clip());
+        let can_paste = crate::hub::with(|hub| hub.board.can_paste());
         let (all_archives, extract_folder, compress_names) = match snapshot {
             Some(snapshot) if !rows.is_empty() => {
                 let all_archives = rows.iter().all(|&row| {
