@@ -185,8 +185,9 @@ layers:
             status=1
         fi
     }
-    forbid rustphin-core 'gpui|wayland|zbus'
-    forbid rustphin-platform 'gpui'
+    forbid rustphin-core 'gpui|wayland|zbus|cxx-qt'
+    forbid rustphin-platform 'gpui|cxx-qt'
+    forbid rustphin-qt 'gpui'
     forbid rustphin-view 'gpui|cxx-qt'
     exit "$status"
 

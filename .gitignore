@@ -5,3 +5,4 @@
 /spikes/*/target/
 /spikes/qt-bridge/shim/
 /spikes/*/.qmlls.ini
+/crates/*/.qmlls.ini

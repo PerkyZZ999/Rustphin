@@ -4,7 +4,7 @@
 //! Views take every visual value from here. Colours are named for their role,
 //! not their hue. Spacing follows a 4-pixel grid.
 
-use gpui_kit::{App, BoxShadow, Global, Rgba, point, px, rgb, rgba};
+use gpui_kit::{App, BoxShadow, Global, Rgba, point, px};
 
 pub use rustphin_view::metrics::space;
 
@@ -89,34 +89,38 @@ impl Theme {
     /// With `translucent`, the window, chrome and content are see-through for
     /// compositor blur; otherwise they are solid.
     pub fn obsidian(translucent: bool) -> Self {
-        let pick = |glass: u32, solid: u32| {
-            if translucent { rgba(glass) } else { rgb(solid) }
+        let c = rustphin_view::colors::Colors::obsidian(translucent);
+        let g = |color: rustphin_view::colors::Color| Rgba {
+            r: color.r,
+            g: color.g,
+            b: color.b,
+            a: color.a,
         };
         Self {
-            window: pick(0x0d1524cc, 0x0d1524),
-            chrome: pick(0x121b2d80, 0x121b2d),
-            chrome_raised: pick(0x1a22368c, 0x1a2236),
-            content: pick(0x0e17279e, 0x0e1727),
-            raised: rgb(0x111a2c),
-            scrim: rgba(0x04070e99),
-            border: rgba(0xffffff12),
-            border_strong: rgba(0xffffff24),
-            border_accent: rgba(0x5073eb8c),
-            activity: rgb(0x3bcff0),
-            track: rgb(0x333d52),
-            success: rgb(0x10b981),
-            text: rgb(0xe6e9f2),
-            text_muted: rgb(0xaeb8cc),
-            text_disabled: rgb(0x7c869a),
-            accent: rgb(0x8fa8ff),
-            selection: rgb(0x2d4cc8),
-            selection_hover: rgb(0x2843b4),
-            on_selection: rgb(0xf5f7fc),
-            current: rgb(0x1d2e6a),
-            hover: rgba(0xffffff12),
-            danger: rgb(0xff9b9b),
-            danger_surface: rgb(0x37202b),
-            danger_border: rgba(0xff9b9b73),
+            window: g(c.window),
+            chrome: g(c.chrome),
+            chrome_raised: g(c.chrome_raised),
+            content: g(c.content),
+            raised: g(c.raised),
+            scrim: g(c.scrim),
+            border: g(c.border),
+            border_strong: g(c.border_strong),
+            border_accent: g(c.border_accent),
+            activity: g(c.activity),
+            track: g(c.track),
+            success: g(c.success),
+            text: g(c.text),
+            text_muted: g(c.text_muted),
+            text_disabled: g(c.text_disabled),
+            accent: g(c.accent),
+            selection: g(c.selection),
+            selection_hover: g(c.selection_hover),
+            on_selection: g(c.on_selection),
+            current: g(c.current),
+            hover: g(c.hover),
+            danger: g(c.danger),
+            danger_surface: g(c.danger_surface),
+            danger_border: g(c.danger_border),
         }
     }
 
@@ -181,9 +185,7 @@ impl Theme {
     }
 }
 
-/// Opacity of a hidden entry (a name starting with a dot), shown faded as in
-/// Dolphin so it reads as hidden at a glance; the leading dot says so too.
-pub const HIDDEN_OPACITY: f32 = 0.6;
+pub use rustphin_view::colors::HIDDEN_OPACITY;
 
 pub use rustphin_view::metrics::HIDDEN_OPACITY_MIN_PERCENT;
 
@@ -202,190 +204,17 @@ pub fn hidden_opacity() -> f32 {
 
 /// `top` composited over an opaque `bottom`.
 fn over(top: Rgba, bottom: Rgba) -> Rgba {
-    let mix = |t: f32, b: f32| t * top.a + b * (1. - top.a);
-    Rgba {
-        r: mix(top.r, bottom.r),
-        g: mix(top.g, bottom.g),
-        b: mix(top.b, bottom.b),
-        a: 1.,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// `color` drawn at `opacity`, as an element with that opacity draws it.
-    fn faded(color: Rgba, opacity: f32) -> Rgba {
-        Rgba {
-            a: color.a * opacity,
-            ..color
-        }
-    }
-
-    /// Relative luminance of an opaque sRGB colour (WCAG 2.x).
-    fn luminance(color: Rgba) -> f32 {
-        let channel = |c: f32| {
-            if c <= 0.04045 {
-                c / 12.92
-            } else {
-                ((c + 0.055) / 1.055).powf(2.4)
-            }
-        };
-        0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b)
-    }
-
-    fn contrast(foreground: Rgba, background: Rgba) -> f32 {
-        let (a, b) = (luminance(foreground), luminance(background));
-        (a.max(b) + 0.05) / (a.min(b) + 0.05)
-    }
-
-    /// Worst case for a translucent window: a white window directly behind it.
-    const WHITE: Rgba = Rgba {
-        r: 1.,
-        g: 1.,
-        b: 1.,
-        a: 1.,
+    let to = |c: Rgba| rustphin_view::colors::Color {
+        r: c.r,
+        g: c.g,
+        b: c.b,
+        a: c.a,
     };
-
-    fn assert_readable(theme: Theme) {
-        assert_readable_with_hidden(theme, HIDDEN_OPACITY);
-    }
-
-    fn assert_readable_with_hidden(theme: Theme, hidden: f32) {
-        let window = over(theme.window, WHITE);
-        let chrome = over(theme.chrome, window);
-        let tab_strip = over(theme.chrome_raised, window);
-        let content = over(theme.content, window);
-        let hover = over(theme.hover, content);
-        for (name, foreground, background) in [
-            ("text on window", theme.text, window),
-            ("text on content", theme.text, content),
-            ("muted text on content", theme.text_muted, content),
-            (
-                "danger text on content",
-                theme.danger,
-                over(theme.danger_surface, content),
-            ),
-            ("muted text on window", theme.text_muted, window),
-            ("text on chrome", theme.text, chrome),
-            ("muted text on chrome", theme.text_muted, chrome),
-            ("text on hover", theme.text, hover),
-            ("active tab text on the tab strip", theme.text, tab_strip),
-            (
-                "inactive tab text on the tab strip",
-                theme.text_muted,
-                tab_strip,
-            ),
-            (
-                "inactive tab text under the pointer",
-                theme.text_muted,
-                over(theme.hover, tab_strip),
-            ),
-            ("text on the current place", theme.text, theme.current),
-            (
-                "muted text on the current place",
-                theme.text_muted,
-                theme.current,
-            ),
-            ("text on an error line", theme.danger, theme.danger_surface),
-            ("text on selection", theme.on_selection, theme.selection),
-            (
-                "text on hovered primary button",
-                theme.on_selection,
-                theme.selection_hover,
-            ),
-            ("danger on its surface", theme.danger, theme.danger_surface),
-            ("text on a dialog", theme.text, theme.raised),
-            (
-                "text on palette hover",
-                theme.text,
-                over(theme.hover, theme.raised),
-            ),
-            (
-                "muted text on palette hover",
-                theme.text_muted,
-                over(theme.hover, theme.raised),
-            ),
-            ("muted text on a dialog", theme.text_muted, theme.raised),
-            ("danger text on a dialog", theme.danger, theme.raised),
-            (
-                "a hidden entry's name on content",
-                over(faded(theme.text, hidden), content),
-                content,
-            ),
-            (
-                "a hidden entry's name under the pointer",
-                over(faded(theme.text, hidden), hover),
-                hover,
-            ),
-        ] {
-            let ratio = contrast(foreground, background);
-            assert!(
-                ratio >= 4.5,
-                "{name}: {ratio:.2}:1 is below WCAG AA (4.5:1)"
-            );
-        }
-        // Non-text indicators need 3:1 (WCAG 1.4.11): selection and focus
-        // bars, the active tab's underline, the current place's bar and icon,
-        // the filled part of progress and usage bars, the success icon.
-        // Disabled text is exempt from 1.4.3; DESIGN.md still keeps it at 3:1
-        // so unavailable controls stay legible.
-        for (name, foreground, background) in [
-            ("accent on window", theme.accent, window),
-            ("accent on chrome", theme.accent, chrome),
-            ("accent on the tab strip", theme.accent, tab_strip),
-            ("accent on content", theme.accent, content),
-            ("accent on the current place", theme.accent, theme.current),
-            ("progress on its track", theme.activity, theme.track),
-            ("success on chrome", theme.success, chrome),
-            ("disabled text on chrome", theme.text_disabled, chrome),
-            ("disabled text on content", theme.text_disabled, content),
-            (
-                "a hidden entry's size and date on content",
-                over(faded(theme.text_muted, hidden), content),
-                content,
-            ),
-            (
-                "disabled text on a dialog",
-                theme.text_disabled,
-                theme.raised,
-            ),
-        ] {
-            let ratio = contrast(foreground, background);
-            assert!(ratio >= 3., "{name}: {ratio:.2}:1 is below 3:1");
-        }
-    }
-
-    #[test]
-    fn floating_surfaces_stay_solid_in_the_translucent_theme() {
-        // GPUI cannot blur inside the window (D-017), so menus, the palette
-        // and dialogs must not let the content behind them show through.
-        let glass = Theme::obsidian(true);
-        assert!(
-            glass.window.a < 1.,
-            "the glass window should be translucent"
-        );
-        assert_eq!(glass.raised.a, 1., "floating surfaces must be opaque");
-        assert_eq!(Theme::obsidian(false).raised, glass.raised);
-    }
-
-    #[test]
-    fn opaque_theme_meets_contrast_minimums() {
-        assert_readable(Theme::obsidian(false));
-    }
-
-    #[test]
-    fn translucent_theme_meets_contrast_minimums_over_a_white_window() {
-        assert_readable(Theme::obsidian(true));
-    }
-
-    #[test]
-    fn every_fading_settings_offers_keeps_hidden_names_readable() {
-        for percent in (HIDDEN_OPACITY_MIN_PERCENT..=100).step_by(5) {
-            let hidden = percent as f32 / 100.;
-            assert_readable_with_hidden(Theme::obsidian(false), hidden);
-            assert_readable_with_hidden(Theme::obsidian(true), hidden);
-        }
+    let mixed = rustphin_view::colors::over(to(top), to(bottom));
+    Rgba {
+        r: mixed.r,
+        g: mixed.g,
+        b: mixed.b,
+        a: mixed.a,
     }
 }

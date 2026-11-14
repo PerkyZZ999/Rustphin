@@ -4074,14 +4074,10 @@ impl Browser {
                         let entry = this.entry(&rows, row, cx);
                         let metadata = rows.metadata(row);
                         let secondary = entry.secondary(theme);
-                        // Folders show a dash: a folder's own size says nothing useful.
-                        let size_text = if entry.container {
-                            "\u{2014}".to_owned()
-                        } else {
-                            metadata
-                                .map(|metadata| format::size(metadata.size))
-                                .unwrap_or_default()
-                        };
+                        let size_text = format::size_column(
+                            entry.container,
+                            metadata.map(|metadata| metadata.size),
+                        );
                         let modified_text = metadata
                             .map(|metadata| format::timestamp(metadata.modified, &zone))
                             .unwrap_or_default();

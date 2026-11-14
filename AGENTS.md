@@ -27,7 +27,7 @@ The project follows a gated workflow. Its documents are the source of truth and 
 | `UI_SCENARIOS.md` | The UI checks to replay through kwin-mcp after UI changes. |
 | `DESIGN_BRIEF.md`, `INFORMATION_ARCHITECTURE.md` | The W-079 design pass: brief and screen structure. The screens are drawn in `docs/mockup/` (HTML, one page per screen); `docs/DESIGN.md` holds the adopted design and says what is implemented. |
 
-`docs/DESIGN.md` is the reference for the visual design (decision D-017). Its front-matter tokens are authoritative and `crates/rustphin-ui/src/theme.rs` implements them: change the document first, then the theme, and keep its "Implementation status" section true. After editing it, run `npx @google/design.md lint docs/DESIGN.md` and fix any errors.
+`docs/DESIGN.md` is the reference for the visual design (decision D-017). Its front-matter tokens are authoritative and `crates/rustphin-view/src/colors.rs` (colours, with the contrast tests) and `metrics.rs` (spacing, sizes, type) implement them for both interfaces; `crates/rustphin-ui/src/theme.rs` converts them for GPUI. Change the document first, then the tokens, and keep its "Implementation status" section true. After editing it, run `npx @google/design.md lint docs/DESIGN.md` and fix any errors.
 
 Rules that follow from it:
 
@@ -59,7 +59,7 @@ Load and follow these skills whenever the work matches. They are mandatory for t
 Notes on applying them here:
 
 - Testing: every new test must pass the two litmus tests (fails when the behaviour breaks; survives a refactor). Prove new tests by breaking the code under test and seeing them fail. A bug fix starts with a failing regression test.
-- The two design skills are written for web CSS. Apply their rules, tables and quality gates to GPUI: all visual values come from `docs/DESIGN.md` through the tokens in `crates/rustphin-ui/src/theme.rs` (4-pixel spacing grid, semantic colour names, one 2-pixel corner radius); text meets WCAG AA and is covered by the contrast tests there; state is never shown by colour alone; every empty, loading and error state says what happened and what to do; icons come from GPUI-Kit's bundled Lucide set, sized on the 4/8-pixel grid, and icon-only buttons carry a tooltip.
+- The two design skills are written for web CSS. Apply their rules, tables and quality gates to GPUI: all visual values come from `docs/DESIGN.md` through the tokens in `crates/rustphin-view/src/colors.rs` and `metrics.rs` (4-pixel spacing grid, semantic colour names, one 2-pixel corner radius); text meets WCAG AA and is covered by the contrast tests there; state is never shown by colour alone; every empty, loading and error state says what happened and what to do; icons come from GPUI-Kit's bundled Lucide set, sized on the 4/8-pixel grid, and icon-only buttons carry a tooltip.
 
 ## Architecture rules
 
@@ -70,7 +70,8 @@ Cargo workspace, dependencies point one way: `rustphin-ui` â†’ `rustphin-view` â
 | `rustphin-core` | Directory model, listing, sorting, selection, history, file operation engine, undo, batch rename, fuzzy matching | Depend on GPUI, Wayland or D-Bus crates |
 | `rustphin-platform` | Blur, file clipboard, devices, trash, thumbnails, places, MIME, icons | Depend on `gpui-kit` |
 | `rustphin-view` | Interface logic free of any toolkit: layout, settings, session, tabs, toolbar items, naming, the numeric design tokens (`metrics`) | Depend on GPUI or cxx-qt (W-114, D-034: shared by the GPUI and the coming Qt interface) |
-| `rustphin-ui` | Theme colours, views, key bindings, bridge to the core | Touch the filesystem directly |
+| `rustphin-ui` | GPUI views, key bindings, bridge to the core | Touch the filesystem directly |
+| `rustphin-qt` | The Qt 6 and QML interface being built (W-114): QML, cxx-qt models over the core | Depend on GPUI; touch the filesystem directly |
 | `rustphin` | Binary; wiring only | Hold logic |
 
 The layering is enforced by `rust-tc layers` (part of `rust-tc doctor`) and by the `gpui-kit` ban in `deny.toml`.
@@ -139,7 +140,7 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 
 - `cargo fmt` and `cargo clippy` clean, with warnings denied (both run by `rust-tc`). Workspace lints deny `unwrap`, `expect`, `dbg!` and `todo!` outside tests.
 - Errors: typed errors in library crates (`thiserror`-style enums); no `unwrap`/`expect` on fallible I/O outside tests.
-- `unsafe` only in `rustphin-platform`, each block with a `// SAFETY:` comment.
+- `unsafe` only in `rustphin-platform`, each block with a `// SAFETY:` comment. The one exception is `rustphin-qt` (D-034): cxx-qt generates unsafe FFI glue, so each bridge sits alone in a `*_bridge.rs` file of declarations, included with `#[allow(unsafe_code)]`; logic stays in the safe files beside it.
 - Public items in `rustphin-core` and `rustphin-platform` carry doc comments.
 - No telemetry and no network access anywhere in the application.
 

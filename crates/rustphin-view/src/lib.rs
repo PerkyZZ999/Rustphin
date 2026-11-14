@@ -6,6 +6,7 @@
 //! Nothing here may depend on GPUI, Qt or a display (`rust-tc layers`).
 
 pub mod archives;
+pub mod colors;
 pub mod folder_views;
 pub mod format;
 pub mod groups;

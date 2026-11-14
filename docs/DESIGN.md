@@ -445,7 +445,8 @@ components:
 # Rustphin design
 
 This is the design reference for Rustphin (D-017). The tokens in the front
-matter are authoritative and `crates/rustphin-ui/src/theme.rs` implements them;
+matter are authoritative and `crates/rustphin-view/src/colors.rs` and
+`metrics.rs` implement them (`crates/rustphin-ui/src/theme.rs` converts them for GPUI);
 the prose explains how to apply them. Change this document first, then the
 theme, and keep "Implementation status" true.
 
@@ -1000,7 +1001,7 @@ stands unless he changes it. There are no pills and no circles.
 - Do take every colour, size, spacing and radius from the tokens; add a token
   before adding a literal.
 - Do check every new surface or text pair in both glass (over white) and opaque
-  modes, and add it to the contrast tests in `theme.rs`.
+  modes, and add it to the contrast tests in `colors.rs`.
 - Do pair colour with a shape, icon or text for every state: selection,
   current place, focus, sort direction, errors, disabled items, usage.
 - Do give every icon-only control a tooltip with its label and key, and every
@@ -1159,7 +1160,7 @@ clipping. Reverse traversal between named text fields is blocked by duplicate
 focus registration in the pinned toolkit (W-076e, not approved).
 
 Lint with `npx @google/design.md lint docs/DESIGN.md`. Contrast is checked by
-the tests in `theme.rs` (glass over white and opaque); before W-079 adopted the
+the tests in `colors.rs` (glass over white and opaque); before W-079 adopted the
 tokens a script mirroring them gave the lowest text pair 4.92:1 and the lowest
 indicator pair (`primary-bright` on window glass over white) 4.31:1. The
 linter's remaining warnings are `border`, `border-strong`, `border-accent` and

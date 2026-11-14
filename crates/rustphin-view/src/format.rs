@@ -74,6 +74,16 @@ pub fn plural<'a>(value: usize, one: &'a str, many: &'a str) -> &'a str {
     if value == 1 { one } else { many }
 }
 
+/// The size column's words for an entry: a dash for a folder, whose own
+/// size says nothing useful, and nothing while a file's size is not known.
+pub fn size_column(is_folder: bool, size: Option<u64>) -> String {
+    match size {
+        _ if is_folder => "\u{2014}".to_owned(),
+        Some(bytes) => self::size(bytes),
+        None => String::new(),
+    }
+}
+
 /// Formats a size in the chosen units with one decimal, as Dolphin does:
 /// `512 B`, `1.5 KiB`, `2.0 GiB`.
 pub fn size(bytes: u64) -> String {
@@ -153,6 +163,14 @@ pub fn size_exact(bytes: u64) -> String {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folders_show_a_dash_and_unknown_sizes_nothing() {
+        assert_eq!(size_column(true, Some(4096)), "\u{2014}");
+        assert_eq!(size_column(true, None), "\u{2014}");
+        assert_eq!(size_column(false, None), "");
+        assert_eq!(size_column(false, Some(12)), "12 B");
+    }
 
     #[test]
     fn exact_sizes_add_the_bytes_with_separators() {

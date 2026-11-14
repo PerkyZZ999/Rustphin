@@ -1,0 +1,27 @@
+[package]
+name = "rustphin-qt"
+description = "Rustphin's Qt 6 and QML interface, built beside the GPUI one until it reaches parity (W-114, D-034)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# The code cxx-qt generates calls cxx's own macros, which cargo-shear cannot
+# see in the sources.
+[package.metadata.cargo-shear]
+ignored = ["cxx"]
+
+[dependencies]
+rustphin-core.workspace = true
+rustphin-view.workspace = true
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+jiff.workspace = true
+
+[build-dependencies]
+cxx-qt-build.workspace = true

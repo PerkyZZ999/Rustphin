@@ -64,6 +64,13 @@ wayland-backend = { version = "0.3", features = ["client_system"] }
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 
+# The Qt 6 interface (W-114, D-034). cxx and cxx-qt are MIT or Apache-2.0;
+# Qt itself is linked from the system under LGPL-3.0.
+cxx = "1"
+cxx-qt = "0.10"
+cxx-qt-lib = { version = "0.10", features = ["qt_full"] }
+cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 missing_docs = "warn"
