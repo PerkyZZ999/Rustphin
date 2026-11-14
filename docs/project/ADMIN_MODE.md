@@ -1,7 +1,10 @@
 # Act as Administrator: design and threat model (W-098)
 
 Status: **approved by the maintainer on 2026-11-10 (D-028)**, as D-027 required
-before any code. Written 2026-11-10.
+before any code. Written 2026-11-10. Built in W-098a–d (2026-11-10) and
+carried into the Qt interface in W-114f (2026-11-14); "As built" below says
+how the current build differs from this design. Open: W-098e, the
+maintainer's check with the real helper (the checklist at the end).
 
 ## What the maintainer asked for
 
@@ -108,8 +111,8 @@ for the password; the view is marked; the same button switches it off.
    prompt and denial handling.
 3. W-098c: changes: new folder or file, rename, copy, move, delete for good,
    undo, Properties with owner and permissions.
-4. W-098d: replay, docs (ARCHITECTURE trust boundary, DESIGN), the maintainer's
-   real-desktop check.
+4. W-098d: replay, docs (ARCHITECTURE trust boundary, DESIGN).
+5. W-098e: the maintainer's real-desktop check (open).
 
 ## Decisions for the maintainer
 
@@ -119,9 +122,70 @@ for the password; the view is marked; the same button switches it off.
 3. Accept the changes in the table: permanent delete with confirmation, no
    live updates, no thumbnails, no batch rename in the mode.
 
-## As built (W-098a–c, 2026-11-10)
+## As built
 
-Built as designed, per window. Differences and limits found on the way:
+### Where it lives (the Qt interface, since W-114f)
+
+- `rustphin-platform::admin`: `AdminHelper` (the helper on the system bus,
+  or on the session bus when `RUSTPHIN_ADMIN_BUS=session`, for tests with
+  `cargo run -p rustphin-platform --example fake_admin_helper -- <sandbox>`),
+  `decode_entry` (the bounded `UDSEntry` parser, at most 512 fields; fuzz
+  target `admin_entry`), `admin_url` (refuses any path that is not absolute,
+  plain and valid UTF-8 rather than send a different name) and `AdminFs`
+  (the core's `Fs` over the helper). Each call allows interactive
+  authorisation, so KDE's polkit agent may ask for the password; one call
+  runs at a time; an operation may take up to 120 s, password dialog
+  included; a file is read or written whole, at most 256 MiB. `installed()`
+  looks for `dbus-1/system-services/org.kde.kio.admin.service` in the XDG
+  data folders.
+- `crates/rustphin/src/admin.rs`: the on/off state. Switching on stats `/`
+  through the helper (this is when KDE asks); the notice says "Asking for
+  administrator access… Enter your password in KDE's dialog." Refused:
+  "Administrator access was not granted: the password was not given.";
+  helper missing: "KDE's administrator helper could not be reached. Install
+  the kio-admin package, then try again." Switching off says "No longer
+  acting as administrator."
+- The hub runs administrator operations on a runner of their own with
+  `AdminFs`, numbered in a range of their own (`admin_first_id`, each
+  run 2^40 apart); panes switch their
+  directory model to `AdminFs` and back (`FolderModel::switch_filesystem`),
+  starting their history afresh.
+- Toolbar: the shield (`admin` item) reads "Act as administrator", "Act as
+  administrator (needs KDE's kio-admin package)" (disabled) when the helper
+  is not installed, "Waiting for the password…" while asked, and "Stop
+  acting as administrator" in the danger colour while on. Main.qml shows the
+  bar "Acting as administrator. Changes you make here can affect the whole
+  system; be careful." with **Stop acting as administrator** on
+  the `danger_surface` token.
+- In the mode: Delete always deletes for good after asking
+  (`selection_actions`); no thumbnails (`FolderModel::thumbnail`); no live
+  updates (`AdminFs::watch` is unsupported; folders re-read after
+  Rustphin's own changes and on F5); Extract and Compress are refused with
+  "Archives cannot be extracted or made as administrator." (W-140), and the
+  administrator runner never hands an archive to 7-Zip (W-129); Properties
+  shows owner and group through the helper (`properties::described_as_administrator`).
+
+### Differences from the design
+
+- **One state for the whole process, not per window.** The Qt interface
+  keeps the mode in one place for the process: while it is on, every
+  window, tab and pane lists and works through the helper, and closing a
+  window does not switch it off (with background mode, R-020, the process
+  outlives its windows). The shield or Stop switches it off; the mode is
+  still never saved in the session. (Read from the code; not run with
+  several windows.)
+- **The title is not marked.** The design's "(administrator)" in the window
+  title is not built in the Qt interface; the red shield and the bar mark the
+  mode.
+- **No warning line for folders not owned by root.** Proposed in the threat
+  model; not built.
+- **Batch rename is not hidden.** The Qt interface still offers it; the
+  engine needs a directory lock, which `AdminFs` does not offer
+  (`lock_directory` is unsupported), so it ends with an error instead of
+  renaming. Inferred from the code; not run (administrator mode is never run
+  against the real helper by agents).
+
+### Found while building (W-098a–c, 2026-11-10)
 
 - **New folders take the user's umask.** KIO sets the mode it is given
   exactly, where `mkdir(2)` filters it; without this a new folder made as
@@ -138,17 +202,17 @@ Built as designed, per window. Differences and limits found on the way:
 - **Opening a file** in the mode starts its application as the maintainer, as
   planned.
 
-## the maintainer's check on the real desktop (W-098d)
+## The maintainer's check on the real desktop (W-098e)
 
 Agents must not type passwords, and the isolated session shares the real
 system bus, so only this check uses the real helper. With the installed
-build:
+build (after `rustphin --quit`, so the new build answers launches):
 
 1. Open `/etc`; click the shield. KDE's own dialog should ask for the
-   password ("Manage files as administrator"). Cancel it: the line should
-   say access was not granted, and the mode stays off.
-2. Click the shield again and enter the password: red shield, red bar,
-   "(administrator)" in the title; `/etc` lists as before.
+   password ("Manage files as administrator"). Cancel it: the notice should
+   say "Administrator access was not granted…", and the mode stays off.
+2. Click the shield again and enter the password: red shield, red bar
+   "Acting as administrator…"; `/etc` lists as before.
 3. Open `/opt` (or another root-owned folder you do not mind touching).
    New folder, name it `rustphin-test`; it should appear at once, owned by
    root, `rwxr-xr-x`.

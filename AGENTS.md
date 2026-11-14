@@ -19,13 +19,18 @@ The project follows a gated workflow. Its documents are the source of truth and 
 | `STATE.md` | Current phase, blockers and the next action. Read it before doing anything; update it when you finish. |
 | `WORK_ITEMS.md` | The queue for the current slice. Work from here. |
 | `ROADMAP.md` | Slices S1–S11 and which requirement each covers. |
-| `REQUIREMENTS.md` | Requirements R-001… with acceptance criteria. |
+| `REQUIREMENTS.md` | Requirements R-001… with acceptance criteria. `ACCEPTANCE.md` maps the open criteria to their evidence. |
 | `DECISIONS.md` | Locked decisions and assumptions. |
-| `ARCHITECTURE.md` | Crates, data flow, trust boundaries, failure modes, test strategy. |
+| `ARCHITECTURE.md` | Crates and modules, data flow, trust boundaries, failure modes, test strategy. |
 | `VALIDATION.md` | Evidence log. Append an entry for every gate or check you actually ran. |
 | `DISCOVERY.md` | Constraints, risks and measurements from the feasibility phase. |
 | `UI_SCENARIOS.md` | The UI checks to replay through kwin-mcp after UI changes. |
+| `KEYBOARD.md` | Every key, compared with Dolphin's. A test in `rustphin-view` (`commands`) checks the command table against it. |
+| `PRIVACY.md` | Every file Rustphin reads or writes in the home folder, what it holds and how to clear it; connections. |
+| `ADMIN_MODE.md` | Administrator mode: design and threat model. |
 | `DESIGN_BRIEF.md`, `INFORMATION_ARCHITECTURE.md` | The W-079 design pass: brief and screen structure. The screens are drawn in `docs/mockup/` (HTML, one page per screen); `docs/DESIGN.md` holds the adopted design and says what is implemented. |
+
+**The documents in `docs/` are the source of truth for behaviour and design.** A change to behaviour, a file written, a key, a command, a crate's responsibility or the look updates the relevant document first, or in the same commit. A document that disagrees with the code is a bug: fix whichever is wrong, and never leave the two apart. Dated records (VALIDATION.md entries, DECISIONS.md records, DISCOVERY.md findings) are history and are not rewritten; add a new entry instead.
 
 `docs/DESIGN.md` is the reference for the visual design (decision D-017). Its front-matter tokens are authoritative and `crates/rustphin-view/src/colors.rs` (colours, with the contrast tests) and `metrics.rs` (spacing, sizes, type) implement them; `crates/rustphin/src/tokens.rs` hands them to QML as the `Tokens` singleton. Change the document first, then the tokens, and keep its "Implementation status" section true. After editing it, run `npx @google/design.md lint docs/DESIGN.md` and fix any errors.
 
@@ -68,29 +73,32 @@ Cargo workspace, dependencies point one way: `rustphin` → `rustphin-view` → 
 
 | Crate | Contains | Must not |
 |---|---|---|
-| `rustphin-core` | Directory model, listing, sorting, selection, history, file operation engine, undo, batch rename, fuzzy matching | Depend on Qt, cxx, Wayland or D-Bus crates |
-| `rustphin-platform` | File clipboard, devices, trash, thumbnails, places, MIME, icons, FileManager1 and instance services, administrator helper client, remote folders | Depend on Qt or cxx |
-| `rustphin-view` | Interface logic free of any toolkit: pane wording, settings and Settings pages, session, tabs, toolbar items, menus, commands, questions, dialogs, the design tokens (`colors`, `metrics`) | Depend on Qt or cxx |
-| `rustphin` | The binary and its Qt interface: QML (`qml/`), Rust QObjects through cxx-qt (`src/`), the C++ shell (`cpp/`) | Touch the filesystem directly for changes; hold logic that `rustphin-view` can hold |
+| `rustphin-core` | The directory model and its snapshots (`model`, `entry`, `details`), sorting, the name filter, selection, recent folders, fuzzy matching (`search`), permission bits (`mode`), the batch-rename plan (`rename`), archive formats with the entry-name and link rules (`archive`), and the operation engine (`ops`: requests, undo, the batch-rename journal, compress and extract, a fault-injecting filesystem for tests). The engine reaches the filesystem, the trash and the archive formats it does not read itself only through the `Fs`, `Trash` and `ForeignReader` traits it is given | Depend on Qt, cxx, Wayland or D-Bus crates, or on libarchive (which reaches the engine through `ForeignReader`) |
+| `rustphin-platform` | XDG locations and atomic writes of Rustphin's files (`xdg`, `config`), the file clipboard, UDisks2 devices, the freedesktop trash, thumbnails, KDE's places file, MIME types, icon themes, applications and `mimeapps.list`, `kdeglobals`, templates, the terminal, properties, the FileManager1 and single-instance services, autostart, `/proc` facts, the administrator helper client (`AdminFs`), kio-fuse remote folders, the byte-preserving `file://` URI codec, and the reader of other archive formats (`libarchive`, `archive_tool::ForeignArchives` with its 7-Zip/unrar fallback). The only crate allowed `unsafe` | Depend on Qt or cxx |
+| `rustphin-view` | Interface logic free of any toolkit, as plain data and functions: the command table and keys (`commands`); one pane's state between snapshots (`pane_state`) and its wording (`pane`); what an action on the selection means (`selection_actions`); the operations' sequencing, wording and questions (`operation_board`, `operations`, `questions`); tabs and split views (`workspace`, `tabs`, `session`); the places panel's state, rows and groups (`places_panel`, `groups`, `place_menu`); context menus (`menu`, with `OpenMenu`); palette results and recent folders (`palette`, `history`); settings, Settings pages, each folder's view and the policy for damaged saved files (`settings`, `settings_form`, `preferences`, `folder_views`, `saved_file`); the toolbar's items, dialogs, Properties, archive menus, remote-folder wording, view geometry, formats, icon names; the design tokens (`colors`, `metrics`) | Depend on Qt or cxx |
+| `rustphin` | The binary and its Qt interface: QML (`qml/`); Rust QObjects through cxx-qt (`src/`), which turn `rustphin-view`'s decisions into Qt models and signals; the hub (`hub.rs`), which owns the engine's runners, the clipboard and the timers; paths across the QML boundary (`qml_path.rs`); the C++ shell (`cpp/`: windows, the QML engine, fonts, `KWindowEffects` blur) | Touch the filesystem directly for changes; hold logic that `rustphin-view` can hold; hand QML a path as plain text |
 
-The layering is enforced by `rust-tc layers` (part of `rust-tc doctor`); `deny.toml` bans `gpui-kit` and `gpui-pre`.
+The layering is enforced by `rust-tc layers` (part of `rust-tc doctor`): the core may not depend on GPUI, Wayland, zbus or cxx crates; the platform layer and `rustphin-view` not on GPUI or cxx; nothing on GPUI. `deny.toml` bans `gpui-kit` and `gpui-pre`, and every HTTP client, TLS stack and telemetry crate (R-108, D-018).
 
 - No work on the UI thread: listing, metadata, sorting, thumbnails and file operations run on the core's own worker pools and reach the UI as immutable snapshots over channels. No Tokio or other general async runtime in the core (D-009).
 - All file mutations go through the core's operation engine (D-011): write under a temporary name then rename; verify before deleting a move's source; never overwrite or permanently delete without an explicit user choice; delete means trash.
-- File names are bytes. Never assume UTF-8; never `unwrap` a name conversion.
+- File names are bytes. Never assume UTF-8; never `unwrap` a name conversion. A path goes to QML as its `file://` URI and a bare name percent-encoded (`qml_path`, W-132); lossy text is for display only.
+- Rustphin's own files are written through `config::write_atomic` (private temporary file, sync, rename). A saved file that cannot be read, is damaged or is from a newer format is kept as it is for the whole run and the user is told (`saved_file` for settings, place groups and folder views; `session` for the saved tabs). PRIVACY.md lists every such file.
 - The file clipboard lives in `rustphin-platform` behind a trait with runtime detection and a fallback (D-010). Blur is KDE's `KWindowEffects`, asked for by the C++ shell, with the opaque theme when KWin offers none.
 - Place groups are stored in Rustphin's own config, never inside KDE's `user-places.xbel` (D-008).
 
 ## Setup
 
-Requirements: Rust through rustup (stable, plus the `1.100.0` toolchain for the minimum-version check), a Wayland session, a C++ compiler, the Qt 6 development packages (Base, Declarative, Wayland; `qmake6` on the path) and KDE Frameworks 6 WindowSystem (`KWindowEffects`), and the Rust-Toolchain tools: `rust-tc`, `just`, `cargo-deny`, `cargo-shear`, `cargo-nextest`, `cargo-hack` (`cargo-llvm-cov` for optional coverage). Install instructions are in `../Rust-Toolchain/RUST-TOOLCHAIN.md`.
+Requirements: Rust through rustup (stable, plus the `1.100.0` toolchain for the minimum-version check), a Wayland session, a C++ compiler, the Qt 6 development packages (Base, Declarative, Svg, Wayland; `qmake6` on the path; `qmlformat` and `qmllint` in `/usr/lib/qt6/bin`), KDE Frameworks 6 WindowSystem (`KWindowEffects`), libarchive (linked by `rustphin-platform`), `python3` and the maintainer's qmllint BestPractices plugin for `rust-tc qml-lint` (from `../QtQmlBestPractices` beside this repository, or the folder `QML_BEST_PRACTICES` names; built there, or built into `target/` when `cmake` is installed), and the Rust-Toolchain tools: `rust-tc`, `just`, `cargo-deny`, `cargo-shear`, `cargo-nextest`, `cargo-hack` (`cargo-llvm-cov` for optional coverage, `cargo-mutants` for mutation testing, nightly Rust with `cargo-fuzz` and Miri for fuzzing and `rust-tc miri`). Install instructions are in `../Rust-Toolchain/RUST-TOOLCHAIN.md`. At run time Rustphin also uses, when installed: kio-fuse (remote folders), kio-admin (administrator mode), 7-Zip or unrar (archives libarchive cannot read).
 
 ```bash
-rust-tc run                # build and run, opening the home folder
+rust-tc run                # build (release) and run, opening the home folder
 rust-tc run ~/Documents    # open a specific folder
 ```
 
-Environment variables: `RUSTPHIN_ADMIN_BUS=session` (UI tests only) makes administrator mode look for KDE's kio-admin helper on the session bus, where `cargo run -p rustphin-platform --example fake_admin_helper -- <sandbox>` stands in for it; never test administrator mode against the real helper, which would ask for the maintainer's password on his desktop (UI_SCENARIOS.md, AD1–AD4). `RUSTPHIN_OPAQUE=1` forces the opaque theme; `RUSTPHIN_LOG=debug` sets the log level (logs go to stderr). Qt and QML warnings go to the journal unless `QT_FORCE_STDERR_LOGGING=1` is set; `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1` exposes the window over AT-SPI in test sessions. `RUSTPHIN_FRAME_LOG=1` logs frame timing every 120 frames, counting dropped frames (intervals over 1.5 × the refresh period, D-019); `RUSTPHIN_SCROLL_BENCH=1` also makes the list scroll itself for 1,200 frames and ends with a "scroll benchmark result" line saying whether at most 5% were dropped, which is how frame rate is measured (see W-013 and W-085 in `docs/project/VALIDATION.md`). With either set, each opened folder logs a "first entries" line: time until a frame described its entries and until the next frame began (W-073g).
+Command line: `rustphin [folder…]` opens the folders (a file opens the folder that holds it), else the saved tabs; `--background` starts without a window; `--quit` ends the running Rustphin.
+
+Environment variables: `RUSTPHIN_ADMIN_BUS=session` (UI tests only) makes administrator mode look for KDE's kio-admin helper on the session bus, where `cargo run -p rustphin-platform --example fake_admin_helper -- <sandbox>` stands in for it; never test administrator mode against the real helper, which would ask for the maintainer's password on the real desktop (UI_SCENARIOS.md, AD1–AD4). `RUSTPHIN_OPAQUE=1` forces the opaque theme; `RUSTPHIN_LOG=debug` sets the log level (default `info`; logs go to stderr). Qt and QML warnings go to the journal unless `QT_FORCE_STDERR_LOGGING=1` is set; `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1` exposes the window over AT-SPI in test sessions. `RUSTPHIN_FRAME_LOG=1` makes each opened folder log a "first entries" line on stderr: the time from asking for the listing to the frame that showed its rows, and Rustphin's own memory (W-073g). `RUSTPHIN_SCROLL_BENCH=1` does the same and also makes the active list scroll itself, once a folder of more than 1,000 entries has finished loading; every 1,200 frames it logs a "scroll benchmark result" line, counting as dropped each interval over 1.5 × the median and passing at most 5% dropped (D-019, `pane::frame_report`). That is how frame rate is measured (see W-013 and W-085 in `docs/project/VALIDATION.md`). Tests of the core also use `RUSTPHIN_TEST_KILL_*` and `RUSTPHIN_TEST_BATCH_MODE` for their child processes; never set them yourself.
 
 Dependencies are optimised even in debug builds, so a debug window opens about as fast as a release one. `crates/rustphin/build.rs` compiles the QML with qmlcachegen and finds every `*_bridge.rs` and `qml/*.qml` itself: a QML error fails the build, and a new bridge or QML file needs no list edited.
 
@@ -102,17 +110,21 @@ Dependencies are optimised even in debug builds, so a debug window opens about a
 |---|---|---|
 | `rust-tc check` | compiler only | fastest feedback while editing |
 | `rust-tc quick` | format, check, clippy, tests, doctests | after meaningful edits |
-| `rust-tc doctor` | format, clippy, tests, doctests, `cargo-deny`, `cargo-shear`, feature checks, `layers`, `msrv`, fuzz harness checks | after every task, before committing |
-| `rust-tc fuzz <target> [seconds]` | bounded URI, places, desktop, image, admin-entry or archive-entry parser campaign; defaults to 30 seconds | after relevant parser changes; requires nightly and cargo-fuzz; see `fuzz/README.md` |
+| `rust-tc doctor` | format, `qml-format`, clippy, tests, doctests, `qml-lint`, `cargo-deny`, `cargo-shear`, feature checks, `layers`, `msrv`, `fuzz-check` (the fuzz harness's format, clippy and dependency policy) | after every task, before committing |
+| `rust-tc qml-format`, `qml-lint` | `qmlformat` check of every QML file (settings in `crates/rustphin/qml/.qmlformat.ini`); `qmllint` with the BestPractices plugin, no warning allowed (W-116) | part of doctor; alone after QML edits |
+| `rust-tc build` | the locked release application, linked, not launched | when a linked build is the evidence (R-109) |
+| `rust-tc validate` | doctor, then both headless benchmarks | before acceptance work |
+| `rust-tc fuzz <target> [seconds]` | bounded `uri`, `places`, `desktop`, `images`, `admin_entry` or `archive_entry` parser campaign; defaults to 30 seconds | after relevant parser changes; requires nightly and cargo-fuzz; see `fuzz/README.md` |
 | `rust-tc bench-listing` | 500,000-entry listing benchmark; fails if R-101's thresholds are missed | after changing listing, sorting or the model |
-| `rust-tc deep`, `mutants`, `miri` | deeper checks | on demand, not after every edit |
+| `rust-tc bench-palette` | fuzzy ranking of 10,000 recent locations; fails above R-015's 50 ms | after changing `search` or the palette's candidates |
+| `rust-tc deep`, `mutants`, `miri`, `coverage` | feature powerset; cargo-mutants; Miri on nightly; LCOV report | on demand, not after every edit |
 
 Hard rules:
 
 - Do not add `cargo-audit` (`cargo-deny` owns advisories). Do not invoke the separate `rust-doctor` binary. Do not add SonarQube.
 - Do not blanket-allow lints. An `allow` needs an understood, intentional reason, the narrowest scope, and a comment when not obvious.
 - Do not invent fuzz targets to satisfy the toolchain.
-- `deny.toml` is reviewed for this project. Its three advisory ignores record reviewed "unmaintained" notices for crates retained by the zbus 5 integrations; re-check them at every zbus upgrade. New licences or ignores need a comment saying why.
+- `deny.toml` is reviewed for this project. Its three advisory ignores record reviewed "unmaintained" notices for crates retained by the zbus 5 integrations; re-check them at every zbus upgrade. New licences, exceptions or ignores need a comment saying why; a banned network, TLS or telemetry crate needs a new decision (D-018).
 - `rust-tc miri` is expected for changes to the `unsafe` code in `rustphin-platform` where it can run.
 
 ## Development workflow
@@ -126,9 +138,13 @@ Hard rules:
 
 Follow the testing-suite skill. Layout and tools:
 
-- Unit tests live in `#[cfg(test)] mod tests` beside the code; runner is `cargo-nextest` through `rust-tc`.
-- Core: behaviour through the public model API where possible; fakes of the `Fs` trait instead of mocks; fault injection through `Fs` for every file operation; no sleeps (wait on model events).
-- Platform: fixture and contract tests; D-Bus services against a mocked bus.
+- Unit tests live in `#[cfg(test)] mod tests` beside the code (or a `tests.rs` beside a large module); runner is `cargo-nextest` through `rust-tc` (`.config/nextest.toml`).
+- Core: behaviour through the public model and engine APIs where possible; fakes of the `Fs` trait instead of mocks; fault injection through `ops/faults.rs` (the real filesystem failing at chosen steps; other crates' tests get it with the `test-support` feature) for every file operation; kill tests run a child process of the test binary; property tests with `proptest` (failures kept in `proptest-regressions/`); no sleeps (wait on model or engine events).
+- Platform: fixture and contract tests (`tests/fixtures/`, temporary homes through injectable XDG locations); D-Bus services against a private peer-to-peer bus; stand-in scripts for 7-Zip and unrar.
+- View: every decision in `rustphin-view` is tested headlessly; the command table is checked for clashing keys and against KEYBOARD.md.
+- Interface: the pure Rust in `crates/rustphin/src` (paths across QML, model roles, toolbar tooltips, icon names) and a few QML contracts read from the files are unit-tested; QML itself is checked by `qml-lint` and `qml-format` and by the UI scenarios.
+- Parsers of untrusted input have fuzz targets (`fuzz/`, `rust-tc fuzz`); turn a finding into a regression test beside the parser.
+- Mutation testing: `rust-tc mutants` (cargo-mutants). A surviving mutant is killed by a new test or recorded as equivalent, with the reason, in VALIDATION.md (W-134, W-139, W-142).
 - UI: verify it yourself. After any change to the interface (`crates/rustphin`), replay the relevant scenarios in `docs/project/UI_SCENARIOS.md` through the kwin-mcp tools (load the `anthropic-skills:kwin-mcp` skill) and record what you saw. Do not ask the user to launch the app and report back; ask them only about matters of taste, or what the tools cannot show.
 - UI: pure logic (selection movement, path expansion, formatting, token contrast) is unit-tested. Interaction is checked by scripted scenarios in an **isolated KWin session with an isolated home directory** (kwin-mcp `session_start` with `isolate_home: true`). Never run test instances of Rustphin or Dolphin against the user's real home, and never use the user's real files as test data. Wait for the window before sending input: the app takes a moment to start.
 - File-operation UI must not be enabled before the operation engine's fault-injection suite passes.
@@ -139,7 +155,7 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 
 - `cargo fmt` and `cargo clippy` clean, with warnings denied (both run by `rust-tc`). Workspace lints deny `unwrap`, `expect`, `dbg!` and `todo!` outside tests.
 - Errors: typed errors in library crates (`thiserror`-style enums); no `unwrap`/`expect` on fallible I/O outside tests.
-- `unsafe` only in `rustphin-platform`, each block with a `// SAFETY:` comment. The one exception is `rustphin` (D-034): cxx-qt generates unsafe FFI glue, so each bridge sits alone in a `*_bridge.rs` file of declarations, included with `#[allow(unsafe_code)]`; logic stays in the safe files beside it.
+- `unsafe` only in `rustphin-platform`, each block with a `// SAFETY:` comment. The one exception is `rustphin` (D-034): cxx-qt generates unsafe FFI glue, so each bridge sits alone in a `*_bridge.rs` file of declarations, included with `#[allow(unsafe_code)]`; logic stays in the safe files beside it. Its `build.rs` also allows it for the one `cc_builder` call that adds KWindowSystem's include path.
 - Public items in `rustphin-core` and `rustphin-platform` carry doc comments.
 - No telemetry and no network access anywhere in the application.
 
@@ -160,7 +176,7 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 
 Qt and QML:
 
-- A window `Shortcut` listing the same key twice (`"Alt+Left"` and `StandardKey.Back` are one key on Linux), or one press matching two of its sequences (Shift+, is also "<"), is ambiguous: Qt fires neither. Main.qml's `Key` component acts on an ambiguous match; never let two shortcuts share a sequence.
+- Keys are written once, in `rustphin_view::commands` (KEYBOARD.md); Main.qml makes a window `Shortcut` for each command from that table (`Shell.shortcuts()`). Two shortcuts sharing a sequence (`"Alt+Left"` and `StandardKey.Back` are one key on Linux) are ambiguous and Qt fires neither, so the table's tests refuse a clash. One press matching two sequences of the same command (Shift+= is also "+", Shift+, also "<") is also reported as ambiguous; the shortcut's `onActivatedAmbiguously` runs the command.
 - Keys that also edit text (arrows, Enter, Backspace, Home, End, Tab, Escape) belong to the pane's or the places panel's `Keys` handler, not to window shortcuts, or they fire while the user types in a field.
 - A model reset destroys every delegate: a press in progress is lost and an open field loses focus (which ends a rename). Use `dataChanged` for focus, current-row and renaming changes, insert/remove/move rows for tabs, and redraw unchanged rows in place (places panel).
 - A delegate's required role named like an outer id shadows it (role `folder` was renamed `isFolder`; the window's `tabs` and `places` are reached as `root.tabsModel`, `root.placesModel`).

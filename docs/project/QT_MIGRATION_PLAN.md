@@ -9,6 +9,43 @@ measured spike, then, on its results, for the switch itself.
 
 **Approved 2026-11-13:** decisions A–D as recommended (D-033). E follows the spike's numbers.
 
+> **Status (2026-11-14): done; this plan is kept as history.** cxx-qt 0.10
+> was chosen (D-034) and the switch shipped in W-114i on 2026-11-14, after
+> W-114a–h, at the maintainer's request and without the planned week of
+> daily use first; the last GPUI version is commit 72ccb06. The Qt quality
+> pass followed (W-116: `qmllint` with the BestPractices plugin and
+> `qmlformat` in `rust-tc doctor`, scenarios replayed). The current design is
+> in ARCHITECTURE.md, DECISIONS.md (D-034, D-035), DESIGN.md and AGENTS.md.
+> How the result differs from this plan:
+>
+> - **Crates:** `rustphin-core` → `rustphin-platform` → `rustphin-view` →
+>   `rustphin`. There is no `rustphin-ui` and no `rustphin-qt`: the Qt
+>   interface was built as `rustphin-qt` beside the GPUI app and renamed
+>   `rustphin` at the switch, when `rustphin-ui` was deleted. The binary crate
+>   holds the QML (`crates/rustphin/qml`), the cxx-qt objects
+>   (`crates/rustphin/src`, each bridge alone in a `*_bridge.rs` file) and a
+>   small C++ shell (`crates/rustphin/cpp`) that owns the QML engine and asks
+>   `KWindowEffects` for blur.
+> - **Tokens:** the QML singleton is `Tokens`, fed from
+>   `rustphin_view::colors` and `metrics` (`crates/rustphin/src/tokens.rs`),
+>   not `Theme` from `theme.rs`.
+> - **More moved to `rustphin-view` than planned:** besides the lists here,
+>   the command and key table (`commands`, W-123), each pane's arrival logic
+>   (`pane_state`, W-122), the operations' sequencing (`operation_board`,
+>   W-124), the selection actions (`selection_actions`, W-126), the places
+>   panel (`places_panel`, W-127), menus' shared holder (`menu::OpenMenu`,
+>   W-131) and the tabs of split panes (`workspace`, W-130).
+> - **Platform:** the GPUI-only modules (blur, blur watch, activation, font
+>   pre-read) were removed; the data-control file clipboard stayed, since
+>   Qt's clipboard cannot exchange file lists with other applications either.
+> - **Layers:** `rust-tc layers` forbids Qt and cxx below the interface crate
+>   and GPUI everywhere; `deny.toml` bans `gpui-kit` and `gpui-pre`. The
+>   minimum Rust version is now 1.100 (D-035), not 1.95.
+> - **Open after the switch:** KWin's window menu on the title bar is not
+>   offered (needs private Qt Wayland API); some Settings choices are saved
+>   but not applied (SETTINGS_PLAN.md status); UI_SCENARIOS.md lists what has
+>   been replayed on Qt.
+
 ## Spike results (W-114a, 2026-11-13)
 
 Two throwaway spikes in `spikes/qt-cxx` (cxx-qt 0.10) and `spikes/qt-bridge`

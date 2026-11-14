@@ -1,5 +1,34 @@
 # Compress and extract (W-111): plan for approval
 
+> **Status (2026-11-14): built; this plan is kept as history.** Option A was
+> built in W-111a–g (2026-11-13) and moved to the Qt interface in W-114e–f.
+> The current behaviour is described in REQUIREMENTS.md (R-021),
+> ARCHITECTURE.md (`rustphin-core` `archive.rs` and `ops/archive.rs`;
+> `rustphin-platform` `libarchive.rs` and `archive_tool.rs`), the menus in
+> `crates/rustphin-view/src/menu.rs` and the dialog in `dialogs.rs`, and
+> UI_SCENARIOS.md (AR1–AR10). How it differs from this plan:
+>
+> - **No Ark.** Formats the core does not read itself (RAR, ISO, CAB, CPIO,
+>   lone `.gz` and others) are read through libarchive inside Rustphin's own
+>   engine, with the same progress, Stop, conflict and password questions,
+>   undo and entry checks; 7-Zip (`7z`, `7zz`, `7za`), then unrar, only for
+>   what libarchive cannot open (D-036, W-119). The reader is handed to the
+>   engine with `Fs` and `Trash` (`archive::ForeignReader`, W-129), so the
+>   core has no C dependency. Writing stays ZIP, TAR and 7Z.
+> - **Compress to…** offers ZIP, TAR.GZ, TAR.XZ, TAR.ZST and 7Z at three
+>   levels (Fast, Normal, Smallest), as planned; it is a QML dialog, and
+>   Extract to… uses Qt's folder dialog, which starts in the folder shown
+>   (W-113, W-114g), not the GPUI portal prompt.
+> - **Several archives** get "Extract each into its own folder" in place of
+>   "Extract into "name/"", and "Extract and trash archives".
+> - **Not built:** the menu does not disable the "here" entries in a
+>   read-only folder (`menu::archive_menus` has no such check); a failure is
+>   reported when the operation runs. "Actions menu" in this plan is the
+>   command palette (Files: Extract here, …).
+> - **Trash and administrator:** no Extract or Compress in either, from the
+>   menu or the palette (W-140); links whose target climbs out after a name
+>   are left out (W-133).
+
 **Approved 2026-11-13 with all five recommendations (D-032, R-021).**
 
 The maintainer asked on 2026-11-13 for compressing and extracting from the context menu, with several choices: extract here, into a new folder, and into a folder followed by removing the archive. This plan says what Dolphin offers, how Rustphin would do it, and what the maintainer needs to decide.

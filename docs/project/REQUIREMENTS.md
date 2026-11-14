@@ -45,7 +45,7 @@ Conventions:
 - **Acceptance:**
   - [x] Click, Ctrl+click, Shift+click, rubber-band, select all and invert selection work. (W-078: W-020, W-022 S2/S3, W-024, W-073e.)
   - [x] Arrow keys, Home/End, Page Up/Down move focus; typing letters jumps to the next matching name. (W-078: W-020, K10, K14 Page Down/Shift+Page Down.)
-  - [ ] Every action in R-001 to R-016 has a keyboard path, and the default shortcuts match Dolphin's where an equivalent exists.
+  - [ ] Every action in R-001 to R-016 has a keyboard path, and the default shortcuts match Dolphin's where an equivalent exists. (Shortcuts: one command table in `rustphin_view::commands`, tested against KEYBOARD.md and for clashes (W-123); every KEYBOARD.md key replayed on Qt in W-114h and W-123. Open: a keyboard-only pass of every surface on the Qt interface, Shift+Tab included; the GPUI focus blocker W-076e went with GPUI in W-114i.)
 - **Validation:** ui-test, manual (keyboard-only checklist)
 
 ### R-005 — Tabs
@@ -93,7 +93,7 @@ Conventions:
 - **Priority:** must
 - **Acceptance:**
   - [x] Dragging within and between Rustphin panes, tabs and windows copies or moves, with a modifier or menu to choose.
-  - [ ] Dragging files out to Dolphin and to at least one non-KDE application delivers them. (Dolphin: done. A non-KDE application: not yet tried.)
+  - [x] Dragging files out to Dolphin and to at least one non-KDE application delivers them. (W-114g, isolated session: a file dragged into Dolphin (Copy Here) and into Nautilus, a GTK application, arrived with the original kept. Not yet tried on the maintainer's desktop.)
   - [x] Files dropped from other applications are accepted onto a view or a folder.
   - [x] Names with spaces and non-ASCII characters survive the round trip.
 - **Validation:** ui-test (with Dolphin), manual (non-KDE app)
@@ -104,7 +104,7 @@ Conventions:
   - [x] Copy and cut in Rustphin paste correctly in Dolphin; copy and cut in Dolphin paste correctly in Rustphin, with cut resulting in a move.
   - [x] Cut items are shown dimmed until pasted or the clipboard changes.
   - [x] Names with spaces and non-ASCII characters survive the round trip.
-  - [x] Where the compositor lacks a data-control protocol, copy and paste still work inside Rustphin and the limitation is reported once. (W-076i: isolated KWin connection with both data-control interfaces hidden; copy/cut/paste, one-time notice and minimum-window replay verified.)
+  - [x] Where the compositor lacks a data-control protocol, copy and paste still work inside Rustphin and the limitation is reported once. (W-076i on the GPUI interface: isolated KWin connection with both data-control interfaces hidden; copy/cut/paste and the one-time notice verified. The fallback is in the platform (`clipboard::for_session`, `LocalClipboard`) and the notice in `OperationBoard::picked_up`, both unchanged by the Qt switch; not replayed on Qt.)
 - **Validation:** ui-test (with Dolphin), test (URI encoding)
 
 ### R-012 — Places and place groups
@@ -159,34 +159,34 @@ Conventions:
   - [x] A desktop entry lets Rustphin be set as the default handler for folders.
   - [x] "Show in folder" requests from other applications (the `org.freedesktop.FileManager1` D-Bus interface) open the folder and select the item.
   - [x] Paths and `file://` URLs given on the command line open as tabs.
-- **Validation:** test (D-Bus), isolated desktop scenarios I1, I10 and I12; observed in W-068 (2026-10-19). Real-user default registration is not changed by tests.
+- **Validation:** test (D-Bus), isolated desktop scenarios I1, I10 and I12; observed in W-068 (2026-10-19); on the Qt interface, FileManager1 ShowItems and ShowItemProperties and a handed-over launch in W-114g, W-114i and W-116b (I1, I10). Real-user default registration is not changed by tests.
 
 ### R-018 — Context menu and properties
 - **Priority:** should
 - **Acceptance:**
   - [x] Right-click offers the operations of R-007 to R-011 relevant to the selection, plus "Open with" listing applications registered for the MIME type.
   - [x] A properties view shows name, type, size (computed in the background for folders), times and permissions, and can change permissions.
-- **Validation:** isolated desktop scenarios I2–I9, I11 and I13; observed in W-068 (2026-10-19), with limits in VALIDATION.md.
+- **Validation:** isolated desktop scenarios I2–I9, I11 and I13; observed in W-068 (2026-10-19), with limits in VALIDATION.md; replayed on the Qt interface in W-114h and W-116b (I2–I9, I13).
 
 ### R-019 — Settings window (after the MVP, D-029)
 - **Priority:** could (requested by the maintainer on 2026-11-12, beyond the MVP)
 - **Acceptance:**
-  - [ ] "Settings…" in the Actions menu, the palette command and Ctrl+Shift+, open one Settings dialog over the window with General, Appearance, Views, Toolbar, Places, Confirmations, Shortcuts and About pages, reachable by mouse and keyboard. (W-106b–g: all eight pages, opened from the palette and Ctrl+Shift+,; pages by Up/Down, a page by Page Up/Down, drop-downs by arrows. Open: Tab through the controls was not seen moving.)
-  - [ ] Every change applies at once in every window and survives a restart; each page can be reset to its defaults; a damaged or newer settings file never stops Rustphin starting and is never overwritten. (Applies at once and survives restarts on screen, Reset seen on every page with settings, lenient reading and newer-file protection unit-tested. Open: a second window following a change was not seen.)
+  - [ ] "Settings…" in the Actions menu, the palette command and Ctrl+Shift+, open one Settings dialog over the window with General, Appearance, Views, Toolbar, Places, Confirmations, Shortcuts and About pages, reachable by mouse and keyboard. (W-106b–g on GPUI: all eight pages, opened from the palette and Ctrl+Shift+,; pages by Up/Down, a page by Page Up/Down, drop-downs by arrows. Qt: opened by Ctrl+Shift+, and the palette, General, Views, Toolbar, Shortcuts, Places and About pages seen (W-114f, W-114h, W-116a). Open: Tab through the controls was not seen moving.)
+  - [ ] Every change applies at once in every window and survives a restart; each page can be reset to its defaults; a damaged or newer settings file never stops Rustphin starting and is never overwritten. (Applies at once and survives restarts on screen, Reset seen on every page with settings (GPUI); a damaged, unreadable or newer settings file is kept, saving is turned off and the user told, unit-tested and seen on screen on Qt (W-140, `saved_file`). Open: a second window following a change was not seen.)
   - [x] The Toolbar page adds, removes and reorders toolbar actions and separators, chooses icon only or icon and words per action, and restores the default toolbar; the responsive rules still apply. (W-106f: TB10–TB15 on screen; the narrowing rule unit-tested.)
-  - [x] Each page's settings do what SETTINGS_PLAN.md describes, with today's behaviour as the default. (Built W-106c–g with today's defaults. Three differences from the plan accepted by the maintainer, D-030: no "system format" for dates; hidden files fade from 60 %, not 30 % (AA); toolbar items move by buttons, not by dragging.)
+  - [ ] Each page's settings do what SETTINGS_PLAN.md describes, with today's behaviour as the default. (Built W-106c–g on GPUI with today's defaults. Three differences from the plan accepted by the maintainer, D-030: no "system format" for dates; hidden files fade from 60 %, not 30 % (AA); toolbar items move by buttons, not by dragging. Unticked 2026-11-14: the Qt interface stores but ignores two Appearance choices: Look (glass or opaque; only `RUSTPHIN_OPAQUE` turns the glass off) and Title bar (Rustphin's or KDE's; the window is always frameless with Rustphin's title bar).)
   - [x] About shows the version, the licence text, credits and where Rustphin keeps its files; nothing is fetched from the network. (W-106b, ST2–ST4.)
 - **Validation:** unit tests of the settings model (defaults, parsing, migration from version 2); isolated desktop scenarios per page; mockups approved by the maintainer first (W-106a).
 
 ### R-020 — Background mode (after the MVP, D-031)
 - **Priority:** could (requested by the maintainer on 2026-11-13, beyond the MVP)
 - **Acceptance:**
-  - [x] With "keep running" on, closing the last window leaves Rustphin running, and the next window (launcher, a folder sent by another application, the command line) shows its folder within 200 ms of the request on a warm machine, whatever the font cache holds. (W-110b: 41 ms after a close, 94 ms after a background start; BG3, BG4, BG7.)
-  - [x] One Rustphin process runs per session; a second launch hands its request to it and exits without starting the UI toolkit; if the running one does not answer within 2 s, the launch starts its own. (W-110a: 12 ms hand-over on screen; the time limit unit-tested.)
-  - [x] With no window open, Rustphin's own memory (RssAnon) is at most 60 MB and it uses no CPU while nothing happens. (W-110e: 41 MB after closing, 11.6 MB after a background start; no CPU over 5 s.)
+  - [x] With "keep running" on, closing the last window leaves Rustphin running, and the next window (launcher, a folder sent by another application, the command line) shows its folder within 200 ms of the request on a warm machine, whatever the font cache holds. (W-110b on GPUI: 41 ms after a close, 94 ms after a background start; BG3, BG4, BG7. Qt (W-114c3): later launches handed over in 16–18 ms and opened a fresh window; the time to the window's first frame was not measured on Qt.)
+  - [x] One Rustphin process runs per session; a second launch hands its request to it and exits without starting the UI toolkit; if the running one does not answer within 2 s, the launch starts its own. (W-110a: 12 ms hand-over on screen; the time limit unit-tested. Qt: W-114c3, W-114i.)
+  - [x] With no window open, Rustphin's own memory (RssAnon) is at most 60 MB and it uses no CPU while nothing happens. (Qt, W-114c3: 53.7–54.9 MB after closing the last window over three cycles (the engine is deleted and `malloc_trim` returns freed memory), 9.8 MB after `--background`; no CPU time over 5 s. GPUI: 41 MB and 11.6 MB, W-110e.)
   - [x] Ctrl+Q, the palette's Quit and `rustphin --quit` end the process; closing windows does not. (BG3, BG5, BG8.)
   - [x] The login switch adds or removes exactly one autostart entry and changes nothing else. (Unit-tested; BG6.)
-  - [ ] New windows get the focus when the request carries an activation token. (W-110d: the token reaches the compositor in a protocol test; KWin's focus not yet seen on the real desktop.)
+  - [ ] New windows get the focus when the request carries an activation token. (Qt: a launch's token, and a FileManager1 caller's `startup_id` (W-120), are handed to Qt as `XDG_ACTIVATION_TOKEN` before the window asks for activation; the private-bus test sees the token delivered. KWin's focus needs a real token, so it is not yet seen: the maintainer's desktop.)
   - [x] With "keep running" off, Rustphin behaves as before W-110. (BG9.)
 - **Validation:** private-bus tests of the hand-over and `--quit`; unit tests of the autostart entry; isolated-session scenarios for closing, reopening, a second launch and quitting; memory and wake-up measurements with no window.
 
@@ -206,17 +206,17 @@ Conventions:
 ### R-101 — Responsiveness at scale
 - **Priority:** must
 - **Acceptance:** on the reference machine, in a directory of 500,000 entries on a local filesystem:
-  - [x] First entries are visible within 200 ms of opening (warm cache) and the UI accepts input throughout loading. (D-022: opening a folder in a running window; application startup is outside this. W-073g: 59–78 ms in every view mode; input during loading W-073e.)
-  - [x] Re-sorting by any column completes within 500 ms once the sizes and dates it needs have been read. The first read has no fixed limit, but the list is shown in name order with a loading indicator while it runs, and details appear from the top of the list first. (Reworded 2026-10-12 with the user's agreement: on a cold disk cache the read is bounded by the disk, 5.3 s for 500,000 files.) (W-078: rust-tc bench-listing, slowest re-sort 92.7 ms in W-077b; name order with loading indicator and details from the top in W-023/W-073c.)
-  - [x] Scrolling holds 60 frames per second: no more than 5% of frame intervals during sustained scrolling exceed 1.5 × the refresh period, in each view mode. (Reworded 2026-11-08 by D-019 with the maintainer's agreement; previously "at the 95th percentile".) (W-085: release diagnostics build, isolated KWin reporting 60 Hz, 1,199 self-driven scroll intervals per mode: details 3 dropped (0.25%), icons 1 (0.08%), compact 0. Not measured on a physical display.)
-  - [x] No UI-thread task exceeds 16 ms in listing, sorting, metadata or thumbnail code paths. (D-022: application startup is outside this. Model callback 0.8 ms (W-073e), thumbnail updates 0.56 ms and draws 9.3 ms while 2,000 were made (W-073f). One 16.2 ms toolkit draw in one of five large scroll runs (W-085) did not recur in a repeat.)
+  - [x] First entries are visible within 200 ms of opening (warm cache) and the UI accepts input throughout loading. (D-022: opening a folder in a running window; application startup is outside this. W-073g: 59–78 ms in every view mode; input during loading W-073e. Qt interface: 91.9 ms (W-114d) and 136.2 ms (W-114h).)
+  - [x] Re-sorting by any column completes within 500 ms once the sizes and dates it needs have been read. The first read has no fixed limit, but the list is shown in name order with a loading indicator while it runs, and details appear from the top of the list first. (Reworded 2026-10-12 with the user's agreement: on a cold disk cache the read is bounded by the disk, 5.3 s for 500,000 files.) (W-078: rust-tc bench-listing, slowest re-sort 92.7 ms in W-077b; name order with loading indicator and details from the top in W-023/W-073c. Qt interface: re-sort by size 129.9 ms (W-114d) and 88.0 ms (W-114h) to the frame showing all 500,000 rows.)
+  - [x] Scrolling holds 60 frames per second: no more than 5% of frame intervals during sustained scrolling exceed 1.5 × the refresh period, in each view mode. (Reworded 2026-11-08 by D-019 with the maintainer's agreement; previously "at the 95th percentile".) (W-085 on GPUI: details 3 dropped (0.25%), icons 1 (0.08%), compact 0 of 1,199 intervals. Qt interface, details: 0 of 1,200 dropped (W-114d, W-114h), 2 of 1,200 (0.17%) while details loaded during a mode switch (W-114d); icons and compact not re-measured on Qt. Isolated KWin at 60 Hz; not measured on a physical display.)
+  - [x] No UI-thread task exceeds 16 ms in listing, sorting, metadata or thumbnail code paths. (D-022: application startup is outside this. Measured on GPUI: model callback 0.8 ms (W-073e), thumbnail updates 0.56 ms and draws 9.3 ms while 2,000 were made (W-073f). Qt interface: listing, sorting and metadata still run on the core's workers; task times on the Qt thread are not measured separately (W-114d), only through the dropped-frame counts above; the theme icon provider draws icons on the Qt thread (W-116a, not re-measured).)
 - **Validation:** bench (headless core), ui-test with frame timing
 
 ### R-102 — Memory
 - **Priority:** should
 - **Acceptance:**
   - [x] Resident memory with one 500,000-entry directory open stays under 400 MB; closing the tab returns to within 50 MB of the starting figure.
-- **Validation:** bench; W-073b (2026-10-22), final default release in isolated KWin: 130332 KiB small baseline, 162124 KiB large/details tab, 150112 KiB after closing that tab (19.3 MiB above baseline).
+- **Validation:** bench; W-073b (2026-10-22, GPUI interface), final default release in isolated KWin: 130332 KiB small baseline, 162124 KiB large/details tab, 150112 KiB after closing that tab (19.3 MiB above baseline). Qt interface (W-114d): own memory 124–156 MB with 500,000 entries and their details; closing the tab not re-measured on Qt. Reloading such a folder grows memory by about 25 MB each time, on both interfaces (W-115, open).
 
 ### R-103 — Data safety
 - **Priority:** must
@@ -224,7 +224,7 @@ Conventions:
   - [x] No code path overwrites or permanently deletes user data without an explicit user choice in that operation.
   - [x] Killing the process at any point during copy, move or batch rename leaves every source file either intact or fully present at its destination. (W-083 under D-020: a killed batch rename keeps every file's bytes intact under journal-recorded temporary names, and the next start restores the original names automatically; copy/move per W-036/W-072.)
   - [x] Configuration and place-group files are written atomically (write, sync, rename).
-- **Validation:** test (fault injection, kill tests). W-071 (2026-10-22) demonstrates batch rename/undo recovery after SIGKILL, including recovery killed in turn. The immediate-after-kill checkbox stays open: original files may remain staged until explicit recovery. W-072 adds file/directory ordering and late-error fault tests; physical power loss remains unverified.
+- **Validation:** test (fault injection, kill tests). W-071 (2026-10-22) demonstrates batch rename/undo recovery after SIGKILL, including recovery killed in turn; W-083 recovers interrupted renames at the next start (D-020), and W-134/W-135 harden the recovery record's parser. W-072 adds file/directory ordering and late-error fault tests. Settings, place groups and folder views that cannot be read, are damaged or come from a newer Rustphin are kept and never overwritten (W-140, W-143). Physical power loss remains unverified.
 
 ### R-104 — Robustness with untrusted input
 - **Priority:** must
@@ -237,11 +237,11 @@ Conventions:
 ### R-105 — Visual design
 - **Priority:** must
 - **Acceptance:**
-  - [ ] A single dark theme as specified in `docs/DESIGN.md`: obsidian translucent surfaces with compositor blur behind the window, royal-blue accent, 2-pixel corners, Inter / JetBrains Mono / Space Grotesk.
-  - [x] Floating surfaces inside the window (menus, palette, dialogs) are tinted opaque, since in-window blur is unavailable. (W-078d: unit test pins the glass theme's `raised` surface opaque; every menu, palette, properties and dialog surface paints with it. The look on the real desktop stays under the first R-105 criterion.)
+  - [ ] A single dark theme as specified in `docs/DESIGN.md`: obsidian translucent surfaces with compositor blur behind the window, royal-blue accent, 2-pixel corners, Inter / JetBrains Mono / Space Grotesk. (Tokens and bundled fonts in place; blur through `KWindowEffects` was confirmed on the maintainer's desktop with the Qt spike (W-114b2), not yet with the current build.)
+  - [x] Floating surfaces inside the window (menus, palette, dialogs) are tinted opaque, since in-window blur is unavailable. (`rustphin_view::colors` test `floating_surfaces_stay_solid_in_the_translucent_theme` pins the `raised` surface opaque in the glass theme (W-078d, moved with the tokens in W-114c1); the QML menus, palette and dialogs paint with it. The look on the real desktop stays under the first R-105 criterion.)
   - [x] Where the compositor offers no blur protocol, or the user turns transparency off, the window is opaque and every text element still meets WCAG AA contrast (4.5:1). (Accepted by the maintainer on 2026-11-08 on token-level evidence: `opaque_theme_meets_contrast_minimums` checks every text/surface token pair used by the views, menus, palette and dialogs at 4.5:1, and W-078c found all colours come from those tokens; the opaque fallback was observed in isolated sessions (W-076h/j). No per-screen pixel audit was made.)
   - [ ] Text meets WCAG AA contrast over the blurred background in the worst case tested (a white window behind).
-  - [x] Colours, spacing, radii and type sizes come from one set of design tokens. (W-078c: code audit of rustphin-ui; the last radius and two sizes moved to tokens. Window default/minimum sizes and the documented half opacity remain literals.)
+  - [x] Colours, spacing, radii and type sizes come from one set of design tokens. (`rustphin_view::colors` and `metrics` implement DESIGN.md and reach QML as the `Tokens` singleton (`crates/rustphin/src/tokens.rs`). The QML has no colour or font-size literals; the window's default size, a few 2 px spacings and borders, and the documented half opacity remain literals (grep of `crates/rustphin/qml`, 2026-11-14). The GPUI audit was W-078c.)
 - **Validation:** test (token contrast), manual (visual review on the real desktop)
 
 ### R-106 — Progressive disclosure
@@ -255,8 +255,8 @@ Conventions:
 ### R-107 — Accessibility baseline
 - **Priority:** should
 - **Acceptance:**
-  - [ ] Keyboard-complete operation (R-004) with a visible focus indicator everywhere.
-  - [x] The entry list, places panel, tabs and dialogs expose names and roles through AccessKit, with gaps listed. (W-074a–i over AT-SPI in isolated sessions: entries, places/groups, tabs, palette, menus, properties and operation dialogs, text fields. Gaps: native expanded and disabled flags and EditableText are not mapped by the pinned adapter. The Orca pass was dropped by D-023.)
+  - [ ] Keyboard-complete operation (R-004) with a visible focus indicator everywhere. (Open: a keyboard-only pass of the Qt interface. The GPUI blocker W-076e no longer applies.)
+  - [x] The entry list, places panel, tabs and dialogs expose names and roles to assistive technology (AT-SPI), with gaps listed. (Qt interface, W-114h: entries are list items by name and report "selected", toolbar buttons are named with a Press action, the places panel is a named panel with a "Places" list and a named width separator, a question is a dialog by its title with pressable buttons. Gaps: some buttons are unnamed (W-116b, W-117); tabs and the palette were not re-checked on Qt. The GPUI interface was checked through AccessKit in W-074a–i. The Orca pass was dropped by D-023.)
 - **Validation:** manual
 
 ### R-108 — Privacy
@@ -264,14 +264,14 @@ Conventions:
 - **Acceptance:**
   - [x] The application makes no network connections of its own and collects no telemetry.
   - [x] All stored history is local, documented, and clearable.
-- **Validation:** test (`deny.toml` bans HTTP clients, TLS and telemetry crates, and confines the locked toolkit's retained network crates to their current wrappers; D-018), source review and traced runs showing only local sockets, manual. Amended 2026-11-08 by D-018: previously "no network crates or sockets in the dependency audit", which the locked toolkit cannot meet.
+- **Validation:** test (`deny.toml` bans HTTP clients, TLS, telemetry crates and, since the Qt switch (W-114i), the async-net/http crates GPUI brought; `cargo tree -i http` finds none), source review and traced runs showing only local sockets (W-077, on the GPUI interface), manual. Amended 2026-11-08 by D-018: previously "no network crates or sockets in the dependency audit", which GPUI could not meet; with GPUI gone the exception is no longer used.
 
 ### R-109 — Platform and build
 - **Priority:** must
 - **Acceptance:**
-  - [x] Builds with the minimum Rust (1.100 since D-035; 1.95 before) and current stable from a clean checkout with one documented command.
-  - [x] Runs on Plasma 6 Wayland; missing optional services (UDisks2, data-control, blur) degrade the related feature with a visible notice rather than failing to start. (W-078: W-076g/h/i/j notices for UDisks2, blur and data-control in an isolated Plasma 6 KWin session; real-desktop blur review stays under R-105.)
-  - [x] One local command runs formatting, lints, the test suite and the headless benchmarks (there is no hosted CI; the repository is on GitHub without one, D-037).
+  - [x] Builds with the minimum Rust (1.100 since D-035) and current stable, Qt 6 (Base, Declarative, Wayland) and KF6 WindowSystem, from a clean checkout with one documented command (`rust-tc run`; checks with `rust-tc doctor`, which also checks the minimum version).
+  - [ ] Runs on Plasma 6 Wayland; missing optional services (UDisks2, data-control, blur) degrade the related feature with a visible notice rather than failing to start. (UDisks2: the places panel says the devices could not be listed (`PlacesPanel::devices_failed`); data-control: the one-time clipboard notice (R-011). Blur: the Qt interface uses the opaque theme when KWin offers no blur at start, but shows no notice (DESIGN.md's "Background blur unavailable" line is not built) and does not follow blur appearing or disappearing while it runs. The GPUI interface had all three notices (W-076g/h/i/j).)
+  - [x] One local command runs formatting, lints, the test suite and the headless benchmarks (`rust-tc doctor`, with QML format and lint since W-116a; `rust-tc bench-listing` for R-101). There is no hosted CI; the repository is on GitHub without one (D-037).
 - **Validation:** test (local check command)
 
 ## Later (not in the MVP)
@@ -286,10 +286,10 @@ Conventions:
 - L-008 — Native network protocols (beyond kio-fuse paths)
 - L-009 — Light theme and following the system colour scheme
 - L-010 — Tags, ratings and comments
-- L-011 — Archive browsing and compress/extract actions
+- L-011 — Archive browsing and compress/extract actions. Compress and extract done as R-021 (W-111, W-119); browsing inside an archive is not offered.
 - L-012 — Packaging (Arch package, Flatpak)
 - L-013 — Translations
-- L-014 — Running operations with elevated privileges
+- L-014 — Running operations with elevated privileges. Done as Act as Administrator through KDE's kio-admin helper (D-027, D-028, W-098; ADMIN_MODE.md); the real-desktop check W-098e is open.
 
 ## Non-goals
 

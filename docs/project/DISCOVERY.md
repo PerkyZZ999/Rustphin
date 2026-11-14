@@ -1,5 +1,24 @@
 # Discovery
 
+> **Status (2026-11-14): history.** The findings below are dated records and
+> are not rewritten. Several no longer describe the project:
+>
+> - **Toolkit:** GPUI through GPUI-Kit was replaced by Qt 6 Quick and QML
+>   through cxx-qt 0.10 (D-034, W-114i, last GPUI version commit 72ccb06).
+>   The `gpui-kit`/`gpui-pre` constraint, the AccessKit note and the W-076e
+>   section at the end (input traversal and focus in the GPUI adapter)
+>   concern that toolkit only. Accessibility is now Qt's AT-SPI bridge.
+> - **Blur:** comes from KDE's `KWindowEffects`, asked for by the C++ shell,
+>   with the opaque theme when KWin offers none; Rustphin no longer speaks the
+>   background-effect protocol itself (D-010 as amended by D-034). The file
+>   clipboard still uses the Wayland data-control protocol from
+>   `rustphin-platform`, with an in-app fallback (D-010).
+> - **Minimum Rust version:** 1.100 (D-035), not 1.95.
+> - **No elevation in the MVP** held for the MVP; acting as administrator was
+>   added later through KDE's kio-admin helper (D-027, D-028).
+> - Today's constraints and design are in DECISIONS.md, ARCHITECTURE.md,
+>   REQUIREMENTS.md and AGENTS.md.
+
 Phase 2 output, 2026-10-12. Each claim is marked **observed** (run or read on this machine today; evidence in VALIDATION.md), **sourced** (read in upstream source or docs), or **assumed**.
 
 ## Feasibility stance

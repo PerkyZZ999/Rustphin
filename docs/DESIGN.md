@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: Rustphin Obsidian
-description: Navy obsidian glass with royal-blue accents for the Rustphin file manager on KDE Plasma Wayland (Qt 6 and QML). Adopted by the W-079 design pass from the HTML mockups in docs/mockup/.
+description: Navy obsidian glass with royal-blue accents for the Rustphin file manager on KDE Plasma Wayland (Qt 6 and QML). Adopted by the W-079 design pass from the HTML mockups in docs/mockup/; the tokens equal crates/rustphin-view/src/colors.rs and metrics.rs.
 colors:
   # Surfaces over the compositor-blurred desktop (glass mode). Stacked: window, then chrome or content.
   window-glass: "rgba(13, 21, 36, 0.80)"
@@ -13,7 +13,7 @@ colors:
   chrome-solid: "#121B2D"
   chrome-raised-solid: "#1A2236"
   content-solid: "#0E1727"
-  # Menus, palette, dialogs, tooltips: always solid.
+  # Menus, palette, dialogs: always solid.
   surface-raised: "#111A2C"
   scrim: "rgba(4, 7, 14, 0.60)"
   # Text.
@@ -44,7 +44,6 @@ typography:
     fontSize: 15px
     fontWeight: 600
     lineHeight: 20px
-    letterSpacing: -0.01em
   headline-sm:
     fontFamily: Space Grotesk
     fontSize: 15px
@@ -60,10 +59,10 @@ typography:
     fontSize: 12px
     fontWeight: 400
     lineHeight: 16px
-  body-strong:
+  body-sm:
     fontFamily: Inter
-    fontSize: 12px
-    fontWeight: 600
+    fontSize: 11px
+    fontWeight: 400
     lineHeight: 16px
   data-md:
     fontFamily: JetBrains Mono
@@ -76,11 +75,9 @@ typography:
     fontWeight: 400
     lineHeight: 16px
   label-sm:
-    fontFamily: JetBrains Mono
+    fontFamily: Inter
     fontSize: 10px
-    fontWeight: 500
-    lineHeight: 14px
-    letterSpacing: 0.06em
+    fontWeight: 400
 rounded:
   sm: 2px
 spacing:
@@ -88,8 +85,6 @@ spacing:
   sm: 8px
   md: 12px
   lg: 16px
-  xl: 24px
-  2xl: 32px
 components:
   window-surface:
     backgroundColor: "{colors.window-solid}"
@@ -101,7 +96,7 @@ components:
     backgroundColor: "{colors.content-glass}"
   chrome-glass-surface:
     backgroundColor: "{colors.chrome-glass}"
-  tab-strip-glass:
+  window-line-glass:
     backgroundColor: "{colors.chrome-raised-glass}"
   modal-scrim:
     backgroundColor: "{colors.scrim}"
@@ -111,11 +106,11 @@ components:
     typography: "{typography.body-md}"
     height: 36px
   window-button:
-    textColor: "{colors.text-muted}"
+    textColor: "{colors.text}"
     width: 44px
     height: 36px
   tab-strip:
-    backgroundColor: "{colors.chrome-raised-solid}"
+    backgroundColor: "{colors.chrome-solid}"
     height: 36px
   tab:
     textColor: "{colors.text-muted}"
@@ -125,14 +120,14 @@ components:
   tab-narrowest:
     width: 96px
   tab-active:
-    backgroundColor: "{colors.chrome-solid}"
+    backgroundColor: "{colors.content-solid}"
     textColor: "{colors.text}"
   tab-close:
-    textColor: "{colors.text-muted}"
+    textColor: "{colors.text}"
     rounded: "{rounded.sm}"
     size: 24px
   tab-add:
-    textColor: "{colors.text-muted}"
+    textColor: "{colors.text}"
     width: 36px
   toolbar:
     backgroundColor: "{colors.chrome-solid}"
@@ -142,9 +137,14 @@ components:
     textColor: "{colors.text}"
     rounded: "{rounded.sm}"
     size: 32px
+  toolbar-menu-button:
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+    width: 48px
+    height: 32px
   toolbar-toggle-on:
     backgroundColor: "{colors.primary-subtle}"
-    textColor: "{colors.primary-bright}"
+    textColor: "{colors.text}"
   toolbar-button-hover:
     backgroundColor: "{colors.hover}"
   toolbar-button-disabled:
@@ -161,46 +161,59 @@ components:
     typography: "{typography.data-md}"
     rounded: "{rounded.sm}"
     height: 32px
-    padding: "{spacing.md}"
+    padding: "{spacing.sm}"
   path-bar:
     backgroundColor: "{colors.chrome-solid}"
     textColor: "{colors.text-muted}"
     typography: "{typography.data-md}"
     height: 28px
     padding: "{spacing.md}"
-  actions-button:
+  path-bar-active:
+    backgroundColor: "{colors.chrome-raised-solid}"
     textColor: "{colors.text}"
+  actions-button:
+    textColor: "{colors.text-muted}"
     typography: "{typography.body-md}"
     rounded: "{rounded.sm}"
     height: 32px
     padding: "{spacing.md}"
-  banner-error:
+  admin-bar:
     backgroundColor: "{colors.error-surface}"
     textColor: "{colors.error}"
     typography: "{typography.body-md}"
-    rounded: "{rounded.sm}"
-    height: 44px
+    height: 36px
     padding: "{spacing.md}"
+  banner-error:
+    backgroundColor: "{colors.error-surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    height: 36px
+    padding: "{spacing.md}"
+  trash-banner:
+    backgroundColor: "{colors.chrome-solid}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    padding: "{spacing.sm}"
   places-panel:
     backgroundColor: "{colors.chrome-solid}"
     width: 240px
   places-title:
-    textColor: "{colors.text}"
-    typography: "{typography.headline-sm}"
+    textColor: "{colors.text-muted}"
+    typography: "{typography.label-sm}"
     height: 36px
     padding: "{spacing.md}"
   place-row:
     textColor: "{colors.text}"
-    typography: "{typography.body-lg}"
+    typography: "{typography.body-md}"
     rounded: "{rounded.sm}"
     height: 28px
     padding: "{spacing.md}"
   place-row-current:
-    backgroundColor: "{colors.primary-subtle}"
-    textColor: "{colors.text}"
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
   section-heading:
     textColor: "{colors.text-muted}"
-    typography: "{typography.body-strong}"
+    typography: "{typography.label-sm}"
     height: 28px
   device-row:
     textColor: "{colors.text}"
@@ -212,12 +225,15 @@ components:
   usage-bar:
     backgroundColor: "{colors.secondary}"
     height: 4px
+  usage-bar-full:
+    backgroundColor: "{colors.error}"
+    height: 4px
   usage-track:
     backgroundColor: "{colors.track}"
     height: 4px
   column-heading:
     textColor: "{colors.text-muted}"
-    typography: "{typography.body-md}"
+    typography: "{typography.body-sm}"
     height: 28px
   column-heading-active:
     textColor: "{colors.text}"
@@ -257,7 +273,7 @@ components:
   compact-column:
     width: 240px
   rename-field:
-    backgroundColor: "{colors.surface-raised}"
+    backgroundColor: "{colors.content-solid}"
     textColor: "{colors.text}"
     rounded: "{rounded.sm}"
     height: 28px
@@ -267,16 +283,22 @@ components:
   entry-row-selected:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
+  entry-row-selected-hover:
+    backgroundColor: "{colors.primary-hover}"
+    textColor: "{colors.on-primary}"
   entry-data-cell:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-md}"
+  entry-type-cell:
+    textColor: "{colors.text-muted}"
+    typography: "{typography.body-sm}"
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
     typography: "{typography.body-md}"
     rounded: "{rounded.sm}"
     height: 32px
-    padding: "{spacing.lg}"
+    padding: "{spacing.md}"
   button-primary-hover:
     backgroundColor: "{colors.primary-hover}"
   button-outlined:
@@ -284,29 +306,24 @@ components:
     typography: "{typography.body-md}"
     rounded: "{rounded.sm}"
     height: 32px
-    padding: "{spacing.lg}"
+    padding: "{spacing.md}"
   button-destructive:
     backgroundColor: "{colors.error-surface}"
     textColor: "{colors.error}"
     rounded: "{rounded.sm}"
     height: 32px
   input:
-    backgroundColor: "{colors.surface-raised}"
+    backgroundColor: "{colors.content-solid}"
     textColor: "{colors.text}"
     typography: "{typography.body-md}"
     rounded: "{rounded.sm}"
-    height: 36px
-    padding: "{spacing.md}"
+    height: 32px
+    padding: "{spacing.sm}"
   note-neutral:
     textColor: "{colors.text-muted}"
     typography: "{typography.body-md}"
     rounded: "{rounded.sm}"
     padding: "{spacing.sm}"
-  checkbox:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    rounded: "{rounded.sm}"
-    size: 16px
   checkbox-row:
     textColor: "{colors.text}"
     typography: "{typography.body-md}"
@@ -324,9 +341,8 @@ components:
     typography: "{typography.body-md}"
     height: 32px
     padding: "{spacing.sm}"
-  menu-item-selected:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+  menu-item-highlighted:
+    backgroundColor: "{colors.hover}"
   menu-shortcut:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-sm}"
@@ -337,11 +353,20 @@ components:
     textColor: "{colors.text}"
     rounded: "{rounded.sm}"
     width: 640px
-    padding: "{spacing.md}"
+    padding: "{spacing.sm}"
+  palette-field:
+    backgroundColor: "{colors.content-solid}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.sm}"
+    height: 40px
   palette-result:
-    typography: "{typography.body-lg}"
+    typography: "{typography.body-md}"
     height: 52px
     padding: "{spacing.md}"
+  palette-result-selected:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
   palette-trail:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-sm}"
@@ -355,6 +380,9 @@ components:
     textColor: "{colors.text}"
     typography: "{typography.headline-sm}"
     height: 48px
+  dialog-actions:
+    backgroundColor: "{colors.chrome-solid}"
+    padding: "{spacing.md}"
   properties-thumbnail:
     width: 96px
     height: 64px
@@ -374,8 +402,39 @@ components:
     rounded: "{rounded.sm}"
     width: 640px
     padding: "{spacing.lg}"
+  compress-dialog:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+    width: 560px
+  settings-dialog:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+    width: 760px
+    height: 560px
+  settings-page-list:
+    width: 200px
+  settings-page-current:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+  setting-row:
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    height: 32px
+  setting-label:
+    width: 184px
+  setting-control:
+    height: 28px
+  setting-select:
+    width: 200px
+  key-cap:
+    textColor: "{colors.text}"
+    typography: "{typography.data-sm}"
+    rounded: "{rounded.sm}"
+    height: 20px
   activity-line:
-    backgroundColor: "{colors.chrome-solid}"
+    backgroundColor: "{colors.chrome-raised-solid}"
     textColor: "{colors.text}"
     typography: "{typography.body-md}"
     height: 44px
@@ -392,7 +451,7 @@ components:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-sm}"
   result-line:
-    backgroundColor: "{colors.chrome-solid}"
+    backgroundColor: "{colors.chrome-raised-solid}"
     textColor: "{colors.text}"
     typography: "{typography.body-md}"
     height: 44px
@@ -401,7 +460,7 @@ components:
     textColor: "{colors.tertiary}"
   result-line-problem:
     backgroundColor: "{colors.error-surface}"
-    textColor: "{colors.error}"
+    textColor: "{colors.text}"
   blur-status:
     backgroundColor: "{colors.chrome-solid}"
     textColor: "{colors.text-muted}"
@@ -412,7 +471,7 @@ components:
     backgroundColor: "{colors.chrome-solid}"
     height: 40px
   filter-field:
-    backgroundColor: "{colors.surface-raised}"
+    backgroundColor: "{colors.content-solid}"
     textColor: "{colors.text}"
     typography: "{typography.body-md}"
     rounded: "{rounded.sm}"
@@ -427,28 +486,45 @@ components:
     width: 600px
   status-selection-only-max:
     width: 440px
-  tooltip:
-    backgroundColor: "{colors.surface-raised}"
-    textColor: "{colors.text}"
-    typography: "{typography.body-md}"
-    rounded: "{rounded.sm}"
-    padding: "{spacing.sm}"
   drag-chip:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
-    typography: "{typography.body-md}"
+    typography: "{typography.body-sm}"
     rounded: "{rounded.sm}"
     height: 28px
-    padding: "{spacing.sm}"
+    padding: "{spacing.md}"
 ---
 
 # Rustphin design
 
 This is the design reference for Rustphin (D-017). The tokens in the front
-matter are authoritative and `crates/rustphin-view/src/colors.rs` and
-`metrics.rs` implement them (`crates/rustphin/src/tokens.rs` hands them to QML);
-the prose explains how to apply them. Change this document first, then the
-theme, and keep "Implementation status" true.
+matter are authoritative. `crates/rustphin-view/src/colors.rs` implements the
+colours (with the contrast tests) and `metrics.rs` the spacing, sizes and type
+scale; `crates/rustphin/src/tokens.rs` hands both to QML as the `Tokens`
+singleton (`Tokens.colors.<name>`, `Tokens.metrics.<name>`), and the screens in
+`crates/rustphin/qml/` draw with nothing else. Change this document first,
+then the tokens, and keep "Implementation status" true.
+
+Token names in code differ from the names here; the mapping is:
+
+| Here | `colors.rs` / QML | Here | `colors.rs` / QML |
+|---|---|---|---|
+| `window-*` | `window` | `primary` | `selection` |
+| `chrome-*` | `chrome` | `primary-hover` | `selection_hover` |
+| `chrome-raised-*` | `chrome_raised` | `on-primary` | `on_selection` |
+| `content-*` | `content` | `primary-subtle` | `current` |
+| `surface-raised` | `raised` | `primary-bright` | `accent` |
+| `secondary` | `activity` | `error` | `danger` |
+| `tertiary` | `success` | `error-surface` | `danger_surface` |
+| `border-strong` | `border_strong` | `error-border` | `danger_border` |
+| `border-accent` | `border_accent` | `text-disabled` | `text_disabled` |
+
+`Colors::obsidian(translucent)` picks the glass or the solid value of each
+surface; `scrim`, `border*`, `hover` and `error-border` are the same in both.
+In `metrics.rs`, `space::XS…LG` are the spacing tokens, `size::RADIUS` is
+`rounded.sm`, `text::BODY`, `NAME`, `SMALL`, `DATA`, `LABEL`, `TITLE` and
+`HEADING` are the type sizes (`text::LINE`, `HEADING_LINE`, `TITLE_LINE` the
+line heights) and the `size` constants are the component sizes below.
 
 The visual reference is the set of HTML mockups in [`mockup/`](mockup/), one
 page per screen, numbered as in
@@ -456,9 +532,9 @@ page per screen, numbered as in
 with the notes in `mockup/00-what-changed.html`. The decisions behind them are
 in [`project/DESIGN_BRIEF.md`](project/DESIGN_BRIEF.md). The original
 reference picture is [`mockup.png`](mockup.png); colours marked "measured"
-were taken from it. This version was adopted on 2026-11-08 by the W-079 design
-pass, which replaces the earlier design (neutral obsidian, 28 px rows) step by
-step; "Implementation status" says which parts the build already follows.
+were taken from it. The mockups were drawn at the W-079 density; D-026 and
+W-096 have since made the type and the rows smaller, so where a mockup and
+this document disagree on a size, this document holds.
 
 ## Overview
 
@@ -469,21 +545,21 @@ geometric, legible and calm, with nothing decorative competing with the files.
 Three ideas hold it together:
 
 - **Obsidian glass.** The window is dark navy glass over the desktop, which the
-  compositor blurs. Chrome (tabs, toolbar, places, status) is recessed glass;
-  the file list sits on a more solid pane so columns of text stay readable over
-  anything behind.
+  compositor blurs (KDE's `KWindowEffects`, asked for by the C++ shell). Chrome
+  (title bar, toolbar, tabs, places, status) is recessed glass; the file list
+  sits on a more solid pane so columns of text stay readable over anything
+  behind.
 - **Royal blue as the only energy.** One accent marks selection, focus, the
-  current place and the primary action. Cyan and emerald appear only as status
+  current place and the default action. Cyan and emerald appear only as status
   signals; salmon only for errors.
 - **Progressive disclosure.** The default window shows places, the location,
-  the files and a status line. Banners, progress, the filter and the tab strip
+  the files and a status line. Banners, progress, notices and the filter
   appear when they have something to say; every command is in the Actions
-  palette with its shortcut.
+  palette with its key.
 
-The density is comfortable rather than packed: 36-pixel rows and 15-pixel
-names at the default zoom (measured: the reference's rows are about 39 px
-apart), on a 4-pixel grid, with hairline dividers instead of boxes. Zooming
-out reaches 28-pixel rows.
+The density is compact: 32-pixel rows with 24-pixel icons and 12-pixel names
+at the default zoom, on a 4-pixel grid, with hairline dividers instead of
+boxes. Zooming out reaches 24-pixel rows.
 
 ## Colors
 
@@ -493,317 +569,283 @@ out reaches 28-pixel rows.
   `window-glass`; it is the backdrop for the others. The navy tint is measured
   from the reference (`#0D1726` list, `#11192A` places, `#1B2035` tab strip).
 - **Solid surfaces** (`window-solid`, `chrome-solid`, `chrome-raised-solid`,
-  `content-solid`) replace the glass in opaque mode: when the compositor does
-  not advertise blur, loses it, or the user turns transparency off. Every rule
-  in this document holds in both modes. When blur is unavailable (not when it
-  is switched off), a read-only status line says "Background blur unavailable;
-  using the opaque theme."
-- **Chrome raised** (`chrome-raised-*`) is the tab strip: one step lighter than
-  the toolbar, so the active tab, drawn in the toolbar's own colour, reads as
-  joined to it.
+  `content-solid`) replace the glass in opaque mode: when KWin does not offer
+  blur, or `RUSTPHIN_OPAQUE` is set to anything but `0`. The choice is made
+  once, when the `Tokens` singleton is created. Every rule in this document
+  holds in both modes.
+- **Chrome raised** (`chrome-raised-*`) is the window lines at the bottom
+  (activity and result) and the active side's path bar in split view: one
+  step lighter than the chrome, so they stand out from the status lines.
 - **Raised surface** (`surface-raised`) is for anything that floats inside the
-  window: menus, the palette, dialogs, tooltips, text fields. Always solid; the
-  toolkit cannot blur inside the window.
+  window: menus, the View menu, the palette, dialogs. Always solid; nothing is
+  blurred inside the window.
 - **Text:** `text` for names and primary content; `text-muted` for data
-  columns, inactive tabs and headings, shortcuts and the status line;
-  `text-disabled` only for disabled controls, which also lose their hover and
-  are skipped by the keyboard. `text` and `text-muted` meet 4.5:1 on every
-  surface, including glass over a white window (lowest pair: `text-muted` on
-  window glass over white, 4.92:1, checked 2026-11-08). `text-disabled` meets
-  3:1 on `surface-raised`.
+  columns, inactive tabs, headings, shortcuts and the status line;
+  `text-disabled` only for disabled controls and the toolbar's quiet hints
+  (the Actions key, menu chevrons). `text` and `text-muted` meet 4.5:1 on every
+  surface, including glass over a white window; `text-disabled` meets 3:1.
+  The tests in `colors.rs` check every pair, glass over white and opaque.
 - **Primary** (`primary`, with `on-primary` text; measured selection fill
-  `#2744B5`–`#2E4FCC`) fills the selected entry, the selected menu item and
-  palette result, checked checkboxes and the one primary button in a view.
-  `primary-hover` is its pointer-over state.
-- **Primary subtle** (`primary-subtle`, measured `#1D2E6A`) marks the current
-  place in the places panel: a location indicator, quieter than a selection.
+  `#2744B5`–`#2E4FCC`) fills the selected entries, the current place in the
+  places panel, the selected palette result, the current Settings page, the
+  chosen segment in dialogs and the place drag chip. `primary-hover` is a
+  selected entry or palette result under the pointer.
+- **Primary subtle** (`primary-subtle`, measured `#1D2E6A`) is the pressed or
+  checked state of icon buttons (toolbar toggles such as Show hidden files and
+  Filter) and the pressed state of outlined buttons.
 - **Primary bright** (`primary-bright`) is the accent line on dark surfaces:
-  selection and focus bars, focus rings, the active-tab underline, the active
-  pane's top line, the current place's bar and the rubber band. It meets 3:1
-  against every surface.
+  the focused entry's bar, focus outlines on buttons and fields, the active
+  tab's top line, the active split pane's path-bar underline, the drop target
+  outline, the rubber band and the View menu's check. It meets 3:1 against
+  every surface.
 - **Secondary** (cyan, measured `#39D2F3`) is live activity and capacity: the
-  progress bar and device usage bars, both on `track`. **Tertiary** (emerald)
-  marks a completed state. Neither is decoration.
-- **Error** text on `error-surface` with an `error-border` outline and a
-  warning icon; colour never carries the message alone. Destructive buttons use
-  the same three.
-- **Borders** are hairlines: `border` between regions, `border-strong` around
-  outlined controls (toolbar buttons, location field, Actions, Stop, secondary
-  dialog buttons), `border-accent` around floating surfaces.
-- **File-type icons** come from the system icon theme (the reference shows
-  Breeze's blue folders); they are not tokens.
+  progress bar, the activity icon and device usage bars, all on `track`. A
+  volume more than 90 % full draws its usage bar in `error`. **Tertiary**
+  (emerald) marks a completed operation. Neither is decoration.
+- **Error** text and icons on `error-surface` with an `error-border` outline
+  and a warning icon; colour never carries the message alone. Used by the
+  folder's re-read banner, a notice that reports a problem, the administrator
+  bar, the Close button's hover in the title bar and a folder that cannot be
+  opened.
+- **Borders** are hairlines: `border` between regions and as menu
+  separators; `border-strong` around outlined controls, text fields, menus,
+  the palette and dialogs, and as the window's own frame when not maximised;
+  `border-accent` is the 1 px outline of the focused entry or place when it is
+  not selected.
+- **File-type icons** come from the system icon theme (`image://theme`); they
+  are not tokens.
 
 ## Typography
 
-Three families, each with one job:
+Three families, each with one job. They are bundled
+(`crates/rustphin/fonts/`: Inter 400, 500 and 600, JetBrains Mono 400 and 500,
+Space Grotesk 600) and registered by the C++ shell at start.
 
-- **Inter** for names and interface text. `body-lg` (12 px since D-026, which
-  made the whole scale smaller after the maintainer's test run) for file names, place
-  names, menu items and palette result names; `body-md` (12 px) for tabs,
-  buttons, banners, column headings and dialog text; `body-strong` for section
-  headings in the places panel ("Devices", group names).
+- **Inter** for names and interface text. `body-lg` (12 px) for file names
+  in every view; `body-md` (12 px) for place names, tabs, menu items, buttons,
+  banners, palette result names, dialog and Settings text; `body-sm` (11 px)
+  for column headings, the type column, the trash banner's sentence, problem
+  reasons, notes in the places panel, the palette's status line and the drag
+  chip; `label-sm` (10 px, written in capitals) for short labels: the places
+  panel's "PLACES" title and its section headings, Settings group titles,
+  OWNER, GROUP and OTHERS in Properties, and SIZE in the View menu.
 - **JetBrains Mono** for data compared down a column or read character by
-  character: `data-md` for sizes, dates, the type column, the location path and
-  dialog facts; `data-sm` for the status line, shortcuts, palette trails,
-  activity figures and device figures; `label-sm` in capitals for short labels
-  (OWNER, GROUP, OTHERS; a SYMLINK tag).
-- **Space Grotesk** for the few headings, all 15 px: `headline-sm` for panel
-  and dialog titles ("Places", "Actions", "Delete for good?", the name in
-  Properties), `headline-md` for empty and error states.
-- Sizes (D-026): 12 px text and names, 11 px data, 10 px capital labels, 15 px
-  headings; 16 px lines for text and data, 14 px for labels, 20 px for
-  headings. Row and control heights are unchanged until the W-096 top-bar
-  mockup reviews the window's density.
+  character: `data-md` for sizes and dates, the location crumbs, the split
+  pane's path bar, dialog facts, Settings values and the problem list's paths;
+  `data-sm` for the status line, shortcuts in menus and the palette, palette
+  trails, activity figures, device figures and the toolbar's Actions hint.
+- **Space Grotesk** for the few headings, all 15 px semibold: `headline-sm`
+  for dialog titles ("Delete for good?", "<name> — Properties", "Compress
+  …") and Settings page titles, `headline-md` for empty and error states in
+  the pane.
+- The current crumb in the location field and the sorted column heading are
+  drawn semibold.
+- **Text size** (Settings, Appearance) multiplies every interface size by
+  11/12 (Smaller) or 14/12 (Larger) (`metrics::text::set_scale`); names and
+  data in the lists follow the zoom table below, scaled the same way.
 
-Nothing is smaller than 11 px. Dates are `YYYY-MM-DD HH:MM` in the list and
-`YYYY-MM-DD HH:MM:SS` in Properties. Sizes use one decimal and IEC units
-as today ("6.3 MiB"; the reference's "MB" reads as MiB); Properties adds the
-exact bytes with grouped digits ("6.3 MiB (6,611,968 bytes)"). Folder sizes in
-the list show "—" in
-`text-muted`.
-
-The three families are installed on the reference system and are not bundled;
-the system interface font stands in when one is missing.
+Nothing is smaller than 10 px, and only capital labels are 10 px. Dates are
+`YYYY-MM-DD HH:MM` in the list by default (Settings offers "Today 14:32") and
+`YYYY-MM-DD HH:MM:SS` in Properties. Sizes use one decimal and IEC units by
+default ("6.3 MiB"; Settings offers decimal units); Properties adds the exact
+bytes with grouped digits ("6.3 MiB (6,611,968 bytes)"). Folder sizes in the
+list show "—" in `text-muted`.
 
 ## Layout
 
 Everything sits on a 4-pixel grid; use only the `spacing` tokens.
 
-- **Window, top to bottom (W-096, mockup 35):** the title bar (36 px) when
-  the compositor leaves decorations to Rustphin; the toolbar (44 px) across
-  the whole window; the body, which is the places panel beside a column made
-  of the tab strip (36 px, always shown) over one or two panes; then the
-  window lines across the full width: activity lines (44 px each) while
-  operations run, the result line (44 px) after one ends, and the blur status
-  (32 px) when blur is unavailable. The places panel runs from under the
-  toolbar to the window lines; its title row lines up with the tab strip.
-  Hairline `border` lines separate them. Without the compositor's frame a
-  hairline `border-strong` frame marks the window's edge.
-- **Title bar:** the small logo (16 px) on the left, the window title
-  centred in `body-md` `text-muted`, then Minimise, Maximise (Restore when
-  maximised) and Close as 44 × 36 px plain buttons. Dragging it moves the
-  window, a double click maximises or restores, a right click opens the
-  compositor's window menu; 4 px bands (16 px corners) along the edges
-  resize the window.
-- **Each pane, top to bottom:** in split view, its path bar (28 px); the
-  error or trash banner when present (44 px, inset 8 px from the pane's
-  edges), the column headings and the list, the filter bar (40 px) when open,
-  and the status line. So at the bottom of the window come the panes' status
-  lines first, then the window lines.
-- **Tab strip:** tabs with a 16 px type icon, the label and a 24 px close
-  button (12 px icon); "+" after the last tab; the rest of the strip is
-  `chrome-raised`. When the tabs do not fit, they shrink evenly down to
-  96 px; past that the tabs scroll sideways, the "+" stays in view after
-  them, and the active tab is scrolled into view (W-103). Tabs narrower
-  than 128 px show the close button on the active tab only, so the names
-  keep their room; Ctrl+W and the middle button still close any tab.
-- **Toolbar:** plain 32 px icon buttons (`toolbar-button`, no outline, the
-  hover fill under the pointer), in groups separated by 20 px hairlines: Act
-  as administrator · Back, Forward, Up, Reload · the location field (fills
-  the middle) · New (Lucide `plus` and a 12 px chevron, opening the New
-  menu), Open terminal here (`square-terminal`, Shift+F4) · the View button
-  (the current mode's icon and a 12 px chevron, opening the view menu) ·
-  Split, Show hidden, Filter · "Actions ⌄"
-  with the shortcut "Ctrl+Shift+P" in `data-sm` beside it, in one outlined
-  group. Toggles that are on take `toolbar-toggle-on` and are announced as
-  pressed; their tooltips name the key. In split view the toolbar acts on
-  the active pane. The items and their order are chosen in Settings,
-  Toolbar (W-106f); the above is the default. When the window is too narrow
-  for them beside a 280 px location field (`toolbar-location-min`),
-  Actions first drops its key hint (196 → 96 px), then its words (an icon
-  button, Lucide `menu`, tooltip "Actions (Ctrl+Shift+P)"), then items leave
-  from the right end inwards; the location field and Actions always stay,
-  and a separator left alone is not drawn. What leaves remains in Actions
-  and on its key.
-- **Path bar (split view):** the side's location as clickable segments in
-  `data-md`, `text` on the active side and `text-muted` on the other, under
-  the 2 px `primary-bright` line that marks the active side.
-- **Location field:** a 16 px folder icon, then the path in `data-md` as
-  clickable segments; leading segments collapse into "…" when space runs out.
-  Trash shows as "Trash", the way Places names it, not `trash:/`; Ctrl+L
-  still edits the address as text.
-- **Places panel:** 240 px on the left (F9 hides it); a 36 px title row
-  "Places" with a 28 px ghost "New group" button on its right (Lucide
-  `list-plus`, tooltip "New group (Ctrl+Shift+G)"), so its hairline lines up
-  with the tab strip's; rows 28 px with
-  16 px icons and a 12 px inset; section headings 28 px; device rows 48 px. The panel scrolls on its own.
-- **Details view:** 28 px heading row; columns name (fills), size (96 px,
-  right-aligned), modified (168 px), type (160 px); 8 px side gutter; rows
-  32 px with 24 px icons or 24 × 16 px thumbnails. Below 820 px of pane width
-  the type column goes, below 600 px the modified column, below 360 px the
-  size column. The scrollbar's track starts below the headings.
-- **New menu (W-108):** as Dolphin's "Create New": the context menu opened
-  under the New button: Folder… (`folder-plus`, F10); a hairline; Text File…
-  (`file-text`), Empty File… (`file`), HTML File…
-  (`file-code`), then the user's templates (the files in `~/Templates`, and
+- **Window, top to bottom (W-096, mockup 35):** Rustphin's own title bar
+  (36 px; the window is frameless); the toolbar (44 px) across the whole
+  window; the administrator bar (36 px) while acting as administrator; the
+  body, which is the places panel and a 1 px divider beside a column made of
+  the tab strip (36 px, always shown) over the tab's one or two panes; then
+  the window lines across the full width: the activity line (44 px) while an
+  operation runs and the notice line (44 px) after one ends or while
+  connecting. The places panel runs from under the toolbar to the window
+  lines. When not maximised a 1 px `border-strong` frame marks the window's
+  edge. The window opens at 1000 × 700 px and cannot be made smaller than
+  480 × 320 px.
+- **Title bar:** the 16 px logo on the left, the window title ("<folder> —
+  Rustphin") centred in `body-md` `text-muted`, then Minimise (`minus`),
+  Maximise (`square`; Restore, `copy`, when maximised) and Close window (`x`,
+  hover on `error-surface`) as 44 × 36 px icon buttons. Dragging it moves the
+  window, a double click maximises or restores. 4 px bands along the edges
+  (16 px at the corners) resize the window.
+- **Each pane, top to bottom:** the re-read error banner when present; the
+  trash banner while a trash is shown; in split view its path bar (28 px); the
+  column headings (28 px, details view only) and the list; the filter bar
+  (40 px) when open; and the status line (28 px). So at the bottom of the
+  window come the panes' status lines first, then the window lines.
+- **Tab strip:** each tab a 16 px Lucide icon (the place's icon when the
+  folder is a place, `trash` for the trash, else `folder`), the title in
+  `body-md`, and a 24 px close button (12 px `x`); "+" (36 px) after the last
+  tab; the rest of the strip is `chrome`. Tabs are 160 px; when they do not
+  fit, they shrink evenly down to 96 px, then the strip scrolls and keeps the
+  active tab in view. The close button shows on the active tab and on the tab
+  under the pointer, and only on tabs at least 128 px wide; Ctrl+W and the
+  middle button still close any tab. Dragging a tab sideways moves it.
+- **Toolbar:** 32 px icon buttons (`toolbar-button`, no outline, the hover
+  fill under the pointer) with 4 px between them and 8 px at the ends, in
+  groups separated by 20 px `border` hairlines. The default, from
+  `toolbar_items::Toolbar::default`: Act as administrator (`shield-alert`) ·
+  Back, Forward, Up one folder, Reload · the location field (fills the middle,
+  at least 280 px) · New (`plus`) and Open terminal here (`square-terminal`) ·
+  View (`list`), Split view, Show hidden files, Filter by name · Actions.
+  New and View are 48 px menu buttons with a 12 px `chevron-down` in
+  `text-disabled`. Show hidden files and Filter by name are toggles: on, they
+  take `toolbar-toggle-on`. Each tooltip is the item's name and its key
+  ("Back (Alt+Left)"). In split view the toolbar acts on the active pane.
+  The items and their order are chosen in Settings, Toolbar; any palette
+  command can be added, shown by its palette icon. When the window is too
+  narrow (`Toolbar::fit`), Actions first drops its key hint (196 → 96 px),
+  then its word (an icon button, `menu`), then items leave from the right end
+  inwards; the location field and Actions always stay. What leaves remains in
+  Actions and on its key.
+- **Location field:** 32 px, `content` with a `border-strong` outline. A
+  16 px `folder` icon (`trash` in the trash), then the path as crumbs in
+  `data-md` separated by 12 px `chevron-right`; the last crumb in `text` and
+  semibold, the others `text-muted` with the hover fill. At most four crumbs
+  show (three below a 1000 px window, two below 780 px, one below 520 px),
+  fewer when they do not fit; the leading ones collapse into "…". Clicking a
+  crumb opens it; clicking beside the crumbs, Ctrl+L, Alt+D or F6 turns the
+  field into a text field with the whole location selected and a 2 px
+  `primary-bright` outline. Enter opens what was typed; Escape, leaving the
+  field, or Ctrl+L again returns to the crumbs and the list.
+- **Path bar (split view):** the side's location in `data-md`, elided in the
+  middle; the active side on `chrome-raised` in `text` with a 2 px
+  `primary-bright` line along its bottom, the other on `chrome` in
+  `text-muted`.
+- **Places panel:** 240 px on the left by default (200–360 px; the 4 px grip
+  on its right edge drags the width, also set in Settings, Places); F9 hides
+  it. A 36 px title row: "PLACES" in `label-sm` `text-muted` and a 28 px
+  "New group" icon button (`list-plus`, tooltip "New group (Ctrl+Shift+G)").
+  Place rows and section headings 28 px, place icons 16 px, a 12 px inset
+  (24 px for a place inside a group); device rows 48 px with 20 px icons. The
+  panel scrolls on its own.
+- **Details view:** 28 px heading row (Name, Size, Modified, Type); columns
+  name (fills), size (96 px, right-aligned), modified (168 px), type (160 px),
+  each data column with 8 px on both sides. Rows follow the zoom table (32 px
+  with 24 px icons by default). Below 820 px of pane width the type column
+  goes, below 600 px the modified column, below 360 px the size column;
+  Settings, Views can also turn each column off.
+- **Zoom:** seven levels (`layout.rs`) with 16, 20, 24, 28, 32, 40 and 48 px
+  icons in the details and compact views; rows are the icon plus 8 px, at
+  least 24 px (24, 28, 32, 36, 40, 48, 56). The default is the 24 px level.
+  Names are 11, 12, 12, 13, 14, 15 and 16 px; sizes, dates and types 10, 11,
+  11, 12, 12, 13 and 14 px. Column headings keep their size. The icons view
+  uses 48, 64, 96, 112, 128, 160 and 192 px icons in cells 40 px wider and
+  64 px taller than the icon, gap included (at 96 px: 128 × 152 px cells 8 px
+  apart); the name wraps under the icon, centred. The compact view fills
+  columns top to bottom, as many rows as fit the pane's height, and scrolls
+  sideways; its column pitch is 232–296 px by level (240 px columns and an
+  8 px gap at the default). Up and Down step through the entries, Left and
+  Right change columns, as in Dolphin.
+- **View menu (W-107):** the View button opens a 240 px popup on the
+  context menu's surface under the button: the three modes as 32 px rows
+  (icon, name, key: Icons `layout-grid` Ctrl+1, Compact `columns-3` Ctrl+2,
+  Details `layout-list` Ctrl+3), the current one with a `primary-bright`
+  `check`; a hairline; then a row with "SIZE" in `label-sm`, the level's icon
+  size in `data-sm` ("24 px") and two icon buttons, Smaller (`zoom-out`,
+  Ctrl+−) and Larger (`zoom-in`, Ctrl+=). Choosing a mode closes the popup;
+  the size buttons apply at once; Escape or a click elsewhere closes it.
+- **New menu (W-108):** as Dolphin's "Create New", the context menu opened
+  under the New button: Folder… (`folder-plus`); a hairline; Text File…
+  (`file-text`), Empty File… (`file`), HTML File… (`file-code`), then the
+  user's templates (the files in `XDG_TEMPLATES_DIR` or `~/Templates`, and
   KDE template entries) by name with `file`. Choosing one creates it with a
   free name ("Text File.txt", "Text File 2.txt") and opens the name for
-  editing, as New folder does. KDE's three "Link to…" entries are not
-  offered yet. **Open terminal here** opens the terminal chosen in KDE's
-  settings (Konsole when none) in the folder shown; it is unavailable in
-  the trash and while nothing is listed.
-- **Settings (W-106, D-029, mockup 36):** a dialog over the window, opened by
-  Ctrl+Shift+, and the palette's "Workspace: Settings…". 760 × 560 px at most,
-  16 px from every window edge; the dialog surface, accent outline and glow;
-  a 48 px title row (`settings`, "Settings", Close). On the left a 200 px
-  list of pages, 32 px rows with a 16 px icon and the name: General
-  (`settings`), Appearance (`palette`), Views (`layout-list`), Toolbar
-  (`sliders-horizontal`), Places (`bookmark`), Confirmations
-  (`circle-check`), Shortcuts (`keyboard`), About (`info`); the current page
-  in `primary-subtle` with the 2 px `primary-bright` bar and icon, others
-  `hover` under the pointer; Up and Down move through it. Below 720 px of
-  window width the list becomes a 36 px row of tabs above the page, the
-  current one underlined in `primary-bright`. A page: its name in
-  `headline-sm` and one sentence in `text-muted`, then groups under
-  `label-sm` capitals with a hairline; each setting a 32 px row with its
-  label in a 184 px column and the control after it (segmented controls for
-  two or three choices, 28 px high inside one `border-strong` outline, the
-  current choice in `primary-subtle` with `primary-bright` words; 28 px
-  drop-downs at least 200 px wide (128 px beside another control) on
-  `surface-raised`, their list in the
-  context menu's surface with the current choice ticked; 28 px outlined
-  buttons; hints in `body-sm` `text-muted`; checkboxes, and sliders with
-  their value in `data-sm`). Every control is a button underneath: Tab
-  reaches it, Space or Enter uses it, a drop-down's list takes the arrows;
-  Page Up and Page Down scroll the page. The page scrolls on its own. The
-  action row: "Reset to defaults" (outlined, `rotate-ccw`) on the left for
-  the page shown, where it has settings; "Close (Esc)" primary on the right.
-  Changes apply at once. **About:** the 64 px logo, "Rustphin" in
-  `headline-md`, the version in `data-sm`, one line on what it is; the
-  licence (GPL-3.0-or-later) with "Show the licence", which shows the full
-  text in the page with "Back"; credits; "No telemetry. Rustphin never uses
-  the network." with `circle-check`; where the settings file is, with "Open
-  the settings folder", which opens it in a new tab. **General:** "Starting"
-  holds When Rustphin starts (drop-down: Restore the last tabs, Open the
-  home folder, Open a chosen folder; the chosen folder shows below in
-  `data-sm` with "Use the folder shown") and Folders opened by other
-  applications (In a new tab, In a new window). "Desktop" holds Default
-  file manager (the success line when Rustphin is the default, else who is
-  and "Make Rustphin the default"), Terminal (KDE's terminal by name with
-  "from KDE's settings", or the command chosen here with a field and "Use
-  KDE's"; "Use another…" opens the field, up to 360 px wide) and Open files and folders with
-  (A double click, A single click; "As KDE is set" until one is chosen).
-  **Appearance:** "Window" holds Look (Glass, Opaque; "Blur shows only
-  where the desktop offers it.") and Title bar (Rustphin's own, KDE's;
-  "Applies to new windows."); "Text and files" holds Text size (Smaller,
-  Normal, Larger: the interface's text one step down or up, 11 or 14 px
-  body text; file names follow the View size) and "Hidden files are drawn
-  at" (a slider from 60 % to 100 % in 5 % steps, 60 % by default, with the
-  value in `data-sm`; fainter, a hidden name under the pointer falls below
-  WCAG AA in the glass theme over a white window, so 60 % is the floor).
-  **Shortcuts:** "The keys Rustphin understands. Changing them comes
-  later." A search field, then a group per palette category (Navigation,
-  Files, View, …) of 28 px rows: the action's name, and its keys on the
-  right, each a 20 px key cap in `data-sm` on `content` inside a
-  `border-strong` outline, 4 px apart; a hairline under each row. Only
-  actions with a key are listed; a search with no match says "No shortcut
-  matches. Try another word." Read-only: no Reset to defaults.
-  **Places:** "Sections" holds Show (Devices, Remote checkboxes) and Hidden
-  places (Keep them hidden, Show them faded); "Groups" lists each group
-  with its name, "N places" in `body-sm` `text-muted`, and 28 px icon
-  buttons with tooltips: Move up, Move down, Rename (the name becomes a
-  field, Enter keeps it), Delete; "Deleting a group keeps its places."
-  below, or "No groups yet. Make one with New group in the places panel."
-  when there are none; "Panel" holds Width (a slider from 200 to 360 px in
-  4 px steps, the value in `data-sm`, "or drag the panel's edge"). The
-  panel's right edge is a 4 px grip with the resize pointer that sets the
-  same width. Reset to defaults leaves the groups as they are.
-  **Toolbar:** a preview of the chosen items (their icons and separators)
-  above two lists side by side, each 32 px rows in a `border` outline:
-  "Available actions" (a search field, then the built-in buttons, a
-  Separator, then every palette command with its palette icon) and "On the
-  toolbar" (in order; the location field and Actions marked "always
-  there"). Between them 28 px icon buttons with tooltips: Add (→), Remove
-  (←); under the second list Move left, Move right and "Show its words"
-  (a checkbox for the chosen item). Double-click adds or removes. The
-  current row of each list in `selection` with the bar.
-  **Confirmations:** "Ask before" holds checkboxes for Moving to the trash
-  (off by default), Deleting for good (ticked and unavailable, "Always
-  asked: it cannot be undone."), Emptying the trash (on) and Closing a
-  window with several tabs (off); "Executable files" holds Opening one
-  (drop-down: Ask each time, Open it, Run it; a shortcut still asks unless
-  Run it). The questions they bring: "Move to the trash?" (the delete
-  question's list, "Move to trash (Enter)" primary) and "Close the window?"
-  ("Close N tabs (Enter)" primary).
-  **Views:** "Default view" holds View (Icons, Compact, Details), Size (the
-  View menu's slider, 200 px, with the icon size in `data-sm`) and "Remember
-  the view for each folder"; "Order" holds Sort by (drop-down) with A to Z
-  or Z to A, then Folders first and Show hidden files; "Details view" holds
-  the Size, Modified and Type columns, Dates (a drop-down showing now in each
-  style: `2026-11-12 14:32` or `Today 14:32`) and Sizes (Binary (KiB, MiB),
-  Decimal (kB, MB)); "Previews" holds "Show pictures' thumbnails" and the
-  largest picture previewed (up to 5, 10, 50 or 100 MB a file). Changing
-  the default view changes every open pane at once, except a folder with a
-  view of its own.
-  Before the first change
-  there is no file: the path adds "(made when you first change a setting)"
-  and the button is unavailable.
-- **Compress and extract (W-111, D-032, mockup 37):** the context menu
-  gains `archive-restore` Extract › for archives (`package-open` Extract here,
-  `folder-archive` Extract into "name/", `archive-x` Extract and trash
-  archive, `folder-input` Extract to…) and `archive` Compress › for anything else
-  (`file-archive` Compress to "name.zip" and "name.tar.gz", each the exact
-  name it will make, `archive` Compress to…), just before Properties; neither
-  in the trash nor as administrator. Compress to… is a 560 px dialog with the
-  usual title row (`archive`, "Compress "name"" or "Compress N items"): rows
-  with a 96 px `text-muted` label for Name (a 32 px field holding the
-  keyboard), Format (ZIP, TAR.GZ, TAR.XZ, TAR.ZST, 7Z) and Compression (Fast,
-  Normal, Smallest) as 32 px segmented rows like batch rename's, the chosen
-  one in `primary`; then a `body-sm` note saying what will be made and where,
-  with the format's one-line hint, or in `danger` why it cannot be (a taken
-  name, an empty one); Cancel (Esc) and Compress (Enter), which is disabled
-  while the note is an error. A password question uses the operation
-  question's layout with `lock-keyhole`, a masked field focused at once, and
-  "Extract (Enter)".
-- **View menu (W-107):** the View button opens a 240 px panel with the
-  context menu's surface, under the button's right edge: the three modes as
-  rows (icon, name, key: Icons Ctrl+1, Compact Ctrl+2, Details Ctrl+3), the
-  current one in `primary-subtle` with the 2 px `primary-bright` bar and a
-  check; a hairline; then "Size" in `label-sm` capitals with the level's
-  icon size in `data-sm` ("24 px"), and a row of a 28 px "−" button, a
-  slider over the seven levels (filled in `primary-bright`, its thumb in
-  `text`) and a 28 px "+" button (Ctrl+− and Ctrl+=;
-  Ctrl+0 resets). Choosing a mode or a size applies at once; Escape or a
-  click elsewhere closes the panel.
-- **Zoom:** seven levels with 16, 20, 24, 28, 32, 40 and 48 px icons; rows are
-  the icon plus 8 px, at least 24 px (24, 28, 32, 36, 40, 48, 56; W-096d,
-  W-107). The default is the 24 px level. In the details and compact views
-  the text grows with the rows: names 11, 12, 12, 13, 14, 15 and 16 px on
-  16, 16, 16, 18, 18, 20 and 20 px lines; sizes, dates and types 10, 11, 11,
-  12, 12, 13 and 14 px (the default level keeps the 12 and 11 px of the
-  type scale). Column headings keep their size. Icons view uses 48, 64, 96,
-  112, 128, 160 and 192 px icons; at the
-  96 px level a cell is 128 × 152 px with 8 px gaps (cells scale with the
-  level), the name wraps to two lines, centred. Compact view fills 240 px
-  columns, 8 px apart, top to bottom, with 32 px rows; as many rows as fit
-  the pane's height, and the view scrolls sideways (the wheel too). Up and
-  Down step through the entries, Left and Right change columns, Page Up and
-  Page Down go to the ends of the column, as in Dolphin.
-- **Split view:** two equal panes with a 1 px divider; each applies the column
-  rules to its own width.
-- **Status line:** left zone: "1 item selected (6.3 MiB)", a `border` divider,
-  "12 items (150.4 MiB)", hidden counts and filter matches as today; right zone:
-  "Free: 1.8 TiB of 3.6 TiB (Data)" for the volume holding the folder. By pane
-  width: below 600 px the right zone leaves; below 440 px, while entries are
-  selected, the left zone shows only the selection.
-- **Dialogs:** centred, at least 16 px from every window edge; title row
-  48 px; body scrolls; action row right-aligned, wrapping when needed. A
-  question with four buttons (the name conflict) wraps its primary button onto
-  a second row at 480 px rather than growing wider.
+  editing, as New folder does. KDE's "Link to…" entries are not offered.
+  **Open terminal here** opens the terminal chosen in Settings (KDE's when
+  none) in the folder shown.
+- **Split view:** two equal panes with a 1 px `border` divider; each applies
+  the column rules to its own width.
+- **Status line:** on `chrome` under a hairline, in `data-sm`: the selection
+  ("1 item selected (6.3 MiB)") in `text`, the folder's totals ("12 items
+  (150.4 MiB)", hidden counts and filter matches) in `text-muted` (a folder
+  notice replaces them in `error`), and on the right the free space ("Free:
+  1.8 TiB of 3.6 TiB (Data)") for the volume holding the folder. Below 600 px
+  of pane width the free space leaves; below 440 px, while entries are
+  selected, only the selection shows.
+- **Dialogs:** centred over the scrim, at most the window's width less 16 px
+  on each side; a 48 px title row; the body scrolls; the action row on
+  `chrome`, right-aligned. Widths: 480 px (questions, Properties, the
+  problems list), 560 px (Compress to…), 640 px (batch rename), 760 × 560 px
+  at most (Settings). A question with many buttons grows to fit them.
+- **Settings (W-106, D-029, mockup 36):** a dialog opened by Ctrl+Shift+, and
+  the palette's "Workspace: Settings…". A title row (`settings`, "Settings",
+  a Close icon button, "Close (Esc)"). On the left a 200 px list of pages,
+  32 px rows with a 16 px icon and the name: General (`settings`), Appearance
+  (`palette`), Views (`layout-grid`), Toolbar (`panel-top`), Places
+  (`panel-left`), Confirmations (`circle-check`), Shortcuts (`keyboard`),
+  About (`info`); the current page in `primary` with `on-primary` text,
+  others `hover` under the pointer; Up and Down move through it. A page: its
+  name in `headline-sm` and one sentence in `text-muted`, then groups under
+  `label-sm` capitals; each setting a 32 px row with its label in a 184 px
+  column and the control after it: a drop-down (`ComboBox`, at least 216 px)
+  for every choice, a checkbox for an on/off setting (with its words beside
+  it), a stepper (28 px `minus` and `plus` icon buttons around the value in
+  `data-md`) for numbers, a text field, or an outlined button; a hint under a
+  row in `text-muted`. The page scrolls on its own. Pages with settings end
+  with a `chrome` row: "Changes apply at once." and "Reset to defaults"
+  (outlined, `rotate-ccw`) for the page shown. Changes apply at once.
+  - **General:** "Starting" (When Rustphin starts: Restore the last tabs,
+    Open the home folder, Open a chosen folder, with the chosen folder and
+    "Use the folder shown"; Folders opened by other applications: In a new
+    tab, In a new window); "Desktop" (Default file manager: the state and
+    "Make Rustphin the default"; Terminal: KDE's, or a command with "Use
+    KDE's" and "Use another…"; Open files and folders with: a single or a
+    double click, "As KDE is set" until chosen); "Background" (Keep Rustphin
+    running after its last window closes; Also start it when you log in, with
+    the memory Rustphin uses now).
+  - **Appearance:** "Window" (Look: Glass, Opaque, "Blur shows only where the
+    desktop offers it."; Title bar: Rustphin's own, KDE's, "Applies to new
+    windows."); "Text and files" (Text size: Smaller, Normal, Larger; Hidden
+    files are drawn at: a stepper from 60 % to 100 %).
+  - **Views:** "Default view" (View; Size, a stepper showing the icon size;
+    Each folder, to remember a view per folder); "Order" (Sort by, Direction A
+    to Z or Z to A, Folders first, Show hidden files); "Details view" (the
+    Size, Modified and Type columns; Dates; Sizes: Binary or Decimal);
+    "Previews" (Show pictures' thumbnails; Largest picture previewed).
+  - **Toolbar:** the toolbar's items ("On the toolbar", the location field and
+    Actions marked "always there") and the items that can be added
+    ("Available actions", with a search field: the built-in buttons, a
+    separator and every palette command); icon buttons to add, take off,
+    move left and move right, and "Show its words" for the chosen item.
+  - **Places:** "Sections" (Show Devices, Remote; Hidden places: Keep them
+    hidden, Show them faded); "Groups" lists each group with its name as a
+    field, "N places" and icon buttons Move up, Move down and Delete
+    ("Deleting a group keeps its places.", or "No groups yet. Make one with
+    New group in the places panel."); "Panel" (Width, a stepper from 200 to
+    360 px, "or drag the panel's edge").
+  - **Confirmations:** "Ask before" (Moving to the trash, off; Deleting for
+    good, always on and unavailable; Emptying the trash, on; Closing a window
+    with several tabs, off); "Executable files" (Opening one: Ask each time,
+    Open it, Run it).
+  - **Shortcuts:** "The keys Rustphin understands. Changing them comes
+    later." A search field, then a group per command category of rows: the
+    command's name and its keys as 20 px key caps in `data-sm`. Only commands
+    with a key are listed; no match says "No shortcut matches. Try another
+    word."
+  - **About:** the 64 px logo, "Rustphin", "Version N", one line on what it
+    is; the licence and credits with "Show the licence" (the full text, with
+    "Back"); "No telemetry. Rustphin never uses the network."; where the
+    settings file is, with "Open the settings folder".
 
 ## Elevation & Depth
 
-Depth comes from stacked planes and edge light, not soft shadows.
+Depth comes from stacked planes and edge lines, not soft shadows.
 
 - **Level 0, the desktop:** whatever is behind the window, blurred by the
-  compositor.
+  compositor in glass mode.
 - **Level 1, window glass and chrome:** `window-glass` with `chrome-glass`
-  (toolbar, places, status, activity) and `chrome-raised-glass` (tab strip).
-- **Level 2, content pane:** `content-glass` under the file views and the
-  location field.
-- **Level 3, floating surfaces:** `surface-raised`, solid, outlined with a 1 px
-  `border-accent` line and a tight glow (`0 0 16px -2px` of `primary` at about
-  35%). Modal dialogs and the palette dim the window with `scrim`.
+  (title bar, toolbar, tab strip, places, headings, status, filter bar) and
+  `chrome-raised-glass` (the window lines, the active path bar).
+- **Level 2, content pane:** `content-glass` under the file views, the
+  location field, the active tab and text fields.
+- **Level 3, floating surfaces:** `surface-raised`, solid, outlined with a
+  1 px `border-strong` line. Modal dialogs and the palette dim the window with
+  `scrim`; menus and the View menu do not.
 
 Blur exists only between level 0 and the window. In opaque mode every glass
 token becomes its solid counterpart and levels are told apart by their
@@ -811,359 +853,331 @@ borders and tones alone.
 
 ## Shapes
 
-One radius: `rounded.sm`, 2 pixels, on rows, cells, buttons, fields, banners,
-menus, dialogs, checkboxes, progress bars and the rubber band. The reference's
-corners read as 3–4 px at its scale; the 2 px decision (the maintainer, 2026-10-12)
-stands unless he changes it. There are no pills and no circles.
+One radius: `rounded.sm`, 2 pixels (`size::RADIUS`), on rows, cells, buttons,
+fields, menus, dialogs, progress and usage bars and the drag chip. The
+reference's corners read as 3–4 px at its scale; the 2 px decision (the
+maintainer, 2026-10-12) stands. There are no pills and no circles.
 
 ## Components
 
-- **Tabs:** inactive tabs `text-muted` on the strip; the hovered tab takes
-  `hover`; the active tab takes the toolbar's surface, `text`, and a 2 px
-  `primary-bright` underline. Each tab has a close button (tooltip "Close tab
-  (Ctrl+W)"). Tabs can be dragged to reorder. The strip is shown with one tab too (W-096).
-- **Toolbar buttons:** plain 32 px buttons with 16 px Lucide icons
-  (shield, arrow-left, arrow-right, arrow-up, refresh-cw, folder-plus,
-  layout-grid, columns-3, list, square-split-horizontal, eye, funnel); hover
-  fills `hover`; unavailable buttons use `text-disabled`. Each has a tooltip
-  with its label and key.
-- **Location field:** outlined; hover shows `hover`; clicking a segment opens
-  it; clicking empty space or Ctrl+L turns it into a text field with the whole
-  path selected and a `primary-bright` ring; Ctrl+L again or Escape returns to
-  segments.
-- **Actions button:** "Actions", a chevron, and the shortcut in `data-sm`
-  `text-muted`; opens the palette.
-- **Error banner:** under the toolbar, inset 8 px: a warning icon, the sentence
-  ("Couldn't copy “IMG_4821.jpg”: Permission denied."), an outlined
-  "Details…" button in the error colours, and a close button. The list stays as
-  it was. Details opens the error details dialog.
-- **Trash banner:** under the toolbar on chrome: the trash icon and name, a
-  wrapping sentence on how long items stay, and an outlined "Trash actions"
-  button opening a menu: Restore (disabled without a selection), "Empty
-  trash…", then other volumes' trash after a separator.
-- **Places panel:** the title "Places" in `headline-sm`. Place rows: 20 px icon
-  and `body-lg` name; hover fills `hover`; the current place has
-  `primary-subtle`, a 2 px `primary-bright` bar on its left edge and a
-  `primary-bright` icon. Section headings ("Devices", group names) in
-  `body-strong` `text-muted` with a chevron that points down when open and right
-  when folded; a folded section shows its count ("Network (2)"). Places in a
-  group are indented one step. A group heading can be dragged: dropped on
-  another heading, or on a place in that group, it takes that group's place
-  (W-105); while dragged its name follows the pointer as a chip in the
-  selection colours and the heading under it takes the `hover` fill. Hidden
-  places, when listed, are at half opacity.
-  Network bookmarks use the `server` icon.
-- **Places menu (W-102):** a right-click in the panel opens a menu with the
-  context menu's look and keys. On a place: Open (Enter), Open in new tab;
-  "Move to group ›" (each group, the place's own disabled, then "New group…"
-  and, for a grouped place, "Out of groups"), Move up (Alt+Up), Move down
-  (Alt+Down); Rename (F2), Hide or Show (H), Remove from places (Del; not for
-  KDE's own places). On a group heading: Collapse or Expand (Left/Right); Move
-  up, Move down; Rename group (F2), Delete group (Del; its places stay). On
-  empty space or the title: New group (Ctrl+Shift+G), Add to places (the
-  folder shown, Ctrl+Shift+D); Show or Hide hidden places. Volumes have no menu.
-- **Device rows:** 48 px: a drive icon, the name and mount point ("Data
-  (/data)") in `body-md`, a 4 px usage bar (`secondary` on `track`), and
-  "1.8 of 3.6 TiB free" in `data-sm` `text-muted`; when the two units differ
-  both are written ("512.0 MiB of 1.2 GiB free"), since the longer sentence
-  does not fit the 240 px panel. Removable volumes have an outlined 28 px eject
-  button (Lucide `arrow-up-from-line`, tooltip "Safely remove"); unmounted
-  volumes are
-  `text-muted`. If devices cannot be listed, the section keeps its heading and
-  shows a sentence saying so and what to do.
-- **Column headings:** `text-muted`; the sorted column uses `text` and an arrow
-  (↑ ascending, ↓ descending), so direction is never colour alone. Clicking a
-  heading sorts; clicking again reverses.
-- **Entries (rows and cells):** icon or thumbnail, then the name in `body-lg`.
-  Hover fills `hover`. Selected: `primary` fill, `on-primary` text, and a 2 px
-  `primary-bright` bar on the left edge. Focused but unselected: the bar only.
-  Cut entries: half opacity. Symbolic links: italic name, the target's icon and
-  type. Data cells in `data-md` `text-muted`; sizes right-aligned; folders show
-  "—".
-- **Thumbnails:** a picture's content replaces its icon at 24 px and above,
-  fitted in the icon's square without cropping: a 3:2 picture is 24 × 16 px in
-  a row and 96 × 64 px in an icon cell and in Properties. Until ready, or if it cannot be
-  made, the type icon stays; nothing flashes.
-- **Context menu:** 240 px, 4 px inner padding. Items 32 px: a 16 px Lucide
-  icon, the label in `body-md`, the shortcut right-aligned in `data-sm`
-  `text-muted`: Open (Enter), Open with ›; Cut (Ctrl+X), Copy (Ctrl+C), Paste
-  (Ctrl+V), Copy location (Ctrl+Alt+C), Duplicate here (Ctrl+D); Rename (F2),
-  Move to trash (Del), Delete… (Shift+Del); Properties (Alt+Enter). The item
-  under the pointer or keyboard takes the selection look: the `primary` fill
-  and the 2 px `primary-bright` bar. Disabled items use `text-disabled` and are
-  skipped. Separators are `border` hairlines with 4 px above and below. A row opening a second menu has an icon like any other: `app-window` "Open with ›", which opens a second menu of applications with their icons.
-- **Actions palette:** 640 px, near the top of the window, over the scrim. A
-  title row with "Actions" in `headline-sm` and "Ctrl+Shift+P" in `data-sm`. A
-  search field with a search icon and the placeholder "Search actions, places,
-  tabs and recent folders…", ringed in `primary-bright` while focused. Results
-  52 px: a 20 px icon, the name in `body-lg`, a trail in `data-sm` ("View ›
-  Show hidden files"), the shortcut right-aligned. At most seven results show;
-  the list scrolls. The selected result takes the selection look, fill and
-  bar. Empty: "No
-  matches. Try another action name or folder path."
-- **Dialogs:** 480 px wide (batch rename 640 px), `surface-raised`, accent
-  outline and glow, over the scrim. A 48 px title row with an icon, the title in
-  `headline-sm` and a close button; the body scrolls between title and actions;
-  the action row is right-aligned and wraps. The safe default is the
+- **Tabs:** inactive tabs `text-muted` on the strip, with the hover fill
+  under the pointer; the active tab on `content` in `text`, with a 2 px
+  `primary-bright` line along its top. A hairline after each tab. Close
+  tooltip "Close tab (Ctrl+W)", "+" tooltip "New tab (Ctrl+T)".
+- **Icon buttons** (`IconButton.qml`): a 16 px Lucide icon in `text`
+  (`text-disabled` when unavailable) on a 32 px square by default; `hover`
+  under the pointer, `primary-subtle` while pressed or checked, a 2 px
+  `primary-bright` outline on keyboard focus. Every one has a tooltip.
+- **Outlined buttons** (`OutlinedButton.qml`): 32 px, 12 px side padding,
+  `body-md` in `text`, a 1 px `border-strong` outline; `hover` under the
+  pointer, `primary-subtle` while pressed. An optional 16 px icon goes 8 px
+  before the words, the same icon the action has in menus and the toolbar
+  (W-097): Rename `pencil`, Undo `undo-2`, Back `arrow-left`, Up `arrow-up`,
+  Home folder `house`, Show hidden `eye`, Clear filter `funnel-x`, Stop
+  acting as administrator `shield-off`, Reset to defaults `rotate-ccw`,
+  Compress `file-archive`. Cancel, Close and Stop stay words only.
+- **Default and destructive buttons:** a dialog's safe default is
   `button-primary`; a destructive default uses `button-destructive`; the
-  others are `button-outlined`. Every button shows its key ("Close (Esc)",
-  "Apply (Enter)"). A disabled primary button keeps its fill at half opacity
-  with `text-disabled` text. A button whose action has a clear picture leads
-  with a 16 px Lucide icon 8 px before its words, the same icon the action
-  has in menus and the toolbar (W-097): Rename `pencil`, Apply `check`, Open
-  `square-arrow-out-up-right`, Run `play`, Skip `skip-forward`, Replace
-  `replace`, Merge `merge`, Keep both `copy-plus`, Try again `rotate-cw`,
-  Copy here and Copy list `copy`, Move here `folder-input`, Delete for good
-  `circle-x`, Empty the trash `trash`, Undo `undo-2`, Back `arrow-left`, Up
-  `arrow-up`, Show hidden `eye`, Clear filter `funnel-x`, Stop acting as
-  administrator `shield-off`. Cancel, Close and Stop stay words only: their
-  picture would be the close cross, which already means closing the dialog.
-- **Properties:** title row "<name> — Properties". Header: a 96 × 64 thumbnail
-  (or the 48 px type icon), the name in `headline-sm` and the type in
-  `data-md`. Facts as label (`text-muted`, 128 px column) and value
-  (`data-md`): Location, Size (with exact bytes), Modified, Accessed, Created
-  when known. A folder's size reads "Calculating size…" until known. A
-  hairline, then "Permissions" with the mode in words and octal
-  ("rw-r--r-- (0644)"), then three columns in `label-sm` naming the owner and
-  group ("OWNER · alex", "GROUP · alex", "OTHERS"), each with Read, Write and
-  Execute checkboxes, separated by hairlines. While a folder's size is being
-  calculated the line reads "Calculating… 1,204 items so far". Apply stays
-  disabled until a box changes.
-- **Batch rename:** three labelled modes (Replace, Pattern, Case) as a
-  segmented row, the chosen one in `primary`; the rule fields; the preview as
-  two `data-md` columns, old and new name, with an arrow between them, in the
-  same scrolling body; new names that cannot be used are in `error`. A problem
-  is a sentence in the error colours with an alert icon above the preview.
-  "Nothing would change" is not a problem but a neutral note (`note-neutral`:
-  `text-muted`, an info icon, a `border` outline). Rename stays disabled while
-  there is a problem or nothing would change.
-- **Question dialogs** (name conflict, failed entry, move or copy, run, empty
-  trash, delete for good): the title states the question or the fact
-  ("“IMG_4821.jpg” already exists", "Couldn't copy “IMG_4821.jpg”", "Run this
-  file?"); the full sentence and facts (`data-md`, labels in a 72 px
-  `text-muted` column) scroll in the body. The name conflict lists the existing
-  and incoming entries and a "Keep both" fact with the name the copy would get;
-  its buttons are Stop, Skip, Replace and Keep both. "Run this file?" makes
-  Cancel the default (Enter), as Dolphin focuses Cancel; Run has its own key.
-  Cancel buttons say "Cancel" (W-093; they read "Keep" before).
-- **Error details dialog:** title says what the operation was; a summary
-  sentence; one row per failed entry with the name (`body-md`), its folder
-  (`data-sm` `text-muted`) and the reason in words; "Copy list" (outlined) and
-  "Close (Esc)" (primary).
-- **Checkboxes:** 16 px, `border-strong` outline; checked: `primary` fill with
-  an `on-primary` check; focus: `primary-bright` ring; the label is clickable.
-- **Focus ring:** buttons and checkboxes show keyboard focus with a 2 px
-  `primary-bright` ring outside a 1–2 px gap in `surface-raised`; fields show
-  a 1 px `primary-bright` ring around their `primary-bright` outline.
-- **Activity line:** an operation icon (Lucide `copy` while copying, `move`
-  while moving, `loader` while connecting or loading), the sentence ("Copying 12 items to
-  “/data/Backup/Pictures”…") in `body-md`, a flexible 6 px progress bar
-  (`secondary` on `track`), the figures as today ("6 of 12 · 742.0 MiB of 1.2 GiB ·
-  48.6 MiB/s")
-  in `data-sm` `text-muted`, and an outlined "Stop". It appears after 300 ms.
-- **Result line:** 44 px after an operation ends: an emerald `circle-check`,
-  the sentence ("Copied 12 items to “Pictures”."), an outlined "Undo Ctrl+Z"
-  when it can be undone, and a dismiss button (tooltip "Dismiss"). It leaves
-  after 6 seconds, unless it reports a problem: then it uses the error colours
-  and an alert icon and stays until dismissed.
-- **Blur status:** a 32 px chrome line with an info icon and "Background blur
-  unavailable; using the opaque theme." in `text-muted`.
-- **Filter bar:** a 16 px filter icon, a 32 px field labelled "Filter by name"
-  (so its 2 px ring fits the 40 px bar), and a close button (tooltip "Close
-  the filter (Esc)").
-- **Status line:** two zones as in Layout, in `data-sm` `text-muted`.
-- **Empty and loading states:** a 32 px icon, a `headline-md` line saying what
-  is the case, a `text-muted` line saying why, and at most one action. Centred
-  when it fits; otherwise a bounded scroller with a 16 px gutter.
-- **Rename field:** 28 px inside the 32 px row with 2 px padding,
-  `surface-raised` with `text` in place of the name, the stem selected, ringed
-  in `primary-bright`. Dialog inputs stay 36 px.
-- **Tooltips:** `surface-raised`, `body-md`, the label then the key in
-  `data-sm` `text-muted`, after 500 ms of hover or on keyboard focus.
-- **Dragging:** a `drag-chip` with the first entry's thumbnail or type icon,
-  then its name or the count ("3 items"); no copy or move icon, because the
-  drop asks "Move or copy?" unless Shift or Ctrl is held. A folder under the
-  pointer takes `hover`.
-- **Rubber band:** a 1 px `primary-bright` outline with a `hover` fill.
-- **Split panes:** the pane taking keyboard input has a 2 px `primary-bright`
-  line along its top, drawn only while split.
-- **Scrollbars:** 8 px, 2 px in from the edge, `text-muted` thumb at half
-  opacity on a transparent track; `primary-bright` while hovered or dragged.
-  In details view the track starts below the column headings.
-- **Interface icons:** Lucide outlines from the toolkit's bundled set. Fixed
-  names for the less obvious ones: `menu` (Actions as an icon),
-  `arrow-up-from-line` (eject; Lucide has no eject glyph), `copy` (copying),
-  `loader` (connecting, loading), `circle-check` (done), `triangle-alert`
-  (problems), `info` (neutral notes).
+  others are outlined. Every dialog button shows its key ("Close (Esc)",
+  "Apply (Enter)", "Skip (S)"). A disabled default keeps its fill at half
+  opacity with `text-disabled` words. (The build fills them differently; see
+  "Implementation status".)
+- **Actions button:** an outlined button: "Actions" in `text-muted` and the
+  key "Ctrl+Shift+P" in `data-sm` `text-disabled`; opens the palette. Tooltip
+  "Actions (Ctrl+Shift+P)".
+- **Administrator bar:** while acting as administrator, 36 px across the
+  window on `error-surface` with an `error-border` outline: `shield-alert`,
+  "Acting as administrator. Changes you make here can affect the whole
+  system; be careful." in `error`, and an outlined 28 px "Stop acting as
+  administrator". The toolbar's shield turns `error` and its tooltip says how
+  to stop; without KDE's kio-admin it is unavailable and says so.
+- **Re-read banner:** a shown folder that fails to re-read keeps its listing
+  under a banner across the pane: `error-surface`, `error-border` outline, a
+  `triangle-alert` icon in `error` and the sentence in `text`, wrapping.
+- **Trash banner:** on `chrome` while a trash is shown: `trash`, the trash's
+  name, an outlined "Trash actions" button (tooltip "Restore, empty or browse
+  another trash; also available in Actions") opening a menu: Restore
+  (unavailable without a selection), "Empty trash…", then other volumes'
+  trashes after a separator; under them "Items stay here until the trash is
+  emptied." in `body-sm` `text-muted`.
+- **Places panel:** place rows with a 16 px icon in `text-muted` and the name
+  in `body-md` `text`; hover fills `hover`; the current place (the folder the
+  active pane shows) is filled `primary` with `on-primary` icon and name; the
+  focused row has a 1 px `border-accent` outline while the panel has the
+  keyboard. Section headings (groups, "Devices", "Remote") in `label-sm`
+  capitals `text-muted` after a 12 px chevron that points down when open and
+  right when folded; a folded heading shows its count ("PHOTOS (3)", "DEVICES
+  (2)", W-127). Places in a group are indented one step. Hidden places, when
+  listed, are drawn at 60 % opacity. Network bookmarks use `server`.
+  Rows can be dragged (the name follows the pointer as a `drag-chip`) to
+  reorder or regroup them; folders dropped from the list or another
+  application become places. With no places: "No places yet. Add the folder
+  shown with Ctrl+Shift+D, or drag a folder here." If devices cannot be
+  listed, a note under the panel says so.
+- **Places menu (W-102):** a right-click, the Menu key or Shift+F10 in the
+  panel opens a menu with the context menu's look. On a place: Open
+  (`square-arrow-out-up-right`), Open in new tab (`square-plus`); "Move to
+  group ›" (`folder-input`: each group, the place's own unavailable, then
+  "New group…" and, for a grouped place, "Out of groups"), Move up, Move down;
+  Rename (F2), Hide or Show (H), Remove from places (Delete; not offered for
+  KDE's built-in places). On a group heading: Collapse or Expand; Move up,
+  Move down; Rename group (F2), Delete group (Delete; its places stay). On
+  empty space: New group (Ctrl+Shift+G), Add to places (the folder shown);
+  Show or Hide hidden places. Volumes have no menu.
+- **Device rows:** 48 px: a 20 px `hard-drive` or `usb` icon, the name, the
+  figures ("1.8 of 3.6 TiB free", "Not mounted", "Working…" while mounting or
+  ejecting) in `data-sm` `text-muted`, and a 4 px usage bar (`secondary` on
+  `track`, `error` past 90 %). Removable volumes (never the one holding the
+  home folder) have a 28 px eject icon button (`arrow-up-from-line`, tooltip
+  "Unmount or remove safely (E)"). Clicking an unmounted volume mounts and
+  opens it.
+- **Column headings:** `body-sm` `text-muted`, `hover` under the pointer; the
+  sorted column in `text`, semibold, with a 12 px `arrow-up` or `arrow-down`,
+  so direction is never colour alone. Clicking a heading sorts; clicking
+  again reverses.
+- **Entries (rows and cells):** icon or thumbnail, then the name in
+  `body-lg`. Hover fills `hover`. Selected: `primary` fill (`primary-hover`
+  under the pointer) with `on-primary` text and data; the focused selected
+  entry also has a 2 px `primary-bright` bar 4 px in from its left edge.
+  Focused but unselected: a 1 px `border-accent` outline while the pane has
+  the keyboard. Hidden entries are drawn at the opacity Settings chooses
+  (60 % by default) unless selected; cut entries at half opacity. Symbolic
+  links: italic name and a 12 px `link` badge in the icon's corner. Data cells
+  in `text-muted`; sizes right-aligned; folders show "—".
+- **Thumbnails:** a picture's content replaces its icon, fitted in the icon's
+  square without cropping (a 3:2 picture is 24 × 16 px in a row and
+  96 × 64 px in an icon cell and in Properties). Until ready, or if it cannot
+  be made, the type icon stays. Settings, Views turns them off or limits the
+  picture size.
+- **Context menu** (`JsonMenu.qml`, built from `menu::to_json`): 240 px,
+  4 px inner padding. Items 32 px: a
+  16 px Lucide icon (`text-muted`) or an application's own icon, the label in
+  `body-md`, the key right-aligned in `data-sm` `text-muted`. The row under
+  the pointer or the keyboard takes `hover`. Disabled items use
+  `text-disabled` and are skipped. Separators are `border` hairlines. On a
+  selection: Open, Open with ›; Cut, Copy, Paste, Copy location, Duplicate
+  here; Rename, Move to trash (Restore in the trash; neither as
+  administrator), Delete…; Extract › and Compress › (W-111; not in the trash
+  or as administrator); Properties. On empty space: Paste; New folder, New
+  file. A row that opens a second menu has an icon like any other (W-118):
+  "Open with ›" `app-window`, "Extract ›" `archive-restore`, "Compress ›"
+  `archive`, the places menu's "Move to group ›" `folder-input`; its 12 px
+  `chevron-right` is on the right. The menu opens below the point, or above
+  the entry when it does not fit below.
+- **Compress and extract (W-111, D-032, mockup 37):** Extract › holds
+  `package-open` Extract here, `folder-archive` Extract into "name/" (or
+  "Extract each into its own folder" for several), `archive-x` Extract and
+  trash archive, `folder-input` Extract to… (the desktop's folder dialog,
+  starting in the folder shown); Compress › holds `file-archive` Compress to
+  "name.zip" and "name.tar.gz", each the exact name it will make, and
+  `archive` Compress to…. One archive alone is not offered for compressing.
+  Compress to… is a 560 px dialog titled with `file-archive`: Name (a 32 px
+  field holding the keyboard), Format (ZIP, TAR.GZ, TAR.XZ, TAR.ZST, 7Z) and
+  Compression (Fast, Normal, Smallest) as segmented rows, the chosen segment
+  in `primary`; a note saying what will be made and where, or why it cannot
+  be; Cancel (Esc) and Compress (Enter), unavailable while the note is an
+  error. A password question has a masked field focused at once and
+  "Extract (Enter)".
+- **Actions palette** (`Palette.qml`): up to 640 px wide, 8 px padding, its
+  top edge under the toolbar, over the scrim. A 40 px search field on
+  `content` with a 2 px `primary-bright` outline, a `search` icon and the
+  placeholder "Search actions, places, tabs and recent folders…". Results
+  52 px: a 20 px icon, the name in `body-md`, a trail in `data-sm` ("View ›
+  Show hidden files"), the key right-aligned. The selected result is filled
+  `primary` (`primary-hover` under the pointer) with `on-primary` text and a
+  2 px `primary-bright` bar on its left; others take `hover` under the
+  pointer. Up, Down and Tab move, Enter runs, Escape closes. With no result:
+  "Nothing matches. Try fewer letters." in `body-sm` `text-muted`.
+- **Dialogs:** `surface-raised` with a `border-strong` outline, over the
+  scrim. Properties, batch rename, Compress to… and Settings open with a
+  48 px title row: an icon, the title in `headline-sm` and a close icon
+  button; questions and the problems list start with their title. The body
+  scrolls between title and actions; the action row is on `chrome`. Text fields (`input`) are 32 px on `content` with a
+  `border-strong` outline, `primary-bright` while focused.
+- **Properties** (`PropertiesDialog.qml`, mockups 13–14): title "<name> —
+  Properties" with a Close icon button. Header: a 96 × 64 thumbnail (or the
+  48 px type icon), the name and the type. Facts as label (`text-muted`,
+  128 px column) and value (`data-md`): Location, Size (with exact bytes),
+  Modified, Accessed, Created when known, and a link's target. A folder's
+  size reads "Calculating size…", then "Calculating… 1,204 items so far",
+  until known. "Permissions" with the mode in words and octal, then OWNER,
+  GROUP and OTHERS columns in `label-sm`, each with Read, Write and Execute
+  checkboxes. Close (Esc) and Apply (Enter), which stays unavailable until a
+  box changes.
+- **Batch rename** (`BatchDialog.qml`, mockups 15–16): 640 px, title row with
+  `pencil`. Three modes (Replace, Pattern, Case) as a segmented row, the
+  chosen one in `primary`; the rule fields (Text to find and Replace with,
+  Regular expression; Pattern with Start and Step, "# is the counter…"; Lower
+  case, Upper case, Capitalise words); the preview as two `data-md` columns,
+  Current name and New name; names that cannot be used are in `error`, with
+  one problem note above the preview. "Nothing would change. Edit the rule to
+  give the files new names." is a neutral note. Rename (Enter) stays
+  unavailable while there is a problem or nothing would change.
+- **Question dialogs** (`QuestionDialog.qml`, wording from
+  `rustphin_view::questions`): an icon and the title, which states the
+  question or the fact ("“IMG_4821.jpg” already exists", "Couldn't copy
+  “IMG_4821.jpg”", "Run “setup.sh”?", "Move or copy?", "Delete for good?",
+  "Move to the trash?", "Empty the trash?", "Close the window?", "Wrong
+  password for “x.zip”"); the sentence in `text-muted`; the facts (labels in
+  `body-sm` `text-muted`, values in `data-md`); the names it is about; the
+  buttons, each with its key. A single letter answers (as in Dolphin) unless
+  a field has the keyboard. The name conflict: Stop (Esc), Skip (S), Replace
+  or Merge (R), Keep both (Enter), and "Do the same for all other conflicts
+  (A)". A failed entry: Stop (Esc), Skip (S), Try again (Enter). "Run …?":
+  Cancel is the Enter default (Dolphin focuses Cancel), Open (O) and Run (R).
+  Move or copy: Cancel (Esc), Copy here (C), Move here (Enter).
+- **Problems dialog** (`ProblemsDialog.qml`): opened by Details on the
+  notice line after an operation left entries out: "<operation>: what was
+  left out" in `headline-sm`; one row per entry with its path in `data-md`
+  and the reason in `body-sm` `text-muted`, scrolling past 384 px; an
+  outlined Close.
+- **Checkboxes:** the Qt Quick Controls Basic indicator with a 2 px
+  `primary-bright` outline on keyboard focus; the label is clickable.
+- **Activity line** (`NoticeBar.qml`): on `chrome-raised`: the operation's
+  icon in `secondary` (`copy`, `move`, `trash`, `undo-2` for restoring,
+  `pencil`, `package-open`, `file-archive`, `loader` otherwise), the sentence
+  ("Copying 12 items to “Pictures”…", "(and N more)" while several run) in
+  `body-md` over the figures ("6 of 12 · 742.0 MiB of 1.2 GiB · 48.6 MiB/s")
+  in `data-sm` `text-muted`, a 6 px progress bar (`secondary` on `track`, at
+  least 80 px and a fifth of the window; it sweeps while the size is
+  unknown), and a Stop icon button (`circle-stop`, tooltip "Stop this
+  operation"). It appears after 300 ms (`operation_board::QUIET_PERIOD`).
+- **Notice line:** 44 px after an operation ends, or while connecting to a
+  remote folder: an emerald `circle-check`, the sentence ("Copied 12 items to
+  “Pictures”."), an outlined "Undo (Ctrl+Z)" when it can be undone, Details
+  when entries were left out, and a dismiss icon button (tooltip "Dismiss
+  this message"). It leaves after 6 seconds (`NOTICE_TIME`), unless it
+  reports a problem or is waiting on something: a problem uses
+  `error-surface` with an `error-border` outline and `triangle-alert` in
+  `error`, and stays until dismissed.
+- **Filter bar:** a 16 px `funnel` icon, a 32 px field (at most 360 px)
+  labelled "Filter by name", and a close icon button (tooltip "Close the
+  filter (Esc)").
+- **Empty, loading and error states** (in place of the list): a 32 px icon
+  (`loader`, `folder-open`, `eye-off`, `search-x`, or `folder-x` in `error`),
+  a `headline-md` line saying what is the case ("Loading…", "This folder is
+  empty", "This folder has only hidden items", "Nothing matches “x”", "This
+  folder is not readable"), a `text-muted` line saying why or what to do (at
+  most 440 px wide), and outlined actions: Show hidden; Clear filter; or for a
+  folder that cannot be opened, Back or Up (whichever applies, with its key)
+  and Home folder. The status line names the reason.
+- **Rename field:** 28 px inside the row, on `content` with a 2 px
+  `primary-bright` outline, the name in its list size, the stem selected
+  (`primary` selection). Enter or leaving the field keeps the name; Escape
+  cancels.
+- **Tooltips:** after 600 ms of hover, the label then the key in
+  parentheses.
+- **Dragging:** entries leave as a system drag of their URIs, shown by the
+  first entry's type icon (32 px); a folder under the pointer takes `hover`,
+  and a drop on the folder itself outlines the pane in 2 px `primary-bright`.
+  A drop asks "Move or copy?" unless Ctrl (copy) or Shift (move) is held.
+  Places are dragged as a `drag-chip` with the place's name.
+- **Rubber band:** a 1 px `primary-bright` outline over `primary-bright` at
+  15 % opacity.
+- **Scrollbars:** the Qt Quick Controls Basic scrollbar, shown as needed:
+  vertical in the details and icons views, horizontal in the compact view.
+- **Interface icons:** the bundled Lucide SVGs (`crates/rustphin/icons`),
+  drawn through `image://lucide/<name>/<colour>` in a token colour, 16 px by
+  default, 12 px for chevrons and badges, 20 px in palette results and device
+  rows, 32 px in states. Fixed names for the less obvious ones: `menu`
+  (Actions as an icon), `arrow-up-from-line` (eject; Lucide has no eject
+  glyph), `loader` (connecting, loading), `circle-check` (done),
+  `triangle-alert` (problems), `shield-alert` (administrator).
 
 ## Do's and Don'ts
 
-- Do take every colour, size, spacing and radius from the tokens; add a token
-  before adding a literal.
+- Do take every colour, size, spacing and radius from `Tokens`; add a token
+  in `colors.rs` or `metrics.rs` (and here) before adding a literal.
 - Do check every new surface or text pair in both glass (over white) and opaque
   modes, and add it to the contrast tests in `colors.rs`.
 - Do pair colour with a shape, icon or text for every state: selection,
   current place, focus, sort direction, errors, disabled items, usage.
 - Do give every icon-only control a tooltip with its label and key, and every
   command a keyboard or palette path.
-- Do use the same label for a command in the menu, the palette and the tooltip.
+- Do use the same label for a command in the menu, the palette and the
+  tooltip: they all read `rustphin_view::commands`.
 - Do use JetBrains Mono only for data that is aligned or read exactly.
 - Don't blur, or rely on blurring, anything inside the window.
 - Don't introduce a second accent, gradients, or soft drop shadows.
-- Don't put text on bare `window-glass`, and don't go below 10 px (capital labels only; other text at least 11 px).
+- Don't put text on bare `window-glass`, and don't go below 10 px (capital
+  labels only; other text at least 11 px).
 - Don't add a radius other than 2 px.
-- Don't use `primary` fills for location (that is `primary-subtle`) or for
-  decoration.
+- Don't use `primary` fills for decoration: they mean selected, current or
+  chosen.
 - Don't follow the system colour scheme; do use the system icon theme for file
   types.
 
 ## Changes from the earlier design
 
-What this version changes from the design the build followed before W-079:
-
-- **Density:** rows 28 → 36 px at the default zoom (24 px icons), names 14 →
-  15 px, data 13 → 14 px, headline-sm 16 → 17 px; toolbar 44 → 52 px; tab
-  strip 32 → 40 px; status line 28 → 32 px; filter bar 36 → 40 px; places
-  panel 220 → 240 px with 32 px rows; device rows 48 → 56 px; dialogs 440 →
-  480 px; column widths size 88 → 96, modified 144 → 168, type 184 → 160 px;
-  column breakpoints 760/560/320 → 820/600/360 px; toolbar breakpoints
-  320/240 → 640/560/300 px.
-- **Colour:** neutral obsidian → navy obsidian (`#0B0F17` → `#0D1524`); glass
-  opacities raised for chrome (0.20 → 0.50) to match the reference; selection
-  `#3457D5` → `#2D4CC8`; new `primary-subtle`, `chrome-raised-*`,
-  `text-disabled`, `error-border` and `track`; `text-muted` `#C3CAD9` →
-  `#AEB8CC` (still AA everywhere).
-- **New typography roles:** `body-lg`, `body-strong`; the type column moves to
-  mono.
-- **Components:** outlined toolbar buttons and location field with a folder
-  icon; Actions with the shortcut beside it; the places title and collapsible
-  sections with counts; the current place in `primary-subtle`; thumbnails in
-  every view from 24 px; "—" for folder sizes; menu icons and shortcuts;
-  palette title row, icons and trails; Properties title row, thumbnail header,
-  location, exact bytes and dates with seconds; the error banner's "Details…" and the new error
-  details dialog; the two-zone status line with free space; a thicker, flexible
-  progress bar with mono figures and an outlined Stop; the result line with
-  Undo; question titles that state the question; "Run this file?" defaults to
-  Keep.
-- **Unchanged:** the three font families, the 2 px radius, the 4-pixel grid,
-  opaque fallback behaviour, every wording rule, the keyboard model, and the
-  rule that menus, palette and dialogs are solid.
+W-079 (2026-11-08) replaced a neutral-obsidian design with this navy one:
+new `primary-subtle`, `chrome-raised-*`, `text-disabled`, `error-border` and
+`track` tokens; selection `#3457D5` → `#2D4CC8`; `text-muted` `#C3CAD9` →
+`#AEB8CC`; menu icons and keys, palette icons and trails, Properties'
+thumbnail header, the two-zone status line, the result line with Undo, and
+question titles that state the question. Its roomier sizes (36 px rows,
+15 px names, a 52 px toolbar) were then reduced by D-026 (the 12 px type
+scale) and W-096 (the top bar redesign) to the values above. The three font
+families, the 2 px radius, the 4-pixel grid, the opaque fallback, the wording
+rules, the keyboard model and solid floating surfaces did not change.
 
 ## Implementation status
 
-Adopted on 2026-11-08 (W-079). The build still follows the earlier design
-except where the list below says otherwise; each W-079 step adds its line.
+The interface is Qt 6 and QML through cxx-qt (D-034, W-114, switched
+2026-11-14); `crates/rustphin/qml/` draws every screen above with the
+`Tokens` singleton, and the colours and sizes in the front matter are the
+values in `colors.rs` and `metrics.rs`. Built as described: the title bar
+and resize bands, the toolbar with Settings' items and `Toolbar::fit`, the
+location crumbs, the tab strip, split view with path bars, the places panel
+with groups, folded counts, Remote and Devices, its menu and drag and drop,
+the three views with the zoom table, selection, rubber band, rename in place
+and thumbnails, the status line, the filter bar, the in-place states, the
+re-read and trash banners, the administrator bar, the context, New, trash
+and View menus with submenu icons (W-118), the palette, the activity and
+notice lines, Properties, batch rename, Compress to…, the questions, the
+problems dialog and Settings with all eight pages.
 
-- W-079a (2026-11-08): every colour token, `data-md` 14 px and `headline-sm`
-  17 px, the floating glow; the tab strip on `chrome-raised` with the active
-  tab on `chrome`, progress and usage bars on `track`, the error banner's
-  `error-border`, the current place in `primary-subtle`, disabled menu items
-  in `text-disabled`, the success icon on results that can be undone.
-- W-079b (2026-11-08): the tab strip (40 px, icons, 24 px close, 40 px "+"),
-  the 52 px toolbar with outlined 36 px buttons, the outlined location field
-  with its icon and mono segments ("Trash" in the trash), Actions with its
-  chevron and shortcut, the 640/560/300 px rules, the 52 px places title, and
-  the window lines' order. Disabled toolbar buttons use the component
-  library's dimmed text, close to but not exactly `text-disabled`.
-- W-079c (2026-11-08): the places panel as described, with Devices folding
-  for the run (not saved). With an eject button, long figures can still be
-  cut short.
-- W-079d (2026-11-08): the zoom table and 36 px default rows, icon cells,
-  240 px compact columns, column widths and pane-width rules, the mono type
-  column, "—" for folder sizes, thumbnails from 24 px, the 28 px rename
-  field, the drag chip with its icon, 20 px state headings with reason
-  lines. List views have their scrollbar (W-090): vertical in details
-  (below the headings) and icons, horizontal along the bottom in compact.
-  The places panel has a Remote section (W-094) between the groups and
-  Devices, with a foldable heading like Devices ("Remote (n)" when folded)
-  and the `server` icon for each network place.
-  Hidden entries (W-091), shown with Ctrl+H, are drawn at 60% opacity
-  except while selected, as in Dolphin; their text stays at 4.5:1 or more.
-- W-086 (2026-11-09): compact view fills columns top to bottom and scrolls
-  sideways, with Dolphin's keys in that view.
-- W-079e (2026-11-08): the two-zone status line with free space and its
-  600/440 px rules (the volume name came with W-103), the filter bar's 32 px field, the
-  activity line, the result line with Undo, Details… and dismiss, the error
-  details dialog (opened from the result line), the blur status line.
-- W-079f (2026-11-08): menu icons, shortcuts and the selection bar; the
-  palette's title row, search icon, 52 px results with category icons and
-  trails, placed near the top. Results use one icon per category.
-- W-079g (2026-11-08): every dialog on the shared frame, title row and
-  action row; question titles that state the question; the Keep both fact;
-  Cancel as the run default; Properties' header, facts and permission columns;
-  batch rename's segments, preview and notes.
-- Mockup comparison (2026-11-09): each screen was laid over its mockup
-  render at the mockup's size. Fixed to match: outlined buttons clear until
-  hovered and destructive buttons with their error outline; text fields on
-  `surface-raised` (the palette's on `content`) with the 1 px focus ring and
-  their real heights (a single-line field's `h` was ignored, so every field
-  was 32 px); disabled toolbar icons in `text-disabled`; the path as one
-  string; table columns with 8 px padding and no gaps, so headings line up
-  with cells, and the "↑"/"↓" sort mark; the selection bar laid over the
-  entry instead of pushing it; icons-view padding 16/12 px and compact cells
-  starting at their column; the film icon for Videos; heading line heights
-  (24 and 28 px); the palette without a visible key-hint footer; the funnel
-  filter icon and 8 px field padding; renaming on the hover fill with a field
-  as wide as the name, `primary` text selection and the status hint; equal
-  permission columns, `label-sm` capitals and 28 px checkbox rows; dialog
-  scrollbars in the body padding; mono name lists; state icons (`eye-off`,
-  `search-x`), spacing and 32 px buttons; the 44 px folder error banner with
-  a dismiss icon; batch rename segments with icons, Find and Replace side by
-  side in mono, and one problem note above the preview.
-- Top bar redesign (W-096, mockup 35): the window's own title bar with
-  resize edges, one toolbar across the window with the new buttons, the tab strip always shown
-  over the files, a path bar per side in split view, and the denser rows,
-  places, headings and status line.
-- Acting as administrator (W-098, mockup 35c): the shield toggles the
-  window's mode (`error` on `error-surface` while on, dimmed with a reason
-  when kio-admin is missing), the 36 px bar under the toolbar with "Stop
-  acting as administrator", and "(administrator)" in the title. Seen only
-  in the isolated session with the stand-in helper; KDE's real password
-  dialog is the maintainer's check.
-- Font weights (W-088): the app bundles static faces of Inter (400, 500,
-  600), Space Grotesk (600) and JetBrains Mono (400, 500), made because the
-  GPUI interface ignored a variable font's weight axis and kept by the Qt one
-  (`crates/rustphin/fonts/`). Headings render semibold as
-  drawn. Weights not listed in the typography tokens fall back to the
-  nearest bundled or installed face.
-- Places menu and the "New group" button (W-102), and second menus that
-  line up with the row that opens them.
-- W-103 (2026-11-10): the volume's name after the free space (only for a
-  listed volume mounted exactly where the folder's filesystem is: tmpfs
-  and network mounts have none); an icon per command in the palette (the
-  same as its toolbar button or menu row; other results keep their
-  category's); icons, and sizes for files, in the delete question's list
-  of names; tab overflow; Devices and Remote stay folded between runs
-  (kept with the place groups).
-- Not yet implemented: the design's offset focus ring on buttons (the
-  library draws its own); icons in the move-or-copy question's list (a drop
-  does not say which entries are folders). "Details…" sits on the result line, since
-  operation results are window-level here.
-- A folder that cannot be opened (W-089): the view goes into it and says so
-  in place, as mockup 28 draws it: a lock icon (`folder-x` when the reason is
-  not permission), "Could not open this folder", why and what to do, and a
-  primary "Back (Alt+Left)" button, or "Up (Alt+Up)" when there is no history.
-  The status line names the reason ("Not readable", "Does not exist"). A
-  shown folder that fails to re-read keeps its listing under the error
-  banner, as does a folder that vanished.
-- Settings (W-106b, W-106c1): the dialog, its page list and the tabs below
-  720 px, the action row, the controls (segments, drop-downs, small buttons,
-  hints, checkboxes, the slider) and all eight pages are built (W-106b–g).
+Where the build differs from this document today:
 
-Carried over unchanged from the earlier design and implemented: the Actions
-palette's **Recover original names after interruption** for the current folder
-(browsing never starts recovery; an invalid record, changed file or occupied
-original name produces an actionable error); the opaque fallback when blur is
-not advertised, lost or switched off, with its persistent status; bounded
-scrolling bodies for every dialog and folder state at the minimum window; the
-trash banner and its Trash actions menu; floating surfaces that escape pane
-clipping. Reverse traversal between named text fields is blocked by duplicate
-focus registration in the pinned toolkit (W-076e, not approved).
+- **Default and destructive buttons** (`OutlinedButton.qml`): the default
+  button is filled with `primary-bright` and the destructive one with
+  `error`, both with `on-primary` words, and neither changes under the
+  pointer. Those pairs are about 2.1:1 and 1.9:1, below WCAG AA, and are not
+  in the contrast tests; the buttons should take `button-primary` and
+  `button-destructive` as specified.
+- **Settings that are stored but not applied:** Appearance's Look (Glass or
+  Opaque) and Title bar (Rustphin's own or KDE's). The theme is chosen only
+  by whether KWin offers blur and by `RUSTPHIN_OPAQUE`, and the window always
+  draws its own title bar. The toolbar's "Show its words" is saved but the
+  toolbar never draws words. The Settings page list does not turn into tabs
+  in a narrow window (`size::SETTINGS_NARROW` is not used).
+- **Blur status:** no line says that blur is unavailable; the opaque theme
+  is used silently (`size::BLUR_STATUS` is not used).
+- **Floating surfaces** have a `border-strong` outline; the `border-accent`
+  outline and the glow the mockups draw are not built.
+- **Tooltips and scrollbars** use the Qt Quick Controls Basic style, not the
+  tokens (`size::SCROLLBAR` and `SCROLLBAR_INSET` are handed to QML but not
+  read).
+- **Line heights:** QML leaves line height to the font; the `lineHeight`
+  tokens (`text::LINE`, `HEADING_LINE`, `TITLE_LINE`) are not applied.
+- **Literals:** the Compress to… dialog's 560 px width and the toolbar's
+  48 px menu buttons are written in QML, not in `metrics.rs`.
+- **Error banner:** the pane's re-read banner has no "Details…" or dismiss
+  button; Details is on the notice line, since operation results are
+  window-level, and the problems dialog has no "Copy list".
+- **Open leftovers (W-117):** the strip with one tab (T5), Ctrl+0's zoom
+  default, the Trash place's highlight, notice icons by kind, recovery notice
+  wording, the Run question's default styling, unnamed AT-SPI buttons and the
+  link icon in Properties.
+
+Carried over and implemented: the palette's **Recover original names after
+interruption** for the current folder (browsing never starts recovery; an
+invalid record, changed file or occupied original name produces an
+actionable error); bounded scrolling bodies for every dialog and folder state
+at the minimum window; menus that open above their entry when there is no
+room below.
 
 Lint with `npx @google/design.md lint docs/DESIGN.md`. Contrast is checked by
-the tests in `colors.rs` (glass over white and opaque); before W-079 adopted the
-tokens a script mirroring them gave the lowest text pair 4.92:1 and the lowest
-indicator pair (`primary-bright` on window glass over white) 4.31:1. The
-linter's remaining warnings are `border`, `border-strong`, `border-accent` and
-`error-border`, used as outline colours, which the format's component
-properties cannot express; the prose says where.
+the tests in `colors.rs` (glass over white and opaque, and the hidden-entry
+opacities Settings offers). The linter's remaining warnings are `border`,
+`border-strong`, `border-accent` and `error-border`, used as outline colours,
+which the format's component properties cannot express; the prose says where.

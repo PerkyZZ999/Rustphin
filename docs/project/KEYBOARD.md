@@ -7,13 +7,23 @@ Rustphin's binding. Rustphin follows Dolphin wherever it has the same
 action. "Replayed" names the scenario in UI_SCENARIOS.md that exercised it
 by keyboard in an isolated session; "—" means bound but not replayed yet.
 
-Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
+Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`;
+Rustphin's column checked against `commands.rs` on 2026-11-14.
 Since W-123 (2026-11-14) every key Rustphin binds is written once, in
 `crates/rustphin-view/src/commands.rs`; the first key of a command is the
-one menus, tooltips and the palette show. The test
-`keyboard_md_lists_the_table_s_keys` fails when a row below and the table
-disagree (the selection-movement row and the places panel's prose are not
-checked).
+one menus, tooltips and the palette show, and Settings, Shortcuts lists
+them all. The test `keyboard_md_lists_the_table_s_keys` fails when a row
+below and the table disagree (the selection-movement, type-to-jump and
+context-menu rows and the places panel's prose are not checked).
+
+Each key is caught by one part of the window (`Catcher` in `commands.rs`).
+Window shortcuts work wherever the focus is. The file commands caught by
+the list (copy, cut, paste, copy location, duplicate, move to trash, delete,
+properties, copy or move to the other view) work only while the file list
+has the keyboard and no text field does. Keys that also edit text (arrows,
+Enter, Backspace, Home, End, Tab, Escape), and F2, F10, Ctrl+Shift+N,
+Ctrl+A, Ctrl+Shift+A and /, belong to the pane's or the places panel's own
+key handler, so they never fire while a name is being typed.
 
 ## Navigation
 
@@ -76,22 +86,35 @@ checked).
 | Places panel shown | F9 | F9 | — |
 | Add folder to Places | (none) | Ctrl+Shift+D (Ctrl+D until D-021), button, drag | K2, K18 |
 | Focus places panel | Ctrl+P | Ctrl+P | K9 |
-| Quit | Ctrl+Q | Ctrl+Q: ends Rustphin, every window, when it keeps running (D-031); otherwise closes the window | K9, BG5 |
+| Quit | Ctrl+Q | Ctrl+Q: ends Rustphin and closes all its windows, also when it keeps running in the background (D-031) | K9, BG5 |
 | New window | Ctrl+N | not offered (one window) | — |
 | Command palette | KDE command bar (from KXmlGui, not Dolphin source) | Ctrl+Shift+P | Q1 |
 | Settings | Ctrl+Shift+, (Configure Dolphin) | Ctrl+Shift+, | ST1 |
 
 ## Places panel (focused)
 
-Up/Down move, Enter opens, F2 renames, Delete removes, H hides, Alt+Up/Down
-reorder, Left/Right fold groups, G next group, Ctrl+Shift+G new group,
-E ejects a device. These single-letter keys apply only while the panel has
-focus and no text field is being edited (K7, K8). The panel takes Alt+Up and
-Alt+Down ahead of the window's Alt+Up (up one folder) while it has the focus
-(W-123).
+Up/Down move, Enter opens (or mounts a device), F2 renames, Delete removes,
+H hides or shows, Alt+Up/Down reorder, Left/Right fold and unfold a section,
+G moves the place to the next group, E unmounts or safely removes a device,
+the Menu key or Shift+F10 opens the places menu, Tab moves on to the view,
+Escape returns to the view. H, G and E act only without a modifier, and all
+these keys apply only while the panel has focus and no text field is being
+edited (K7, K8). The panel takes Alt+Up and Alt+Down ahead of the window's
+Alt+Up (up one folder) while it has the focus (W-123). Ctrl+Shift+G (new
+group) is a window shortcut: it works from anywhere and takes the keyboard
+to the panel to name the group. "List or hide hidden places" has no key; it
+is in the panel's menu and the palette.
 
 ## Not offered yet
 
-Redo and Dolphin's search (Ctrl+F) have no Rustphin equivalent. Search is
-L-001; redo is a candidate for later work and is not part of R-001–R-016 as
-written.
+- Redo (Ctrl+Shift+Z): an undone operation cannot be redone. A candidate
+  for later work; not part of R-001–R-016 as written.
+- Dolphin's search (Ctrl+F): search is L-001.
+- The columns view (Ctrl+4) and a new window (Ctrl+N): Rustphin has no
+  columns view, and new windows open only for launches and other
+  applications (Settings, General).
+- Changing keys: Settings, Shortcuts lists them read-only.
+- Commands with no key, reached through menus, the toolbar or the palette:
+  folders first, sorting by a column, Extract and Compress, Recover original
+  names, the trash's actions (open, restore, empty), stopping operations and
+  dismissing the notice.

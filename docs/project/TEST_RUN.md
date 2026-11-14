@@ -1,5 +1,7 @@
 # Test run: findings
 
+> Dated record: the maintainer's run of the GPUI build `fdd9361` (2026-11-09). That interface was replaced by Qt at W-114i (2026-11-14); the build, install notes and findings below describe it, not the current app.
+
 Rustphin build `fdd9361`, installed 2026-11-09 at `~/.local/bin/rustphin`.
 Start it from the desktop icon or the application menu (Rustphin, under System).
 Dolphin stays your default for folders; nothing here changes that.

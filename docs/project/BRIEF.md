@@ -2,6 +2,27 @@
 
 Status: **agreed 2026-10-12**. Items marked (A) remain assumptions.
 
+> **Status (2026-11-14): kept as the agreed brief; not rewritten.** Problem,
+> outcome, defining features and design direction still hold. What has
+> changed since, and where it is recorded:
+>
+> - **UI toolkit:** the brief's fallback became the toolkit. The interface is
+>   Qt 6 Quick and QML through cxx-qt 0.10 (D-034, W-114i); GPUI and GPUI-Kit
+>   are gone, and the open question about GPUI's drag, clipboard and blur was
+>   answered for Qt in the W-114a spike (QT_MIGRATION_PLAN.md).
+> - **Minimum Rust version:** 1.100 (D-035), not 1.95.
+> - **Repository:** also on GitHub (D-037), still with no hosted CI.
+> - **Scope beyond the MVP, added by the maintainer later:** acting as
+>   administrator through KDE's kio-admin helper (D-027, D-028), a Settings
+>   window (R-019), background mode (R-020), compress and extract (R-021,
+>   through libarchive and 7-Zip, D-036), remote folders through kio-fuse
+>   (D-004, W-080).
+> - **Place groups vs `user-places.xbel`:** decided in D-008 (Rustphin's own
+>   `place-groups.toml` beside the shared file).
+> - Current requirements are in REQUIREMENTS.md, the architecture in
+>   ARCHITECTURE.md, the look in docs/DESIGN.md, and the phase and success
+>   signal's progress in STATE.md.
+
 ## Problem
 Dolphin is a capable file manager, but its UI/UX has accumulated friction and its architecture keeps much work (sorting, role updates) bound to the main thread and to KDE Frameworks. The user wants a file manager with Dolphin's strengths, a modern UI/UX, some new features, and an architecture designed around Rust's strengths (parallelism, memory safety, cheap concurrency).
 

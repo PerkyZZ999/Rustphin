@@ -2,10 +2,12 @@
 
 Each slice ends with something the author can run and use, and with its acceptance demonstrated. Order reflects dependencies and risk: scale and data safety are proven early.
 
+**Toolkit note.** Slices S1–S10 were built with a GPUI interface. On 2026-11-14 the interface moved to Qt 6 and QML through cxx-qt (W-114, D-033/D-034): `crates/rustphin` is now the Qt binary, the toolkit-free interface logic lives in `crates/rustphin-view`, and the core and platform crates were kept. Each slice's behaviour was replayed on the Qt interface (W-114h, W-116b); what was not repeated on Qt is said per criterion in REQUIREMENTS.md and in ACCEPTANCE.md.
+
 ## Slice S1 — Open and browse a folder
 - **Outcome:** Launch Rustphin, see a folder's entries in the frosted-glass window, and move around with mouse and keyboard, including in a 500,000-entry folder.
 - **Acceptance:**
-  - Workspace builds with one command on Rust 1.95 and stable; format, lint and test checks pass.
+  - Workspace builds with one command on the minimum Rust (1.95 then; 1.100 since D-035) and stable; format, lint and test checks pass.
   - Window uses the dark theme tokens with blur, and the opaque mode when blur is unavailable.
   - A directory's entries are listed by name, natural order, folders first; hidden files toggle.
   - Enter a folder, go up, back, forward; type a path; unreadable or invalid paths show an inline error.
@@ -80,30 +82,30 @@ Each slice ends with something the author can run and use, and with its acceptan
 
 ## Slice S11 — Hardening for daily use
 - **Outcome:** Ready for the two-week daily-driver trial.
-- **Acceptance:** Contrast checks pass in both surface modes; keyboard-only checklist passes; parser fuzzing has run without findings; dependency audit shows no application network use (toolkit exception under D-018) and compatible licences.
+- **Acceptance:** Contrast checks pass in both surface modes; keyboard-only checklist passes; parser fuzzing has run without findings; dependency audit shows no application network use and compatible licences (D-018's toolkit exception is no longer used: `deny.toml` bans every network crate since W-114i).
 - **Requirements:** R-104 (parsers), R-105 (contrast), R-107, R-108 (no Orca pass: D-023)
 - **Validation:** test, manual
-- **Status:** in progress, 2026-10-20; W-069 assessment and W-070–W-078 queue
+- **Status:** in progress since 2026-10-20 (W-069 assessment, W-070–W-078 queue). Done: contrast tests in both modes, parser fuzzing (W-075; later targets `admin_entry` and `archive_entry`), licences and privacy (W-077, R-108). Open (ACCEPTANCE.md): the keyboard-only pass on the Qt interface (R-004, R-107), the blur notice (R-109), and the maintainer's real-desktop and hardware checks (R-013, R-105).
 
 ## After S11 — Mockup-aligned UI/UX and design (W-079)
 
 - **Requested:** The maintainer, 2026-11-06; start after Slice 11 is complete.
 - **Visual target:** [`../mockup.png`](../mockup.png), the user-provided 1672 × 941 reference. Match its appearance as closely as feasible while adapting to Rustphin's implemented features and supported platform behavior.
 - **Scope:** tabs/navigation/location toolbar, places and device presentation, file rows/selection, actions palette, context menus, properties and operation status/progress; carry the same design through icons/compact views, split panes, dialogs and states absent from the picture.
-- **Workflow:** after the S11 gate, break W-079 into focused steps. Update DESIGN.md first, implement its tokens through theme.rs, then update views. Preserve current features, operation safety, keyboard/accessibility behavior and locked platform/toolkit decisions; the image's Network row does not add network features to scope.
+- **Workflow:** after the S11 gate, break W-079 into focused steps. Update DESIGN.md first, implement its tokens (then `theme.rs`; now `rustphin-view`'s `colors.rs` and `metrics.rs`, handed to QML as `Tokens`), then update views. Preserve current features, operation safety, keyboard/accessibility behavior and locked platform/toolkit decisions; the image's Network row does not add network features to scope.
 - **Validation:** compare real application screenshots with the reference, including normal/minimum sizes, split panes, empty/loading/error/disabled/operation states. Re-run affected contrast, native/keyboard, responsiveness and fallback checks; rust-tc doctor, project evidence and one focused commit after every task.
 - **Inputs:** [`DESIGN_BRIEF.md`](DESIGN_BRIEF.md), [`INFORMATION_ARCHITECTURE.md`](INFORMATION_ARCHITECTURE.md), the maintainer's HTML mockups in [`../mockup/`](../mockup/) (34 screens, 2026-11-08) and [`../DESIGN.md`](../DESIGN.md), which W-079 adopted from the target on 2026-11-08 with the mockup's changes.
-- **Status:** in progress since 2026-11-08 (D-024: started before the remaining S11 criteria close). Steps W-079a–g in WORK_ITEMS.md.
+- **Status:** done 2026-11-08 (D-024: started before the remaining S11 criteria closed), steps W-079a–g, followed by W-086–W-105; carried into the Qt interface in W-114 and compared with the mockups again (W-114h). The glass look on the real desktop is still to be reviewed. The maintainer's next task is a colour scheme and UI refactor.
 
-## Later — Settings window with toolbar customization (W-106)
+## Done — Settings window with toolbar customization (W-106)
 
-- **Requested:** The maintainer, 2026-11-11, for later; not started.
+- **Requested:** The maintainer, 2026-11-11.
 - **What:** a Settings window (Dolphin's "Configure Rustphin…") whose first page is **Toolbar**: the user rebuilds the toolbar as they want it, as Dolphin's "Configure Toolbars…" allows. A list of available actions beside the toolbar's current actions; add, remove and reorder them (drag or buttons); separators; per action icon only or icon and text; restore the defaults. The result is saved in Rustphin's own config and applied at once.
 - **Before building:** a requirement with acceptance criteria and a design for the maintainer to approve (pages, mockup, how the responsive toolbar rules of W-096 apply to a customized toolbar, where the settings are stored). It adds scope beyond the MVP, so it waits until the maintainer schedules it.
 - **2026-11-12:** The maintainer asked for the whole Settings window (General, Appearance, Customizations, About, …) to be planned first. The proposal is [`SETTINGS_PLAN.md`](SETTINGS_PLAN.md): eight pages, storage, order of work W-106a–g and five decisions for the maintainer.
-- **Status:** plan and mockups approved 2026-11-12 (D-029, R-019); built the same day as W-106b–g (all eight pages). Three differences from the plan accepted (D-030). R-019 is open on Tab through the controls and a second window following changes.
+- **Status:** plan and mockups approved 2026-11-12 (D-029, R-019); built the same day as W-106b–g (all eight pages), then in Qt (W-114f). Three differences from the plan accepted (D-030). R-019 is open on Tab through the controls, a second window following changes, and two Appearance choices (Look, Title bar) the Qt interface ignores.
 
-## Next — Background mode and archives (W-110, W-111)
+## Done — Background mode and archives (W-110, W-111)
 
 - **Requested:** The maintainer, 2026-11-13, as the next tasks.
 - **W-110, background mode:** after its last window closes Rustphin keeps running without a window and can start hidden at login, as Dolphin's daemon mode, so new windows and folders sent by other applications open at once. Follows W-109: reading fonts in parallel brought a cold start to about 3 s, and only a resident process removes it. Costs memory while idle; needs a Settings switch and a way to quit for good.
@@ -111,13 +113,20 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Before building:** each gets a requirement with acceptance criteria and a plan for the maintainer to approve; both add scope beyond the MVP.
 - **2026-11-13:** W-110's plan is [`BACKGROUND_PLAN.md`](BACKGROUND_PLAN.md): one Rustphin per session that keeps running without windows (as Nautilus does; Dolphin's `--daemon` only relays D-Bus requests to new processes), launches handed to it, start at login as a Settings switch; work W-110a–f and five decisions for the maintainer. Approved with all five recommendations (D-031, R-020).
 - **2026-11-13:** W-111's plan is [`ARCHIVE_PLAN.md`](ARCHIVE_PLAN.md): Ark's Extract and Compress submenus with the maintainer's extra "into a new folder", done by Rustphin's own engine for ZIP, TAR and 7Z with Ark for other formats (recommended); work W-111a–g and five decisions. The maintainer reviews it, then both plans are built.
-- **Status:** both built 2026-11-13. W-110a–f done (R-020; KWin focus from a real launcher token and a login start need the maintainer's desktop). W-111a–g done (R-021 ticked; RAR and ISO through a real tool not tried). Follow-up W-113: Extract to… should start in the folder shown.
+- **Status:** both built 2026-11-13, then in Qt (W-114c3, W-114f). W-110a–f done (R-020; KWin focus from a real launcher token and a login start need the maintainer's desktop). W-111a–g done (R-021 ticked). W-113 (Extract to… starts in the folder shown) done in W-114g. W-119 (D-036) replaced Ark: other formats are read by libarchive inside the engine, then 7-Zip or unrar; RAR not tried (no fixture).
 
-## Proposed — Qt 6 and QML interface (W-114)
+## Done — Qt 6 and QML interface (W-114)
 
 - **Requested:** The maintainer, 2026-11-13: move the interface from GPUI to Qt 6 and QML, with QtBridge for Rust.
 - **Plan:** [`QT_MIGRATION_PLAN.md`](QT_MIGRATION_PLAN.md). Gains are maturity and KDE integration (cold start, blur, file exchange with other applications, focus, text input, accessibility); speed targets are already met on GPUI. Recommended: a measured spike first (W-114a) with go/no-go criteria, cxx-qt as the bridge with QtBridge tried alongside, the Qt interface built beside the GPUI one until parity, then the switch (D-033, superseding D-001). Five decisions for the maintainer.
-- **Status:** A–D approved (D-033). Spike W-114a done 2026-11-13: cxx-qt passes 1–4 and 6–9 (startup 0.3–0.4 s against about 10 s), blur needs the maintainer's desktop. Switch decided (D-034, cxx-qt). Then W-116: a Qt quality pass with the desktop Qt skills, `qmllint` with the maintainer's BestPractices plugin and `qmlformat` (the maintainer, 2026-11-14).
+- **Status:** A–D approved (D-033). Spike W-114a done 2026-11-13: cxx-qt passes 1–4 and 6–9 (startup 0.3–0.4 s against about 10 s); blur confirmed on the maintainer's desktop with the spike. Switch decided (D-034, cxx-qt) and made 2026-11-14 (W-114i): GPUI, GPUI-Kit and `rustphin-ui` removed. W-116 (Qt quality pass: `qmllint` with the BestPractices plugin and `qmlformat` in `rust-tc doctor`, the qt-qml-review findings, 36 scenarios replayed) done 2026-11-14. Then W-118–W-144: libarchive (D-036), interface logic moved into `rustphin-view` (commands, pane state, operation board, selection actions, places panel, workspace, menus), byte-safe paths to QML, test audits and the bugs they found, the GitHub repository (D-037).
+
+## What remains
+
+- **Next (the maintainer):** a colour scheme and UI refactor, started by the maintainer.
+- **Small Qt leftovers:** W-117 (one-tab strip, Ctrl+0 zoom, Trash place highlight, notice icons, recovery wording, Run prompt default, unnamed buttons, a link's Properties icon, J7); the Appearance › Look and Title bar choices; the blur notice (R-109); W-115 (memory grows on each reload of a very large folder).
+- **S11 acceptance:** a keyboard-only pass of the Qt interface (R-004, R-107, R-019); the maintainer's real-desktop and hardware checks (R-013, R-105, R-020 focus, W-098e administrator mode).
+- **Then:** the two-week daily-driver trial (the MVP success signal), and phase 7 (release).
 
 ## Traceability
 

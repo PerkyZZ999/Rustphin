@@ -2,8 +2,35 @@
 
 Status: **approved as written 2026-11-12 (D-029, R-019) and built the same
 day (W-106b–g).** Three differences from this plan were accepted by
-The maintainer (D-030): no "system format" for dates, hidden files fade from 60 %
+the maintainer (D-030): no "system format" for dates, hidden files fade from 60 %
 (WCAG AA), toolbar items move by buttons rather than dragging.
+
+> **Status (2026-11-14): built; the plan below is kept as history.** The
+> window was built on GPUI in W-106b–g and moved to Qt in W-114f. The current
+> behaviour is described in REQUIREMENTS.md (R-019), DESIGN.md (the Settings
+> dialog), ARCHITECTURE.md, and UI_SCENARIOS.md (ST, GN, VW, AP, CF, PL,
+> TB10–TB15, SC). As built:
+>
+> - A 760 × 560 dialog over the dimmed window (`SettingsDialog.qml`) with the
+>   eight pages in this order: General, Appearance, Views, Toolbar, Places,
+>   Confirmations, Shortcuts, About; the page list becomes tabs below 720 px.
+>   Pages are data in `crates/rustphin-view/src/settings_form.rs`; changes
+>   apply at once; each page but Shortcuts and About has Reset to defaults.
+> - General also holds the background-mode switches (W-110c, D-031). The
+>   Shortcuts page lists the command table (`commands.rs`, W-123).
+> - The model is in `rustphin-view` (`settings.rs`, `preferences.rs`), not
+>   `rustphin-ui`. `~/.config/rustphin/settings.toml` is now format 3 with the
+>   tables `[general]`, `[appearance]`, `[confirm]`, `[places]`, `[toolbar]`
+>   and `[view]`. Place groups stay in `place-groups.toml`, and each folder's
+>   own view is in `~/.local/state/rustphin/views.toml`. A damaged,
+>   unreadable or newer file is kept unchanged, saving is turned off for the
+>   run and the user is told (`saved_file`, W-140, W-143), rather than read
+>   leniently and written over.
+> - **Known gaps on Qt** (found 2026-11-14, not yet work items): Window look
+>   (Glass/Opaque) and Title bar (KDE's) are saved but not applied (glass
+>   depends only on KWin's blur and `RUSTPHIN_OPAQUE`; the window is always
+>   frameless with Rustphin's bar), and Text size takes effect only when the
+>   QML engine next starts, not at once (UI_SCENARIOS.md AP2–AP5).
 
 ## What it is
 

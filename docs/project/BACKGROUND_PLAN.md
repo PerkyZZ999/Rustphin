@@ -1,5 +1,31 @@
 # Background mode (W-110): plan for approval
 
+> **Status (2026-11-14): built; this plan is kept as history.** Built on the
+> GPUI interface in W-110a–f (2026-11-13), then on Qt in W-114c3. The current
+> behaviour is described in REQUIREMENTS.md (R-020), ARCHITECTURE.md, the
+> General page in `crates/rustphin-view/src/settings_form.rs`, and
+> UI_SCENARIOS.md (BG1–BG9). As built:
+>
+> - One Rustphin per session owns `org.rustphin.Rustphin`
+>   (`rustphin-platform` `instance.rs`); a later launch hands over its folders
+>   and activation token and exits, or starts on its own after 2 s without an
+>   answer. `--background` and `--quit` work as planned ("Rustphin is not
+>   running." when none runs).
+> - "Keep Rustphin running after its last window closes" defaults to on, "Also
+>   start it when you log in" to off (it writes or removes
+>   `~/.config/autostart/rustphin.desktop`); Ctrl+Q ends the process; no tray
+>   icon. The bus name stayed the placeholder.
+> - **Different from the plan:** the GPUI details here (`QuitMode::Explicit`,
+>   the font scan the plan set out to avoid, the activation-token check of
+>   W-110d) left with GPUI at W-114i. On Qt, the C++ shell
+>   (`crates/rustphin/cpp/app.cpp`) keeps the process when the last window
+>   closes, deletes the QML engine and returns freed memory (`malloc_trim`);
+>   the next window builds a new engine. The window takes focus with the
+>   caller's token (W-120, not verifiable in an isolated session). The
+>   memory figures in "What was found" are GPUI's; R-020's 60 MB limit was
+>   measured on GPUI (W-110e) and in the Qt spike (W-114a), and the Qt build's
+>   idle figure needs measuring again (UI_SCENARIOS.md BG3, BG7).
+
 **Approved 2026-11-13 with all five recommendations (D-031, R-020).**
 
 The maintainer asked on 2026-11-13 for Rustphin to stay running after its last window closes and to be able to start at login, so that windows open at once. This plan says what that means, what was measured before writing it, how it would be built, and what the maintainer needs to decide.

@@ -1,10 +1,11 @@
 # Bundled fonts
 
 Static faces of the three typefaces in `docs/DESIGN.md`, at the weights it
-uses. `build.rs` puts them in the QML module's resources (`fonts/`) and the
-C++ shell registers them at start (`cpp/app.cpp`). They were made for the
-GPUI interface, which ignored a variable font's weight axis; the Qt one keeps
-them so every machine draws the same faces whatever fonts it has installed.
+lists (W-088). `build.rs` puts every `.ttf` here in the QML module's
+resources (`fonts/`) and the C++ shell registers them at start
+(`cpp/app.cpp`), so every machine draws the same faces whatever fonts it has
+installed. The QML takes the family names from the `Tokens` singleton
+(`family_body`, `family_data`, `family_heading`).
 
 | File | Weight | Licence |
 |---|---|---|

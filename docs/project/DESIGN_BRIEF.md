@@ -1,5 +1,15 @@
 # Design Brief: Rustphin main window and its surfaces (W-079)
 
+> **Status (2026-11-14): historical.** This brief was the input for the
+> W-079 design pass, which adopted [`../DESIGN.md`](../DESIGN.md) on
+> 2026-11-08; it is kept as written. Since then D-026 and W-096 made the
+> type and rows smaller, and the interface moved from GPUI to Qt 6 and QML
+> (D-034, W-114): `theme.rs` and the GPUI toolkit it mentions are gone, the
+> colours now live in `crates/rustphin-view/src/colors.rs` and the sizes in
+> `metrics.rs`. What the build draws today is in `docs/DESIGN.md` (its
+> "Implementation status") and
+> [`INFORMATION_ARCHITECTURE.md`](INFORMATION_ARCHITECTURE.md).
+
 Written 2026-11-08 for the mockup-aligned design pass (W-079). It is the input
 for an HTML mockup that the maintainer will produce, and then for the pass itself.
 It is read together with:

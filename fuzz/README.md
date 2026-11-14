@@ -24,14 +24,24 @@ optional second argument changes the campaign duration, for example
 - `desktop`: shortcut classification and Exec argument parsing. Uses only a
   generated temporary `.desktop` file; never invokes a launch API. Command
   arguments must be NUL-free, and parsing must preserve the source bytes.
+- `images`: thumbnail generation and malformed image handling in a fresh
+  temporary source/cache. Success must be discoverable through cache lookup;
+  failure must create a failure marker; source bytes must remain unchanged.
 - `admin_entry`: entries from KDE's kio-admin helper (KIO `UDSEntry` in Qt's
   `QDataStream` layout, W-098). Any input must decode or be refused without a
   panic; an accepted entry must have a plain name (not empty, no `/`),
   permission bits only, and valid nanoseconds. Seeds are entries KIO 6.31
   itself wrote.
-- `images`: thumbnail generation and malformed image handling in a fresh
-  temporary source/cache. Success must be discoverable through cache lookup;
-  failure must create a failure marker; source bytes must remain unchanged.
+- `archive_entry`: archive entries are untrusted (W-111, D-032). A first byte
+  below 128 checks the entry rules: an accepted name is relative with only
+  plain parts (no `..`, no root), and a link accepted as staying inside never
+  starts at the root and has no `..` after a name (W-133). Otherwise the rest
+  is handed to the reader of one of the seven formats Rustphin reads itself
+  (ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ, TAR.ZST, 7Z), which must read or refuse
+  it without panicking, reading at most 64 KiB of each entry. Other formats
+  go to libarchive in the application; this target does not fuzz it.
+  Seeds: a plain name with a climbing link target, a name with `..`, a ZIP
+  and a TAR.
 
 Reviewed starting inputs live in `seeds/`. The command copies them into the
 ignored mutable `corpus/`; libFuzzer discoveries and crashes stay in ignored
@@ -41,14 +51,9 @@ short campaigns are evidence within their input/time bounds, not proof that
 every parser input is safe or that image decoding has a wall-clock deadline.
 
 The independent workspace keeps libFuzzer out of the application build.
-`rust-tc doctor` includes `fuzz-check` for harness formatting, Clippy and the
-same dependency/licence policy as the application. It does not run campaigns;
-run those explicitly after relevant parser changes. The fuzz lockfile starts
-from the application versions; harness-only dependency updates are reviewed
-separately. No UI toolkit is linked into the harness.
-- `archive_entry`: archive entries are untrusted (W-111, D-032). A first byte
-  below 128 checks the entry rules: an accepted name is relative with only
-  plain parts (no `..`, no root), and a link accepted as staying inside never
-  starts at the root. Otherwise the rest is handed to the reader of one of
-  the seven formats, which must read or refuse it without panicking, reading
-  at most 64 KiB of each entry. Seeds: names with `..`, a ZIP and a TAR.
+`rust-tc doctor` includes `fuzz-check`: the harness's formatting, Clippy with
+warnings denied, and `cargo-deny` with the application's `deny.toml`. It does
+not run campaigns; run those explicitly after relevant parser changes. The
+fuzz lockfile starts from the application versions; harness-only dependency
+updates are reviewed separately. The harness depends on `rustphin-core` and
+`rustphin-platform` only; no UI toolkit is linked into it.
