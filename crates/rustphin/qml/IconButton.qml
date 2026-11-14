@@ -20,13 +20,15 @@ ToolButton {
     focusPolicy: Qt.TabFocus
     implicitWidth: side
     implicitHeight: side
-    ToolTip.visible: hovered && tip.length > 0
-    ToolTip.delay: 600
-    ToolTip.text: tip
     Accessible.name: text
     // A hidden button (another row's Eject) is not offered to screen readers.
     Accessible.ignored: !visible
     Accessible.checked: checked
+
+    Tip {
+        visible: button.hovered && button.tip.length > 0
+        text: button.tip
+    }
 
     contentItem: Image {
         source: "image://lucide/" + button.iconName + "/" + button.iconColour.toString().slice(1)

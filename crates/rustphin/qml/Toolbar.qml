@@ -96,7 +96,7 @@ Rectangle {
                         enabled: entry.available && bar.folder !== null && (entry.itemId === "admin" ? Operations.admin || (Operations.adminInstalled && !Operations.adminPending) : entry.itemId === "back" ? bar.folder.canGoBack : entry.itemId === "forward" ? bar.folder.canGoForward : entry.itemId === "up" ? bar.folder.canGoUp : true)
                         checkable: entry.itemId === "hidden" || entry.itemId === "filter"
                         checked: entry.itemId === "hidden" ? (bar.folder !== null && bar.folder.showHidden) : entry.itemId === "filter" ? (bar.pane !== null && bar.pane.filterOpen) : false
-                        implicitWidth: entry.kind === "menu" ? 48 : Tokens.metrics.tool_button
+                        implicitWidth: entry.kind === "menu" ? Tokens.metrics.tool_menu_button : Tokens.metrics.tool_button
                         onClicked: {
                             if (entry.kind === "menu" || ["filter", "split", "admin"].indexOf(entry.itemId) >= 0 || entry.itemId.indexOf("command:") === 0)
                                 bar.command(entry.itemId, tool)
@@ -140,9 +140,7 @@ Rectangle {
 
                         enabled: entry.available
                         text: entry.name
-                        ToolTip.visible: hovered
-                        ToolTip.delay: 600
-                        ToolTip.text: entry.tip
+                        tip: entry.tip
                         onClicked: bar.command("actions", actionsButton)
 
                         contentItem: Row {

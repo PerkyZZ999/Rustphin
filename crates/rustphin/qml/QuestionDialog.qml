@@ -154,6 +154,8 @@ Popup {
                     textFormat: Text.PlainText
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
+                    lineHeight: Tokens.metrics.title_line
+                    lineHeightMode: Text.FixedHeight
                     color: Tokens.colors.text
                     font.family: Tokens.metrics.family_heading
                     font.pixelSize: Tokens.metrics.title_text
@@ -167,6 +169,8 @@ Popup {
                 Layout.leftMargin: Tokens.metrics.space_lg
                 Layout.rightMargin: Tokens.metrics.space_lg
                 wrapMode: Text.Wrap
+                lineHeight: Tokens.metrics.text_line
+                lineHeightMode: Text.FixedHeight
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.body_text
@@ -267,6 +271,8 @@ Popup {
                 Layout.rightMargin: Tokens.metrics.space_lg
                 visible: text.length > 0
                 wrapMode: Text.Wrap
+                lineHeight: Tokens.metrics.text_line
+                lineHeightMode: Text.FixedHeight
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.small_text

@@ -15,7 +15,7 @@ Popup {
 
     parent: Overlay.overlay
     anchors.centerIn: parent
-    width: Math.min(560, parent.width - 2 * Tokens.metrics.space_lg)
+    width: Math.min(Tokens.metrics.compress_dialog, parent.width - 2 * Tokens.metrics.space_lg)
     modal: true
     focus: true
     padding: 0
@@ -192,6 +192,8 @@ Popup {
             Layout.leftMargin: Tokens.metrics.space_lg
             Layout.rightMargin: Tokens.metrics.space_lg
             wrapMode: Text.Wrap
+            lineHeight: Tokens.metrics.text_line
+            lineHeightMode: Text.FixedHeight
             color: compress.ready ? Tokens.colors.text_muted : Tokens.colors.danger
             font.family: Tokens.metrics.family_body
             font.pixelSize: Tokens.metrics.small_text

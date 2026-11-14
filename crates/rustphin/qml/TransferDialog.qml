@@ -72,6 +72,8 @@ Popup {
             Layout.fillWidth: true
             visible: transferDialog.cards.length === 0
             wrapMode: Text.Wrap
+            lineHeight: Tokens.metrics.text_line
+            lineHeightMode: Text.FixedHeight
             color: Tokens.colors.text_muted
             font.family: Tokens.metrics.family_body
             font.pixelSize: Tokens.metrics.body_text

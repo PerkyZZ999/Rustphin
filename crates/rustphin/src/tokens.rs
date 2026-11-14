@@ -89,6 +89,9 @@ fn metric_values() -> Vec<(&'static str, f32)> {
         ("heading_text", text::HEADING * scale),
         ("text_scale", scale),
         ("line", text::LINE),
+        ("text_line", text::LINE * scale),
+        ("heading_line", text::HEADING_LINE * scale),
+        ("title_line", text::TITLE_LINE * scale),
         ("hidden_opacity", rustphin_view::colors::HIDDEN_OPACITY),
         ("cell_gap", size::CELL_GAP),
         ("rename_field", size::RENAME_FIELD),
@@ -128,6 +131,8 @@ fn metric_values() -> Vec<(&'static str, f32)> {
         ("menu_visible", size::MENU_VISIBLE),
         ("dialog", size::DIALOG),
         ("rename_dialog", size::RENAME_DIALOG),
+        ("compress_dialog", size::COMPRESS_DIALOG),
+        ("tool_menu_button", size::TOOL_MENU_BUTTON),
         ("dialog_title", size::DIALOG_TITLE),
         ("palette", size::PALETTE),
         ("palette_row", size::PALETTE_ROW),
@@ -200,15 +205,11 @@ mod tests {
         assert_eq!(names.len(), count);
     }
 
-    #[test]
-    fn every_colour_the_qml_reads_is_handed_to_it() -> std::io::Result<()> {
-        // A misspelt or retired token reads as `undefined` in QML and draws
-        // nothing, without a warning at build time.
-        let known: Vec<&str> = Colors::charcoal(false)
-            .named()
-            .iter()
-            .map(|(name, _)| *name)
-            .collect();
+    /// Checks that every `Tokens.<group>.<name>` the QML reads is in
+    /// `known`: a misspelt or retired token reads as `undefined` in QML and
+    /// draws nothing, without a warning at build time.
+    fn check_reads(group: &str, known: &[&str], at_least: usize) -> std::io::Result<()> {
+        let prefix = format!("Tokens.{group}.");
         let qml = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("qml");
         let mut checked = 0;
         for file in std::fs::read_dir(&qml)? {
@@ -217,25 +218,42 @@ mod tests {
                 continue;
             }
             let source = std::fs::read_to_string(&path)?;
-            for (at, prefix) in source.match_indices("Tokens.colors.") {
-                let rest = &source[at + prefix.len()..];
+            for (at, found) in source.match_indices(&prefix) {
+                let rest = &source[at + found.len()..];
                 let name: String = rest
                     .chars()
                     .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
                     .collect();
                 assert!(
                     known.contains(&name.as_str()),
-                    "{} reads Tokens.colors.{name}, which is not a colour",
+                    "{} reads {prefix}{name}, which is not handed to QML",
                     path.display()
                 );
                 checked += 1;
             }
         }
         assert!(
-            checked > 100,
-            "only {checked} colour reads found in {}",
+            checked > at_least,
+            "only {checked} reads of {prefix} found in {}",
             qml.display()
         );
         Ok(())
+    }
+
+    #[test]
+    fn every_colour_the_qml_reads_is_handed_to_it() -> std::io::Result<()> {
+        let known: Vec<&str> = Colors::charcoal(false)
+            .named()
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
+        check_reads("colors", &known, 100)
+    }
+
+    #[test]
+    fn every_size_and_font_the_qml_reads_is_handed_to_it() -> std::io::Result<()> {
+        let mut known: Vec<&str> = metric_values().iter().map(|(name, _)| *name).collect();
+        known.extend(font_families().iter().map(|(name, _)| *name));
+        check_reads("metrics", &known, 300)
     }
 }

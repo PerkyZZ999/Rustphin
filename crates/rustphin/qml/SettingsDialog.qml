@@ -53,6 +53,8 @@ Popup {
         font.family: Tokens.metrics.family_body
         font.pixelSize: Tokens.metrics.body_text
         wrapMode: Text.Wrap
+        lineHeight: Tokens.metrics.text_line
+        lineHeightMode: Text.FixedHeight
     }
     component Quiet: Words {
         color: Tokens.colors.text_muted
@@ -199,9 +201,7 @@ Popup {
                     contentHeight: column.implicitHeight + 2 * Tokens.metrics.space_lg
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar {
-                        policy: ScrollBar.AsNeeded
-                    }
+                    ScrollBar.vertical: Scroller {}
 
                     ColumnLayout {
                         id: column
@@ -393,6 +393,8 @@ Popup {
                     leftPadding: check.indicator.width + Tokens.metrics.space_sm
                     verticalAlignment: Text.AlignVCenter
                     wrapMode: Text.Wrap
+                    lineHeight: Tokens.metrics.text_line
+                    lineHeightMode: Text.FixedHeight
                     color: check.enabled ? Tokens.colors.text : Tokens.colors.text_disabled
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.body_text
@@ -590,9 +592,7 @@ Popup {
             model: box.items
             Accessible.role: Accessible.List
             Accessible.name: box.name
-            ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
-            }
+            ScrollBar.vertical: Scroller {}
             delegate: ItemDelegate {
                 id: item
 
@@ -901,6 +901,8 @@ Popup {
                 visible: dialog.showingLicence
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
+                lineHeight: Tokens.metrics.text_line
+                lineHeightMode: Text.FixedHeight
                 color: Tokens.colors.text
                 font.family: Tokens.metrics.family_data
                 font.pixelSize: Tokens.metrics.small_text

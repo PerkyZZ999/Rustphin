@@ -107,9 +107,7 @@ FocusScope {
             currentIndex: places.focusRow
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Places")
-            ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
-            }
+            ScrollBar.vertical: Scroller {}
 
             // The panel's keys run its commands from the table
             // (`rustphin_view::commands`, KEYBOARD.md). Alt+Up and Alt+Down
@@ -470,6 +468,8 @@ FocusScope {
                 rightPadding: Tokens.metrics.space_md
                 bottomPadding: Tokens.metrics.space_sm
                 wrapMode: Text.Wrap
+                lineHeight: Tokens.metrics.text_line
+                lineHeightMode: Text.FixedHeight
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.small_text
@@ -486,6 +486,8 @@ FocusScope {
                     width: parent.width - 2 * Tokens.metrics.space_md
                     x: Tokens.metrics.space_md
                     wrapMode: Text.Wrap
+                    lineHeight: Tokens.metrics.text_line
+                    lineHeightMode: Text.FixedHeight
                     color: Tokens.colors.text_muted
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.small_text

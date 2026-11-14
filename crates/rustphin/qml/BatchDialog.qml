@@ -214,6 +214,8 @@ Popup {
                     textFormat: Text.PlainText
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
+                    lineHeight: Tokens.metrics.text_line
+                    lineHeightMode: Text.FixedHeight
                     color: Tokens.colors.text_muted
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.small_text
@@ -256,6 +258,8 @@ Popup {
                 visible: dialog.problem.length > 0 || dialog.rowProblems.length > 0
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
+                lineHeight: Tokens.metrics.text_line
+                lineHeightMode: Text.FixedHeight
                 color: Tokens.colors.danger
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.body_text
@@ -267,6 +271,8 @@ Popup {
                 visible: dialog.unchanged
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
+                lineHeight: Tokens.metrics.text_line
+                lineHeightMode: Text.FixedHeight
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.body_text
@@ -291,9 +297,7 @@ Popup {
                 boundsBehavior: Flickable.StopAtBounds
                 Accessible.role: Accessible.List
                 Accessible.name: qsTr("Rename preview")
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
-                }
+                ScrollBar.vertical: Scroller {}
                 header: RowLayout {
                     width: ListView.view.width
                     height: Tokens.metrics.heading_row

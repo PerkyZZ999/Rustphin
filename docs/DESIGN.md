@@ -529,6 +529,16 @@ components:
     width: 600px
   status-selection-only-max:
     width: 440px
+  tooltip:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.sm}"
+  scrollbar-thumb:
+    backgroundColor: "{colors.text-muted}"
+    rounded: "{rounded.sm}"
+    width: 8px
   drag-chip:
     backgroundColor: "{colors.selection}"
     textColor: "{colors.on-selection}"
@@ -682,8 +692,8 @@ boxes. Zooming out reaches 24-pixel rows.
 ## Typography
 
 Three families, each with one job. They are bundled
-(`crates/rustphin/fonts/`: Inter 400, 500 and 600, JetBrains Mono 400 and 500,
-Space Grotesk 600) and registered by the C++ shell at start.
+(`crates/rustphin/fonts/`: Inter 400 and 600, JetBrains Mono 400, Space
+Grotesk 600; no token uses another weight) and registered by the C++ shell at start.
 
 - **Inter** for names and interface text. `body-lg` (12 px) for file names
   in every view; `body-md` (12 px) for place names, tabs, menu items, buttons,
@@ -1193,16 +1203,21 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   `primary-bright` outline, the name in its list size, the stem selected
   (`selection` with `on-selection`). Enter or leaving the field keeps the name; Escape
   cancels.
-- **Tooltips:** after 600 ms of hover, the label then the key in
-  parentheses.
+- **Tooltips** (`Tip.qml`): after 600 ms of hover, the label then the key in
+  parentheses, in `body-md` `text` on `surface-raised` with a 1 px
+  `border-strong` outline and 8 px padding; a long one wraps at 440 px. A
+  tooltip is a note, not a menu: it has no royal-blue outline or glow.
 - **Dragging:** entries leave as a system drag of their URIs, shown by the
   first entry's type icon (32 px); a folder under the pointer takes `hover`,
   and a drop on the folder itself outlines the pane in 2 px `primary-bright`.
   A drop asks "Move or copy?" unless Ctrl (copy) or Shift (move) is held.
   Places are dragged as a `drag-chip` with the place's name.
 - **Rubber band:** a 1 px `primary-bright` outline over `hover`.
-- **Scrollbars:** the Qt Quick Controls Basic scrollbar, shown as needed:
-  vertical in the details and icons views, horizontal in the compact view.
+- **Scrollbars** (`Scroller.qml`): a thumb 8 px thick, 2 px from the edge
+  it runs along, in `text-muted` at half opacity (65 % under the pointer,
+  80 % while dragged), with no track; shown whenever there is more than
+  fits: vertical in the details and icons views and in every list that
+  scrolls, horizontal in the compact view.
 - **Interface icons:** the bundled Lucide SVGs (`crates/rustphin/icons`),
   drawn through `image://lucide/<name>/<colour>` in a token colour, 16 px by
   default, 12 px for chevrons and badges, 20 px in palette results, 32 px in
@@ -1290,13 +1305,10 @@ Where the build differs from this document today:
   in a narrow window (`size::SETTINGS_NARROW` is not used).
 - **Blur status:** no line says that blur is unavailable; the opaque theme
   is used silently (`size::BLUR_STATUS` is not used).
-- **Tooltips and scrollbars** use the Qt Quick Controls Basic style, not the
-  tokens (`size::SCROLLBAR` and `SCROLLBAR_INSET` are handed to QML but not
-  read).
-- **Line heights:** QML leaves line height to the font; the `lineHeight`
-  tokens (`text::LINE`, `HEADING_LINE`, `TITLE_LINE`) are not applied.
-- **Literals:** the Compress to… dialog's 560 px width and the toolbar's
-  48 px menu buttons are written in QML, not in `metrics.rs`.
+- **Line heights:** the `lineHeight` tokens (`text::LINE`, `HEADING_LINE`,
+  `TITLE_LINE`) set the lines of text that wraps (sentences in dialogs,
+  states, notes and tooltips). A single line is centred in its row and
+  keeps the font's own height.
 - **Error banner:** the pane's re-read banner has no "Details…" or dismiss
   button; Details is on the notice line, since operation results are
   window-level, and the problems dialog has no "Copy list".

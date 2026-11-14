@@ -187,6 +187,8 @@ Popup {
             Layout.fillWidth: true
             visible: list.count === 0 || results.status.length > 0
             wrapMode: Text.Wrap
+            lineHeight: Tokens.metrics.text_line
+            lineHeightMode: Text.FixedHeight
             color: Tokens.colors.text_muted
             font.family: Tokens.metrics.family_body
             font.pixelSize: Tokens.metrics.small_text

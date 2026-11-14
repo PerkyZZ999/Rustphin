@@ -127,6 +127,8 @@ pub mod size {
     pub const MENU_VISIBLE: f32 = 384.;
     /// Width of a dialog.
     pub const DIALOG: f32 = 480.;
+    /// Width of the Compress to… dialog.
+    pub const COMPRESS_DIALOG: f32 = 560.;
     /// Width of the batch-rename dialog, which has a two-column preview.
     pub const RENAME_DIALOG: f32 = 640.;
     /// Maximum width of the command palette.
@@ -191,9 +193,11 @@ pub mod size {
     pub const PATH_BAR: f32 = 28.;
     /// A plain toolbar button and the view-mode segments (`toolbar-button`).
     pub const TOOL_BUTTON: f32 = 32.;
-    /// Width of a scrollbar's track.
+    /// A toolbar button that opens a menu: its icon and a chevron.
+    pub const TOOL_MENU_BUTTON: f32 = 48.;
+    /// Thickness of a scrollbar's thumb.
     pub const SCROLLBAR: f32 = 8.;
-    /// Gap between a scrollbar's thumb and the edge of its track.
+    /// Gap between a scrollbar's thumb and the edge it runs along.
     pub const SCROLLBAR_INSET: f32 = 2.;
 }
 

@@ -279,9 +279,7 @@ FocusScope {
                         id: trashActions
 
                         text: qsTr("Trash actions")
-                        ToolTip.visible: hovered
-                        ToolTip.delay: 600
-                        ToolTip.text: qsTr("Restore, empty or browse another trash; also available in Actions")
+                        tip: qsTr("Restore, empty or browse another trash; also available in Actions")
                         onClicked: {
                             if (folder.openMenu("trash"))
                                 trashMenu.openAt(trashActions, 0, trashActions.height, 0)
@@ -336,7 +334,7 @@ FocusScope {
             visible: folder.mode === 2
             color: Tokens.colors.chrome
 
-            // Columns as in the GPUI view (M1): each data column keeps
+            // Columns as in the mockups (M1): each data column keeps
             // 8 px on both sides, and the last ends 8 px from the edge.
             RowLayout {
                 anchors.fill: parent
@@ -735,6 +733,8 @@ FocusScope {
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
+                    lineHeight: Tokens.metrics.heading_line
+                    lineHeightMode: Text.FixedHeight
                     color: Tokens.colors.text
                     font.family: Tokens.metrics.family_heading
                     font.pixelSize: Tokens.metrics.heading_text
@@ -747,6 +747,8 @@ FocusScope {
                     visible: text.length > 0
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
+                    lineHeight: Tokens.metrics.text_line
+                    lineHeightMode: Text.FixedHeight
                     color: Tokens.colors.text_muted
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.body_text
@@ -772,9 +774,7 @@ FocusScope {
                         visible: folder.problem.length === 0 && folder.emptyTitle.indexOf("hidden") >= 0
                         text: qsTr("Show hidden")
                         iconName: "eye"
-                        ToolTip.visible: hovered
-                        ToolTip.delay: 600
-                        ToolTip.text: qsTr("Show hidden files (Ctrl+H)")
+                        tip: qsTr("Show hidden files (Ctrl+H)")
                         onClicked: {
                             folder.setHidden(true)
                             keys.forceActiveFocus()
@@ -784,9 +784,7 @@ FocusScope {
                         visible: folder.problem.length === 0 && folder.filterText.length > 0 && folder.empty
                         text: qsTr("Clear filter")
                         iconName: "funnel-x"
-                        ToolTip.visible: hovered
-                        ToolTip.delay: 600
-                        ToolTip.text: qsTr("Clear the filter (Esc in the filter bar)")
+                        tip: qsTr("Clear the filter (Esc in the filter bar)")
                         onClicked: pane.closeFilter()
                     }
                 }
@@ -1216,9 +1214,7 @@ FocusScope {
             highlightFollowsCurrentItem: false
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Entries")
-            ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
-            }
+            ScrollBar.vertical: Scroller {}
 
             delegate: DetailsRow {}
         }
@@ -1241,9 +1237,7 @@ FocusScope {
             highlightFollowsCurrentItem: false
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Entries")
-            ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
-            }
+            ScrollBar.vertical: Scroller {}
 
             delegate: Item {
                 id: cell
@@ -1331,9 +1325,7 @@ FocusScope {
             highlightFollowsCurrentItem: false
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Entries")
-            ScrollBar.horizontal: ScrollBar {
-                policy: ScrollBar.AsNeeded
-            }
+            ScrollBar.horizontal: Scroller {}
 
             delegate: Item {
                 id: entry

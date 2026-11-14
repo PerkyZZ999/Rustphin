@@ -98,9 +98,7 @@ Popup {
             contentHeight: body.implicitHeight + 2 * Tokens.metrics.space_lg
             clip: true
             boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollBar {
-                policy: ScrollBar.AsNeeded
-            }
+            ScrollBar.vertical: Scroller {}
 
             ColumnLayout {
                 id: body
@@ -115,6 +113,8 @@ Popup {
                     visible: info.loading || info.error.length > 0
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
+                    lineHeight: Tokens.metrics.text_line
+                    lineHeightMode: Text.FixedHeight
                     color: info.error.length > 0 ? Tokens.colors.danger : Tokens.colors.text_muted
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.body_text
@@ -314,6 +314,8 @@ Popup {
                     visible: dialog.permissionNote.length > 0
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
+                    lineHeight: Tokens.metrics.text_line
+                    lineHeightMode: Text.FixedHeight
                     color: Tokens.colors.text_muted
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.small_text

@@ -24,9 +24,11 @@ Button {
     rightPadding: Tokens.metrics.space_md
     Accessible.name: text
     Accessible.description: tip
-    ToolTip.visible: hovered && tip.length > 0
-    ToolTip.delay: 600
-    ToolTip.text: tip
+
+    Tip {
+        visible: plain.hovered && plain.tip.length > 0
+        text: plain.tip
+    }
 
     contentItem: Row {
         spacing: Tokens.metrics.space_sm

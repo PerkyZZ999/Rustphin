@@ -9,9 +9,9 @@ installed. The QML takes the family names from the `Tokens` singleton
 
 | File | Weight | Licence |
 |---|---|---|
-| `Inter-Regular.ttf`, `Inter-Medium.ttf`, `Inter-SemiBold.ttf` | 400, 500, 600 | `OFL-Inter.txt` |
+| `Inter-Regular.ttf`, `Inter-SemiBold.ttf` | 400, 600 | `OFL-Inter.txt` |
 | `SpaceGrotesk-SemiBold.ttf` | 600 | `OFL-SpaceGrotesk.txt` |
-| `JetBrainsMono-Regular.ttf`, `JetBrainsMono-Medium.ttf` | 400, 500 | `OFL-JetBrainsMono.txt` |
+| `JetBrainsMono-Regular.ttf` | 400 | `OFL-JetBrainsMono.txt` |
 
 All three are under the SIL Open Font License 1.1, which allows bundling them
 with software; none declares a Reserved Font Name, so the instances keep the
@@ -25,7 +25,7 @@ fontTools 4.68:
 
 ```bash
 python3 -m fontTools.varLib.instancer --update-name-table -o Inter-SemiBold.ttf 'Inter[opsz,wght].ttf' wght=600 opsz=14
-python3 -m fontTools.varLib.instancer --update-name-table -o JetBrainsMono-Medium.ttf 'JetBrainsMono[wght].ttf' wght=500
+python3 -m fontTools.varLib.instancer --update-name-table -o JetBrainsMono-Regular.ttf 'JetBrainsMono[wght].ttf' wght=400
 ```
 
 and likewise for the other Inter and JetBrains Mono weights. Inter's optical
