@@ -297,7 +297,7 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Context:** The maintainer asked for compressing and extracting from the context menu (W-111). docs/project/ARCHIVE_PLAN.md is the plan, with five open decisions.
 - **Decision:** as ARCHIVE_PLAN.md proposes, with its five recommendations. Rustphin's own operation engine reads and writes ZIP, TAR (plain, .gz, .bz2, .xz, .zst) and 7Z; other formats are handed to Ark, else 7-Zip or unrar, when installed. Extract › Extract here, Extract into "name/", Extract and trash archive, Extract to…; Compress › Compress to "name.zip" (first), Compress to "name.tar.gz", Compress to…. Creating encrypted archives is later work; opening them is in. After extracting, the result is selected in the current view; no folder is opened. Work W-111a–g, requirement R-021.
 - **Confirmed by / date:** The maintainer, 2026-11-13 ("Approve, build both")
-- **Supersedes / superseded by:** adds scope beyond the MVP at the maintainer's request
+- **Supersedes / superseded by:** adds scope beyond the MVP at the maintainer's request; its hand-over to Ark superseded by D-036
 
 ## D-033 — Qt 6 interface: spike first, cxx-qt, own look, own engine
 - **Status:** decided
@@ -323,3 +323,11 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** `rust-version = "1.100"` for every crate (and the spikes); the minimum-version check (`rust-tc msrv`, part of doctor) runs on the `1.100.0` toolchain; development uses rustup's `stable`, now 1.100.0. Edition stays 2024.
 - **Confirmed by / date:** The maintainer, 2026-11-14 ("I would also like for our project to get update to Rust 1.100 (Stable)")
 - **Supersedes / superseded by:** supersedes D-005 (minimum 1.95)
+
+## D-036 — Other archive formats through libarchive, then 7-Zip; no Ark
+- **Status:** decided
+- **Date:** 2026-11-14
+- **Context:** D-032 handed formats Rustphin does not read itself (RAR, ISO, CAB, LHA, CPIO, RPM, DEB, lone compressed files…) to Ark, with its own window, progress and questions. The maintainer asked for something more modern and faster. libarchive (BSD-2-Clause, already part of every KDE system, the library behind `bsdtar`) reads those formats in-process; 7-Zip reads the rest, encrypted RAR and 7Z included.
+- **Decision:** Rustphin reads the other formats through libarchive inside its own operation engine: the same progress, Stop, conflict questions, password question and undo as ZIP and TAR, and the same checks on entry names and links. The binding is Rustphin's own small FFI in `rustphin-platform` (names stay bytes; no new crate), registered with the core as its reader of `Format::Foreign`, so the core keeps no C dependency. Archives libarchive cannot open, or whose encryption it cannot read, go to 7-Zip, else unrar, as before. Ark is no longer used. Writing stays ZIP, TAR and 7Z.
+- **Confirmed by / date:** The maintainer, 2026-11-14 ("Yes, use libarchive")
+- **Supersedes / superseded by:** supersedes D-032's hand-over to Ark

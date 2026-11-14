@@ -2099,7 +2099,7 @@ pub mod handed {
         /// Every name in the folder, as bytes (Compress avoids them).
         pub taken: Vec<Vec<u8>>,
         /// For Extract to: each archive and whether Rustphin opens it.
-        pub archives: Vec<(PathBuf, bool)>,
+        pub archives: Vec<PathBuf>,
         /// Extract to: trash the archives afterwards.
         pub trash: bool,
     }
@@ -2427,17 +2427,12 @@ impl qobject::FolderModel {
             return;
         };
         let rows = self.rust().selection.rows(&snapshot);
-        let archives: Vec<(PathBuf, bool)> = rows
+        let archives: Vec<PathBuf> = rows
             .iter()
-            .filter(|&&row| !snapshot.is_container(row))
-            .filter_map(|&row| {
-                self.archive_opener(&snapshot, row).map(|opener| {
-                    (
-                        snapshot.entry_path(row),
-                        opener == rustphin_view::archives::Opener::Rustphin,
-                    )
-                })
+            .filter(|&&row| {
+                !snapshot.is_container(row) && self.archive_opener(&snapshot, row).is_some()
             })
+            .map(|&row| snapshot.entry_path(row))
             .collect();
         if archives.is_empty() {
             return crate::hub::say("Select an archive to extract.".to_owned(), false);
@@ -2543,47 +2538,21 @@ impl qobject::FolderModel {
     }
 }
 
-/// Extracts each archive into `into`: Rustphin's own formats through the
-/// operation engine, others with the desktop's tool (W-111).
+/// Extracts each archive into `into` through the operation engine: its
+/// own formats, and the others through libarchive or 7-Zip (D-036).
 pub fn start_extracting(
-    archives: Vec<(PathBuf, bool)>,
+    archives: Vec<PathBuf>,
     into: PathBuf,
     layout: rustphin_core::ops::Layout,
     trash: bool,
 ) {
-    for (archive, ours) in archives {
-        if ours {
-            crate::hub::start(rustphin_core::ops::Request::Extract {
-                archive,
-                into: into.clone(),
-                layout,
-                trash_archive: trash,
-            });
-        } else {
-            let into = into.clone();
-            std::thread::spawn(move || {
-                let name = rustphin_view::operations::folder_name(&archive);
-                let folder = (layout == rustphin_core::ops::Layout::NewFolder).then(|| {
-                    let raw = archive.file_name().map(OsStr::as_bytes).unwrap_or_default();
-                    OsStr::from_bytes(rustphin_view::archives::folder_stem(raw)).to_owned()
-                });
-                match rustphin_platform::archive_tool::extract(&archive, &into, folder.as_deref()) {
-                    Ok(tool) => {
-                        crate::hub::say(format!("{tool} extracted {name}."), false);
-                        if trash {
-                            crate::post::on_qt(move || {
-                                crate::hub::start(rustphin_core::ops::Request::Trash {
-                                    paths: vec![archive],
-                                });
-                            });
-                        }
-                    }
-                    Err(error) => {
-                        crate::hub::say(format!("Could not extract {name}: {error}."), true)
-                    }
-                }
-            });
-        }
+    for archive in archives {
+        crate::hub::start(rustphin_core::ops::Request::Extract {
+            archive,
+            into: into.clone(),
+            layout,
+            trash_archive: trash,
+        });
     }
 }
 

@@ -75,6 +75,7 @@ impl Engine<'_> {
         head.truncate(filled);
         let name = file_name(path)?;
         archive::detect(name.as_bytes(), &head)
+            .or_else(|| archive::foreign_reader().map(|_| Format::Foreign))
             .ok_or_else(|| OpError::NotAnArchive(path.to_owned()))
     }
 
@@ -193,6 +194,7 @@ impl Engine<'_> {
         let mut folders: Vec<(PathBuf, Option<u32>, Option<i64>)> = Vec::new();
         let read = archive::read_entries(
             format,
+            archive,
             source,
             password,
             &mut |items, bytes| {
@@ -468,7 +470,7 @@ impl Engine<'_> {
                 let _ = self.fs.set_mode(temp, 0o755);
                 (
                     temp.to_path_buf(),
-                    into.join(OsStr::from_bytes(archive::stem(name.as_bytes()))),
+                    into.join(OsStr::from_bytes(archive::folder_stem(name.as_bytes()))),
                 )
             }
         };

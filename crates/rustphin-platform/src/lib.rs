@@ -15,6 +15,7 @@ pub mod file_manager;
 pub mod icons;
 pub mod instance;
 pub mod kdeglobals;
+pub mod libarchive;
 pub mod mime;
 pub mod places;
 pub mod process;

@@ -39,6 +39,7 @@ fuzz_target!(|data: &[u8]| {
     let format = formats[usize::from(selector) % formats.len()];
     let _ = read_entries(
         format,
+        std::path::Path::new("fuzz"),
         Box::new(std::io::Cursor::new(rest.to_vec())),
         Some("password"),
         &mut |_, _| ControlFlow::Continue(()),

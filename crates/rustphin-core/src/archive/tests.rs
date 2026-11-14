@@ -13,7 +13,7 @@ fn formats_are_known_by_content_and_tar_streams_also_by_name() {
     );
     assert_eq!(detect(b"a.tar.gz", &[0x1F, 0x8B, 8]), Some(Format::TarGz));
     assert_eq!(detect(b"a.TGZ", &[0x1F, 0x8B, 8]), Some(Format::TarGz));
-    // A lone compressed file is not a TAR: Rustphin leaves it to Ark.
+    // A lone compressed file is not a TAR: the foreign reader takes it.
     assert_eq!(detect(b"notes.txt.gz", &[0x1F, 0x8B, 8]), None);
     // A name that lies about the content is not believed.
     assert_eq!(detect(b"a.tar.xz", &[0x1F, 0x8B, 8]), None);
@@ -188,6 +188,7 @@ fn read_back(format: Format, bytes: Vec<u8>) -> BTreeMap<Vec<u8>, (Kind, Vec<u8>
     let mut found = BTreeMap::new();
     read_entries(
         format,
+        Path::new("test"),
         Box::new(Cursor::new(bytes)),
         None,
         &mut |_, _| ControlFlow::Continue(()),
@@ -313,6 +314,7 @@ fn a_damaged_archive_says_so() {
     bytes.truncate(bytes.len() / 2);
     let result = read_entries(
         Format::Zip,
+        Path::new("test.zip"),
         Box::new(Cursor::new(bytes)),
         None,
         &mut |_, _| ControlFlow::Continue(()),
@@ -336,6 +338,7 @@ fn an_encrypted_zip_asks_for_its_password_and_refuses_a_wrong_one() {
         let mut content = Vec::new();
         let result = read_entries(
             Format::Zip,
+            Path::new("test.zip"),
             Box::new(Cursor::new(bytes.clone())),
             password,
             &mut |_, _| ControlFlow::Continue(()),

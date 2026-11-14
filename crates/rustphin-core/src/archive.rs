@@ -35,6 +35,9 @@ pub enum Format {
     TarZst,
     /// 7-Zip.
     SevenZ,
+    /// Any other format, read (never written) by the reader the
+    /// application registers with [`set_foreign_reader`]: libarchive (D-036).
+    Foreign,
 }
 
 /// How hard to compress.
@@ -77,6 +80,8 @@ impl Format {
             Self::TarXz => "tar.xz",
             Self::TarZst => "tar.zst",
             Self::SevenZ => "7z",
+            // Never written; names have no one ending.
+            Self::Foreign => "",
         }
     }
 
@@ -87,7 +92,7 @@ impl Format {
 
     /// Whether Rustphin can make archives of this format.
     pub fn writable(self) -> bool {
-        !matches!(self, Self::TarBz2 | Self::Tar)
+        !matches!(self, Self::TarBz2 | Self::Tar | Self::Foreign)
     }
 }
 
@@ -107,6 +112,20 @@ pub fn stem(name: &[u8]) -> &[u8] {
     match suffix(name) {
         Some((length, _)) => &name[..name.len() - length],
         None => name,
+    }
+}
+
+/// The folder "Extract into" makes for the archive called `name`: the name
+/// without its archive ending, or else without its last ending, as Ark
+/// names it ("notes.txt.gz" gives "notes.txt", "disc.iso" gives "disc").
+pub fn folder_stem(name: &[u8]) -> &[u8] {
+    let short = stem(name);
+    if short.len() < name.len() {
+        return short;
+    }
+    match name.iter().rposition(|&byte| byte == b'.') {
+        Some(dot) if dot > 0 => &name[..dot],
+        _ => name,
     }
 }
 
@@ -246,16 +265,48 @@ pub type Totals<'a> = &'a mut dyn FnMut(u64, u64) -> ControlFlow<()>;
 /// Called for each entry with its header and its content.
 pub type Visit<'a> = &'a mut dyn FnMut(&Header, &mut dyn Read) -> io::Result<ControlFlow<()>>;
 
-/// Reads the archive `source` of `format`, calling `visit` for each entry in
-/// order until it breaks.
+/// Reads archives of [`Format::Foreign`]: the archive's path (for a tool
+/// that opens it itself, and a lone compressed file, whose entry is named
+/// after it), its content, the password and the visitor of
+/// [`read_entries`]. Declares no totals.
+pub type ForeignReader = fn(
+    path: &Path,
+    source: Box<dyn ReadSeek>,
+    password: Option<&str>,
+    visit: Visit<'_>,
+) -> Result<(), ReadError>;
+
+static FOREIGN: std::sync::OnceLock<ForeignReader> = std::sync::OnceLock::new();
+
+/// Registers the reader of every format Rustphin does not read itself.
+/// The application does this once at start (D-036); the core has no C
+/// dependency of its own. Later calls are ignored.
+pub fn set_foreign_reader(reader: ForeignReader) {
+    let _ = FOREIGN.set(reader);
+}
+
+/// The reader registered with [`set_foreign_reader`], if any.
+pub fn foreign_reader() -> Option<ForeignReader> {
+    FOREIGN.get().copied()
+}
+
+/// Reads the archive `source` of `format`, found at `path`, calling
+/// `visit` for each entry in order until it breaks.
 pub fn read_entries(
     format: Format,
+    path: &Path,
     source: Box<dyn ReadSeek>,
     password: Option<&str>,
     totals: Totals<'_>,
     visit: Visit<'_>,
 ) -> Result<(), ReadError> {
     match format {
+        Format::Foreign => match foreign_reader() {
+            Some(reader) => reader(path, source, password, visit),
+            None => Err(ReadError::Damaged(
+                "no reader for this format is available".to_owned(),
+            )),
+        },
         Format::Zip => read_zip(source, password, &TimeZone::system(), totals, visit),
         Format::SevenZ => read_seven_z(source, password, totals, visit),
         Format::Tar => read_tar(source, visit),
@@ -560,6 +611,10 @@ pub fn write_archive<W: Write + Seek>(
         Format::TarBz2 => Err(io::Error::new(
             io::ErrorKind::Unsupported,
             "Rustphin does not make .tar.bz2 archives",
+        )),
+        Format::Foreign => Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Rustphin makes only ZIP, TAR and 7Z archives",
         )),
     }
 }

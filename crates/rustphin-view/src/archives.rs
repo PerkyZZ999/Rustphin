@@ -17,13 +17,14 @@ const OWN_TYPES: [&str; 10] = [
     "application/x-7z-compressed",
 ];
 
-/// Archive types handed to Ark, 7-Zip or unrar (W-111f).
-const OTHER_TYPES: [&str; 18] = [
+/// Archive types read through libarchive, else 7-Zip or unrar (D-036).
+const OTHER_TYPES: [&str; 19] = [
     "application/vnd.rar",
     "application/x-rar",
     "application/x-rar-compressed",
     "application/x-cd-image",
     "application/x-iso9660-image",
+    "application/vnd.efi.iso",
     "application/vnd.ms-cab-compressed",
     "application/x-lha",
     "application/x-lzh-compressed",
@@ -44,7 +45,7 @@ const OTHER_TYPES: [&str; 18] = [
 pub enum Opener {
     /// Rustphin's own engine.
     Rustphin,
-    /// Ark or another installed tool.
+    /// libarchive, else 7-Zip or unrar, still inside the engine (D-036).
     Other,
 }
 
@@ -63,14 +64,7 @@ pub fn opener(name: &[u8], mime: Option<&str>) -> Option<Opener> {
 /// without its archive ending, or else without its last ending, as Ark
 /// names it ("notes.txt.gz" gives "notes.txt").
 pub fn folder_stem(name: &[u8]) -> &[u8] {
-    let stem = archive::stem(name);
-    if stem.len() < name.len() {
-        return stem;
-    }
-    match name.iter().rposition(|&byte| byte == b'.') {
-        Some(dot) if dot > 0 => &name[..dot],
-        _ => name,
-    }
+    archive::folder_stem(name)
 }
 
 /// [`folder_stem`] as text for the menu.
@@ -141,7 +135,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn archives_are_known_by_name_or_type_and_others_go_to_ark() {
+    fn archives_are_known_by_name_or_type_and_others_go_to_libarchive() {
         assert_eq!(opener(b"a.zip", None), Some(Opener::Rustphin));
         assert_eq!(opener(b"photos.tar.zst", None), Some(Opener::Rustphin));
         assert_eq!(
@@ -154,6 +148,11 @@ mod tests {
         );
         assert_eq!(
             opener(b"disc.iso", Some("application/x-cd-image")),
+            Some(Opener::Other)
+        );
+        // shared-mime-info's newer name for ISO images.
+        assert_eq!(
+            opener(b"disc.iso", Some("application/vnd.efi.iso")),
             Some(Opener::Other)
         );
         assert_eq!(opener(b"notes.txt", Some("text/plain")), None);

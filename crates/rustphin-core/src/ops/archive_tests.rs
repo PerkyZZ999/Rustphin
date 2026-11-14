@@ -697,3 +697,90 @@ fn folders_the_archive_only_implies_get_the_usual_rights() {
         assert_ne!(mode & 0o055, 0, "{folder} is not private: {mode:o}");
     }
 }
+
+/// Stands in for libarchive (D-036): a folder, a file inside it, a file at
+/// the top and a hostile `../` name; the content is the archive's own name.
+/// "locked.iso" needs the password "secret".
+fn foreign(
+    path: &Path,
+    _source: Box<dyn crate::fs::ReadSeek>,
+    password: Option<&str>,
+    visit: crate::archive::Visit<'_>,
+) -> Result<(), crate::archive::ReadError> {
+    use crate::archive::{Header, Kind, ReadError};
+    let name = path.file_name().unwrap().as_bytes();
+    if name == b"locked.iso" {
+        match password {
+            None => return Err(ReadError::NeedsPassword),
+            Some("secret") => {}
+            Some(_) => return Err(ReadError::WrongPassword),
+        }
+    }
+    let entries: [(&[u8], Kind, &[u8]); 4] = [
+        (b"sub/", Kind::Directory, b""),
+        (b"sub/deep.txt", Kind::File, b"deep"),
+        (b"notes.txt", Kind::File, name),
+        (b"../escape.txt", Kind::File, b"out"),
+    ];
+    for (entry, kind, content) in entries {
+        let header = Header {
+            name: entry.to_vec(),
+            kind,
+            mode: Some(0o644),
+            modified: None,
+            size: content.len() as u64,
+        };
+        if visit(&header, &mut &content[..])?.is_break() {
+            break;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn formats_rustphin_does_not_read_itself_go_through_the_registered_reader() {
+    crate::archive::set_foreign_reader(foreign);
+    let d = dirs();
+    fs::write(d.src.join("disc.iso"), b"not a format Rustphin knows").unwrap();
+
+    let outcome = run(
+        &RealFs,
+        &NoTrash,
+        &extract(&d.src.join("disc.iso"), &d.dst, Layout::NewFolder),
+        &mut Archivist::default(),
+    )
+    .unwrap();
+
+    assert!(outcome.completed);
+    // The same checks as for Rustphin's own formats: nothing outside.
+    assert_eq!(
+        names(&d.dst),
+        ["disc", "disc/notes.txt", "disc/sub", "disc/sub/deep.txt"]
+    );
+    assert_eq!(read(d.dst.join("disc/notes.txt")), "disc.iso");
+    assert!(!d.dst.parent().unwrap().join("escape.txt").exists());
+    assert!(no_leftovers(&d.dst));
+}
+
+#[test]
+fn the_registered_reader_gets_the_password_the_user_gives() {
+    crate::archive::set_foreign_reader(foreign);
+    let d = dirs();
+    fs::write(d.src.join("locked.iso"), b"encrypted").unwrap();
+    let mut archivist = Archivist {
+        passwords: [Some("guess".to_owned()), Some("secret".to_owned())].into(),
+        ..Archivist::default()
+    };
+
+    let outcome = run(
+        &RealFs,
+        &NoTrash,
+        &extract(&d.src.join("locked.iso"), &d.dst, Layout::NewFolder),
+        &mut archivist,
+    )
+    .unwrap();
+
+    assert!(outcome.completed);
+    assert_eq!(archivist.asked_passwords, [false, true]);
+    assert_eq!(read(d.dst.join("locked/sub/deep.txt")), "deep");
+}

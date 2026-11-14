@@ -1,21 +1,38 @@
-//! Archives Rustphin does not open itself (RAR, ISO, CAB, …) are handed to
-//! an installed tool (W-111f, D-032): Ark first, as Dolphin uses it, then
-//! 7-Zip, then unrar. Ark shows its own progress, password and overwrite
-//! questions; 7-Zip and unrar are told never to overwrite.
+//! Reading the archives Rustphin does not read itself (D-036): through
+//! libarchive when it can, else through an installed 7-Zip or unrar
+//! (encrypted RAR and 7Z, ARJ…). Either way the operation engine gets the
+//! entries one by one and does the writing, so every format has the same
+//! progress, conflict and password questions and the same Undo.
+//!
+//! A tool extracts into a private folder in Rustphin's cache, never into
+//! the destination; the entries are read from there and the folder is
+//! removed. A tool never asks anything itself: it gets the password the
+//! engine asked for, or an empty one.
 
 use std::{
     ffi::{OsStr, OsString},
-    io,
+    fs, io,
+    ops::ControlFlow,
+    os::unix::{
+        ffi::{OsStrExt as _, OsStringExt as _},
+        fs::MetadataExt as _,
+    },
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
 };
+
+use rustphin_core::{
+    ReadSeek,
+    archive::{Header, Kind, ReadError, Visit},
+};
+
+use crate::libarchive;
 
 /// An installed extraction tool.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tool {
-    /// KDE's Ark.
-    Ark(PathBuf),
-    /// 7-Zip (`7z`, `7za` or `7zz`).
+    /// 7-Zip (`7z`, `7zz` or `7za`).
     SevenZip(PathBuf),
     /// unrar.
     Unrar(PathBuf),
@@ -25,14 +42,14 @@ impl Tool {
     /// The tool's name for messages.
     pub fn name(&self) -> &'static str {
         match self {
-            Self::Ark(_) => "Ark",
             Self::SevenZip(_) => "7-Zip",
             Self::Unrar(_) => "unrar",
         }
     }
 }
 
-/// The first tool found in the folders of `path` (a `PATH` value).
+/// The first tool found in the folders of `path` (a `PATH` value):
+/// 7-Zip, which reads nearly everything, then unrar.
 pub fn find(path: Option<&OsStr>) -> Option<Tool> {
     let dirs: Vec<PathBuf> = path.map(|path| std::env::split_paths(path).collect())?;
     let on_path = |program: &str| {
@@ -40,212 +57,216 @@ pub fn find(path: Option<&OsStr>) -> Option<Tool> {
             .map(|dir| dir.join(program))
             .find(|candidate| candidate.is_file())
     };
-    on_path("ark")
-        .map(Tool::Ark)
-        .or_else(|| {
-            ["7z", "7zz", "7za"]
-                .into_iter()
-                .find_map(on_path)
-                .map(Tool::SevenZip)
-        })
+    ["7z", "7zz", "7za"]
+        .into_iter()
+        .find_map(on_path)
+        .map(Tool::SevenZip)
         .or_else(|| on_path("unrar").map(Tool::Unrar))
 }
 
-/// The program and arguments that extract `archive` into `into`. With
-/// `new_folder`, into that folder inside `into`; without, Ark decides as
-/// "Extract here" does. 7-Zip and unrar always get a folder of their own,
-/// since they cannot judge whether one is needed.
-pub fn command(
+/// The arguments that make `tool` extract `archive` into the empty folder
+/// `into`, with `password` (an empty one when none was given, so the tool
+/// never stops to ask) and without overwriting anything.
+pub fn arguments(
     tool: &Tool,
     archive: &Path,
     into: &Path,
-    new_folder: Option<&OsStr>,
-) -> (PathBuf, Vec<OsString>) {
-    let folder = |name: Option<&OsStr>| match name {
-        Some(name) => into.join(name),
-        None => into.join(stem_of(archive)),
-    };
+    password: Option<&str>,
+) -> Vec<OsString> {
     match tool {
-        Tool::Ark(program) => {
-            let mut args: Vec<OsString> = vec!["--batch".into()];
-            let destination = match new_folder {
-                Some(name) => into.join(name),
-                None => {
-                    args.push("--autosubfolder".into());
-                    into.to_path_buf()
-                }
-            };
-            args.push("--destination".into());
-            args.push(destination.into_os_string());
-            args.push(archive.as_os_str().to_owned());
-            (program.clone(), args)
-        }
-        Tool::SevenZip(program) => {
+        Tool::SevenZip(_) => {
             let mut output = OsString::from("-o");
-            output.push(folder(new_folder));
-            (
-                program.clone(),
-                vec![
-                    "x".into(),
-                    "-aos".into(),
-                    output,
-                    "--".into(),
-                    archive.as_os_str().to_owned(),
-                ],
-            )
+            output.push(into);
+            vec![
+                "x".into(),
+                "-aos".into(),
+                format!("-p{}", password.unwrap_or("")).into(),
+                output,
+                "--".into(),
+                archive.as_os_str().to_owned(),
+            ]
         }
-        Tool::Unrar(program) => {
-            let mut destination = folder(new_folder).into_os_string();
+        Tool::Unrar(_) => {
+            let mut destination = into.as_os_str().to_owned();
             destination.push("/");
-            (
-                program.clone(),
-                vec![
-                    "x".into(),
-                    "-o-".into(),
-                    "--".into(),
-                    archive.as_os_str().to_owned(),
-                    destination,
-                ],
-            )
+            vec![
+                "x".into(),
+                "-o-".into(),
+                match password {
+                    Some(password) => format!("-p{password}").into(),
+                    // "-p-": do not ask for a password.
+                    None => "-p-".into(),
+                },
+                "--".into(),
+                archive.as_os_str().to_owned(),
+                destination,
+            ]
         }
     }
 }
 
-/// The archive's name without its last ending: the folder 7-Zip and unrar
-/// extract into.
-fn stem_of(archive: &Path) -> OsString {
-    archive
-        .file_stem()
-        .map_or_else(|| OsString::from("extracted"), OsStr::to_owned)
+/// Reads the archive at `path` (`archive::ForeignReader`, registered at
+/// start): libarchive when it can read it, else the installed tool.
+pub fn read_entries(
+    path: &Path,
+    source: Box<dyn ReadSeek>,
+    password: Option<&str>,
+    visit: Visit<'_>,
+) -> Result<(), ReadError> {
+    read_entries_with(
+        path,
+        source,
+        password,
+        visit,
+        find(std::env::var_os("PATH").as_deref()),
+        crate::xdg::cache_home().map(|cache| cache.join("rustphin")),
+    )
 }
 
-/// Why an archive could not be handed over.
-#[derive(Debug, thiserror::Error)]
-pub enum ToolError {
-    /// Nothing that could open it is installed.
-    #[error("no program that can open it is installed; install Ark, 7-Zip or unrar")]
-    NoTool,
-    /// The tool could not be started.
-    #[error("{tool} could not be started: {source}")]
-    Start {
-        /// Which tool.
-        tool: &'static str,
-        /// Why.
-        source: io::Error,
-    },
-    /// The tool ran and reported a failure.
-    #[error("{tool} could not extract it (exit code {code})")]
-    Failed {
-        /// Which tool.
-        tool: &'static str,
-        /// Its exit code, or -1 when it was killed.
-        code: i32,
-    },
+/// [`read_entries`] with the tool and the folder for its work given.
+pub fn read_entries_with(
+    path: &Path,
+    source: Box<dyn ReadSeek>,
+    password: Option<&str>,
+    visit: Visit<'_>,
+    tool: Option<Tool>,
+    work: Option<PathBuf>,
+) -> Result<(), ReadError> {
+    let name = path.file_name().map(OsStr::as_bytes).unwrap_or_default();
+    let reason = match libarchive::probe(path) {
+        Ok(()) => return libarchive::read_entries(name, source, password, visit),
+        Err(reason) => reason,
+    };
+    let (Some(tool), Some(work)) = (tool, work) else {
+        return Err(ReadError::Damaged(format!(
+            "{reason}, and 7-Zip is not installed to open it"
+        )));
+    };
+    read_with_tool(&tool, path, password, visit, &work)
 }
 
-/// Extracts `archive` into `into` with the first installed tool, waiting
-/// until it is done. Blocks: run it on a background thread.
-pub fn extract(
-    archive: &Path,
-    into: &Path,
-    new_folder: Option<&OsStr>,
-) -> Result<&'static str, ToolError> {
-    let tool = find(std::env::var_os("PATH").as_deref()).ok_or(ToolError::NoTool)?;
-    let (program, args) = command(&tool, archive, into, new_folder);
-    let status = Command::new(program)
-        .args(args)
-        .current_dir(into)
-        .status()
-        .map_err(|source| ToolError::Start {
-            tool: tool.name(),
-            source,
-        })?;
-    if status.success() {
-        Ok(tool.name())
-    } else {
-        Err(ToolError::Failed {
-            tool: tool.name(),
-            code: status.code().unwrap_or(-1),
-        })
+/// Removes its folder when dropped, whatever happened.
+struct WorkFolder(PathBuf);
+
+impl Drop for WorkFolder {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
     }
+}
+
+/// A new, empty, private folder in `work` for one extraction.
+fn work_folder(work: &Path) -> io::Result<WorkFolder> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    fs::create_dir_all(work)?;
+    loop {
+        let folder = work.join(format!(
+            ".extract-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::create_dir(&folder) {
+            Ok(()) => {
+                fs::set_permissions(&folder, std::os::unix::fs::PermissionsExt::from_mode(0o700))?;
+                return Ok(WorkFolder(folder));
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+/// Extracts `archive` with `tool` into a work folder, then hands what it
+/// made to `visit`, folders before what they hold.
+fn read_with_tool(
+    tool: &Tool,
+    archive: &Path,
+    password: Option<&str>,
+    visit: Visit<'_>,
+    work: &Path,
+) -> Result<(), ReadError> {
+    let folder = work_folder(work)?;
+    let program = match tool {
+        Tool::SevenZip(program) | Tool::Unrar(program) => program,
+    };
+    let output = Command::new(program)
+        .args(arguments(tool, archive, &folder.0, password))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|error| {
+            ReadError::Io(io::Error::new(
+                error.kind(),
+                format!("{} could not be started: {error}", tool.name()),
+            ))
+        })?;
+    if !output.status.success() {
+        let said = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
+        // 7-Zip says "Wrong password"; unrar exits with 11 for one.
+        let about_password = said.contains("password")
+            || (matches!(tool, Tool::Unrar(_)) && output.status.code() == Some(11));
+        return Err(if about_password {
+            match password {
+                None => ReadError::NeedsPassword,
+                Some(_) => ReadError::WrongPassword,
+            }
+        } else {
+            ReadError::Damaged(format!(
+                "{} could not extract it (exit code {})",
+                tool.name(),
+                output.status.code().unwrap_or(-1)
+            ))
+        });
+    }
+    walk(&folder.0, Path::new(""), visit).map(drop)
+}
+
+/// Hands every entry under `root/relative` to `visit`, in name order.
+fn walk(root: &Path, relative: &Path, visit: Visit<'_>) -> Result<ControlFlow<()>, ReadError> {
+    let mut names: Vec<OsString> = fs::read_dir(root.join(relative))?
+        .map(|entry| entry.map(|entry| entry.file_name()))
+        .collect::<io::Result<_>>()?;
+    names.sort();
+    for name in names {
+        let inside = relative.join(&name);
+        let full = root.join(&inside);
+        let metadata = fs::symlink_metadata(&full)?;
+        let kind = if metadata.is_dir() {
+            Kind::Directory
+        } else if metadata.is_file() {
+            Kind::File
+        } else if metadata.file_type().is_symlink() {
+            Kind::Link(fs::read_link(&full)?.into_os_string().into_vec())
+        } else {
+            Kind::Special
+        };
+        let header = Header {
+            name: inside.as_os_str().as_bytes().to_vec(),
+            kind: kind.clone(),
+            mode: Some(metadata.mode() & 0o7777),
+            modified: Some(metadata.mtime()),
+            size: if kind == Kind::File {
+                metadata.len()
+            } else {
+                0
+            },
+        };
+        let flow = if kind == Kind::File {
+            let mut content = fs::File::open(&full)?;
+            visit(&header, &mut content)?
+        } else {
+            visit(&header, &mut io::empty())?
+        };
+        if flow.is_break() {
+            return Ok(ControlFlow::Break(()));
+        }
+        if kind == Kind::Directory && walk(root, &inside, visit)?.is_break() {
+            return Ok(ControlFlow::Break(()));
+        }
+    }
+    Ok(ControlFlow::Continue(()))
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ark_is_preferred_then_7zip_then_unrar() {
-        let bin = tempfile::tempdir().unwrap();
-        let path = bin.path().as_os_str();
-        assert_eq!(find(Some(path)), None);
-        std::fs::write(bin.path().join("unrar"), "").unwrap();
-        assert_eq!(
-            find(Some(path)),
-            Some(Tool::Unrar(bin.path().join("unrar")))
-        );
-        std::fs::write(bin.path().join("7za"), "").unwrap();
-        assert_eq!(
-            find(Some(path)),
-            Some(Tool::SevenZip(bin.path().join("7za")))
-        );
-        std::fs::write(bin.path().join("ark"), "").unwrap();
-        assert_eq!(find(Some(path)), Some(Tool::Ark(bin.path().join("ark"))));
-        assert_eq!(find(None), None);
-    }
-
-    #[test]
-    fn each_tool_is_told_where_and_never_to_overwrite() {
-        let archive = Path::new("/home/someone/film.rar");
-        let into = Path::new("/home/someone");
-        let (_, ark) = command(&Tool::Ark("ark".into()), archive, into, None);
-        assert_eq!(
-            ark,
-            [
-                "--batch",
-                "--autosubfolder",
-                "--destination",
-                "/home/someone",
-                "/home/someone/film.rar"
-            ]
-        );
-        let (_, ark) = command(
-            &Tool::Ark("ark".into()),
-            archive,
-            into,
-            Some(OsStr::new("film")),
-        );
-        assert_eq!(
-            ark,
-            [
-                "--batch",
-                "--destination",
-                "/home/someone/film",
-                "/home/someone/film.rar"
-            ]
-        );
-        let (_, seven) = command(&Tool::SevenZip("7z".into()), archive, into, None);
-        assert_eq!(
-            seven,
-            [
-                "x",
-                "-aos",
-                "-o/home/someone/film",
-                "--",
-                "/home/someone/film.rar"
-            ]
-        );
-        let (_, unrar) = command(&Tool::Unrar("unrar".into()), archive, into, None);
-        assert_eq!(
-            unrar,
-            [
-                "x",
-                "-o-",
-                "--",
-                "/home/someone/film.rar",
-                "/home/someone/film/"
-            ]
-        );
-    }
-}
+mod tests;

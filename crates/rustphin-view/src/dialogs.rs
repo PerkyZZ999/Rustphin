@@ -67,7 +67,7 @@ pub fn format_hint(format: Format) -> &'static str {
         Format::TarXz => "TAR.XZ is smaller and slower to make.",
         Format::TarZst => "TAR.ZST is fast and small; older systems may not open it.",
         Format::SevenZ => "7Z is small; links are not kept.",
-        Format::Tar | Format::TarBz2 => "",
+        Format::Tar | Format::TarBz2 | Format::Foreign => "",
     }
 }
 

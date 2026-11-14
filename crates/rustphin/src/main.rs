@@ -122,6 +122,8 @@ fn main() -> ExitCode {
         )
         .with_writer(std::io::stderr)
         .init();
+    // Archives Rustphin does not read itself: libarchive, else 7-Zip (D-036).
+    rustphin_core::archive::set_foreign_reader(rustphin_platform::archive_tool::read_entries);
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
     let mut launch = parse_launch(std::env::args_os(), &cwd);
     launch.targets = launch.targets.into_iter().map(folder_tab).collect();
