@@ -276,6 +276,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "isSelected"]
         fn is_selected(self: &FolderModel, row: i32) -> bool;
+        /// The icon-theme name of the entry at `row` (its type's icon), for
+        /// the image under a drag; empty for no such row.
+        #[qinvokable]
+        #[cxx_name = "iconAt"]
+        fn icon_at(self: &FolderModel, row: i32) -> QString;
         /// The selected entries as a `text/uri-list`, for a drag out.
         #[qinvokable]
         #[cxx_name = "selectedUris"]

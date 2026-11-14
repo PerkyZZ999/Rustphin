@@ -1,8 +1,9 @@
 // The tab strip (W-114e): each tab with its folder's icon and name, a
 // close button on the wider ones, and "+" for a new tab. Tabs keep 160
 // pixels while they fit, shrink evenly to 96, then the strip scrolls.
+pragma ComponentBehavior: Bound
+
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Rustphin
 
@@ -13,7 +14,7 @@ Rectangle {
     readonly property real tabWidth: Math.max(Tokens.metrics.tab_min, Math.min(Tokens.metrics.tab, (width - Tokens.metrics.tab_add) / Math.max(1, tabs.count)))
     property int dragFrom: -1
 
-    signal newTab()
+    signal newTab
     signal closeTab(int index)
 
     height: Tokens.metrics.tabs
@@ -87,6 +88,7 @@ Rectangle {
                         colour: tab.current ? Tokens.colors.text : Tokens.colors.text_muted
                     }
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                         color: tab.current ? Tokens.colors.text : Tokens.colors.text_muted

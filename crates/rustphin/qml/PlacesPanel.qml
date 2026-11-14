@@ -2,6 +2,8 @@
 // group with its places, the Remote section and the volumes; a menu on
 // each row, its keys while it has the keyboard, rename in place, dragging
 // to reorder and folders dropped from the views.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -16,10 +18,10 @@ FocusScope {
     property int dragFrom: -1
 
     signal openFolder(string path, bool newTab)
-    signal openTrash()
-    signal done()
+    signal openTrash
+    signal done
     // Tab: the keyboard goes back to the views.
-    signal otherPane()
+    signal otherPane
 
     function focusPanel() {
         list.forceActiveFocus()
@@ -66,6 +68,7 @@ FocusScope {
             Layout.rightMargin: Tokens.metrics.space_xs
 
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_body
@@ -109,17 +112,37 @@ FocusScope {
                 const ctrlShift = (event.modifiers & Qt.ControlModifier) && (event.modifiers & Qt.ShiftModifier)
                 let key = ""
                 switch (event.key) {
-                case Qt.Key_Up: key = alt ? "Alt+Up" : "Up"; break
-                case Qt.Key_Down: key = alt ? "Alt+Down" : "Down"; break
-                case Qt.Key_Left: key = "Left"; break
-                case Qt.Key_Right: key = "Right"; break
+                case Qt.Key_Up:
+                    key = alt ? "Alt+Up" : "Up"
+                    break
+                case Qt.Key_Down:
+                    key = alt ? "Alt+Down" : "Down"
+                    break
+                case Qt.Key_Left:
+                    key = "Left"
+                    break
+                case Qt.Key_Right:
+                    key = "Right"
+                    break
                 case Qt.Key_Return:
-                case Qt.Key_Enter: key = "Enter"; break
-                case Qt.Key_F2: key = "F2"; break
-                case Qt.Key_Delete: key = "Delete"; break
-                case Qt.Key_H: key = event.modifiers === Qt.NoModifier ? "H" : ""; break
-                case Qt.Key_G: key = ctrlShift ? "Ctrl+Shift+G" : event.modifiers === Qt.NoModifier ? "G" : ""; break
-                case Qt.Key_E: key = event.modifiers === Qt.NoModifier ? "E" : ""; break
+                case Qt.Key_Enter:
+                    key = "Enter"
+                    break
+                case Qt.Key_F2:
+                    key = "F2"
+                    break
+                case Qt.Key_Delete:
+                    key = "Delete"
+                    break
+                case Qt.Key_H:
+                    key = event.modifiers === Qt.NoModifier ? "H" : ""
+                    break
+                case Qt.Key_G:
+                    key = ctrlShift ? "Ctrl+Shift+G" : event.modifiers === Qt.NoModifier ? "G" : ""
+                    break
+                case Qt.Key_E:
+                    key = event.modifiers === Qt.NoModifier ? "E" : ""
+                    break
                 case Qt.Key_Tab:
                 case Qt.Key_Backtab:
                     panel.otherPane()
@@ -173,16 +196,14 @@ FocusScope {
                 Accessible.name: title
                 Accessible.selected: current
                 Accessible.focused: focused
-                Accessible.description: heading ? (collapsed ? qsTr("Collapsed section. Activate to expand.") : qsTr("Expanded section. Activate to collapse."))
-                                                : kind === "device" ? detail : ""
+                Accessible.description: heading ? (collapsed ? qsTr("Collapsed section. Activate to expand.") : qsTr("Expanded section. Activate to collapse.")) : kind === "device" ? detail : ""
 
                 Rectangle {
                     anchors.fill: parent
                     anchors.leftMargin: Tokens.metrics.space_xs
                     anchors.rightMargin: Tokens.metrics.space_xs
                     radius: Tokens.metrics.radius
-                    color: row.current ? Tokens.colors.selection
-                         : rowArea.containsMouse || drop.containsDrag ? Tokens.colors.hover : "transparent"
+                    color: row.current ? Tokens.colors.selection : rowArea.containsMouse || drop.containsDrag ? Tokens.colors.hover : "transparent"
                     border.width: row.focused && list.activeFocus ? 1 : 0
                     border.color: Tokens.colors.border_accent
                 }
@@ -210,6 +231,7 @@ FocusScope {
                         visible: !row.renaming
 
                         Text {
+                            textFormat: Text.PlainText
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                             color: row.current ? Tokens.colors.on_selection : row.heading ? Tokens.colors.text_muted : Tokens.colors.text
@@ -219,6 +241,7 @@ FocusScope {
                             text: row.title
                         }
                         Text {
+                            textFormat: Text.PlainText
                             visible: row.kind === "device" && row.detail.length > 0
                             Layout.fillWidth: true
                             elide: Text.ElideRight
@@ -348,6 +371,7 @@ FocusScope {
             }
             // With no places of its own (devices aside), how to add one.
             header: Text {
+                textFormat: Text.PlainText
                 visible: !places.hasPlaces
                 width: ListView.view.width
                 height: visible ? implicitHeight : 0
@@ -366,6 +390,7 @@ FocusScope {
                 topPadding: Tokens.metrics.space_sm
 
                 Text {
+                    textFormat: Text.PlainText
                     visible: places.devicesNote.length > 0
                     width: parent.width - 2 * Tokens.metrics.space_md
                     x: Tokens.metrics.space_md
@@ -381,16 +406,20 @@ FocusScope {
             MouseArea {
                 anchors.left: parent.left
                 anchors.right: parent.right
-                y: list.contentHeight - list.contentY
-                height: Math.max(0, list.height - y)
+                // Children of a ListView live in its content: below the
+                // last row, down to the bottom of the visible part.
+                y: list.originY + list.contentHeight
+                height: Math.max(0, list.contentY + list.height - y)
                 acceptedButtons: Qt.RightButton
                 onPressed: mouse => panel.menuAt(-1, this, mouse.x, mouse.y)
             }
             DropArea {
                 anchors.left: parent.left
                 anchors.right: parent.right
-                y: list.contentHeight - list.contentY
-                height: Math.max(0, list.height - y)
+                // Children of a ListView live in its content: below the
+                // last row, down to the bottom of the visible part.
+                y: list.originY + list.contentHeight
+                height: Math.max(0, list.contentY + list.height - y)
                 keys: ["text/uri-list"]
                 onDropped: event => {
                     places.dropFolders(event.urls.map(url => url.toString()).join("\r\n"), -1)
@@ -418,6 +447,7 @@ FocusScope {
         Text {
             id: proxyText
 
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             color: Tokens.colors.on_selection
             font.family: Tokens.metrics.family_body

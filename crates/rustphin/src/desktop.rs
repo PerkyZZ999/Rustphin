@@ -158,6 +158,10 @@ impl qobject::Shell {
     fn quit(self: Pin<&mut Self>) {
         crate::shell::qobject::rustphin_shell_quit();
     }
+
+    fn keyboard_modifiers(&self) -> i32 {
+        crate::shell::qobject::rustphin_keyboard_modifiers()
+    }
 }
 
 /// An empty name: the file's own name is used.

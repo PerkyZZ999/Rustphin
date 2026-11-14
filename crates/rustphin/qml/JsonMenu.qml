@@ -1,6 +1,8 @@
 // A menu built from Rust's JSON (`menu::to_json`): items with their key and
 // icon, separators and submenus. Choosing an entry reports its path; Qt's
 // Menu gives the arrow keys, Enter, Esc and submenus.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import Rustphin
@@ -15,13 +17,18 @@ Menu {
     function build(target, entries) {
         for (const entry of entries) {
             if (entry.kind === "separator") {
-                target.addItem(separatorComponent.createObject(target))
+                // Items are created under the menu's visual container: a
+                // Menu is not an Item, and Qt warns about items parented to it.
+                target.addItem(separatorComponent.createObject(target.contentItem))
             } else if (entry.kind === "submenu") {
-                const sub = submenuComponent.createObject(target, { title: entry.label, enabled: entry.enabled })
+                const sub = submenuComponent.createObject(target, {
+                    title: entry.label,
+                    enabled: entry.enabled
+                })
                 build(sub, entry.items)
                 target.addMenu(sub)
             } else {
-                const item = itemComponent.createObject(target, {
+                const item = itemComponent.createObject(target.contentItem, {
                     text: entry.label,
                     shortcutText: entry.shortcut,
                     iconSource: entry.icon,
@@ -153,6 +160,7 @@ Menu {
                 }
             }
             Text {
+                textFormat: Text.PlainText
                 width: row.availableWidth - Tokens.metrics.icon_ui - keyText.width - 2 * Tokens.metrics.space_sm
                 anchors.verticalCenter: parent.verticalCenter
                 elide: Text.ElideRight
@@ -164,6 +172,7 @@ Menu {
             Text {
                 id: keyText
 
+                textFormat: Text.PlainText
                 anchors.verticalCenter: parent.verticalCenter
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_data

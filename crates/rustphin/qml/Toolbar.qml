@@ -1,5 +1,7 @@
 // The toolbar across the window (W-096, W-114c2b): the items Settings
 // arranges, through ToolbarModel, acting on the active pane.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -8,7 +10,7 @@ import Rustphin
 Rectangle {
     id: bar
 
-    required property var pane
+    required property Pane pane
     readonly property FolderModel folder: pane ? pane.listing : null
     property bool editingLocation: false
 
@@ -55,10 +57,7 @@ Rectangle {
                 Layout.fillWidth: kind === "location"
                 Layout.minimumWidth: kind === "location" ? Tokens.metrics.toolbar_location_min : -1
                 Layout.alignment: Qt.AlignVCenter
-                sourceComponent: kind === "separator" ? separator
-                               : kind === "location" ? location
-                               : kind === "actions" ? actions
-                               : button
+                sourceComponent: kind === "separator" ? separator : kind === "location" ? location : kind === "actions" ? actions : button
 
                 Component {
                     id: separator
@@ -84,28 +83,15 @@ Rectangle {
                         id: tool
 
                         iconName: entry.itemId === "admin" && Operations.admin ? "shield-alert" : entry.icon
-                        text: entry.itemId === "admin" ? (Operations.admin ? qsTr("Stop acting as administrator")
-                                                         : Operations.adminPending ? qsTr("Waiting for the password\u2026")
-                                                         : Operations.adminInstalled ? entry.name
-                                                         : qsTr("Act as administrator (needs KDE's kio-admin package)"))
-                                                      : entry.name
+                        text: entry.itemId === "admin" ? (Operations.admin ? qsTr("Stop acting as administrator") : Operations.adminPending ? qsTr("Waiting for the password\u2026") : Operations.adminInstalled ? entry.name : qsTr("Act as administrator (needs KDE's kio-admin package)")) : entry.name
                         tip: entry.itemId === "admin" ? text : entry.tip
-                        iconColour: entry.itemId === "admin" && Operations.admin ? Tokens.colors.danger
-                                  : enabled ? Tokens.colors.text : Tokens.colors.text_disabled
-                        enabled: entry.available && bar.folder !== null
-                                 && (entry.itemId === "admin" ? Operations.admin || (Operations.adminInstalled && !Operations.adminPending)
-                                   : entry.itemId === "back" ? bar.folder.canGoBack
-                                   : entry.itemId === "forward" ? bar.folder.canGoForward
-                                   : entry.itemId === "up" ? bar.folder.canGoUp
-                                   : true)
+                        iconColour: entry.itemId === "admin" && Operations.admin ? Tokens.colors.danger : enabled ? Tokens.colors.text : Tokens.colors.text_disabled
+                        enabled: entry.available && bar.folder !== null && (entry.itemId === "admin" ? Operations.admin || (Operations.adminInstalled && !Operations.adminPending) : entry.itemId === "back" ? bar.folder.canGoBack : entry.itemId === "forward" ? bar.folder.canGoForward : entry.itemId === "up" ? bar.folder.canGoUp : true)
                         checkable: entry.itemId === "hidden" || entry.itemId === "filter"
-                        checked: entry.itemId === "hidden" ? (bar.folder !== null && bar.folder.showHidden)
-                               : entry.itemId === "filter" ? (bar.pane !== null && bar.pane.filterOpen)
-                               : false
+                        checked: entry.itemId === "hidden" ? (bar.folder !== null && bar.folder.showHidden) : entry.itemId === "filter" ? (bar.pane !== null && bar.pane.filterOpen) : false
                         implicitWidth: entry.kind === "menu" ? 48 : Tokens.metrics.tool_button
                         onClicked: {
-                            if (entry.kind === "menu" || ["filter", "split", "admin"].indexOf(entry.itemId) >= 0
-                                    || entry.itemId.indexOf("command:") === 0)
+                            if (entry.kind === "menu" || ["filter", "split", "admin"].indexOf(entry.itemId) >= 0 || entry.itemId.indexOf("command:") === 0)
                                 bar.command(entry.itemId, tool)
                             else
                                 bar.folder.run(entry.itemId)
@@ -134,7 +120,8 @@ Rectangle {
                     LocationBar {
                         pane: bar.pane
                         editing: bar.editingLocation
-                        onEditingChanged: bar.editingLocation = editing
+                        onEditRequested: bar.editingLocation = true
+                        onEditEnded: bar.editingLocation = false
                     }
                 }
 
@@ -161,6 +148,7 @@ Rectangle {
                                 colour: Tokens.colors.text_muted
                             }
                             Text {
+                                textFormat: Text.PlainText
                                 visible: toolbarItems.actionsWords
                                 anchors.verticalCenter: parent.verticalCenter
                                 color: Tokens.colors.text_muted
@@ -169,6 +157,7 @@ Rectangle {
                                 text: entry.name
                             }
                             Text {
+                                textFormat: Text.PlainText
                                 visible: toolbarItems.actionsWords && toolbarItems.actionsHint
                                 anchors.verticalCenter: parent.verticalCenter
                                 color: Tokens.colors.text_disabled

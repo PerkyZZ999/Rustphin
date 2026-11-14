@@ -29,5 +29,8 @@ void rustphin_shell_reveal(const QString& folder, const QStringList& select, boo
 void rustphin_shell_properties(const QStringList& paths);
 // Closes every window and ends the process. Safe from any thread.
 void rustphin_shell_quit();
+// The keyboard modifiers held now (Qt::KeyboardModifiers as an int). QML's
+// drop event does not carry them. On the GUI thread.
+int rustphin_keyboard_modifiers();
 // Runs `run` on the GUI thread, from its event loop. Safe from any thread.
 void rustphin_post(rust::Fn<void()> run);

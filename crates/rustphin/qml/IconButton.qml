@@ -1,5 +1,7 @@
 // A plain icon button: a 16-pixel Lucide icon on its square, its name read
 // out and shown as a tooltip (icon-only buttons always carry one).
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import Rustphin
@@ -32,8 +34,7 @@ ToolButton {
     }
     background: Rectangle {
         radius: Tokens.metrics.radius
-        color: button.checked || button.down ? Tokens.colors.current
-             : button.hovered ? button.hoverFill : "transparent"
+        color: button.checked || button.down ? Tokens.colors.current : button.hovered ? button.hoverFill : "transparent"
         border.width: button.visualFocus ? 2 : 0
         border.color: Tokens.colors.accent
     }

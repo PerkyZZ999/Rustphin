@@ -1,4 +1,6 @@
 // A Lucide icon in one of the theme's colours, at `side` pixels.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import Rustphin
 

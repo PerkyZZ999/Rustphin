@@ -1,5 +1,7 @@
 // Compress to… (W-111d, mockup 37): the archive's name, its format and
 // how hard to compress; the line under them says what it makes.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -39,7 +41,7 @@ Popup {
     component Choices: Row {
         id: choices
 
-        required property var labels
+        required property list<string> labels
         required property int chosen
 
         signal picked(int index)
@@ -65,6 +67,7 @@ Popup {
                 Accessible.name: modelData
                 Accessible.checked: checked
                 contentItem: Text {
+                    textFormat: Text.PlainText
                     verticalAlignment: Text.AlignVCenter
                     color: choice.checked ? Tokens.colors.on_selection : Tokens.colors.text
                     font.family: Tokens.metrics.family_body
@@ -97,6 +100,7 @@ Popup {
                 colour: Tokens.colors.text
             }
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 elide: Text.ElideMiddle
                 color: Tokens.colors.text
@@ -121,6 +125,7 @@ Popup {
             rowSpacing: Tokens.metrics.space_sm
 
             Text {
+                textFormat: Text.PlainText
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.body_text
@@ -147,6 +152,7 @@ Popup {
                 Keys.onEnterPressed: compress.accept()
             }
             Text {
+                textFormat: Text.PlainText
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.body_text
@@ -159,6 +165,7 @@ Popup {
                 onPicked: index => compress.chooseFormat(index)
             }
             Text {
+                textFormat: Text.PlainText
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.body_text
@@ -172,6 +179,7 @@ Popup {
             }
         }
         Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             Layout.leftMargin: Tokens.metrics.space_lg
             Layout.rightMargin: Tokens.metrics.space_lg

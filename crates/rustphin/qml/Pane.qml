@@ -2,6 +2,8 @@
 // columns or details, with selection, rubber band, keyboard movement,
 // type-ahead and renaming in place; its in-place states and its status
 // line. FolderModel decides everything; this file draws and forwards input.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -12,13 +14,17 @@ FocusScope {
 
     required property string startFolder
     // Names to select once the start folder is listed.
-    property var startSelect: []
+    property list<string> startSelect: []
     // This pane receives the window's commands (the active one of a split).
     property bool current: true
     // Shown beside another pane: its location is drawn on its own bar.
     property bool split: false
     readonly property FolderModel listing: folder
-    readonly property alias view: viewLoader.item
+    // The view in use, and the same view by its kind (details is a list,
+    // icons and compact are grids), for what only those types offer.
+    readonly property Flickable view: viewLoader.item as Flickable
+    readonly property ListView listView: viewLoader.item as ListView
+    readonly property GridView gridView: viewLoader.item as GridView
     property int hoverIndex: -1
     property bool filterOpen: false
 
@@ -29,16 +35,16 @@ FocusScope {
     // The context menu: on `row` (-1 for the folder) at a point in the pane.
     signal menuRequested(int row, real x, real y)
     // The pane took the keyboard.
-    signal entered()
+    signal entered
     // Text for the clipboard.
     signal copyText(string words)
     // A dialog the window opens: "properties", "compress", "batch" or
     // "extractTo", with what it needs.
     signal dialogRequested(string kind, var data)
     // The pane shows another folder, or its title or trash state changed.
-    signal reported()
+    signal reported
     // Tab: the keyboard moves on to the other view or the places panel.
-    signal otherPane()
+    signal otherPane
 
     // Entries per line (icons) or per column (compact); one in details.
     function lanes(): int {
@@ -49,6 +55,16 @@ FocusScope {
         if (folder.mode === 1)
             return Math.max(1, Math.floor(view.height / folder.rowHeight))
         return 1
+    }
+
+    // The delegate drawing `row`, if it is on screen.
+    function itemAtIndex(row: int): Item {
+        return listView ? listView.itemAtIndex(row) : gridView ? gridView.itemAtIndex(row) : null
+    }
+
+    // The row at a point of the view's content; -1 for none.
+    function indexAt(x: real, y: real): int {
+        return listView ? listView.indexAt(x, y) : gridView ? gridView.indexAt(x, y) : -1
     }
 
     function showFilter() {
@@ -80,7 +96,7 @@ FocusScope {
     // entry, or the pane's corner.
     function menuForKeyboard() {
         const row = folder.focusRow
-        const item = row >= 0 && view ? view.itemAtIndex(row) : null
+        const item = row >= 0 ? itemAtIndex(row) : null
         if (item && folder.isSelected(row)) {
             const point = item.mapToItem(pane, 0, item.height)
             pane.menuRequested(row, point.x, point.y)
@@ -118,8 +134,10 @@ FocusScope {
         onBatchRenameRequested: json => pane.dialogRequested("batch", JSON.parse(json))
         onExtractToRequested: json => pane.dialogRequested("extractTo", JSON.parse(json))
         onRevealRow: row => {
-            if (pane.view)
-                pane.view.positionViewAtIndex(row, ListView.Contain)
+            if (pane.listView)
+                pane.listView.positionViewAtIndex(row, ListView.Contain)
+            else if (pane.gridView)
+                pane.gridView.positionViewAtIndex(row, GridView.Contain)
         }
         onTitleChanged: pane.reported()
         onTrashChanged: pane.reported()
@@ -170,6 +188,7 @@ FocusScope {
                 Text {
                     id: bannerText
 
+                    textFormat: Text.PlainText
                     Layout.fillWidth: true
                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                     color: Tokens.colors.text
@@ -206,6 +225,7 @@ FocusScope {
                         colour: Tokens.colors.text
                     }
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         color: Tokens.colors.text
                         font.family: Tokens.metrics.family_body
@@ -226,6 +246,7 @@ FocusScope {
                     }
                 }
                 Text {
+                    textFormat: Text.PlainText
                     color: Tokens.colors.text_muted
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.small_text
@@ -242,6 +263,7 @@ FocusScope {
             color: pane.current ? Tokens.colors.chrome_raised : Tokens.colors.chrome
 
             Text {
+                textFormat: Text.PlainText
                 anchors.fill: parent
                 anchors.leftMargin: Tokens.metrics.space_md
                 anchors.rightMargin: Tokens.metrics.space_md
@@ -279,63 +301,29 @@ FocusScope {
                 anchors.rightMargin: Tokens.metrics.space_sm
                 spacing: 0
 
-                Repeater {
-                    model: [
-                        { label: qsTr("Name"), column: 0, shown: true, width: -1 },
-                        { label: qsTr("Size"), column: 1, shown: folder.showSize, width: Tokens.metrics.column_size },
-                        { label: qsTr("Modified"), column: 2, shown: folder.showModified, width: Tokens.metrics.column_modified },
-                        { label: qsTr("Type"), column: 3, shown: folder.showType, width: Tokens.metrics.column_type }
-                    ]
-                    delegate: Item {
-                        id: heading
-
-                        required property var modelData
-                        readonly property bool sorted: folder.sortColumn === modelData.column
-
-                        visible: modelData.shown
-                        Layout.fillWidth: modelData.width < 0
-                        Layout.preferredWidth: modelData.width < 0 ? 100 : modelData.width
-                        Layout.fillHeight: true
-                        Accessible.role: Accessible.ColumnHeader
-                        Accessible.name: sorted ? qsTr("%1, sorted %2").arg(modelData.label).arg(folder.descending ? qsTr("descending") : qsTr("ascending"))
-                                                : qsTr("Sort by %1").arg(modelData.label)
-
-                        Row {
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.right: heading.modelData.column === 1 ? parent.right : undefined
-                            anchors.left: heading.modelData.column === 1 ? undefined : parent.left
-                            anchors.leftMargin: heading.modelData.column === 0 ? 0 : Tokens.metrics.space_sm
-                            anchors.rightMargin: Tokens.metrics.space_sm
-                            spacing: Tokens.metrics.space_xs
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: heading.sorted ? Tokens.colors.text : Tokens.colors.text_muted
-                                font.family: Tokens.metrics.family_body
-                                font.pixelSize: Tokens.metrics.small_text
-                                font.weight: heading.sorted ? Font.DemiBold : Font.Normal
-                                text: heading.modelData.label
-                            }
-                            Lucide {
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: heading.sorted
-                                name: folder.descending ? "arrow-down" : "arrow-up"
-                                side: Tokens.metrics.icon_small
-                                colour: Tokens.colors.text
-                            }
-                        }
-                        HoverHandler {
-                            id: headingHover
-                        }
-                        Rectangle {
-                            anchors.fill: parent
-                            color: headingHover.hovered ? Tokens.colors.hover : "transparent"
-                            z: -1
-                        }
-                        TapHandler {
-                            onTapped: folder.sortBy(heading.modelData.column)
-                        }
-                    }
+                ColumnHeading {
+                    label: qsTr("Name")
+                    column: 0
+                    shown: true
+                    columnWidth: -1
+                }
+                ColumnHeading {
+                    label: qsTr("Size")
+                    column: 1
+                    shown: folder.showSize
+                    columnWidth: Tokens.metrics.column_size
+                }
+                ColumnHeading {
+                    label: qsTr("Modified")
+                    column: 2
+                    shown: folder.showModified
+                    columnWidth: Tokens.metrics.column_modified
+                }
+                ColumnHeading {
+                    label: qsTr("Type")
+                    column: 3
+                    shown: folder.showType
+                    columnWidth: Tokens.metrics.column_type
                 }
             }
             Rectangle {
@@ -368,8 +356,14 @@ FocusScope {
                     const ctrl = (event.modifiers & Qt.ControlModifier) !== 0
                     const alt = (event.modifiers & Qt.AltModifier) !== 0
                     const steps = {
-                        [Qt.Key_Up]: 0, [Qt.Key_Down]: 1, [Qt.Key_Left]: 2, [Qt.Key_Right]: 3,
-                        [Qt.Key_PageUp]: 4, [Qt.Key_PageDown]: 5, [Qt.Key_Home]: 6, [Qt.Key_End]: 7
+                        [Qt.Key_Up]: 0,
+                        [Qt.Key_Down]: 1,
+                        [Qt.Key_Left]: 2,
+                        [Qt.Key_Right]: 3,
+                        [Qt.Key_PageUp]: 4,
+                        [Qt.Key_PageDown]: 5,
+                        [Qt.Key_Home]: 6,
+                        [Qt.Key_End]: 7
                     }
                     if (!ctrl && !alt && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
                         pane.otherPane()
@@ -461,9 +455,11 @@ FocusScope {
                 // other applications receive its files as a URI list.
                 function startDrag() {
                     dragging = true
-                    const item = pane.view.itemAtIndex(pressRow)
-                    dragOut.Drag.imageSource = item && item.icon ? "image://theme/" + item.icon : ""
-                    dragOut.Drag.mimeData = { "text/uri-list": folder.selectedUris() }
+                    const icon = folder.iconAt(pressRow)
+                    dragOut.Drag.imageSource = icon.length > 0 ? "image://theme/" + icon : ""
+                    dragOut.Drag.mimeData = {
+                        "text/uri-list": folder.selectedUris()
+                    }
                     dragOut.Drag.active = true
                 }
 
@@ -475,15 +471,15 @@ FocusScope {
                     if (!pane.view)
                         return -1
                     const p = contentPoint(x, y)
-                    return pane.view.indexAt(p.x, p.y)
+                    return pane.indexAt(p.x, p.y)
                 }
 
                 // A press on a details row beyond its name's text.
                 function besideName(row: int, x: real, y: real): bool {
                     if (row < 0 || folder.mode !== 2)
                         return false
-                    const item = pane.view.itemAtIndex(row)
-                    return item !== null && pointer.mapToItem(item, x, y).x > item.nameEnd + Tokens.metrics.space_sm
+                    const item = pane.itemAtIndex(row) as DetailsRow
+                    return item !== null && pointer.mapToItem(item, x, y).x > item.nameEnd() + Tokens.metrics.space_sm
                 }
 
                 function modifiersOf(mouse): int {
@@ -534,8 +530,7 @@ FocusScope {
                     }
                     if (Math.abs(mouse.x - pressedAt.x) + Math.abs(mouse.y - pressedAt.y) > 4)
                         moved = true
-                    if (moved && !banding && !dragging && pressRow >= 0 && (mouse.buttons & Qt.LeftButton)
-                            && folder.isSelected(pressRow)) {
+                    if (moved && !banding && !dragging && pressRow >= 0 && (mouse.buttons & Qt.LeftButton) && folder.isSelected(pressRow)) {
                         startDrag()
                         return
                     }
@@ -553,15 +548,13 @@ FocusScope {
                         folder.click(pressRow, modifiersOf(mouse))
                     // A press on a selected entry kept the selection for a
                     // drag; without one, the click narrows it to the entry.
-                    if (mouse.button === Qt.LeftButton && !banding && !moved && pressRow >= 0
-                            && modifiersOf(mouse) === 0)
+                    if (mouse.button === Qt.LeftButton && !banding && !moved && pressRow >= 0 && modifiersOf(mouse) === 0)
                         folder.click(pressRow, 0)
                     banding = false
                     bandScroll.direction = 0
                 }
                 onClicked: mouse => {
-                    if (mouse.button === Qt.LeftButton && folder.oneClick && pressRow >= 0 && !moved
-                            && modifiersOf(mouse) === 0)
+                    if (mouse.button === Qt.LeftButton && folder.oneClick && pressRow >= 0 && !moved && modifiersOf(mouse) === 0)
                         folder.activate(pressRow)
                 }
                 onDoubleClicked: mouse => {
@@ -640,8 +633,9 @@ FocusScope {
                     pane.hoverIndex = -1
                 }
                 onDropped: drop => {
-                    const action = (drop.modifiers & Qt.ControlModifier) ? 1
-                                 : (drop.modifiers & Qt.ShiftModifier) ? 2 : 0
+                    // QML's drop event has no modifiers: ask the keyboard.
+                    const modifiers = Shell.keyboardModifiers()
+                    const action = (modifiers & Qt.ControlModifier) ? 1 : (modifiers & Qt.ShiftModifier) ? 2 : 0
                     const uris = drop.urls.map(url => url.toString()).join("\r\n")
                     folder.dropOn(folder.dropRow(pointer.rowAt(drop.x, drop.y)), uris, action)
                     // Rustphin does the copying or moving; the source keeps
@@ -687,14 +681,12 @@ FocusScope {
 
                 Lucide {
                     Layout.alignment: Qt.AlignHCenter
-                    name: folder.problem.length > 0 ? "folder-x"
-                        : folder.loading ? "loader"
-                        : folder.filterText.length > 0 ? "search-x"
-                        : folder.emptyTitle.indexOf("hidden") >= 0 ? "eye-off" : "folder-open"
+                    name: folder.problem.length > 0 ? "folder-x" : folder.loading ? "loader" : folder.filterText.length > 0 ? "search-x" : folder.emptyTitle.indexOf("hidden") >= 0 ? "eye-off" : "folder-open"
                     side: Tokens.metrics.icon_large
                     colour: folder.problem.length > 0 ? Tokens.colors.danger : Tokens.colors.text_muted
                 }
                 Text {
+                    textFormat: Text.PlainText
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
@@ -705,6 +697,7 @@ FocusScope {
                     Accessible.role: Accessible.Heading
                 }
                 Text {
+                    textFormat: Text.PlainText
                     Layout.fillWidth: true
                     visible: text.length > 0
                     horizontalAlignment: Text.AlignHCenter
@@ -825,6 +818,7 @@ FocusScope {
                 spacing: Tokens.metrics.space_md
 
                 Text {
+                    textFormat: Text.PlainText
                     visible: folder.selectionText.length > 0 && folder.problem.length === 0
                     Layout.fillWidth: !folder.showsTotals
                     elide: Text.ElideRight
@@ -834,16 +828,17 @@ FocusScope {
                     text: folder.selectionText
                 }
                 Text {
+                    textFormat: Text.PlainText
                     visible: folder.showsTotals || folder.problem.length > 0 || folder.notice.length > 0
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                     color: folder.notice.length > 0 ? Tokens.colors.danger : Tokens.colors.text_muted
                     font.family: Tokens.metrics.family_data
                     font.pixelSize: Tokens.metrics.small_text
-                    text: folder.notice.length > 0 ? folder.notice
-                        : folder.problem.length > 0 ? folder.problemStatus : folder.total
+                    text: folder.notice.length > 0 ? folder.notice : folder.problem.length > 0 ? folder.problemStatus : folder.total
                 }
                 Text {
+                    textFormat: Text.PlainText
                     visible: folder.showsFreeSpace && folder.freeSpace.length > 0
                     color: Tokens.colors.text_muted
                     font.family: Tokens.metrics.family_data
@@ -909,6 +904,185 @@ FocusScope {
 
     // The entry's picture: its thumbnail when there is one, else its
     // type's icon from the desktop theme; faded when hidden or cut.
+    // One column heading of the details view; a click sorts by it.
+    component ColumnHeading: Item {
+        id: heading
+
+        required property string label
+        required property int column
+        required property bool shown
+        required property real columnWidth
+        readonly property bool sorted: folder.sortColumn === column
+
+        visible: shown
+        Layout.fillWidth: columnWidth < 0
+        Layout.preferredWidth: columnWidth < 0 ? 100 : columnWidth
+        Layout.fillHeight: true
+        Accessible.role: Accessible.ColumnHeader
+        Accessible.name: sorted ? qsTr("%1, sorted %2").arg(label).arg(folder.descending ? qsTr("descending") : qsTr("ascending")) : qsTr("Sort by %1").arg(label)
+
+        Row {
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: heading.column === 1 ? parent.right : undefined
+            anchors.left: heading.column === 1 ? undefined : parent.left
+            anchors.leftMargin: heading.column === 0 ? 0 : Tokens.metrics.space_sm
+            anchors.rightMargin: Tokens.metrics.space_sm
+            spacing: Tokens.metrics.space_xs
+
+            Text {
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                color: heading.sorted ? Tokens.colors.text : Tokens.colors.text_muted
+                font.family: Tokens.metrics.family_body
+                font.pixelSize: Tokens.metrics.small_text
+                font.weight: heading.sorted ? Font.DemiBold : Font.Normal
+                text: heading.label
+            }
+            Lucide {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: heading.sorted
+                name: folder.descending ? "arrow-down" : "arrow-up"
+                side: Tokens.metrics.icon_small
+                colour: Tokens.colors.text
+            }
+        }
+        HoverHandler {
+            id: headingHover
+        }
+        Rectangle {
+            anchors.fill: parent
+            color: headingHover.hovered ? Tokens.colors.hover : "transparent"
+            z: -1
+        }
+        TapHandler {
+            onTapped: folder.sortBy(heading.column)
+        }
+    }
+
+    // One row of the details view: icon, name, size, date, type.
+    component DetailsRow: Item {
+        id: row
+
+        required property int index
+        required property string name
+        required property string size
+        required property string modified
+        required property string kind
+        required property string icon
+        required property string thumbnail
+        required property bool selected
+        required property bool current
+        required property real fade
+        required property bool link
+        required property bool renaming
+
+        readonly property color ink: selected ? Tokens.colors.on_selection : Tokens.colors.text
+        readonly property color quiet: selected ? Tokens.colors.on_selection : Tokens.colors.text_muted
+        // Where the name's text ends: a press beyond it starts a
+        // rubber band, not a drag (Dolphin's details view).
+        function nameEnd(): real {
+            return nameLabel.mapToItem(row, Math.min(nameLabel.contentWidth, nameLabel.width), 0).x
+        }
+
+        width: ListView.view.width
+        height: folder.rowHeight
+        Accessible.role: Accessible.ListItem
+        Accessible.name: name
+        Accessible.selected: selected
+        Accessible.focused: current
+
+        EntryFill {
+            anchors.fill: parent
+            anchors.leftMargin: Tokens.metrics.space_xs
+            anchors.rightMargin: Tokens.metrics.space_xs
+            index: row.index
+            selected: row.selected
+            current: row.current
+            renaming: row.renaming
+        }
+        // The focused entry's bar, as in the mockups.
+        Rectangle {
+            visible: row.current && row.selected
+            x: Tokens.metrics.space_xs
+            width: Tokens.metrics.selection_bar
+            height: parent.height
+            color: Tokens.colors.accent
+        }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Tokens.metrics.space_lg
+            anchors.rightMargin: Tokens.metrics.space_sm
+            spacing: 0
+            opacity: row.fade
+
+            EntryIcon {
+                icon: row.icon
+                thumbnail: row.thumbnail
+                link: row.link
+            }
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.leftMargin: Tokens.metrics.space_sm
+
+                Text {
+                    id: nameLabel
+
+                    textFormat: Text.PlainText
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width
+                    visible: !row.renaming
+                    elide: Text.ElideRight
+                    color: row.ink
+                    font.family: Tokens.metrics.family_body
+                    font.pixelSize: Math.round(folder.nameText * Tokens.metrics.text_scale)
+                    text: row.name
+                }
+                Loader {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width
+                    active: row.renaming
+                    sourceComponent: RenameField {}
+                }
+            }
+            Text {
+                textFormat: Text.PlainText
+                visible: folder.showSize
+                Layout.preferredWidth: Tokens.metrics.column_size
+                rightPadding: Tokens.metrics.space_sm
+                horizontalAlignment: Text.AlignRight
+                color: row.quiet
+                font.family: Tokens.metrics.family_data
+                font.pixelSize: Math.round(folder.dataText * Tokens.metrics.text_scale)
+                text: row.size
+            }
+            Text {
+                textFormat: Text.PlainText
+                visible: folder.showModified
+                Layout.preferredWidth: Tokens.metrics.column_modified
+                leftPadding: Tokens.metrics.space_sm
+                rightPadding: Tokens.metrics.space_sm
+                elide: Text.ElideRight
+                color: row.quiet
+                font.family: Tokens.metrics.family_data
+                font.pixelSize: Math.round(folder.dataText * Tokens.metrics.text_scale)
+                text: row.modified
+            }
+            Text {
+                textFormat: Text.PlainText
+                visible: folder.showType
+                Layout.preferredWidth: Tokens.metrics.column_type
+                leftPadding: Tokens.metrics.space_sm
+                rightPadding: Tokens.metrics.space_sm
+                elide: Text.ElideRight
+                color: row.quiet
+                font.family: Tokens.metrics.family_body
+                font.pixelSize: Math.round(folder.dataText * Tokens.metrics.text_scale)
+                text: row.kind
+            }
+        }
+    }
+
     component EntryIcon: Item {
         id: entryIcon
 
@@ -924,17 +1098,20 @@ FocusScope {
             anchors.centerIn: parent
             width: entryIcon.side
             height: entryIcon.side
-            visible: entryIcon.thumbnail.length === 0 || status !== Image.Ready
+            // Until the thumbnail is ready, and for good when it fails.
+            visible: thumb.status !== Image.Ready
             source: "image://theme/" + entryIcon.icon
             sourceSize.width: entryIcon.side
             sourceSize.height: entryIcon.side
             Accessible.ignored: true
         }
         Image {
+            id: thumb
+
             anchors.centerIn: parent
             width: entryIcon.side
             height: entryIcon.side
-            visible: entryIcon.thumbnail.length > 0
+            visible: status === Image.Ready
             source: entryIcon.thumbnail
             asynchronous: true
             fillMode: Image.PreserveAspectFit
@@ -969,8 +1146,7 @@ FocusScope {
         required property bool renaming
 
         radius: Tokens.metrics.radius
-        color: selected ? (pane.hoverIndex === index ? Tokens.colors.selection_hover : Tokens.colors.selection)
-             : (pane.hoverIndex === index || renaming) ? Tokens.colors.hover : "transparent"
+        color: selected ? (pane.hoverIndex === index ? Tokens.colors.selection_hover : Tokens.colors.selection) : (pane.hoverIndex === index || renaming) ? Tokens.colors.hover : "transparent"
         border.width: current && pane.activeFocus && !selected ? 1 : 0
         border.color: Tokens.colors.border_accent
     }
@@ -994,123 +1170,7 @@ FocusScope {
                 policy: ScrollBar.AsNeeded
             }
 
-            delegate: Item {
-                id: row
-
-                required property int index
-                required property string name
-                required property string size
-                required property string modified
-                required property string kind
-                required property bool isFolder
-                required property string icon
-                required property string thumbnail
-                required property bool selected
-                required property bool current
-                required property real fade
-                required property bool link
-                required property bool renaming
-
-                readonly property color ink: selected ? Tokens.colors.on_selection : Tokens.colors.text
-                readonly property color quiet: selected ? Tokens.colors.on_selection : Tokens.colors.text_muted
-                // Where the name's text ends: a press beyond it starts a
-                // rubber band, not a drag (Dolphin's details view).
-                readonly property real nameEnd: nameLabel.mapToItem(row, Math.min(nameLabel.contentWidth, nameLabel.width), 0).x
-
-                width: ListView.view.width
-                height: folder.rowHeight
-                Accessible.role: Accessible.ListItem
-                Accessible.name: name
-                Accessible.selected: selected
-                Accessible.focused: current
-
-                EntryFill {
-                    anchors.fill: parent
-                    anchors.leftMargin: Tokens.metrics.space_xs
-                    anchors.rightMargin: Tokens.metrics.space_xs
-                    index: row.index
-                    selected: row.selected
-                    current: row.current
-                    renaming: row.renaming
-                }
-                // The focused entry's bar, as in the mockups.
-                Rectangle {
-                    visible: row.current && row.selected
-                    x: Tokens.metrics.space_xs
-                    width: Tokens.metrics.selection_bar
-                    height: parent.height
-                    color: Tokens.colors.accent
-                }
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Tokens.metrics.space_lg
-                    anchors.rightMargin: Tokens.metrics.space_sm
-                    spacing: 0
-                    opacity: row.fade
-
-                    EntryIcon {
-                        icon: row.icon
-                        thumbnail: row.thumbnail
-                        link: row.link
-                    }
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.leftMargin: Tokens.metrics.space_sm
-
-                        Text {
-                            id: nameLabel
-
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width
-                            visible: !row.renaming
-                            elide: Text.ElideRight
-                            color: row.ink
-                            font.family: Tokens.metrics.family_body
-                            font.pixelSize: Math.round(folder.nameText * Tokens.metrics.text_scale)
-                            text: row.name
-                        }
-                        Loader {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width
-                            active: row.renaming
-                            sourceComponent: RenameField {}
-                        }
-                    }
-                    Text {
-                        visible: folder.showSize
-                        Layout.preferredWidth: Tokens.metrics.column_size
-                        rightPadding: Tokens.metrics.space_sm
-                        horizontalAlignment: Text.AlignRight
-                        color: row.quiet
-                        font.family: Tokens.metrics.family_data
-                        font.pixelSize: Math.round(folder.dataText * Tokens.metrics.text_scale)
-                        text: row.size
-                    }
-                    Text {
-                        visible: folder.showModified
-                        Layout.preferredWidth: Tokens.metrics.column_modified
-                        leftPadding: Tokens.metrics.space_sm
-                        rightPadding: Tokens.metrics.space_sm
-                        elide: Text.ElideRight
-                        color: row.quiet
-                        font.family: Tokens.metrics.family_data
-                        font.pixelSize: Math.round(folder.dataText * Tokens.metrics.text_scale)
-                        text: row.modified
-                    }
-                    Text {
-                        visible: folder.showType
-                        Layout.preferredWidth: Tokens.metrics.column_type
-                        leftPadding: Tokens.metrics.space_sm
-                        rightPadding: Tokens.metrics.space_sm
-                        elide: Text.ElideRight
-                        color: row.quiet
-                        font.family: Tokens.metrics.family_body
-                        font.pixelSize: Math.round(folder.dataText * Tokens.metrics.text_scale)
-                        text: row.kind
-                    }
-                }
-            }
+            delegate: DetailsRow {}
         }
     }
 
@@ -1140,7 +1200,6 @@ FocusScope {
 
                 required property int index
                 required property string name
-                required property bool isFolder
                 required property string icon
                 required property string thumbnail
                 required property bool selected
@@ -1177,6 +1236,7 @@ FocusScope {
                         link: cell.link
                     }
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         visible: !cell.renaming
@@ -1228,7 +1288,6 @@ FocusScope {
 
                 required property int index
                 required property string name
-                required property bool isFolder
                 required property string icon
                 required property string thumbnail
                 required property bool selected
@@ -1265,6 +1324,7 @@ FocusScope {
                         link: entry.link
                     }
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         visible: !entry.renaming
                         elide: Text.ElideRight

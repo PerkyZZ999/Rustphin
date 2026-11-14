@@ -1,7 +1,8 @@
 // The progress of a file operation and the latest notice, over the bottom
 // of the window: what is happening, how far, and Undo or Stop.
+pragma ComponentBehavior: Bound
+
 import QtQuick
-import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Rustphin
 
@@ -34,15 +35,16 @@ ColumnLayout {
                 spacing: 2
 
                 Text {
+                    textFormat: Text.PlainText
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                     color: Tokens.colors.text
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.body_text
-                    text: Operations.progressLabel
-                        + (Operations.runningCount > 1 ? qsTr(" (and %1 more)").arg(Operations.runningCount - 1) : "")
+                    text: Operations.progressLabel + (Operations.runningCount > 1 ? qsTr(" (and %1 more)").arg(Operations.runningCount - 1) : "")
                 }
                 Text {
+                    textFormat: Text.PlainText
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                     color: Tokens.colors.text_muted
@@ -118,6 +120,7 @@ ColumnLayout {
                 colour: Operations.noticeError ? Tokens.colors.danger : Tokens.colors.success
             }
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 elide: Text.ElideRight
                 color: Tokens.colors.text
@@ -128,7 +131,7 @@ ColumnLayout {
             OutlinedButton {
                 visible: Operations.problems.length > 0
                 text: qsTr("Details")
-                onClicked: problemsDialog.open()
+                onClicked: bar.problemsDialog.open()
             }
             OutlinedButton {
                 visible: Operations.noticeUndo
@@ -145,74 +148,12 @@ ColumnLayout {
         }
     }
 
-    // What the operation left out, one entry per line with why.
-    Popup {
-        id: problemsDialog
+    // Keyboard focus goes back to the window when the problems dialog closes.
+    signal problemsClosed
 
-        readonly property var problems: Operations.problems.length > 0 ? JSON.parse(Operations.problems) : null
-
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(Tokens.metrics.dialog, parent ? parent.width - 32 : Tokens.metrics.dialog)
-        modal: true
-        padding: Tokens.metrics.space_lg
-        background: Rectangle {
-            radius: Tokens.metrics.radius
-            color: Tokens.colors.raised
-            border.color: Tokens.colors.border_strong
-        }
-        Overlay.modal: Rectangle {
-            color: Tokens.colors.scrim
-        }
-
-        contentItem: ColumnLayout {
-            spacing: Tokens.metrics.space_md
-            Accessible.role: Accessible.Dialog
-            Accessible.name: problemsDialog.problems ? problemsDialog.problems.title : ""
-
-            Text {
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                color: Tokens.colors.text
-                font.family: Tokens.metrics.family_heading
-                font.pixelSize: Tokens.metrics.title_text
-                text: problemsDialog.problems ? qsTr("%1: what was left out").arg(problemsDialog.problems.title) : ""
-            }
-            ListView {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(contentHeight, Tokens.metrics.menu_visible)
-                clip: true
-                model: problemsDialog.problems ? problemsDialog.problems.entries : []
-                delegate: ColumnLayout {
-                    required property var modelData
-
-                    width: ListView.view.width
-                    spacing: 2
-
-                    Text {
-                        Layout.fillWidth: true
-                        elide: Text.ElideMiddle
-                        color: Tokens.colors.text
-                        font.family: Tokens.metrics.family_data
-                        font.pixelSize: Tokens.metrics.data_text
-                        text: modelData.path
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        Layout.bottomMargin: Tokens.metrics.space_sm
-                        wrapMode: Text.Wrap
-                        color: Tokens.colors.text_muted
-                        font.family: Tokens.metrics.family_body
-                        font.pixelSize: Tokens.metrics.small_text
-                        text: modelData.reason
-                    }
-                }
-            }
-            OutlinedButton {
-                Layout.alignment: Qt.AlignRight
-                text: qsTr("Close")
-                onClicked: problemsDialog.close()
-            }
-        }
+    // What the operation left out: a dialog over the window, kept out of
+    // this layout.
+    readonly property ProblemsDialog problemsDialog: ProblemsDialog {
+        onClosed: bar.problemsClosed()
     }
 }

@@ -1,12 +1,14 @@
 // The command palette (Ctrl+Shift+P, mockup 12): a field and up to seven
 // results; Up, Down and Tab move, Enter runs, Esc closes.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Rustphin
 
 Popup {
-    id: palette
+    id: commandPalette
 
     // Called with what was chosen (a `{kind, …}` object).
     signal chosen(var target)
@@ -80,9 +82,9 @@ Popup {
             Keys.onDownPressed: results.moveBy(1)
             Keys.onTabPressed: results.moveBy(1)
             Keys.onBacktabPressed: results.moveBy(-1)
-            Keys.onReturnPressed: palette.confirm()
-            Keys.onEnterPressed: palette.confirm()
-            Keys.onEscapePressed: palette.close()
+            Keys.onReturnPressed: commandPalette.confirm()
+            Keys.onEnterPressed: commandPalette.confirm()
+            Keys.onEscapePressed: commandPalette.close()
 
             Lucide {
                 x: Tokens.metrics.space_md
@@ -117,8 +119,7 @@ Popup {
                 width: ListView.view.width
                 height: Tokens.metrics.palette_row
                 radius: Tokens.metrics.radius
-                color: chosen ? (rowArea.containsMouse ? Tokens.colors.selection_hover : Tokens.colors.selection)
-                     : rowArea.containsMouse ? Tokens.colors.hover : "transparent"
+                color: chosen ? (rowArea.containsMouse ? Tokens.colors.selection_hover : Tokens.colors.selection) : rowArea.containsMouse ? Tokens.colors.hover : "transparent"
                 Accessible.role: Accessible.ListItem
                 Accessible.name: label
                 Accessible.description: qsTr("%1. Select, then press Enter to run.").arg(trail)
@@ -146,6 +147,7 @@ Popup {
                         spacing: 2
 
                         Text {
+                            textFormat: Text.PlainText
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                             color: row.chosen ? Tokens.colors.on_selection : Tokens.colors.text
@@ -154,6 +156,7 @@ Popup {
                             text: row.name
                         }
                         Text {
+                            textFormat: Text.PlainText
                             Layout.fillWidth: true
                             elide: Text.ElideMiddle
                             color: row.chosen ? Tokens.colors.on_selection : Tokens.colors.text_muted
@@ -163,6 +166,7 @@ Popup {
                         }
                     }
                     Text {
+                        textFormat: Text.PlainText
                         visible: row.shortcut.length > 0
                         color: row.chosen ? Tokens.colors.on_selection : Tokens.colors.text_muted
                         font.family: Tokens.metrics.family_data
@@ -177,12 +181,13 @@ Popup {
                     hoverEnabled: true
                     onClicked: {
                         results.select(row.index)
-                        palette.confirm()
+                        commandPalette.confirm()
                     }
                 }
             }
         }
         Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             visible: list.count === 0 || results.status.length > 0
             wrapMode: Text.Wrap

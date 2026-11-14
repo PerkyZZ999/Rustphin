@@ -165,6 +165,13 @@ QWindow* openWindow(const QStringList& folders, const QString& activation,
     const QList<QObject*> roots = windows->rootObjects();
     auto* window = roots.isEmpty() ? nullptr : qobject_cast<QWindow*>(roots.last());
     if (window != nullptr) {
+        // A window closed while another stays open is freed with its
+        // panes and models; the last one goes with the engine (R-020).
+        QObject::connect(window, &QWindow::visibleChanged, window, [window](bool visible) {
+            if (!visible && lastActive() != nullptr) {
+                window->deleteLater();
+            }
+        });
         activate(window, activation);
     }
     return window;
@@ -230,7 +237,7 @@ void rustphin_shell_show(const QStringList& folders, const QString& activation, 
         openWindow(folders, activation);
         return;
     }
-    QMetaObject::invokeMethod(window, "openTabs", Q_ARG(QVariant, QVariant(folders)));
+    QMetaObject::invokeMethod(window, "openTabs", Q_ARG(QStringList, folders));
     activate(window, activation);
 }
 
@@ -241,8 +248,7 @@ void rustphin_shell_reveal(const QString& folder, const QStringList& select, boo
         openWindow({ folder }, QString(), select);
         return;
     }
-    QMetaObject::invokeMethod(window, "reveal", Q_ARG(QVariant, QVariant(folder)),
-        Q_ARG(QVariant, QVariant(select)));
+    QMetaObject::invokeMethod(window, "reveal", Q_ARG(QString, folder), Q_ARG(QStringList, select));
     activate(window, QString());
 }
 
@@ -269,6 +275,11 @@ void rustphin_shell_quit()
             QCoreApplication::quit();
         },
         Qt::QueuedConnection);
+}
+
+int rustphin_keyboard_modifiers()
+{
+    return static_cast<int>(QGuiApplication::queryKeyboardModifiers().toInt());
 }
 
 void rustphin_post(rust::Fn<void()> run)

@@ -1,6 +1,8 @@
 // A text button with the design's outline; `primary` fills it with the
 // accent, `destructive` with the danger colour. An optional Lucide icon
 // goes before the label.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import Rustphin
@@ -11,9 +13,7 @@ Button {
     property string iconName: ""
     property bool primary: false
     property bool destructive: false
-    readonly property color labelColour: !enabled ? Tokens.colors.text_disabled
-                                       : primary || destructive ? Tokens.colors.on_selection
-                                       : Tokens.colors.text
+    readonly property color labelColour: !enabled ? Tokens.colors.text_disabled : primary || destructive ? Tokens.colors.on_selection : Tokens.colors.text
 
     implicitHeight: Tokens.metrics.button
     leftPadding: Tokens.metrics.space_md
@@ -31,6 +31,7 @@ Button {
             sourceSize.height: Tokens.metrics.icon_ui
         }
         Text {
+            textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
             text: plain.text
             color: plain.labelColour
@@ -40,9 +41,7 @@ Button {
     }
     background: Rectangle {
         radius: Tokens.metrics.radius
-        color: plain.destructive ? (plain.down ? Qt.darker(Tokens.colors.danger, 1.2) : Tokens.colors.danger)
-             : plain.primary ? (plain.down ? Qt.darker(Tokens.colors.accent, 1.2) : Tokens.colors.accent)
-             : plain.down ? Tokens.colors.current : plain.hovered ? Tokens.colors.hover : "transparent"
+        color: plain.destructive ? (plain.down ? Qt.darker(Tokens.colors.danger, 1.2) : Tokens.colors.danger) : plain.primary ? (plain.down ? Qt.darker(Tokens.colors.accent, 1.2) : Tokens.colors.accent) : plain.down ? Tokens.colors.current : plain.hovered ? Tokens.colors.hover : "transparent"
         border.width: plain.visualFocus ? 2 : (plain.primary || plain.destructive ? 0 : 1)
         border.color: plain.visualFocus ? Tokens.colors.on_selection : Tokens.colors.border_strong
     }

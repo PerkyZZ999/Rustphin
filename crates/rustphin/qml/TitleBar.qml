@@ -1,13 +1,15 @@
 // The window's own title bar (W-114c2b): logo, centred title, Minimise,
 // Maximise or Restore, Close. Dragging moves the window; a double click
 // maximises or restores it.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import Rustphin
 
 Rectangle {
     id: bar
 
-    required property var window
+    required property Window window
     readonly property bool maximised: window.visibility === Window.Maximized || window.visibility === Window.FullScreen
 
     function toggleMaximised() {
@@ -32,6 +34,7 @@ Rectangle {
         Accessible.ignored: true
     }
     Text {
+        textFormat: Text.PlainText
         anchors.centerIn: parent
         width: parent.width - 2 * windowButtons.width
         horizontalAlignment: Text.AlignHCenter

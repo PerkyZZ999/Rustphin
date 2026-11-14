@@ -50,6 +50,11 @@ pub mod qobject {
         /// Closes every window and ends Rustphin.
         #[qinvokable]
         fn quit(self: Pin<&mut Shell>);
+        /// The keyboard modifiers held now (a drop decides copy or move by
+        /// them; QML's drop event does not carry them).
+        #[qinvokable]
+        #[cxx_name = "keyboardModifiers"]
+        fn keyboard_modifiers(self: &Shell) -> i32;
     }
 
     impl cxx_qt::Threading for Shell {}

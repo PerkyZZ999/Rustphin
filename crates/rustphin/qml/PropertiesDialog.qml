@@ -1,6 +1,8 @@
 // Properties (mockup 25): the entry's facts, its size (a folder is
 // measured as the dialog stays open) and its permissions, changed with
 // Apply. Esc or Close leaves unapplied changes.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -10,8 +12,23 @@ Popup {
     id: dialog
 
     required property string path
-    readonly property var facts: info.facts.length > 0 ? JSON.parse(info.facts) : []
-    readonly property var permissions: info.permissions.length > 0 ? JSON.parse(info.permissions) : null
+    // Facts are label and value pairs; permissions come as JSON from Rust
+    // (`rustphin_view::properties`), read once per change into typed parts.
+    readonly property list<var> facts: info.facts.length > 0 ? JSON.parse(info.facts) : []
+    property bool hasPermissions: false
+    property string permissionWords: ""
+    property list<var> permissionClasses: []
+    property bool permissionsEditable: false
+    property string permissionNote: ""
+
+    function readPermissions() {
+        const read = info.permissions.length > 0 ? JSON.parse(info.permissions) : null
+        hasPermissions = read !== null
+        permissionWords = read ? read.words : ""
+        permissionClasses = read ? read.classes : []
+        permissionsEditable = read !== null && read.editable === true
+        permissionNote = read ? read.note : ""
+    }
 
     parent: Overlay.overlay
     anchors.centerIn: parent
@@ -33,9 +50,13 @@ Popup {
         open()
     }
     onClosed: info.close()
+    // Another launch may ask for a different entry while it is open.
+    onPathChanged: info.open(path)
 
     PropertiesModel {
         id: info
+
+        onPermissionsChanged: dialog.readPermissions()
     }
 
     contentItem: ColumnLayout {
@@ -57,6 +78,7 @@ Popup {
                 colour: Tokens.colors.text
             }
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 elide: Text.ElideMiddle
                 color: Tokens.colors.text
@@ -92,6 +114,7 @@ Popup {
                 spacing: Tokens.metrics.space_md
 
                 Text {
+                    textFormat: Text.PlainText
                     visible: info.loading || info.error.length > 0
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
@@ -133,16 +156,20 @@ Popup {
                             source: info.thumbnail
                             fillMode: Image.PreserveAspectFit
                             asynchronous: true
+                            sourceSize.width: Tokens.metrics.properties_thumb_width
+                            sourceSize.height: Tokens.metrics.properties_thumb_height
                         }
                     }
                     ColumnLayout {
                         Text {
+                            textFormat: Text.PlainText
                             color: Tokens.colors.text
                             font.family: Tokens.metrics.family_body
                             font.pixelSize: Tokens.metrics.body_text
                             text: info.title
                         }
                         Text {
+                            textFormat: Text.PlainText
                             color: Tokens.colors.text_muted
                             font.family: Tokens.metrics.family_body
                             font.pixelSize: Tokens.metrics.small_text
@@ -154,7 +181,9 @@ Popup {
                     model: dialog.facts
 
                     delegate: RowLayout {
-                        required property var modelData
+                        id: fact
+
+                        required property list<string> modelData
 
                         Layout.fillWidth: true
                         spacing: Tokens.metrics.space_sm
@@ -162,35 +191,38 @@ Popup {
                         Accessible.name: modelData[0] + ": " + modelData[1]
 
                         Text {
+                            textFormat: Text.PlainText
                             Layout.preferredWidth: Tokens.metrics.properties_label
                             Layout.alignment: Qt.AlignTop
                             color: Tokens.colors.text_muted
                             font.family: Tokens.metrics.family_body
                             font.pixelSize: Tokens.metrics.body_text
-                            text: modelData[0]
+                            text: fact.modelData[0]
                         }
                         Text {
+                            textFormat: Text.PlainText
                             Layout.fillWidth: true
                             wrapMode: Text.WrapAnywhere
                             color: Tokens.colors.text
                             font.family: Tokens.metrics.family_data
                             font.pixelSize: Tokens.metrics.data_text
-                            text: modelData[1]
+                            text: fact.modelData[1]
                         }
                     }
                 }
                 Rectangle {
-                    visible: dialog.permissions !== null
+                    visible: dialog.hasPermissions
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
                     color: Tokens.colors.border
                 }
                 RowLayout {
-                    visible: dialog.permissions !== null
+                    visible: dialog.hasPermissions
                     Layout.fillWidth: true
                     spacing: Tokens.metrics.space_sm
 
                     Text {
+                        textFormat: Text.PlainText
                         Layout.preferredWidth: Tokens.metrics.properties_label
                         color: Tokens.colors.text_muted
                         font.family: Tokens.metrics.family_body
@@ -198,42 +230,46 @@ Popup {
                         text: qsTr("Permissions")
                     }
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         color: Tokens.colors.text
                         font.family: Tokens.metrics.family_data
                         font.pixelSize: Tokens.metrics.data_text
-                        text: dialog.permissions ? dialog.permissions.words : ""
+                        text: dialog.permissionWords
                     }
                 }
                 RowLayout {
-                    visible: dialog.permissions !== null
+                    visible: dialog.hasPermissions
                     Layout.fillWidth: true
                     spacing: Tokens.metrics.space_md
                     Accessible.role: Accessible.Grouping
                     Accessible.name: qsTr("Permissions")
 
                     Repeater {
-                        model: dialog.permissions ? dialog.permissions.classes : []
+                        model: dialog.permissionClasses
 
                         delegate: ColumnLayout {
                             id: permissionClass
 
-                            required property var modelData
                             required property int index
+                            readonly property string name: dialog.permissionClasses[index]?.name ?? ""
+                            readonly property string heading: dialog.permissionClasses[index]?.heading ?? ""
+                            readonly property list<bool> bits: dialog.permissionClasses[index]?.bits ?? []
 
                             Layout.fillWidth: true
                             Layout.preferredWidth: 1
                             spacing: 2
                             Accessible.role: Accessible.Grouping
-                            Accessible.name: qsTr("%1 permissions").arg(modelData.name)
+                            Accessible.name: qsTr("%1 permissions").arg(name)
 
                             Text {
+                                textFormat: Text.PlainText
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
                                 color: Tokens.colors.text_muted
                                 font.family: Tokens.metrics.family_body
                                 font.pixelSize: Tokens.metrics.label_text
-                                text: permissionClass.modelData.heading
+                                text: permissionClass.heading
                             }
                             Repeater {
                                 model: [qsTr("Read"), qsTr("Write"), qsTr("Execute")]
@@ -245,11 +281,12 @@ Popup {
                                     required property int index
 
                                     text: modelData
-                                    checked: permissionClass.modelData.bits[index]
-                                    enabled: dialog.permissions.editable
-                                    Accessible.name: permissionClass.modelData.name + " " + modelData
+                                    checked: permissionClass.bits[index]
+                                    enabled: dialog.permissionsEditable
+                                    Accessible.name: permissionClass.name + " " + modelData
                                     onToggled: info.setBit(permissionClass.index, index, checked)
                                     contentItem: Text {
+                                        textFormat: Text.PlainText
                                         leftPadding: box.indicator.width + Tokens.metrics.space_xs
                                         verticalAlignment: Text.AlignVCenter
                                         color: box.enabled ? Tokens.colors.text : Tokens.colors.text_disabled
@@ -263,13 +300,14 @@ Popup {
                     }
                 }
                 Text {
-                    visible: dialog.permissions !== null && dialog.permissions.note.length > 0
+                    textFormat: Text.PlainText
+                    visible: dialog.permissionNote.length > 0
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
                     color: Tokens.colors.text_muted
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.small_text
-                    text: dialog.permissions ? dialog.permissions.note : ""
+                    text: dialog.permissionNote
                 }
             }
         }

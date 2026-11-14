@@ -1,5 +1,7 @@
 // One tab: one pane, or two side by side (F3). It tells the tabs model
 // where its panes are and which has the keyboard.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Layouts
 import Rustphin
@@ -12,20 +14,20 @@ Item {
     required property int activePane
     required property string leftStart
     required property string rightStart
-    required property var select
+    required property list<string> select
     required property bool current
     required property TabsModel tabs
-    required property var places
-    readonly property var activeItem: split && activePane === 1 && right.item ? right.item : left
+    required property PlacesModel places
+    readonly property Pane activeItem: split && activePane === 1 && rightLoader.item ? rightLoader.item as Pane : leftPane
 
     signal fileActivated(string path)
     signal openInNewTab(string path)
-    signal menuRequested(var pane, int row, real x, real y)
+    signal menuRequested(Pane pane, int row, real x, real y)
     signal copyText(string words)
     signal dialogRequested(string kind, var data)
-    signal otherPane()
+    signal otherPane
 
-    function report(side: int, pane) {
+    function report(side: int, pane: Pane) {
         const folder = pane.listing
         const icon = folder.trash ? "trash" : (page.places.iconFor(folder.location) || "folder")
         page.tabs.setPane(page.key, side, folder.location, folder.title, icon)
@@ -35,9 +37,9 @@ Item {
     Connections {
         target: page.places
         function onCountChanged() {
-            page.report(0, left)
-            if (right.item)
-                page.report(1, right.item)
+            page.report(0, leftPane)
+            if (rightLoader.item)
+                page.report(1, rightLoader.item as Pane)
         }
     }
 
@@ -46,7 +48,7 @@ Item {
         spacing: 0
 
         Pane {
-            id: left
+            id: leftPane
 
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -57,8 +59,8 @@ Item {
             onEntered: page.tabs.setActivePane(page.key, 0)
             onFileActivated: path => page.fileActivated(path)
             onOpenInNewTab: path => page.openInNewTab(path)
-            onMenuRequested: (row, x, y) => page.menuRequested(left, row, x, y)
-            onReported: page.report(0, left)
+            onMenuRequested: (row, x, y) => page.menuRequested(leftPane, row, x, y)
+            onReported: page.report(0, leftPane)
             onCopyText: words => page.copyText(words)
             onDialogRequested: (kind, data) => page.dialogRequested(kind, data)
             onOtherPane: page.otherPane()
@@ -70,7 +72,7 @@ Item {
             color: Tokens.colors.border
         }
         Loader {
-            id: right
+            id: rightLoader
 
             Layout.fillWidth: true
             Layout.fillHeight: true

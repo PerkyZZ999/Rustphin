@@ -1,5 +1,7 @@
 // Batch rename (S9, mockup 23): replace, a pattern with a counter, or a
 // change of case, with every new name previewed before Rename.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -8,7 +10,23 @@ import Rustphin
 Popup {
     id: dialog
 
-    readonly property var shown: batch.view.length > 0 ? JSON.parse(batch.view) : null
+    // The preview Rust sends as JSON, read once per change into typed parts.
+    property string title: ""
+    property string problem: ""
+    property string rowProblems: ""
+    property bool unchanged: false
+    property bool ready: false
+    property list<var> rows: []
+
+    function readView() {
+        const view = batch.view.length > 0 ? JSON.parse(batch.view) : null
+        title = view ? view.title : ""
+        problem = view ? view.problem : ""
+        rowProblems = view ? view.rowProblems : ""
+        unchanged = view !== null && view.unchanged === true
+        ready = view !== null && view.ready === true
+        rows = view ? view.rows : []
+    }
 
     parent: Overlay.overlay
     anchors.centerIn: parent
@@ -32,6 +50,8 @@ Popup {
 
     BatchModel {
         id: batch
+
+        onViewChanged: dialog.readView()
     }
 
     component Field: TextField {
@@ -73,6 +93,7 @@ Popup {
         Accessible.name: text
         Accessible.checked: on
         contentItem: Text {
+            textFormat: Text.PlainText
             verticalAlignment: Text.AlignVCenter
             color: segment.on ? Tokens.colors.on_selection : Tokens.colors.text
             font.family: Tokens.metrics.family_body
@@ -89,7 +110,7 @@ Popup {
     contentItem: ColumnLayout {
         spacing: Tokens.metrics.space_md
         Accessible.role: Accessible.Dialog
-        Accessible.name: dialog.shown ? dialog.shown.title : ""
+        Accessible.name: dialog.title
         Accessible.description: qsTr("Review the preview before Rename; Escape cancels.")
 
         RowLayout {
@@ -103,11 +124,12 @@ Popup {
                 colour: Tokens.colors.text
             }
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 color: Tokens.colors.text
                 font.family: Tokens.metrics.family_heading
                 font.pixelSize: Tokens.metrics.title_text
-                text: dialog.shown ? dialog.shown.title : ""
+                text: dialog.title
                 Accessible.role: Accessible.Heading
             }
             IconButton {
@@ -161,6 +183,7 @@ Popup {
                     text: qsTr("Regular expression")
                     onToggled: batch.edit("regex", checked ? "true" : "false")
                     contentItem: Text {
+                        textFormat: Text.PlainText
                         leftPadding: regex.indicator.width + Tokens.metrics.space_xs
                         verticalAlignment: Text.AlignVCenter
                         color: Tokens.colors.text
@@ -180,6 +203,7 @@ Popup {
                     text: "@-#"
                 }
                 Text {
+                    textFormat: Text.PlainText
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
                     color: Tokens.colors.text_muted
@@ -220,17 +244,19 @@ Popup {
                 }
             }
             Text {
-                visible: dialog.shown !== null && (dialog.shown.problem.length > 0 || dialog.shown.rowProblems.length > 0)
+                textFormat: Text.PlainText
+                visible: dialog.problem.length > 0 || dialog.rowProblems.length > 0
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
                 color: Tokens.colors.danger
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.body_text
-                text: dialog.shown ? (dialog.shown.problem + " " + dialog.shown.rowProblems).trim() : ""
+                text: (dialog.problem + " " + dialog.rowProblems).trim()
                 Accessible.role: Accessible.AlertMessage
             }
             Text {
-                visible: dialog.shown !== null && dialog.shown.unchanged
+                textFormat: Text.PlainText
+                visible: dialog.unchanged
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
                 color: Tokens.colors.text_muted
@@ -253,7 +279,7 @@ Popup {
                 anchors.fill: parent
                 anchors.margins: 1
                 clip: true
-                model: dialog.shown ? dialog.shown.rows : []
+                model: dialog.rows
                 boundsBehavior: Flickable.StopAtBounds
                 Accessible.role: Accessible.List
                 Accessible.name: qsTr("Rename preview")
@@ -265,6 +291,7 @@ Popup {
                     height: Tokens.metrics.heading_row
 
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         leftPadding: Tokens.metrics.space_md
@@ -274,6 +301,7 @@ Popup {
                         text: qsTr("Current name")
                     }
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         color: Tokens.colors.text_muted
@@ -283,15 +311,22 @@ Popup {
                     }
                 }
                 delegate: RowLayout {
-                    required property var modelData
+                    id: previewRow
+
+                    required property int index
+                    readonly property string from: dialog.rows[index]?.from ?? ""
+                    readonly property string to: dialog.rows[index]?.to ?? ""
+                    readonly property string problems: dialog.rows[index]?.problems ?? ""
+                    readonly property bool changes: dialog.rows[index]?.changes === true
 
                     width: ListView.view.width
                     height: Tokens.metrics.setting_row
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: qsTr("%1 becomes %2").arg(modelData.from).arg(modelData.to)
-                    Accessible.description: modelData.problems
+                    Accessible.name: qsTr("%1 becomes %2").arg(from).arg(to)
+                    Accessible.description: problems
 
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         leftPadding: Tokens.metrics.space_md
@@ -299,17 +334,17 @@ Popup {
                         color: Tokens.colors.text_muted
                         font.family: Tokens.metrics.family_data
                         font.pixelSize: Tokens.metrics.data_text
-                        text: modelData.from
+                        text: previewRow.from
                     }
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         elide: Text.ElideMiddle
-                        color: modelData.problems.length > 0 ? Tokens.colors.danger
-                             : modelData.changes ? Tokens.colors.text : Tokens.colors.text_muted
+                        color: previewRow.problems.length > 0 ? Tokens.colors.danger : previewRow.changes ? Tokens.colors.text : Tokens.colors.text_muted
                         font.family: Tokens.metrics.family_data
                         font.pixelSize: Tokens.metrics.data_text
-                        text: "→ " + modelData.to
+                        text: "→ " + previewRow.to
                     }
                 }
             }
@@ -335,7 +370,7 @@ Popup {
                     text: qsTr("Rename (Enter)")
                     iconName: "pencil"
                     primary: true
-                    enabled: dialog.shown !== null && dialog.shown.ready
+                    enabled: dialog.ready
                     onClicked: batch.accept()
                 }
             }

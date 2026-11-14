@@ -27,6 +27,8 @@ pub mod qobject {
         fn rustphin_shell_properties(paths: &QStringList);
         /// Closes every window and ends the process. Any thread.
         fn rustphin_shell_quit();
+        /// The keyboard modifiers held now, as Qt's flags. Qt thread.
+        fn rustphin_keyboard_modifiers() -> i32;
         /// Runs `run` on the GUI thread, from its event loop. Any thread.
         fn rustphin_post(run: fn());
     }

@@ -88,7 +88,7 @@ features-deep:
 # it provides the fastest compiler-only feedback path.
 #
 
-doctor: fmt clippy test deps features layers msrv fuzz-check
+doctor: fmt qml-format clippy test qml-lint deps features layers msrv fuzz-check
     @echo
     @echo "Rust-Toolchain: PASS"
 
@@ -193,6 +193,65 @@ layers:
     exit "$status"
 
 
+# QML formatting (W-116): every file as qmlformat writes it, with the
+# settings in crates/rustphin/qml/.qmlformat.ini.
+qml-format:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    status=0
+    for file in crates/rustphin/qml/*.qml; do
+        if ! /usr/lib/qt6/bin/qmlformat "$file" | cmp -s - "$file"; then
+            echo "not formatted: $file (run: /usr/lib/qt6/bin/qmlformat -i $file)"
+            status=1
+        fi
+    done
+    exit "$status"
+
+
+# QML lint (W-116): qmllint with the maintainer's BestPractices plugin, every
+# category a warning and no warning allowed. The plugin is built from
+# ../QtQmlBestPractices into target/ against the
+# installed Qt. The module's generated type information is copied without
+# the opaque stand-ins qmltyperegistrar writes for cxx-qt's QString,
+# QStringList, QMap and plain types, which would hide Qt's own types, and
+# the QML files are linked in, so qmllint sees the module as Qt loads it.
+qml-lint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    plugin=target/qmllint-plugin
+    if [[ ! -f "$plugin/libBestPracticesPlugin.so" ]]; then
+        cmake -S ../QtQmlBestPractices -B "$plugin" -DCMAKE_BUILD_TYPE=Release >/dev/null
+        cmake --build "$plugin" -j"$(nproc)" >/dev/null
+    fi
+    cargo build --quiet --package rustphin
+    generated="$(find target/debug/build/rustphin -name plugin.qmltypes -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)"
+    module=target/qmllint-module/Rustphin
+    rm -rf target/qmllint-module
+    mkdir -p "$module"
+    sed '/isTypeOpaque: true/d; s/"QMap_QString_QVariant"/"QVariantMap"/g' "$generated/plugin.qmltypes" > "$module/plugin.qmltypes"
+    { cat "$generated/qmldir"; echo "depends QtQuick"; echo "depends QtQml"; } > "$module/qmldir"
+    ln -s "$PWD/crates/rustphin/qml" "$module/qml"
+    ln -s "$PWD/crates/rustphin/icons" "$module/icons"
+    categories=(prefer-typed-properties layout-child-geometry versioned-imports no-state-in-delegates imperative-completed-assignment native-style-customization prefer-interaction-signals redundant-window-import)
+    args=()
+    for category in "${categories[@]}"; do
+        args+=("--Plugin.BestPractices.$category" warning)
+    done
+    # JSON output: in text mode qmllint 6.12 counts some plugin warnings it
+    # does not print.
+    /usr/lib/qt6/bin/qmllint --json target/qmllint-module/report.json -I target/qmllint-module -P "$PWD/$plugin" "${args[@]}" crates/rustphin/qml/*.qml || true
+    python3 - target/qmllint-module/report.json <<'REPORT'
+    import json, sys
+    found = 0
+    for entry in json.load(open(sys.argv[1]))["files"]:
+        for warning in entry["warnings"]:
+            if warning["type"] in ("warning", "critical"):
+                found += 1
+                print(f'{entry["filename"]}:{warning.get("line", 0)}:{warning.get("column", 0)}: {warning["message"]} [{warning["id"]}]')
+    sys.exit(1 if found else 0)
+    REPORT
+
+
 # Minimum supported Rust version (requirement R-109).
 msrv:
     cargo +1.100.0 check --workspace --all-targets --all-features
@@ -242,4 +301,6 @@ toolchain-help:
     @echo "  rust-tc bench-listing 500,000-entry listing benchmark (R-101)"
     @echo "  rust-tc bench-palette 10,000-location palette benchmark (R-015)"
     @echo "  rust-tc layers        Crate layering check (part of doctor)"
+    @echo "  rust-tc qml-lint      qmllint with the BestPractices plugin (part of doctor)"
+    @echo "  rust-tc qml-format    qmlformat check of the QML (part of doctor)"
     @echo "  rust-tc msrv          Compiler check on Rust 1.100 (part of doctor)"

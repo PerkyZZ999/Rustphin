@@ -2,6 +2,8 @@
 // page's groups on the right. Rows come from Rust (`settings_form`) as
 // JSON and are drawn here by kind; the Toolbar, Places groups, Shortcuts
 // and About pages have their own layouts.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -12,9 +14,13 @@ Popup {
 
     required property string shownFolder
     required property PlacesModel places
-    readonly property var pageList: settings.pages.length > 0 ? JSON.parse(settings.pages) : []
-    readonly property var groups: settings.groups.length > 0 ? JSON.parse(settings.groups) : []
-    readonly property var page: pageList.length > settings.page ? pageList[settings.page] : null
+    // Rust hands the pages over as JSON (`settings_form`): typed here.
+    readonly property list<var> pageList: settings.pages.length > 0 ? JSON.parse(settings.pages) : []
+    readonly property list<var> groups: settings.groups.length > 0 ? JSON.parse(settings.groups) : []
+    readonly property bool pageShown: pageList.length > settings.page
+    readonly property string pageTitle: pageShown ? pageList[settings.page].title : ""
+    readonly property string pageDescription: pageShown ? pageList[settings.page].description : ""
+    readonly property bool pageResettable: pageShown && pageList[settings.page].resettable === true
     property bool showingLicence: false
     property int toolbarCursor: -1
     property int availableCursor: -1
@@ -88,6 +94,7 @@ Popup {
                 colour: Tokens.colors.text
             }
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 color: Tokens.colors.text
                 font.family: Tokens.metrics.family_heading
@@ -132,15 +139,16 @@ Popup {
                 delegate: ItemDelegate {
                     id: pageRow
 
-                    required property var modelData
                     required property int index
+                    readonly property string pageTitle: dialog.pageList[index]?.title ?? ""
+                    readonly property string pageIcon: dialog.pageList[index]?.icon ?? ""
                     readonly property bool chosen: settings.page === index
 
                     width: ListView.view.width - Tokens.metrics.space_sm
                     x: Tokens.metrics.space_xs
                     implicitHeight: Tokens.metrics.setting_row
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: modelData.title
+                    Accessible.name: pageTitle
                     Accessible.selected: chosen
                     background: Rectangle {
                         radius: Tokens.metrics.radius
@@ -150,15 +158,16 @@ Popup {
                         spacing: Tokens.metrics.space_sm
 
                         Lucide {
-                            name: pageRow.modelData.icon
+                            name: pageRow.pageIcon
                             colour: pageRow.chosen ? Tokens.colors.on_selection : Tokens.colors.text_muted
                         }
                         Text {
+                            textFormat: Text.PlainText
                             Layout.fillWidth: true
                             color: pageRow.chosen ? Tokens.colors.on_selection : Tokens.colors.text
                             font.family: Tokens.metrics.family_body
                             font.pixelSize: Tokens.metrics.body_text
-                            text: pageRow.modelData.title
+                            text: pageRow.pageTitle
                         }
                     }
                     onClicked: {
@@ -199,16 +208,17 @@ Popup {
                         spacing: Tokens.metrics.space_md
 
                         Text {
+                            textFormat: Text.PlainText
                             Layout.fillWidth: true
                             color: Tokens.colors.text
                             font.family: Tokens.metrics.family_heading
                             font.pixelSize: Tokens.metrics.heading_text
-                            text: dialog.page ? dialog.page.title : ""
+                            text: dialog.pageTitle
                             Accessible.role: Accessible.Heading
                         }
                         Quiet {
                             Layout.fillWidth: true
-                            text: dialog.page ? dialog.page.description : ""
+                            text: dialog.pageDescription
                         }
 
                         // Pages of rows.
@@ -218,24 +228,29 @@ Popup {
                             delegate: ColumnLayout {
                                 id: group
 
-                                required property var modelData
+                                required property int index
+                                readonly property string title: dialog.groups[index]?.title ?? ""
+                                readonly property list<var> rows: dialog.groups[index]?.rows ?? []
 
                                 Layout.fillWidth: true
                                 Layout.topMargin: Tokens.metrics.space_sm
                                 spacing: Tokens.metrics.space_xs
 
                                 Text {
+                                    textFormat: Text.PlainText
                                     color: Tokens.colors.text_muted
                                     font.family: Tokens.metrics.family_body
                                     font.pixelSize: Tokens.metrics.label_text
                                     font.capitalization: Font.AllUppercase
-                                    text: group.modelData.title
+                                    text: group.title
                                     Accessible.role: Accessible.Heading
                                 }
                                 Repeater {
-                                    model: group.modelData.rows
+                                    model: group.rows
 
-                                    delegate: SettingRow {}
+                                    delegate: SettingRow {
+                                        rows: group.rows
+                                    }
                                 }
                             }
                         }
@@ -270,7 +285,7 @@ Popup {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Tokens.metrics.control_line
-                    visible: dialog.page !== null && dialog.page.resettable
+                    visible: dialog.pageResettable
                     color: Tokens.colors.chrome
 
                     RowLayout {
@@ -297,8 +312,25 @@ Popup {
     component SettingRow: RowLayout {
         id: line
 
-        required property var modelData
-        readonly property var control: modelData.control
+        // The row `index` of `rows`, each field typed.
+        required property list<var> rows
+        required property int index
+        readonly property string key: rows[index]?.key ?? ""
+        readonly property string label: rows[index]?.label ?? ""
+        readonly property string hint: rows[index]?.hint ?? ""
+        readonly property bool warning: rows[index]?.warning === true
+        readonly property string kind: rows[index]?.control?.kind ?? ""
+        readonly property list<var> options: kind === "choice" ? (rows[index]?.control?.options ?? []) : []
+        readonly property string valueText: kind === "choice" || kind === "text" ? (rows[index]?.control?.value ?? "") : ""
+        readonly property real valueNumber: kind === "stepper" ? (rows[index]?.control?.value ?? 0) : 0
+        readonly property real min: kind === "stepper" ? (rows[index]?.control?.min ?? 0) : 0
+        readonly property real max: kind === "stepper" ? (rows[index]?.control?.max ?? 0) : 0
+        readonly property real step: kind === "stepper" ? (rows[index]?.control?.step ?? 0) : 0
+        readonly property string shownValue: kind === "stepper" ? (rows[index]?.control?.text || "") : ""
+        readonly property bool isOn: kind === "toggle" && rows[index]?.control?.on === true
+        readonly property bool controlEnabled: kind === "toggle" ? rows[index]?.control?.enabled === true : true
+        readonly property string placeholder: kind === "text" ? (rows[index]?.control?.placeholder || "") : ""
+        readonly property string buttonLabel: kind === "button" ? (rows[index]?.control?.label ?? "") : ""
 
         Layout.fillWidth: true
         spacing: Tokens.metrics.space_md
@@ -307,7 +339,7 @@ Popup {
             Layout.preferredWidth: Tokens.metrics.settings_label
             Layout.alignment: Qt.AlignTop
             Layout.topMargin: Tokens.metrics.space_xs
-            text: line.modelData.label
+            text: line.label
         }
         ColumnLayout {
             Layout.fillWidth: true
@@ -317,13 +349,13 @@ Popup {
             ComboBox {
                 id: combo
 
-                visible: line.control.kind === "choice"
+                visible: line.kind === "choice"
                 Layout.preferredWidth: Tokens.metrics.setting_select + Tokens.metrics.space_lg
                 implicitHeight: Tokens.metrics.setting_control
-                model: visible ? line.control.options.map(option => option[1]) : []
-                currentIndex: visible ? line.control.options.findIndex(option => option[0] === line.control.value) : -1
-                Accessible.name: line.modelData.label
-                onActivated: index => settings.set(line.modelData.key, line.control.options[index][0])
+                model: line.options.map(option => option[1])
+                currentIndex: line.options.findIndex(option => option[0] === line.valueText)
+                Accessible.name: line.label
+                onActivated: index => settings.set(line.key, line.options[index][0])
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.body_text
                 background: Rectangle {
@@ -333,6 +365,7 @@ Popup {
                     border.color: combo.visualFocus ? Tokens.colors.accent : Tokens.colors.border_strong
                 }
                 contentItem: Text {
+                    textFormat: Text.PlainText
                     leftPadding: Tokens.metrics.space_sm
                     verticalAlignment: Text.AlignVCenter
                     elide: Text.ElideRight
@@ -345,13 +378,14 @@ Popup {
                 id: check
 
                 Layout.fillWidth: true
-                visible: line.control.kind === "toggle"
-                checked: visible && line.control.on
-                enabled: visible && line.control.enabled
-                text: line.modelData.hint
-                Accessible.name: line.modelData.hint.length > 0 ? line.modelData.hint : line.modelData.label
-                onToggled: settings.set(line.modelData.key, checked ? "true" : "false")
+                visible: line.kind === "toggle"
+                checked: line.isOn
+                enabled: line.controlEnabled
+                text: line.hint
+                Accessible.name: line.hint.length > 0 ? line.hint : line.label
+                onToggled: settings.set(line.key, checked ? "true" : "false")
                 contentItem: Text {
+                    textFormat: Text.PlainText
                     leftPadding: check.indicator.width + Tokens.metrics.space_sm
                     verticalAlignment: Text.AlignVCenter
                     wrapMode: Text.Wrap
@@ -362,55 +396,56 @@ Popup {
                 }
             }
             RowLayout {
-                visible: line.control.kind === "stepper"
+                visible: line.kind === "stepper"
                 spacing: Tokens.metrics.space_xs
 
                 IconButton {
                     iconName: "minus"
                     text: qsTr("Less")
                     tip: qsTr("Less")
-                    enabled: line.control.value > line.control.min
+                    enabled: line.valueNumber > line.min
                     side: Tokens.metrics.setting_control
-                    onClicked: settings.set(line.modelData.key, String(line.control.value - line.control.step))
+                    onClicked: settings.set(line.key, String(line.valueNumber - line.step))
                 }
                 Text {
+                    textFormat: Text.PlainText
                     Layout.preferredWidth: Tokens.metrics.setting_select_short / 2
                     horizontalAlignment: Text.AlignHCenter
                     color: Tokens.colors.text
                     font.family: Tokens.metrics.family_data
                     font.pixelSize: Tokens.metrics.data_text
-                    text: line.control.text || ""
+                    text: line.shownValue
                     Accessible.role: Accessible.StaticText
-                    Accessible.name: line.modelData.label + ": " + text
+                    Accessible.name: line.label + ": " + text
                 }
                 IconButton {
                     iconName: "plus"
                     text: qsTr("More")
                     tip: qsTr("More")
-                    enabled: line.control.value < line.control.max
+                    enabled: line.valueNumber < line.max
                     side: Tokens.metrics.setting_control
-                    onClicked: settings.set(line.modelData.key, String(line.control.value + line.control.step))
+                    onClicked: settings.set(line.key, String(line.valueNumber + line.step))
                 }
             }
             Field {
-                visible: line.control.kind === "text"
+                visible: line.kind === "text"
                 Layout.preferredWidth: Tokens.metrics.setting_field
-                text: visible ? line.control.value : ""
-                placeholderText: visible ? line.control.placeholder : ""
+                text: line.valueText
+                placeholderText: line.placeholder
                 Accessible.name: qsTr("Terminal command")
-                onAccepted: settings.set(line.modelData.key, text)
-                onEditingFinished: settings.set(line.modelData.key, text)
+                onAccepted: settings.set(line.key, text)
+                onEditingFinished: settings.set(line.key, text)
             }
             OutlinedButton {
-                visible: line.control.kind === "button"
-                text: visible ? line.control.label : ""
-                onClicked: settings.set(line.modelData.key, "")
+                visible: line.kind === "button"
+                text: line.buttonLabel
+                onClicked: settings.set(line.key, "")
             }
             Quiet {
                 Layout.fillWidth: true
-                visible: line.modelData.hint.length > 0 && line.control.kind !== "toggle"
-                color: line.modelData.warning ? Tokens.colors.danger : Tokens.colors.text_muted
-                text: line.modelData.hint
+                visible: line.hint.length > 0 && line.kind !== "toggle"
+                color: line.warning ? Tokens.colors.danger : Tokens.colors.text_muted
+                text: line.hint
             }
         }
     }
@@ -422,8 +457,8 @@ Popup {
         ColumnLayout {
             id: page
 
-            readonly property var onBar: settings.toolbar.length > 0 ? JSON.parse(settings.toolbar) : []
-            property var offered: JSON.parse(settings.available(search.text))
+            readonly property list<var> onBar: settings.toolbar.length > 0 ? JSON.parse(settings.toolbar) : []
+            property list<var> offered: JSON.parse(settings.available(search.text))
 
             spacing: Tokens.metrics.space_sm
 
@@ -510,14 +545,16 @@ Popup {
                         onPicked: index => dialog.toolbarCursor = index
                     }
                     CheckBox {
+                        id: wordsBox
+
                         enabled: dialog.toolbarCursor >= 0 && page.onBar[dialog.toolbarCursor].canShowWords
                         checked: dialog.toolbarCursor >= 0 && page.onBar[dialog.toolbarCursor].words
                         text: qsTr("Show its words")
                         onToggled: settings.setWords(dialog.toolbarCursor, checked)
                         contentItem: Words {
-                            leftPadding: parent.indicator.width + Tokens.metrics.space_sm
+                            leftPadding: wordsBox.indicator.width + Tokens.metrics.space_sm
                             verticalAlignment: Text.AlignVCenter
-                            text: parent.text
+                            text: wordsBox.text
                         }
                     }
                 }
@@ -529,7 +566,7 @@ Popup {
     component ItemList: Rectangle {
         id: box
 
-        required property var items
+        required property list<var> items
         required property int cursor
         required property string name
         required property string empty
@@ -555,12 +592,14 @@ Popup {
             delegate: ItemDelegate {
                 id: item
 
-                required property var modelData
                 required property int index
+                readonly property string name: box.items[index]?.name ?? ""
+                readonly property string iconName: box.items[index]?.icon ?? ""
+                readonly property bool fixed: box.items[index]?.fixed === true
 
                 width: ListView.view.width
                 implicitHeight: Tokens.metrics.setting_row
-                Accessible.name: modelData.name
+                Accessible.name: name
                 Accessible.selected: box.cursor === index
                 background: Rectangle {
                     radius: Tokens.metrics.radius
@@ -570,19 +609,21 @@ Popup {
                     spacing: Tokens.metrics.space_sm
 
                     Lucide {
-                        name: item.modelData.icon
+                        name: item.iconName
                         colour: box.cursor === item.index ? Tokens.colors.on_selection : Tokens.colors.text_muted
                     }
                     Text {
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                         color: box.cursor === item.index ? Tokens.colors.on_selection : Tokens.colors.text
                         font.family: Tokens.metrics.family_body
                         font.pixelSize: Tokens.metrics.body_text
-                        text: item.modelData.name
+                        text: item.name
                     }
                     Text {
-                        visible: item.modelData.fixed === true
+                        textFormat: Text.PlainText
+                        visible: item.fixed
                         color: box.cursor === item.index ? Tokens.colors.on_selection : Tokens.colors.text_muted
                         font.family: Tokens.metrics.family_body
                         font.pixelSize: Tokens.metrics.small_text
@@ -606,7 +647,7 @@ Popup {
         ColumnLayout {
             id: groupsColumn
 
-            property var list: JSON.parse(dialog.places.groupsJson())
+            property list<var> list: JSON.parse(dialog.places.groupsJson())
 
             spacing: Tokens.metrics.space_xs
 
@@ -618,6 +659,7 @@ Popup {
             }
 
             Text {
+                textFormat: Text.PlainText
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.label_text
@@ -626,8 +668,7 @@ Popup {
             }
             Quiet {
                 Layout.fillWidth: true
-                text: groupsColumn.list.length === 0 ? qsTr("No groups yet. Make one with New group in the places panel.")
-                                                     : qsTr("Deleting a group keeps its places.")
+                text: groupsColumn.list.length === 0 ? qsTr("No groups yet. Make one with New group in the places panel.") : qsTr("Deleting a group keeps its places.")
             }
             Repeater {
                 model: groupsColumn.list
@@ -635,15 +676,16 @@ Popup {
                 delegate: RowLayout {
                     id: groupRow
 
-                    required property var modelData
                     required property int index
+                    readonly property string name: groupsColumn.list[index]?.name ?? ""
+                    readonly property int count: groupsColumn.list[index]?.count ?? 0
 
                     Layout.fillWidth: true
                     spacing: Tokens.metrics.space_xs
 
                     Field {
                         Layout.fillWidth: true
-                        text: groupRow.modelData.name
+                        text: groupRow.name
                         placeholderText: qsTr("Group name")
                         Accessible.name: qsTr("Group name")
                         onEditingFinished: {
@@ -652,11 +694,11 @@ Popup {
                         }
                     }
                     Quiet {
-                        text: qsTr("%n place(s)", "", groupRow.modelData.count)
+                        text: groupRow.count === 1 ? qsTr("1 place") : qsTr("%1 places").arg(groupRow.count)
                     }
                     IconButton {
                         iconName: "arrow-up"
-                        text: qsTr("Move %1 up").arg(groupRow.modelData.name)
+                        text: qsTr("Move %1 up").arg(groupRow.name)
                         enabled: groupRow.index > 0
                         onClicked: {
                             dialog.places.shiftGroup(groupRow.index, -1)
@@ -665,7 +707,7 @@ Popup {
                     }
                     IconButton {
                         iconName: "arrow-down"
-                        text: qsTr("Move %1 down").arg(groupRow.modelData.name)
+                        text: qsTr("Move %1 down").arg(groupRow.name)
                         enabled: groupRow.index < groupsColumn.list.length - 1
                         onClicked: {
                             dialog.places.shiftGroup(groupRow.index, 1)
@@ -674,7 +716,7 @@ Popup {
                     }
                     IconButton {
                         iconName: "trash"
-                        text: qsTr("Delete %1; its places stay").arg(groupRow.modelData.name)
+                        text: qsTr("Delete %1; its places stay").arg(groupRow.name)
                         onClicked: {
                             dialog.places.deleteGroup(groupRow.index)
                             groupsColumn.list = JSON.parse(dialog.places.groupsJson())
@@ -690,6 +732,10 @@ Popup {
         id: shortcutsPage
 
         ColumnLayout {
+            id: shortcutsColumn
+
+            readonly property list<var> found: JSON.parse(settings.shortcuts(keySearch.text))
+
             spacing: Tokens.metrics.space_sm
 
             Field {
@@ -706,40 +752,49 @@ Popup {
             Repeater {
                 id: keyGroups
 
-                model: JSON.parse(settings.shortcuts(keySearch.text))
+                model: shortcutsColumn.found
 
                 delegate: ColumnLayout {
                     id: keyGroup
 
-                    required property var modelData
+                    required property int index
+                    readonly property string category: shortcutsColumn.found[index]?.category ?? ""
+                    readonly property list<var> shortcuts: shortcutsColumn.found[index]?.shortcuts ?? []
 
                     Layout.fillWidth: true
                     spacing: 2
 
                     Text {
+                        textFormat: Text.PlainText
                         Layout.topMargin: Tokens.metrics.space_sm
                         color: Tokens.colors.text_muted
                         font.family: Tokens.metrics.family_body
                         font.pixelSize: Tokens.metrics.label_text
                         font.capitalization: Font.AllUppercase
-                        text: keyGroup.modelData.category
+                        text: keyGroup.category
                     }
                     Repeater {
-                        model: keyGroup.modelData.shortcuts
+                        model: keyGroup.shortcuts
 
                         delegate: RowLayout {
-                            required property var modelData
+                            id: shortcutRow
+
+                            required property int index
+                            readonly property string name: keyGroup.shortcuts[index]?.name ?? ""
+                            readonly property list<string> keys: keyGroup.shortcuts[index]?.keys ?? []
 
                             Layout.fillWidth: true
 
                             Words {
                                 Layout.fillWidth: true
-                                text: modelData.name
+                                text: shortcutRow.name
                             }
                             Repeater {
-                                model: modelData.keys
+                                model: shortcutRow.keys
 
                                 delegate: Rectangle {
+                                    id: keyCap
+
                                     required property string modelData
 
                                     implicitWidth: keyText.implicitWidth + 2 * Tokens.metrics.space_xs
@@ -751,11 +806,12 @@ Popup {
                                     Text {
                                         id: keyText
 
+                                        textFormat: Text.PlainText
                                         anchors.centerIn: parent
                                         color: Tokens.colors.text
                                         font.family: Tokens.metrics.family_data
                                         font.pixelSize: Tokens.metrics.small_text
-                                        text: parent.modelData
+                                        text: keyCap.modelData
                                     }
                                 }
                             }
@@ -771,7 +827,10 @@ Popup {
         id: aboutPage
 
         ColumnLayout {
-            readonly property var about: settings.about.length > 0 ? JSON.parse(settings.about) : ({})
+            id: aboutColumn
+
+            readonly property string version: settings.about.length > 0 ? JSON.parse(settings.about).version : ""
+            readonly property string settingsPath: settings.about.length > 0 ? JSON.parse(settings.about).settings : ""
 
             spacing: Tokens.metrics.space_sm
 
@@ -787,13 +846,14 @@ Popup {
                 }
                 ColumnLayout {
                     Text {
+                        textFormat: Text.PlainText
                         color: Tokens.colors.text
                         font.family: Tokens.metrics.family_heading
                         font.pixelSize: Tokens.metrics.heading_text
                         text: "Rustphin"
                     }
                     Quiet {
-                        text: qsTr("Version %1").arg(parent.parent.parent.about.version || "")
+                        text: qsTr("Version %1").arg(aboutColumn.version)
                     }
                     Words {
                         text: qsTr("A file manager for KDE Plasma, written in Rust.")
@@ -818,7 +878,7 @@ Popup {
             Quiet {
                 visible: !dialog.showingLicence
                 Layout.fillWidth: true
-                text: qsTr("Settings: %1").arg(parent.about.settings || "")
+                text: qsTr("Settings: %1").arg(aboutColumn.settingsPath)
             }
             OutlinedButton {
                 visible: !dialog.showingLicence
@@ -833,6 +893,7 @@ Popup {
                 onClicked: dialog.showingLicence = false
             }
             Text {
+                textFormat: Text.PlainText
                 visible: dialog.showingLicence
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap

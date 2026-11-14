@@ -1,5 +1,7 @@
 // The View button's menu (W-107): the three modes with their keys, and the
 // size with Smaller and Larger.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
@@ -25,63 +27,29 @@ Popup {
         Accessible.name: qsTr("View")
         Accessible.description: qsTr("Choose how entries are shown and how large. Escape closes.")
 
-        Repeater {
-            model: [
-                { name: qsTr("Icons"), key: "Ctrl+1", icon: "layout-grid", mode: 0 },
-                { name: qsTr("Compact"), key: "Ctrl+2", icon: "columns-3", mode: 1 },
-                { name: qsTr("Details"), key: "Ctrl+3", icon: "layout-list", mode: 2 }
-            ]
-            delegate: ItemDelegate {
-                id: row
-
-                required property var modelData
-                readonly property bool chosen: menu.folder.mode === modelData.mode
-
-                Layout.fillWidth: true
-                implicitHeight: Tokens.metrics.menu_row
-                Accessible.role: Accessible.RadioButton
-                Accessible.checked: chosen
-                Accessible.name: qsTr("%1 (%2)").arg(modelData.name).arg(modelData.key)
-                background: Rectangle {
-                    radius: Tokens.metrics.radius
-                    color: row.highlighted || row.hovered ? Tokens.colors.hover : "transparent"
-                }
-                contentItem: RowLayout {
-                    spacing: Tokens.metrics.space_sm
-
-                    Lucide {
-                        name: row.modelData.icon
-                        colour: Tokens.colors.text
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        color: Tokens.colors.text
-                        font.family: Tokens.metrics.family_body
-                        font.pixelSize: Tokens.metrics.body_text
-                        text: row.modelData.name
-                    }
-                    Text {
-                        color: Tokens.colors.text_muted
-                        font.family: Tokens.metrics.family_data
-                        font.pixelSize: Tokens.metrics.small_text
-                        text: row.modelData.key
-                    }
-                    Lucide {
-                        name: row.chosen ? "check" : ""
-                        colour: Tokens.colors.accent
-                    }
-                }
-                onClicked: {
-                    menu.folder.chooseMode(modelData.mode)
-                    menu.close()
-                }
-            }
+        ModeRow {
+            name: qsTr("Icons")
+            key: "Ctrl+1"
+            iconName: "layout-grid"
+            mode: 0
+        }
+        ModeRow {
+            name: qsTr("Compact")
+            key: "Ctrl+2"
+            iconName: "columns-3"
+            mode: 1
+        }
+        ModeRow {
+            name: qsTr("Details")
+            key: "Ctrl+3"
+            iconName: "layout-list"
+            mode: 2
         }
         Rectangle {
             Layout.fillWidth: true
             Layout.topMargin: Tokens.metrics.space_xs
             Layout.bottomMargin: Tokens.metrics.space_xs
-            height: 1
+            Layout.preferredHeight: 1
             color: Tokens.colors.border
         }
         RowLayout {
@@ -90,6 +58,7 @@ Popup {
             spacing: Tokens.metrics.space_xs
 
             Text {
+                textFormat: Text.PlainText
                 color: Tokens.colors.text_muted
                 font.family: Tokens.metrics.family_body
                 font.pixelSize: Tokens.metrics.label_text
@@ -97,6 +66,7 @@ Popup {
                 text: qsTr("Size")
             }
             Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 color: Tokens.colors.text
                 font.family: Tokens.metrics.family_data
@@ -115,6 +85,58 @@ Popup {
                 enabled: menu.folder.zoom < 6
                 onClicked: menu.folder.zoomBy(1)
             }
+        }
+    }
+
+    // One view mode: its icon, name and key, checked when chosen.
+    component ModeRow: ItemDelegate {
+        id: row
+
+        required property string name
+        required property string key
+        required property string iconName
+        required property int mode
+        readonly property bool chosen: menu.folder.mode === mode
+
+        Layout.fillWidth: true
+        implicitHeight: Tokens.metrics.menu_row
+        Accessible.role: Accessible.RadioButton
+        Accessible.checked: chosen
+        Accessible.name: qsTr("%1 (%2)").arg(name).arg(key)
+        background: Rectangle {
+            radius: Tokens.metrics.radius
+            color: row.highlighted || row.hovered ? Tokens.colors.hover : "transparent"
+        }
+        contentItem: RowLayout {
+            spacing: Tokens.metrics.space_sm
+
+            Lucide {
+                name: row.iconName
+                colour: Tokens.colors.text
+            }
+            Text {
+                textFormat: Text.PlainText
+                Layout.fillWidth: true
+                color: Tokens.colors.text
+                font.family: Tokens.metrics.family_body
+                font.pixelSize: Tokens.metrics.body_text
+                text: row.name
+            }
+            Text {
+                textFormat: Text.PlainText
+                color: Tokens.colors.text_muted
+                font.family: Tokens.metrics.family_data
+                font.pixelSize: Tokens.metrics.small_text
+                text: row.key
+            }
+            Lucide {
+                name: row.chosen ? "check" : ""
+                colour: Tokens.colors.accent
+            }
+        }
+        onClicked: {
+            menu.folder.chooseMode(row.mode)
+            menu.close()
         }
     }
 }

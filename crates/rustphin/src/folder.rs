@@ -501,6 +501,19 @@ fn step_of(number: i32) -> Option<Step> {
     })
 }
 
+/// The icon-theme name an entry is drawn with: its type's icon; a link
+/// looks like what it points to, as in Dolphin.
+fn entry_icon(types: Option<&crate::types::Types>, snapshot: &Snapshot, row: usize) -> String {
+    let is_folder = snapshot.is_container(row);
+    let name = snapshot.link_target_name(row).unwrap_or(snapshot.name(row));
+    let names = types.map_or_else(Vec::new, |types| {
+        types
+            .mimes
+            .icon_names(types.mimes.mime_type(name, is_folder))
+    });
+    icon_id(&names, is_folder)
+}
+
 /// The `image://theme/` id of an entry's icon: the theme's names for its
 /// type, most specific first, then the generic folder or file icon.
 pub(crate) fn icon_id(type_names: &[String], is_folder: bool) -> String {
@@ -570,17 +583,7 @@ impl qobject::FolderModel {
             }
             Role::Folder => QVariant::from(&snapshot.is_container(row)),
             Role::Hidden => QVariant::from(&snapshot.is_hidden(row)),
-            Role::Icon => {
-                let is_folder = snapshot.is_container(row);
-                // A link looks like what it points to, as in Dolphin.
-                let name = snapshot.link_target_name(row).unwrap_or(snapshot.name(row));
-                let names = rust.types.as_ref().map_or_else(Vec::new, |types| {
-                    types
-                        .mimes
-                        .icon_names(types.mimes.mime_type(name, is_folder))
-                });
-                words(&icon_id(&names, is_folder))
-            }
+            Role::Icon => words(&entry_icon(rust.types.as_deref(), snapshot, row)),
             Role::Thumbnail => words(&rust.thumbnail(snapshot, row).unwrap_or_default()),
             Role::Selected => {
                 QVariant::from(&(rust.selection.contains(snapshot, row) && !renaming))
@@ -1863,6 +1866,20 @@ impl qobject::FolderModel {
                 Some(path_text(&snapshot.entry_path(row)))
             })
             .unwrap_or_default()
+    }
+
+    fn icon_at(&self, row: i32) -> QString {
+        let rust = self.rust();
+        let Some(snapshot) = rust.current() else {
+            return QString::default();
+        };
+        let Some(row) = usize::try_from(row)
+            .ok()
+            .filter(|row| *row < snapshot.len())
+        else {
+            return QString::default();
+        };
+        QString::from(&entry_icon(rust.types.as_deref(), snapshot, row))
     }
 
     fn selected_uris(&self) -> QString {

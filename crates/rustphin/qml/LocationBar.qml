@@ -1,16 +1,21 @@
 // The location in the toolbar: the folder's crumbs, each opening its
 // folder; a click on the empty part, Ctrl+L, F6 or Alt+D edits it as text.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls.Basic
-import QtQuick.Layouts
 import Rustphin
 
 Rectangle {
     id: bar
 
-    required property var pane
+    required property Pane pane
     readonly property FolderModel folder: pane ? pane.listing : null
+    // Owned by the toolbar, which binds it; the bar asks for changes
+    // through these signals so that binding survives (W-116).
     property bool editing: false
+    signal editRequested
+    signal editEnded
     // Trailing crumbs shown: at most as many as the window's width allows,
     // fewer while they do not fit the bar; the rest collapse into "…".
     readonly property int most: Window.width >= 1000 ? 4 : Window.width >= 780 ? 3 : Window.width >= 520 ? 2 : 1
@@ -33,7 +38,9 @@ Rectangle {
     onMostChanged: refit()
     Connections {
         target: bar.folder
-        function onCrumbLabelsChanged() { bar.refit() }
+        function onCrumbLabelsChanged() {
+            bar.refit()
+        }
     }
 
     implicitHeight: Tokens.metrics.tool_button
@@ -66,7 +73,7 @@ Rectangle {
     MouseArea {
         anchors.fill: parent
         visible: !bar.editing
-        onClicked: bar.editing = true
+        onClicked: bar.editRequested()
     }
 
     Row {
@@ -84,6 +91,7 @@ Rectangle {
         Accessible.name: qsTr("Location: %1").arg(bar.folder ? bar.folder.location : "")
 
         Text {
+            textFormat: Text.PlainText
             visible: bar.folder !== null && bar.folder.crumbLabels.length > bar.fits
             anchors.verticalCenter: parent.verticalCenter
             leftPadding: Tokens.metrics.space_xs
@@ -120,6 +128,7 @@ Rectangle {
                     focusPolicy: Qt.NoFocus
                     Accessible.name: crumb.modelData
                     contentItem: Text {
+                        textFormat: Text.PlainText
                         verticalAlignment: Text.AlignVCenter
                         color: crumb.last ? Tokens.colors.text : Tokens.colors.text_muted
                         font.family: Tokens.metrics.family_data
@@ -160,19 +169,19 @@ Rectangle {
         background: null
         function accept() {
             bar.folder.openTyped(text)
-            bar.editing = false
+            bar.editEnded()
             bar.pane.focusList()
         }
 
         Keys.onReturnPressed: accept()
         Keys.onEnterPressed: accept()
         Keys.onEscapePressed: {
-            bar.editing = false
+            bar.editEnded()
             bar.pane.focusList()
         }
         onActiveFocusChanged: {
             if (!activeFocus)
-                bar.editing = false
+                bar.editEnded()
         }
     }
 }
