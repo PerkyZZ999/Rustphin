@@ -46,6 +46,7 @@ use rustphin_view::{
     location::Location,
     operations::{Listed, duplicate_names, free_name, stem_len},
     pane::{self, Failure, StatusFacts, TypeAhead, Way},
+    pane_state::PaneState,
     toolbar_items::Item,
 };
 
@@ -213,6 +214,8 @@ pub struct FolderModelRust {
     crumb_paths: QStringList,
     one_click: bool,
 
+    /// The pane's folder, kept as a path: `location` only shows it.
+    pane: PaneState,
     model: Option<DirectoryModel>,
     /// The listing shown; it may belong to another folder while the next
     /// one is requested.
@@ -332,6 +335,7 @@ impl Default for FolderModelRust {
             crumb_labels: QStringList::default(),
             crumb_paths: QStringList::default(),
             one_click: prefs::with(|store| store.opens_with_one_click()),
+            pane: PaneState::default(),
             model: None,
             snapshot: None,
             generation: 0,
@@ -392,6 +396,11 @@ impl FolderModelRust {
         self.data_text = f64::from(layout.data_text);
         self.mode = mode_number(self.view);
         self.zoom = i32::try_from(self.zoom_level).unwrap_or(0);
+    }
+
+    /// The pane's folder, or an empty path before the first.
+    fn folder(&self) -> PathBuf {
+        self.pane.folder().map(Path::to_owned).unwrap_or_default()
     }
 
     /// The snapshot of the folder now shown, if it is the one requested.
@@ -709,7 +718,7 @@ impl qobject::FolderModel {
         }
         let fs: Arc<dyn rustphin_core::Fs> =
             crate::admin::filesystem().unwrap_or_else(|| Arc::new(RealFs));
-        let location = PathBuf::from(self.location().to_string());
+        let location = self.rust().folder();
         let options = self.rust().options;
         let (mut model, events) = match DirectoryModel::new(fs) {
             Ok(started) => started,
@@ -728,6 +737,7 @@ impl qobject::FolderModel {
             rust.snapshot = None;
             rust.visited = None;
             rust.selection = Selection::default();
+            rust.pane.forget_folder();
         }
         self.as_mut().listen(events);
         self.as_mut().set_location(QString::default());
@@ -978,11 +988,6 @@ impl qobject::FolderModel {
             snapshot.path(),
             rust.trash_dir.is_some(),
         );
-        let failure = rust.failure.clone();
-        let in_place = failure
-            .as_ref()
-            .filter(|failure| failure.in_place(Some(snapshot.path()), false));
-        let _ = in_place;
         self.as_mut().set_total(text(&parts.total));
         self.as_mut()
             .set_selection_text(text(parts.selection.as_deref().unwrap_or("")));
@@ -998,7 +1003,7 @@ impl qobject::FolderModel {
     /// folder that failed, else as a banner over the listing.
     fn set_failure(mut self: Pin<&mut Self>, failure: Option<Failure>) {
         self.as_mut().rust_mut().failure = failure.clone();
-        let location = PathBuf::from(self.location().to_string());
+        let location = self.rust().folder();
         let listed = self
             .rust()
             .snapshot
@@ -1178,7 +1183,7 @@ impl qobject::FolderModel {
             });
             return true;
         }
-        let base = PathBuf::from(self.location().to_string());
+        let base = self.rust().folder();
         match pane::expand_path(typed, Some(&base)) {
             Some(path) => {
                 self.as_mut().go_to(path);
@@ -1319,7 +1324,7 @@ impl qobject::FolderModel {
                 self.set_hidden(show);
             }
             Some(Item::Terminal) => {
-                let folder = PathBuf::from(self.location().to_string());
+                let folder = self.rust().folder();
                 let command = prefs::settings().terminal().map(str::to_owned);
                 let thread = self.qt_thread();
                 std::thread::spawn(move || {
@@ -1355,11 +1360,10 @@ impl qobject::FolderModel {
 
     /// Shows `path` as the location, with its crumbs and title.
     fn set_location_text(mut self: Pin<&mut Self>, path: &Path) {
-        let shown = path_text(path);
-        if *self.location() == shown {
+        if !self.as_mut().rust_mut().pane.set_folder(path) {
             return;
         }
-        self.as_mut().set_location(shown);
+        self.as_mut().set_location(path_text(path));
         if !self.notice().is_empty() {
             self.as_mut().set_notice(QString::default());
         }
@@ -1390,7 +1394,7 @@ impl qobject::FolderModel {
         let (back, forward) = self.rust().model.as_ref().map_or((false, false), |model| {
             (model.can_go_back(), model.can_go_forward())
         });
-        let up = Path::new(&self.location().to_string()).parent().is_some();
+        let up = self.rust().pane.folder().and_then(Path::parent).is_some();
         self.as_mut().set_can_go_back(back);
         self.as_mut().set_can_go_forward(forward);
         self.as_mut().set_can_go_up(up);
@@ -1407,7 +1411,7 @@ impl qobject::FolderModel {
         std::thread::spawn(move || {
             let dir = trash.dir_showing(&path);
             let _ = thread.queue(move |mut model| {
-                if model.location().to_string() == path.to_string_lossy() {
+                if model.rust().pane.folder() == Some(path.as_path()) {
                     let label: Option<String> = dir.as_ref().map(|dir| pane::trash_label(dir));
                     model.as_mut().rust_mut().trash_dir = dir;
                     model.as_mut().set_trash(label.is_some());
@@ -1463,7 +1467,7 @@ impl qobject::FolderModel {
             self.rust().zoom_level,
             self.rust().options,
         );
-        let location = PathBuf::from(self.location().to_string());
+        let location = self.rust().folder();
         prefs::with(|store| {
             if store.settings().per_folder() && !location.as_os_str().is_empty() {
                 store.set_folder_view(
@@ -1497,7 +1501,7 @@ impl qobject::FolderModel {
     /// On arriving in a folder while each folder keeps its view: its own
     /// view, or the default for one never set.
     fn adopt_folder_view(self: Pin<&mut Self>) {
-        let location = PathBuf::from(self.location().to_string());
+        let location = self.rust().folder();
         let view = prefs::with(|store| {
             store.settings().per_folder().then(|| {
                 store
@@ -1511,7 +1515,7 @@ impl qobject::FolderModel {
     }
 
     fn adopt_settings(mut self: Pin<&mut Self>) {
-        let location = PathBuf::from(self.location().to_string());
+        let location = self.rust().folder();
         let (epoch, adopt, one_click, limit) = prefs::with(|store| {
             let own = store.settings().per_folder()
                 && store
@@ -1813,11 +1817,11 @@ impl qobject::FolderModel {
         };
         let typed = typed.to_string();
         let unchanged = typed.is_empty() || typed == display_name(&old);
-        let folder = PathBuf::from(self.location().to_string());
-        if apply && !unchanged {
+        let path = self.rust().pane.entry_path(&old);
+        if let Some(path) = path.filter(|_| apply && !unchanged) {
             self.as_mut().rust_mut().select_when_seen = Some((typed.clone().into_bytes(), false));
             crate::hub::start(rustphin_core::ops::Request::Rename {
-                path: folder.join(OsStr::from_bytes(&old)),
+                path,
                 new_name: typed.into(),
             });
         }
@@ -1918,7 +1922,7 @@ impl qobject::FolderModel {
                 .rust()
                 .current()
                 .map(|snapshot| snapshot.entry_path(row)),
-            Err(_) => Some(PathBuf::from(self.location().to_string())),
+            Err(_) => Some(self.rust().folder()),
         };
         let Some(into) = into else { return };
         let sources = rustphin_platform::uri::paths_from_uri_list(uris.to_string().as_bytes());
@@ -1945,7 +1949,7 @@ impl qobject::FolderModel {
         }
         if self.rust().created_serial != created.0 {
             self.as_mut().rust_mut().created_serial = created.0;
-            let location = PathBuf::from(self.location().to_string());
+            let location = self.rust().folder();
             let names: Vec<Vec<u8>> = created
                 .1
                 .iter()
@@ -1994,7 +1998,7 @@ impl qobject::FolderModel {
 
     fn paste(self: Pin<&mut Self>) {
         if self.rust().trash_dir.is_none() && self.rust().current().is_some() {
-            crate::hub::paste(PathBuf::from(self.location().to_string()));
+            crate::hub::paste(self.rust().folder());
         }
     }
 
@@ -2233,7 +2237,7 @@ impl qobject::FolderModel {
             "recover-renames" => {
                 if self.rust().trash_dir.is_none() && self.rust().current().is_some() {
                     crate::hub::start(rustphin_core::ops::Request::RecoverRenameBatch {
-                        directory: PathBuf::from(self.location().to_string()),
+                        directory: self.rust().folder(),
                     });
                 }
             }

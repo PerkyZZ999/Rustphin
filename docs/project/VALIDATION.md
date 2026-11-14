@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-14 — W-121 The pane's folder kept as bytes
+- **Bug:** a pane kept its folder only in the Qt `location` text, written with `to_string_lossy` and read back as a path about a dozen times (paste, rename, drop on empty space, recover renames, terminal, per-folder views, typed relative paths, the pane's "created here" check, the filesystem switch). A folder whose name is not UTF-8 came back as another path, so paste and rename acted on a folder that does not exist; two such folders that display alike also counted as the same location.
+- **Fix:** `rustphin_view::pane_state::PaneState` holds the folder as a `PathBuf`; `FolderModel` sets it where it sets the location text and every reader uses it (`finish_rename` through `PaneState::entry_path`). `location` is only shown. The unused `in_place` lines in `update_status` are gone.
+- **Tests:** `a_folder_whose_name_is_not_utf8_is_kept_byte_for_byte` (folder `caf\xe9` and the rename path in it) and `two_folders_that_display_alike_are_different_folders`; both fail when `set_folder` stores the path through `to_string_lossy`, as the location text did, and pass with the fix. `a_forgotten_folder_is_no_folder` covers the filesystem switch.
+- **On screen:** checked with W-122 (a non-UTF-8 folder entered, a file pasted and renamed in it).
+- **Tests:** `rust-tc doctor` PASS, 676 tests.
+- **Waiver:** none
+
 ### 2026-11-14 — W-120 Windows shown for another application take the focus
 - **Problem (the maintainer):** Chrome's "Show in folder" selected the download in Rustphin but left its window behind Chrome. FileManager1's `ShowItems`, `ShowFolders` and `ShowItemProperties` receive the caller's `startup_id`, on Wayland an XDG activation token; Rustphin dropped it and asked for the focus without one, which KWin's focus-stealing prevention refuses.
 - **Fix:** `file_manager::Call` carries the token; `rustphin_shell_reveal` and `rustphin_shell_properties` pass it to `activate`, which hands it to Qt as `XDG_ACTIVATION_TOKEN` (Qt 6.12's `QWaylandXdgSurface::requestActivate` uses and clears it). A new window gets it too. A token is good once, so only the first of several shown folders uses it.

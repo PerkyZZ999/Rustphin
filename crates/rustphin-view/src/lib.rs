@@ -22,6 +22,7 @@ pub mod naming;
 pub mod operations;
 pub mod palette;
 pub mod pane;
+pub mod pane_state;
 pub mod place_menu;
 pub mod places_panel;
 pub mod preferences;
