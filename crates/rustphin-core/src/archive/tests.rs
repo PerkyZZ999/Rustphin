@@ -314,6 +314,83 @@ fn names_a_format_cannot_hold_are_left_out_with_a_reason() {
     assert!(read_back(Format::Tar, out.into_inner()).contains_key(b"top/caf\xe9.txt".as_slice()));
 }
 
+/// The sample written as `format`.
+fn sample_as(format: Format) -> Vec<u8> {
+    let (_dir, entries) = sample();
+    let open: Open<'_> = &|path| Ok(Box::new(std::fs::File::open(path)?));
+    let mut out = Cursor::new(Vec::new());
+    write_archive(
+        format,
+        Level::Fast,
+        &mut out,
+        &entries,
+        open,
+        &mut |_| ControlFlow::Continue(()),
+        &mut |_, reason| panic!("left out: {reason}"),
+    )
+    .unwrap();
+    out.into_inner()
+}
+
+/// Reads `bytes` as `format` to the end of every entry's content.
+fn read_all(format: Format, bytes: Vec<u8>) -> Result<(), ReadError> {
+    read_entries(
+        format,
+        Path::new("test"),
+        Box::new(Cursor::new(bytes)),
+        None,
+        &NoForeignReader,
+        &mut |_, _| ControlFlow::Continue(()),
+        &mut |_, content| {
+            io::copy(content, &mut io::sink())?;
+            Ok(ControlFlow::Continue(()))
+        },
+    )
+}
+
+#[test]
+fn a_tar_bz2_is_read() {
+    // Rustphin does not write bzip2, so this one is made here.
+    let mut tar = tar::Builder::new(bzip2::write::BzEncoder::new(
+        Vec::new(),
+        bzip2::Compression::fast(),
+    ));
+    let mut header = tar::Header::new_gnu();
+    header.set_size(5);
+    header.set_mode(0o640);
+    header.set_cksum();
+    tar.append_data(&mut header, "top/a.txt", &b"alpha"[..])
+        .unwrap();
+    let bytes = tar.into_inner().unwrap().finish().unwrap();
+
+    let found = read_back(Format::TarBz2, bytes);
+
+    assert_eq!(
+        found[&b"top/a.txt".to_vec()],
+        (Kind::File, b"alpha".to_vec(), Some(0o640))
+    );
+}
+
+#[test]
+fn a_damaged_7z_says_so() {
+    let mut bytes = sample_as(Format::SevenZ);
+    bytes.truncate(bytes.len() / 2);
+
+    let result = read_all(Format::SevenZ, bytes);
+
+    assert!(matches!(result, Err(ReadError::Damaged(_))), "{result:?}");
+}
+
+#[test]
+fn a_damaged_tar_xz_says_so() {
+    let mut bytes = sample_as(Format::TarXz);
+    bytes.truncate(bytes.len() / 2);
+
+    let result = read_all(Format::TarXz, bytes);
+
+    assert!(matches!(result, Err(ReadError::Damaged(_))), "{result:?}");
+}
+
 #[test]
 fn a_damaged_archive_says_so() {
     let mut bytes = Vec::new();

@@ -396,6 +396,42 @@ fn renaming_onto_an_existing_name_is_refused_and_both_survive() {
 }
 
 #[test]
+fn copying_leaves_out_sockets_and_pipes_without_waiting_on_them() {
+    let d = dirs();
+    file(d.src.join("box/a.txt"), "a");
+    let _socket = std::os::unix::net::UnixListener::bind(d.src.join("box/sock")).unwrap();
+    rustix::fs::mknodat(
+        rustix::fs::CWD,
+        d.src.join("box/pipe"),
+        rustix::fs::FileType::Fifo,
+        rustix::fs::Mode::from_raw_mode(0o600),
+        0,
+    )
+    .unwrap();
+
+    // A pipe opened for reading would block until a writer came.
+    let outcome = go(&copy(&[d.src.join("box")], &d.dst), &mut Script::default());
+
+    assert!(outcome.completed);
+    assert_eq!(names(&d.dst), ["box", "box/a.txt"]);
+    let mut skipped: Vec<_> = outcome
+        .skipped
+        .iter()
+        .map(|skip| (skip.path.clone(), skip.reason.as_str()))
+        .collect();
+    skipped.sort();
+    let reason = "devices, pipes and sockets cannot be copied";
+    assert_eq!(
+        skipped,
+        [
+            (d.src.join("box/pipe"), reason),
+            (d.src.join("box/sock"), reason)
+        ]
+    );
+    assert!(d.src.join("box/sock").exists() && d.src.join("box/pipe").exists());
+}
+
+#[test]
 fn copies_a_tree_with_links_and_names_that_are_not_utf8() {
     let d = dirs();
     let odd = OsString::from_vec(b"bad\xff name".to_vec());
@@ -2171,25 +2207,6 @@ fn a_copied_recovery_record_cannot_change_another_directory() {
         "{error:?}"
     );
     assert_eq!(tree(&d.dst), before);
-}
-
-#[test]
-fn bounded_reads_refuse_oversized_files_and_links() {
-    let d = dirs();
-    file(d.src.join("record"), "12345");
-    assert_eq!(
-        RealFs
-            .read_bounded(&d.src.join("record"), 4)
-            .unwrap_err()
-            .kind(),
-        io::ErrorKind::InvalidData
-    );
-    assert_eq!(
-        RealFs.read_bounded(&d.src.join("record"), 5).unwrap(),
-        b"12345"
-    );
-    symlink("record", d.src.join("link")).unwrap();
-    assert!(RealFs.read_bounded(&d.src.join("link"), 5).is_err());
 }
 
 #[test]

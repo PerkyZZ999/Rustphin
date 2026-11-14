@@ -600,4 +600,75 @@ mod tests {
         assert_eq!(RealFs.metadata(&dir.path().join("broken")).unwrap().size, 0);
         assert!(RealFs.metadata(&dir.path().join("absent")).is_err());
     }
+
+    fn kind_of(result: io::Result<Vec<u8>>) -> io::ErrorKind {
+        result.unwrap_err().kind()
+    }
+
+    #[test]
+    fn a_bounded_read_takes_a_file_up_to_its_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = dir.path().join("record");
+        std::fs::write(&record, b"12345").unwrap();
+
+        assert_eq!(RealFs.read_bounded(&record, 5).unwrap(), b"12345");
+        assert_eq!(
+            kind_of(RealFs.read_bounded(&record, 4)),
+            io::ErrorKind::InvalidData
+        );
+    }
+
+    #[test]
+    fn a_bounded_read_never_follows_a_link() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("record"), b"12345").unwrap();
+        std::os::unix::fs::symlink("record", dir.path().join("link")).unwrap();
+
+        let error = RealFs
+            .read_bounded(&dir.path().join("link"), 5)
+            .unwrap_err();
+
+        assert_eq!(
+            error.raw_os_error(),
+            Some(rustix::io::Errno::LOOP.raw_os_error()),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_bounded_read_refuses_what_is_not_a_file_without_waiting() {
+        let dir = tempfile::tempdir().unwrap();
+        let pipe = dir.path().join("pipe");
+        rustix::fs::mknodat(
+            rustix::fs::CWD,
+            &pipe,
+            rustix::fs::FileType::Fifo,
+            rustix::fs::Mode::from_raw_mode(0o600),
+            0,
+        )
+        .unwrap();
+
+        // Opening a pipe for reading would wait for a writer.
+        assert_eq!(
+            kind_of(RealFs.read_bounded(&pipe, 5)),
+            io::ErrorKind::InvalidData
+        );
+        assert_eq!(
+            kind_of(RealFs.read_bounded(dir.path(), 5)),
+            io::ErrorKind::InvalidData
+        );
+    }
+
+    #[test]
+    fn a_locked_directory_refuses_a_second_lock_until_released() {
+        let dir = tempfile::tempdir().unwrap();
+        let held = RealFs.lock_directory(dir.path()).unwrap();
+
+        let second = RealFs.lock_directory(dir.path()).map(drop);
+        drop(held);
+        let after = RealFs.lock_directory(dir.path()).map(drop);
+
+        assert_eq!(second.unwrap_err().kind(), io::ErrorKind::WouldBlock);
+        assert!(after.is_ok(), "{after:?}");
+    }
 }

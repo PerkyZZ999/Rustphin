@@ -11,7 +11,7 @@ use std::{
 
 use super::{
     faults::{Fault, FaultFs},
-    tests::{FolderTrash, Item, dirs, file, names, read, tree},
+    tests::{Dirs, FolderTrash, Item, dirs, file, names, read, tree},
     *,
 };
 use crate::{
@@ -86,13 +86,22 @@ fn zip_of(entries: &[(&str, &str)], password: Option<&str>) -> Vec<u8> {
 /// A TAR whose entry names are written as given, `..` and `/` included,
 /// as a hostile archive would hold them.
 fn raw_tar(entries: &[(&[u8], tar::EntryType, &[u8])]) -> Vec<u8> {
+    let with_modes: Vec<_> = entries
+        .iter()
+        .map(|(name, kind, data)| (*name, *kind, *data, 0o644))
+        .collect();
+    raw_tar_with_modes(&with_modes)
+}
+
+/// As [`raw_tar`], each entry with its mode. A link's data is its target.
+fn raw_tar_with_modes(entries: &[(&[u8], tar::EntryType, &[u8], u32)]) -> Vec<u8> {
     let mut builder = tar::Builder::new(Vec::new());
-    for (name, kind, data) in entries {
+    for (name, kind, data, mode) in entries {
         let mut header = tar::Header::new_old();
         header.as_old_mut().name[..name.len()].copy_from_slice(name);
         header.set_entry_type(*kind);
-        header.set_mode(0o644);
-        if *kind == tar::EntryType::Symlink {
+        header.set_mode(*mode);
+        if matches!(kind, tar::EntryType::Symlink | tar::EntryType::Link) {
             header.as_old_mut().linkname[..data.len()].copy_from_slice(data);
             header.set_size(0);
             header.set_cksum();
@@ -399,6 +408,132 @@ fn a_file_beneath_a_link_is_not_written_through_it() {
     );
 }
 
+/// Extracts `archive` (a TAR) here into `d.dst`.
+fn extract_tar(d: &Dirs, bytes: Vec<u8>) -> Outcome {
+    let archive = d.src.join("a.tar");
+    fs::write(&archive, bytes).unwrap();
+    run(
+        &RealFs,
+        &NoTrash,
+        &NoForeignReader,
+        &extract(&archive, &d.dst, Layout::NewFolder),
+        &mut Archivist::default(),
+    )
+    .unwrap()
+}
+
+fn mode_of(path: impl AsRef<Path>) -> u32 {
+    fs::symlink_metadata(path).unwrap().permissions().mode() & 0o7777
+}
+
+#[test]
+fn set_id_and_sticky_bits_are_dropped_from_extracted_files() {
+    let d = dirs();
+
+    extract_tar(
+        &d,
+        raw_tar_with_modes(&[(b"tool", tar::EntryType::Regular, b"x", 0o7755)]),
+    );
+
+    // No set-ID or sticky bit; the owner's rights whatever the umask.
+    assert_eq!(mode_of(d.dst.join("a/tool")) & 0o7700, 0o700);
+}
+
+#[test]
+fn an_extracted_file_its_owner_could_not_read_gets_owner_rights() {
+    let d = dirs();
+
+    extract_tar(
+        &d,
+        raw_tar_with_modes(&[(b"locked", tar::EntryType::Regular, b"x", 0o000)]),
+    );
+
+    assert_eq!(mode_of(d.dst.join("a/locked")), 0o600);
+}
+
+#[test]
+fn a_hard_link_entry_is_left_out_and_its_target_untouched() {
+    let d = dirs();
+    file(d.src.join("secret"), "secret");
+
+    let outcome = extract_tar(
+        &d,
+        raw_tar(&[
+            (b"fine.txt", tar::EntryType::Regular, b"fine"),
+            (b"hard", tar::EntryType::Link, b"../src/secret"),
+        ]),
+    );
+
+    assert_eq!(names(&d.dst), ["a", "a/fine.txt"]);
+    assert_eq!(outcome.skipped.len(), 1, "{:?}", outcome.skipped);
+    assert!(
+        outcome.skipped[0].reason.contains("hard link"),
+        "{}",
+        outcome.skipped[0].reason
+    );
+    assert_eq!(read(d.src.join("secret")), "secret");
+}
+
+#[test]
+fn a_name_held_twice_extracts_the_later_entry() {
+    let d = dirs();
+
+    let outcome = extract_tar(
+        &d,
+        raw_tar(&[
+            (b"dup.txt", tar::EntryType::Regular, b"first"),
+            (b"dup.txt", tar::EntryType::Regular, b"second"),
+        ]),
+    );
+
+    assert_eq!(outcome.skipped, []);
+    assert_eq!(read(d.dst.join("a/dup.txt")), "second");
+}
+
+#[test]
+fn a_file_in_the_way_of_a_folder_leaves_the_folders_entries_out() {
+    let d = dirs();
+
+    let outcome = extract_tar(
+        &d,
+        raw_tar(&[
+            (b"x", tar::EntryType::Regular, b"file"),
+            (b"x/inner.txt", tar::EntryType::Regular, b"inner"),
+        ]),
+    );
+
+    assert_eq!(read(d.dst.join("a/x")), "file");
+    assert_eq!(outcome.skipped.len(), 1, "{:?}", outcome.skipped);
+    assert!(
+        outcome.skipped[0].reason.contains("file of the same name"),
+        "{}",
+        outcome.skipped[0].reason
+    );
+}
+
+#[test]
+fn a_folder_in_the_way_of_a_file_leaves_the_file_out() {
+    let d = dirs();
+
+    let outcome = extract_tar(
+        &d,
+        raw_tar(&[
+            (b"y/inner.txt", tar::EntryType::Regular, b"inner"),
+            (b"y", tar::EntryType::Regular, b"file"),
+        ]),
+    );
+
+    assert_eq!(read(d.dst.join("a/y/inner.txt")), "inner");
+    assert_eq!(outcome.skipped.len(), 1, "{:?}", outcome.skipped);
+    assert!(
+        outcome.skipped[0]
+            .reason
+            .contains("folder of the same name"),
+        "{}",
+        outcome.skipped[0].reason
+    );
+}
+
 #[test]
 fn a_taken_name_asks_and_keep_both_gets_a_numbered_folder() {
     let d = dirs();
@@ -647,6 +782,43 @@ fn damaged_and_unknown_files_are_refused_with_nothing_left() {
     assert!(matches!(broken, Err(OpError::Damaged { .. })));
     assert!(matches!(unknown, Err(OpError::NotAnArchive(_))));
     assert!(names(&d.dst).is_empty());
+}
+
+/// A content error from the decompressor reaches the engine inside an
+/// entry; the archive is still refused as damaged, not extracted in part.
+#[test]
+fn a_truncated_tar_gz_is_refused_as_damaged_with_nothing_left() {
+    let d = dirs();
+    file(d.dst.join("big.bin"), &"z".repeat(200_000));
+    let made = d.src.join("whole.tar.gz");
+    run(
+        &RealFs,
+        &NoTrash,
+        &NoForeignReader,
+        &Request::Compress {
+            sources: vec![d.dst.join("big.bin")],
+            archive: made.clone(),
+            format: Format::TarGz,
+            level: Level::Fast,
+        },
+        &mut Archivist::default(),
+    )
+    .unwrap();
+    fs::remove_file(d.dst.join("big.bin")).unwrap();
+    let mut bytes = fs::read(&made).unwrap();
+    bytes.truncate(bytes.len() / 2);
+    fs::write(d.src.join("cut.tar.gz"), bytes).unwrap();
+
+    let result = run(
+        &RealFs,
+        &NoTrash,
+        &NoForeignReader,
+        &extract(&d.src.join("cut.tar.gz"), &d.dst, Layout::Here),
+        &mut Archivist::default(),
+    );
+
+    assert!(matches!(result, Err(OpError::Damaged { .. })), "{result:?}");
+    assert!(names(&d.dst).is_empty(), "{:?}", names(&d.dst));
 }
 
 #[test]
