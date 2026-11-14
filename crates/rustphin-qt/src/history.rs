@@ -74,3 +74,49 @@ pub fn clear() {
 pub fn snapshot() -> (Arc<Recent>, Option<String>) {
     with(|state| (Arc::clone(&state.locations), state.status.clone()))
 }
+
+/// Looks for batch renames a killed Rustphin left unfinished, in the
+/// saved tabs and recent folders, and restores their original names
+/// (D-020). Nothing is recovered while another Rustphin runs.
+pub fn recover_interrupted_renames() {
+    std::thread::spawn(|| {
+        let program = std::env::current_exe()
+            .ok()
+            .and_then(|path| {
+                path.file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+            })
+            .unwrap_or_else(|| "rustphin".to_owned());
+        if rustphin_platform::process::others_running(&program) {
+            tracing::info!("another Rustphin is running; rename recovery left to it");
+            return;
+        }
+        let session = rustphin_platform::config::state_dir()
+            .map(|dir| dir.join("session.toml"))
+            .and_then(|path| rustphin_platform::config::read(&path).ok().flatten())
+            .and_then(|text| rustphin_view::session::Session::parse(&text).ok())
+            .unwrap_or_default();
+        let folders = history::recovery_candidates(
+            &session,
+            history::saved_locations(history::RECENT_FOLDERS_CHECKED),
+        );
+        let found: Vec<std::path::PathBuf> = folders
+            .into_iter()
+            .filter(|folder| rustphin_core::ops::has_rename_journal(&rustphin_core::RealFs, folder))
+            .collect();
+        if found.is_empty() {
+            return;
+        }
+        post::on_qt(move || {
+            for directory in found {
+                let name = rustphin_view::operations::folder_name(&directory);
+                tracing::warn!(folder = %directory.display(), "recovering an interrupted batch rename");
+                crate::hub::start_lasting(
+                    rustphin_core::ops::Request::RecoverRenameBatch { directory },
+                    format!("Restoring original names in {name} after an interrupted rename"),
+                    format!("restored the original names in {name} after an interrupted rename"),
+                );
+            }
+        });
+    });
+}

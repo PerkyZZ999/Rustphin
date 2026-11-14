@@ -4,6 +4,7 @@
 // lays out, binds and forwards keys.
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Rustphin
 
@@ -161,6 +162,23 @@ Window {
         }
     }
 
+    // Opens a dialog a pane asked for.
+    function openDialog(kind: string, data) {
+        if (kind === "properties") {
+            if (data.length > 0) {
+                propertiesLoader.path = data[0]
+                propertiesLoader.active = true
+            }
+        } else if (kind === "compress") {
+            compressLoader.active = true
+        } else if (kind === "batch") {
+            batchLoader.active = true
+        } else if (kind === "extractTo") {
+            extractFolder.currentFolder = "file://" + data.folder
+            extractFolder.open()
+        }
+    }
+
     function openPalette() {
         palette.show(tabs.paletteJson(), places.model.paletteJson())
     }
@@ -194,6 +212,8 @@ Window {
                 paneMenuView.openAt(source, 0, source.height)
         } else if (id === "split") {
             tabs.toggleSplit()
+        } else if (id === "admin") {
+            Operations.toggleAdmin()
         } else if (id === "actions") {
             openPalette()
         } else if (id.indexOf("command:") === 0) {
@@ -235,6 +255,45 @@ Window {
             pane: root.activePane
             onCommand: (id, source) => root.command(id, source)
         }
+        // Acting as administrator: said across the window, with the way back.
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Tokens.metrics.admin_bar
+            visible: Operations.admin
+            color: Tokens.colors.danger_surface
+            border.color: Tokens.colors.danger_border
+            Accessible.role: Accessible.AlertMessage
+            Accessible.name: adminText.text
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Tokens.metrics.space_md
+                anchors.rightMargin: Tokens.metrics.space_sm
+                spacing: Tokens.metrics.space_md
+
+                Lucide {
+                    name: "shield-alert"
+                    colour: Tokens.colors.danger
+                }
+                Text {
+                    id: adminText
+
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                    color: Tokens.colors.danger
+                    font.family: Tokens.metrics.family_body
+                    font.pixelSize: Tokens.metrics.body_text
+                    text: qsTr("Acting as administrator. Changes you make here can affect the whole system; be careful.")
+                }
+                OutlinedButton {
+                    text: qsTr("Stop acting as administrator")
+                    iconName: "shield-off"
+                    implicitHeight: Tokens.metrics.small_button
+                    onClicked: Operations.toggleAdmin()
+                }
+            }
+        }
+
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -290,6 +349,7 @@ Window {
                             onOpenInNewTab: path => tabs.open(path, false, [])
                             onMenuRequested: (pane, row, x, y) => root.paneMenu(pane, row, x, y)
                             onCopyText: words => textClip.put(words)
+                            onDialogRequested: (kind, data) => root.openDialog(kind, data)
                         }
                     }
                 }
@@ -344,6 +404,60 @@ Window {
         id: settingsLoader
 
         active: false
+        sourceComponent: SettingsDialog {
+            shownFolder: root.folder ? root.folder.location : ""
+            places: root.placesModel
+            onClosed: {
+                settingsLoader.active = false
+                root.focusActive()
+            }
+        }
+    }
+
+    Loader {
+        id: propertiesLoader
+
+        property string path: ""
+
+        active: false
+        sourceComponent: PropertiesDialog {
+            path: propertiesLoader.path
+            onClosed: {
+                propertiesLoader.active = false
+                root.focusActive()
+            }
+        }
+    }
+    Loader {
+        id: compressLoader
+
+        active: false
+        sourceComponent: CompressDialog {
+            onClosed: {
+                compressLoader.active = false
+                root.focusActive()
+            }
+        }
+    }
+    Loader {
+        id: batchLoader
+
+        active: false
+        sourceComponent: BatchDialog {
+            onClosed: {
+                batchLoader.active = false
+                root.focusActive()
+            }
+        }
+    }
+    // Extract to…: the desktop's folder dialog, starting in the folder
+    // shown (W-113).
+    FolderDialog {
+        id: extractFolder
+
+        title: qsTr("Extract here")
+        acceptLabel: qsTr("Extract here")
+        onAccepted: Shell.extractTo(selectedFolder.toString())
     }
 
     ViewMenu {
@@ -475,7 +589,7 @@ Window {
         onActivated: root.openPalette()
     }
     Key {
-        sequences: ["Ctrl+Shift+,", "Ctrl+<"]
+        sequences: ["Ctrl+Shift+,", "Ctrl+Shift+<", "Ctrl+<"]
         onActivated: root.openSettings()
     }
     Key {
@@ -589,6 +703,14 @@ Window {
     ListKey {
         sequence: "Ctrl+D"
         onActivated: root.folder.duplicateSelected()
+    }
+    ListKey {
+        sequences: ["Alt+Return", "Alt+Enter"]
+        onActivated: root.runCommand("show-properties")
+    }
+    ListKey {
+        sequence: "Ctrl+Alt+C"
+        onActivated: root.runCommand("copy-location")
     }
     ListKey {
         sequence: "Shift+F5"

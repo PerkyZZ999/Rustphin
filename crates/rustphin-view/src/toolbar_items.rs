@@ -430,6 +430,23 @@ pub struct Fitted {
     pub actions_hint: bool,
 }
 
+/// What "Available actions" offers: the built-in buttons and every palette
+/// command not on the toolbar yet (a separator always), matching `search`.
+pub fn available(toolbar: &Toolbar, search: &str) -> Vec<Item> {
+    let search = search.trim().to_lowercase();
+    BUILT_IN
+        .iter()
+        .cloned()
+        .chain(
+            crate::commands::COMMANDS
+                .iter()
+                .map(|command| Item::Command(command.label.to_owned())),
+        )
+        .filter(|item| !toolbar.contains(item))
+        .filter(|item| search.is_empty() || item.name().to_lowercase().contains(&search))
+        .collect()
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -532,5 +549,21 @@ mod tests {
             &[],
         );
         assert_eq!(drawn(&lonely, 1400.), ["location", "separator", "actions"]);
+    }
+
+    #[test]
+    fn available_actions_leave_out_what_is_on_the_toolbar_but_offer_separators() {
+        let toolbar = Toolbar::default();
+        let offered = available(&toolbar, "");
+        assert!(!offered.contains(&Item::Back), "Back is on the toolbar");
+        assert!(offered.contains(&Item::Separator), "a separator always");
+        let found = available(&toolbar, "  COPY LOCATION ");
+        assert!(!found.is_empty());
+        assert!(
+            found
+                .iter()
+                .all(|item| item.name().to_lowercase().contains("copy location"))
+        );
+        assert!(available(&toolbar, "no such action at all").is_empty());
     }
 }

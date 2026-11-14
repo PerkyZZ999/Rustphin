@@ -140,6 +140,21 @@ impl qobject::Shell {
         QString::from(&serde_json::to_string(&shown).unwrap_or_default())
     }
 
+    fn extract_to(self: Pin<&mut Self>, url: &QString) {
+        let Some(given) = crate::folder::handed::take() else {
+            return;
+        };
+        let Some(into) = rustphin_platform::uri::path_from_uri(url.to_string().as_bytes()) else {
+            return;
+        };
+        crate::folder::start_extracting(
+            given.archives,
+            into,
+            rustphin_core::ops::Layout::Here,
+            given.trash,
+        );
+    }
+
     fn quit(self: Pin<&mut Self>) {
         crate::shell::qobject::rustphin_shell_quit();
     }

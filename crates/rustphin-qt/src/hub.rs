@@ -81,7 +81,6 @@ pub struct Hub {
     ops: Operations,
     admin_ops: Option<Operations>,
     admin_active: bool,
-    #[expect(dead_code, reason = "administrator mode arrives with W-114f")]
     admin_runs: u64,
     /// How many administrator operations have finished: KDE's helper
     /// cannot watch folders, so views re-read when this changes.
@@ -399,7 +398,6 @@ fn refresh_clip() {
     });
 }
 
-#[expect(dead_code, reason = "administrator mode arrives with W-114f")]
 /// Sends new operations through `admin` (KDE's helper, W-098) or, with
 /// `None`, through the user's own filesystem.
 pub fn set_admin(admin: Option<Arc<dyn rustphin_core::Fs>>) {
@@ -416,7 +414,11 @@ pub fn set_admin(admin: Option<Arc<dyn rustphin_core::Fs>>) {
     });
 }
 
-#[expect(dead_code, reason = "rename recovery arrives with W-114f")]
+/// Tells the windows that administrator access is being asked for.
+pub fn set_admin_pending() {
+    change(|_| {});
+}
+
 /// Starts an operation the progress line and final notice describe with
 /// `label` and `done`; its notice stays until dismissed.
 pub fn start_lasting(request: Request, label: String, done: String) {

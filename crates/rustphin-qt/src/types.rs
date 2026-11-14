@@ -97,3 +97,8 @@ pub fn when_ready(ready: impl FnOnce(Arc<Types>) + 'static) {
         }
     });
 }
+
+/// The database if it is loaded already.
+pub fn when_ready_now() -> Option<Arc<Types>> {
+    TYPES.get().cloned()
+}

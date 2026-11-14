@@ -22,6 +22,7 @@ Item {
     signal openInNewTab(string path)
     signal menuRequested(var pane, int row, real x, real y)
     signal copyText(string words)
+    signal dialogRequested(string kind, var data)
 
     function report(side: int, pane) {
         const folder = pane.listing
@@ -58,6 +59,7 @@ Item {
             onMenuRequested: (row, x, y) => page.menuRequested(left, row, x, y)
             onReported: page.report(0, left)
             onCopyText: words => page.copyText(words)
+            onDialogRequested: (kind, data) => page.dialogRequested(kind, data)
         }
         Rectangle {
             visible: page.split
@@ -84,6 +86,7 @@ Item {
                 onMenuRequested: (row, x, y) => page.menuRequested(rightPane, row, x, y)
                 onReported: page.report(1, rightPane)
                 onCopyText: words => page.copyText(words)
+                onDialogRequested: (kind, data) => page.dialogRequested(kind, data)
                 Component.onCompleted: focusList()
             }
         }

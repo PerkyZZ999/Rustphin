@@ -262,6 +262,10 @@ pub struct FolderModelRust {
     shown: bool,
     /// Frame times of the scroll benchmark.
     frames: Vec<Instant>,
+    /// The model lists through the administrator's helper.
+    as_admin: bool,
+    /// Counts models, so a replaced one's events are dropped.
+    model_epoch: u64,
     /// The New menu's files.
     new_files: Vec<rustphin_platform::templates::NewFile>,
     /// The open menu and what it acts on.
@@ -363,6 +367,8 @@ impl Default for FolderModelRust {
             asked: None,
             shown: false,
             frames: Vec::new(),
+            as_admin: false,
+            model_epoch: 0,
             new_files: rustphin_platform::templates::built_in(),
             menu_entries: Vec::new(),
             clip_serial: 0,
@@ -409,7 +415,12 @@ impl FolderModelRust {
     /// it is ready; asking gets it made.
     fn thumbnail(&self, snapshot: &Snapshot, row: usize) -> Option<String> {
         let edge = self.view.layout(self.zoom_level).icon;
-        if snapshot.is_container(row) || edge < pane::MIN_THUMBNAIL_EDGE || self.trash_dir.is_some()
+        // No previews as administrator: they would read every picture as
+        // root (docs/project/ADMIN_MODE.md).
+        if snapshot.is_container(row)
+            || edge < pane::MIN_THUMBNAIL_EDGE
+            || self.trash_dir.is_some()
+            || self.as_admin
         {
             return None;
         }
@@ -619,7 +630,10 @@ impl qobject::FolderModel {
         if self.rust().model.is_some() {
             return true;
         }
-        let (mut model, events) = match DirectoryModel::new(Arc::new(RealFs)) {
+        let fs: Arc<dyn rustphin_core::Fs> =
+            crate::admin::filesystem().unwrap_or_else(|| Arc::new(RealFs));
+        self.as_mut().rust_mut().as_admin = crate::admin::active();
+        let (mut model, events) = match DirectoryModel::new(fs) {
             Ok(started) => started,
             Err(error) => {
                 let words = format!("Folders cannot be listed: {error}.");
@@ -630,15 +644,7 @@ impl qobject::FolderModel {
         model.set_options(self.rust().options);
         self.as_mut().rust_mut().model = Some(model);
         crate::hub::watch_pane(self.qt_thread());
-        let thread = self.qt_thread();
-        std::thread::spawn(move || {
-            // Ends when the model, and with it the sender, is gone.
-            while let Ok(event) = events.recv() {
-                if thread.queue(move |model| model.on_event(event)).is_err() {
-                    break;
-                }
-            }
-        });
+        self.as_mut().listen(events);
         let thread = self.qt_thread();
         crate::types::when_ready(move |types| {
             let _ = thread.queue(move |model| model.set_types(types));
@@ -671,6 +677,58 @@ impl qobject::FolderModel {
             });
         }
         true
+    }
+
+    /// Hands the model's events to the Qt thread; ends with the model.
+    fn listen(self: Pin<&mut Self>, events: flume::Receiver<ModelEvent>) {
+        let thread = self.qt_thread();
+        let epoch = self.rust().model_epoch;
+        std::thread::spawn(move || {
+            while let Ok(event) = events.recv() {
+                let queued = thread.queue(move |model| {
+                    if model.rust().model_epoch == epoch {
+                        model.on_event(event);
+                    }
+                });
+                if queued.is_err() {
+                    break;
+                }
+            }
+        });
+    }
+
+    /// Lists through the administrator's helper, or the user's own
+    /// filesystem again, from the folder shown.
+    fn switch_filesystem(mut self: Pin<&mut Self>) {
+        let admin = crate::admin::active();
+        if self.rust().model.is_none() || self.rust().as_admin == admin {
+            return;
+        }
+        let fs: Arc<dyn rustphin_core::Fs> =
+            crate::admin::filesystem().unwrap_or_else(|| Arc::new(RealFs));
+        let location = PathBuf::from(self.location().to_string());
+        let options = self.rust().options;
+        let (mut model, events) = match DirectoryModel::new(fs) {
+            Ok(started) => started,
+            Err(error) => {
+                tracing::error!(%error, "could not start the directory model");
+                return;
+            }
+        };
+        model.set_options(options);
+        {
+            let mut rust = self.as_mut().rust_mut();
+            rust.as_admin = admin;
+            rust.model = Some(model);
+            rust.model_epoch += 1;
+            rust.generation = 0;
+            rust.snapshot = None;
+            rust.visited = None;
+            rust.selection = Selection::default();
+        }
+        self.as_mut().listen(events);
+        self.as_mut().set_location(QString::default());
+        self.go_to(location);
     }
 
     /// One event from the core's model.
@@ -1840,8 +1898,9 @@ impl qobject::FolderModel {
         }
         if self.rust().admin_changes != admin {
             self.as_mut().rust_mut().admin_changes = admin;
-            self.reload();
+            self.as_mut().reload();
         }
+        self.switch_filesystem();
     }
 
     /// What a question lists for the selected entries.
@@ -1881,8 +1940,9 @@ impl qobject::FolderModel {
 
     fn trash_selected(self: Pin<&mut Self>) {
         let (paths, listed) = self.listed_selection();
-        // What is already in the trash can only be deleted for good.
-        if self.rust().trash_dir.is_some() {
+        // What is already in the trash can only be deleted for good; so can
+        // anything as administrator: KDE's helper has no trash.
+        if self.rust().trash_dir.is_some() || self.rust().as_admin {
             crate::hub::delete(paths, listed);
         } else {
             crate::hub::trash(paths, listed);
@@ -1954,7 +2014,6 @@ impl qobject::FolderModel {
 
 /// Entries handed to the window's dialogs (Compress, batch rename,
 /// Extract to): QML gets a ticket, the paths stay here as bytes.
-#[expect(dead_code, reason = "the dialogs that take these arrive with W-114f")]
 pub mod handed {
     use std::{cell::RefCell, ffi::OsString, path::PathBuf};
 

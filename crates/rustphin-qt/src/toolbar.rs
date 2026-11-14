@@ -72,7 +72,6 @@ fn kind(item: &Item) -> &'static str {
 /// drawn in their place but unavailable until their work item (W-114d–f).
 fn available(item: &Item) -> bool {
     match item {
-        Item::Admin => false,
         Item::Command(label) => command_id(label).is_some(),
         _ => true,
     }
@@ -208,9 +207,10 @@ mod tests {
     fn tooltips_name_the_key_or_say_the_item_is_not_built_yet() {
         assert_eq!(tip(&Item::Back), "Back (Alt+Left)");
         assert_eq!(tip(&Item::Hidden), "Show hidden files (Ctrl+H)");
+        assert_eq!(tip(&Item::Admin), "Act as administrator");
         assert_eq!(
-            tip(&Item::Admin),
-            "Act as administrator: not in the Qt interface yet"
+            tip(&Item::Command("Files: Gone".to_owned())),
+            "Files: Gone: not in the Qt interface yet"
         );
     }
 

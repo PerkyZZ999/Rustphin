@@ -83,11 +83,18 @@ Rectangle {
                     IconButton {
                         id: tool
 
-                        iconName: entry.icon
-                        text: entry.name
-                        tip: entry.tip
+                        iconName: entry.itemId === "admin" && Operations.admin ? "shield-alert" : entry.icon
+                        text: entry.itemId === "admin" ? (Operations.admin ? qsTr("Stop acting as administrator")
+                                                         : Operations.adminPending ? qsTr("Waiting for the password\u2026")
+                                                         : Operations.adminInstalled ? entry.name
+                                                         : qsTr("Act as administrator (needs KDE's kio-admin package)"))
+                                                      : entry.name
+                        tip: entry.itemId === "admin" ? text : entry.tip
+                        iconColour: entry.itemId === "admin" && Operations.admin ? Tokens.colors.danger
+                                  : enabled ? Tokens.colors.text : Tokens.colors.text_disabled
                         enabled: entry.available && bar.folder !== null
-                                 && (entry.itemId === "back" ? bar.folder.canGoBack
+                                 && (entry.itemId === "admin" ? Operations.admin || (Operations.adminInstalled && !Operations.adminPending)
+                                   : entry.itemId === "back" ? bar.folder.canGoBack
                                    : entry.itemId === "forward" ? bar.folder.canGoForward
                                    : entry.itemId === "up" ? bar.folder.canGoUp
                                    : true)

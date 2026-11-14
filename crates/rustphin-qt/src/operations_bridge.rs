@@ -30,6 +30,9 @@ pub mod qobject {
         #[qproperty(QString, problems)]
         #[qproperty(bool, can_paste, cxx_name = "canPaste")]
         #[qproperty(i32, revision)]
+        #[qproperty(bool, admin)]
+        #[qproperty(bool, admin_pending, cxx_name = "adminPending")]
+        #[qproperty(bool, admin_installed, cxx_name = "adminInstalled")]
         type Operations = super::OperationsRust;
     }
 
@@ -48,6 +51,10 @@ pub mod qobject {
         /// Answers the question shown (`questions::Answer` numbers).
         #[qinvokable]
         fn answer(self: Pin<&mut Operations>, answer: i32, apply_to_all: bool, password: &QString);
+        /// Starts or stops acting as administrator.
+        #[qinvokable]
+        #[cxx_name = "toggleAdmin"]
+        fn toggle_admin(self: Pin<&mut Operations>);
         /// Dismisses the notice.
         #[qinvokable]
         #[cxx_name = "dismissNotice"]

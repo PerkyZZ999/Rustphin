@@ -32,6 +32,9 @@ FocusScope {
     signal entered()
     // Text for the clipboard.
     signal copyText(string words)
+    // A dialog the window opens: "properties", "compress", "batch" or
+    // "extractTo", with what it needs.
+    signal dialogRequested(string kind, var data)
     // The pane shows another folder, or its title or trash state changed.
     signal reported()
 
@@ -108,6 +111,10 @@ FocusScope {
         onFileActivated: path => pane.fileActivated(path)
         onOpenInNewTab: path => pane.openInNewTab(path)
         onCopyText: words => pane.copyText(words)
+        onPropertiesRequested: paths => pane.dialogRequested("properties", paths)
+        onCompressRequested: json => pane.dialogRequested("compress", JSON.parse(json))
+        onBatchRenameRequested: json => pane.dialogRequested("batch", JSON.parse(json))
+        onExtractToRequested: json => pane.dialogRequested("extractTo", JSON.parse(json))
         onRevealRow: row => {
             if (pane.view)
                 pane.view.positionViewAtIndex(row, ListView.Contain)

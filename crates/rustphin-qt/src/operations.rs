@@ -36,6 +36,9 @@ pub struct OperationsRust {
     problems: QString,
     can_paste: bool,
     revision: i32,
+    admin: bool,
+    admin_pending: bool,
+    admin_installed: bool,
     zone: TimeZone,
     watching: bool,
 }
@@ -56,6 +59,9 @@ impl Default for OperationsRust {
             problems: QString::default(),
             can_paste: false,
             revision: 0,
+            admin: false,
+            admin_pending: false,
+            admin_installed: rustphin_platform::admin::installed(),
             zone: TimeZone::system(),
             watching: false,
         }
@@ -135,6 +141,8 @@ impl qobject::Operations {
         self.as_mut()
             .set_problems(QString::from(&problems.unwrap_or_default()));
         self.as_mut().set_can_paste(can_paste);
+        self.as_mut().set_admin(crate::admin::active());
+        self.as_mut().set_admin_pending(crate::admin::pending());
         let next = self.revision().wrapping_add(1);
         self.as_mut().set_revision(next);
     }
@@ -153,6 +161,10 @@ impl qobject::Operations {
         };
         let password = Some(password.to_string()).filter(|password| !password.is_empty());
         hub::answer(answer, apply_to_all, password);
+    }
+
+    fn toggle_admin(self: Pin<&mut Self>) {
+        crate::admin::toggle();
     }
 
     fn dismiss_notice(self: Pin<&mut Self>) {

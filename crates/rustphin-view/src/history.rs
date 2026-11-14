@@ -65,6 +65,31 @@ pub fn saved_locations(limit: usize) -> Vec<Location> {
         .unwrap_or_default()
 }
 
+/// Recent folders checked for interrupted batch renames at start, besides
+/// the saved tabs (D-020).
+pub const RECENT_FOLDERS_CHECKED: usize = 200;
+
+/// The local folders a batch rename may have been interrupted in: the
+/// saved tabs first, then the recent folders, each once.
+pub fn recovery_candidates(
+    session: &crate::session::Session,
+    recent: Vec<Location>,
+) -> Vec<std::path::PathBuf> {
+    let mut folders: Vec<std::path::PathBuf> = Vec::new();
+    let tabs = session
+        .tabs
+        .iter()
+        .flat_map(|tab| tab.panes.iter().cloned());
+    for location in tabs.chain(recent) {
+        if let Location::Folder(path) = location
+            && !folders.contains(&path)
+        {
+            folders.push(path);
+        }
+    }
+    folders
+}
+
 /// What the history worker is asked to do.
 #[derive(Debug)]
 pub enum HistoryCommand {
@@ -174,6 +199,29 @@ mod tests {
             [
                 Location::Remote(RemoteAddress::parse("sftp://host/x").unwrap()),
                 folder("/a")
+            ]
+        );
+    }
+
+    #[test]
+    fn saved_tabs_come_first_and_each_local_folder_once() {
+        let session = crate::session::Session::new(
+            vec![crate::session::SessionTab {
+                panes: vec![
+                    folder("/work"),
+                    Location::Remote(RemoteAddress::parse("sftp://host/x").unwrap()),
+                ],
+                active_pane: 0,
+            }],
+            0,
+        );
+        let recent = vec![folder("/photos"), folder("/work"), folder("/music")];
+        assert_eq!(
+            recovery_candidates(&session, recent),
+            [
+                PathBuf::from("/work"),
+                PathBuf::from("/photos"),
+                PathBuf::from("/music")
             ]
         );
     }

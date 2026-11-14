@@ -9,9 +9,11 @@
 
 mod admin;
 mod desktop;
+mod dialogs;
 mod folder;
 mod history;
 mod hub;
+mod info;
 mod operations;
 mod palette;
 mod places;
@@ -19,6 +21,7 @@ mod post;
 mod preferences;
 mod prefs;
 mod remote;
+mod settings;
 mod tabs;
 mod tokens;
 mod toolbar;
@@ -118,6 +121,9 @@ fn main() -> ExitCode {
             &folder_list(&launch.targets),
             &QString::from(activation.as_deref().unwrap_or_default()),
         );
+    }
+    if instance.is_some() {
+        history::recover_interrupted_renames();
     }
     if let Some(instance) = &instance {
         let requests = instance.receiver();
