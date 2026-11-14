@@ -366,9 +366,31 @@ mod tests {
             archive_name("report", Format::Zip, &taken)
                 .is_err_and(|problem| problem.contains("already exists"))
         );
-        assert!(archive_name("   ", Format::Zip, &taken).is_err());
-        assert!(archive_name("a/b", Format::Zip, &taken).is_err());
-        assert!(archive_name(&"x".repeat(260), Format::Zip, &taken).is_err());
+        assert_eq!(
+            archive_name("   ", Format::Zip, &taken),
+            Err("Type a name for the archive.".into())
+        );
+        assert_eq!(
+            archive_name("a/b", Format::Zip, &taken),
+            Err("A name cannot contain \u{201c}/\u{201d}.".into())
+        );
+        assert_eq!(
+            archive_name("a\0b", Format::Zip, &taken),
+            Err("A name cannot contain \u{201c}/\u{201d}.".into())
+        );
+        assert_eq!(
+            archive_name(&"x".repeat(260), Format::Zip, &taken),
+            Err("The name is too long.".into())
+        );
+        // 251 bytes and ".zip" make the longest name a folder holds.
+        assert_eq!(
+            archive_name(&"x".repeat(251), Format::Zip, &taken).map(|name| name.len()),
+            Ok(255)
+        );
+        assert_eq!(
+            archive_name(&"x".repeat(252), Format::Zip, &taken),
+            Err("The name is too long.".into())
+        );
     }
 
     #[test]
@@ -410,7 +432,16 @@ mod tests {
         let view = batch.view();
         assert!(view.ready);
         assert_eq!(view.rows[0].to, "photo-01");
-        assert!(batch.request().is_some());
+        assert_eq!(
+            batch.request(),
+            Some(Request::RenameBatch {
+                directory: "/srv".into(),
+                pairs: vec![
+                    ("b.jpg".into(), "photo-01".into()),
+                    ("a.jpg".into(), "photo-02".into()),
+                ],
+            })
+        );
         batch.step = "two".into();
         assert!(batch.view().problem.contains("whole numbers"));
         assert!(batch.request().is_none());

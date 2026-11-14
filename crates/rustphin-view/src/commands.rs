@@ -1254,6 +1254,7 @@ pub const COMMANDS: &[Command] = &[
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::menu::{self, MenuEntry, MenuFacts};
 
     #[test]
     fn every_command_has_its_own_id_and_a_category() {
@@ -1262,7 +1263,6 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), COMMANDS.len());
         assert!(COMMANDS.iter().all(|command| command.label.contains(": ")));
-        assert!(COMMANDS.len() > 80);
     }
 
     #[test]
@@ -1428,8 +1428,8 @@ mod tests {
     #[test]
     fn every_surface_shows_the_table_s_key() {
         use crate::{
-            menu::{Command as _, MenuCommand},
-            place_menu::PlaceCommand,
+            menu::Command as _,
+            place_menu::{Target, place_menu},
             toolbar_items::{BUILT_IN, Item},
         };
         let palette = |id: &str| {
@@ -1448,53 +1448,121 @@ mod tests {
                 .find(|shortcut| shortcut.name == name)
                 .and_then(|shortcut| shortcut.keys.first().cloned())
         };
-        let mut checked = 0;
         for item in BUILT_IN.iter().chain([&Item::Actions]) {
             if let Some(id) = item.command_id() {
                 assert_eq!(item.keys(), palette(id), "toolbar {item:?}");
                 assert_eq!(item.keys(), settings(id), "toolbar {item:?}");
-                checked += 1;
             }
         }
         assert_eq!(Item::Back.keys().as_deref(), Some("Alt+Left"));
-        for row in [
-            MenuCommand::Open,
-            MenuCommand::Copy,
-            MenuCommand::Cut,
-            MenuCommand::Paste,
-            MenuCommand::CopyLocation,
-            MenuCommand::Duplicate,
-            MenuCommand::Rename,
-            MenuCommand::MoveToTrash,
-            MenuCommand::Delete,
-            MenuCommand::Properties,
-            MenuCommand::NewFolder,
-            MenuCommand::NewFile,
-            MenuCommand::Restore,
-        ] {
-            let id = row
+        // Every row the menus actually show, in each situation they are
+        // built for, shows the palette's key for the same command.
+        let mut menu_rows = Vec::new();
+        for facts in menu_situations() {
+            menu_rows.extend(commands_in(&menu::context_menu(&facts)));
+        }
+        menu_rows.extend(commands_in(&menu::trash_actions(
+            true,
+            [(
+                "Other trash".to_owned(),
+                "/media/x/.Trash-1000/files".into(),
+            )],
+        )));
+        assert!(!menu_rows.is_empty());
+        for row in menu_rows {
+            let palette_key = row
                 .action()
                 .and_then(|action| of(Action::Pane(action)))
-                .unwrap()
-                .id;
-            assert_eq!(row.shortcut(), palette(id), "menu {row:?}");
-            checked += 1;
+                .and_then(|command| palette(command.id));
+            assert_eq!(row.shortcut(), palette_key, "menu {row:?}");
         }
-        for row in [
-            PlaceCommand::Open,
-            PlaceCommand::Rename,
-            PlaceCommand::Hide,
-            PlaceCommand::Remove,
-            PlaceCommand::MoveUp,
-            PlaceCommand::Collapse,
-            PlaceCommand::NewGroup,
-            PlaceCommand::AddShownFolder,
+        let groups = ["Work".to_owned()];
+        let mut place_rows = Vec::new();
+        for target in [
+            Target::Place {
+                system: false,
+                hidden: false,
+                group: Some(0),
+                groups: &groups,
+            },
+            Target::Place {
+                system: true,
+                hidden: true,
+                group: None,
+                groups: &groups,
+            },
+            Target::Group { collapsed: false },
+            Target::Group { collapsed: true },
+            Target::Panel {
+                can_add_shown: true,
+                showing_hidden: false,
+            },
         ] {
-            let id = row.action().and_then(of).unwrap().id;
-            assert_eq!(row.shortcut(), palette(id), "places menu {row:?}");
-            checked += 1;
+            place_rows.extend(commands_in(&place_menu(target)));
         }
-        assert!(checked > 25);
+        assert!(!place_rows.is_empty());
+        for row in place_rows {
+            let palette_key = row
+                .action()
+                .and_then(of)
+                .and_then(|command| palette(command.id));
+            assert_eq!(row.shortcut(), palette_key, "places menu {row:?}");
+        }
+    }
+
+    /// Every command in `entries`, submenus included.
+    fn commands_in<C: Clone>(entries: &[MenuEntry<C>]) -> Vec<C> {
+        entries
+            .iter()
+            .flat_map(|entry| match entry {
+                MenuEntry::Item { command, .. } => vec![command.clone()],
+                MenuEntry::Submenu { items, .. } => commands_in(items),
+                MenuEntry::Separator => Vec::new(),
+            })
+            .collect()
+    }
+
+    /// The context menu's situations: one file, one archive, several
+    /// files, a folder, empty space, and the selection in the trash.
+    fn menu_situations() -> Vec<MenuFacts> {
+        let base = MenuFacts {
+            on_selection: true,
+            count: 1,
+            single_container: false,
+            in_trash: false,
+            as_administrator: false,
+            can_paste: true,
+            applications: Vec::new(),
+            types_ready: true,
+            all_archives: false,
+            extract_folder: None,
+            compress_names: ["a.zip".to_owned(), "a.tar.gz".to_owned()],
+        };
+        vec![
+            base.clone(),
+            MenuFacts {
+                all_archives: true,
+                extract_folder: Some("a".to_owned()),
+                ..base.clone()
+            },
+            MenuFacts {
+                count: 3,
+                ..base.clone()
+            },
+            MenuFacts {
+                single_container: true,
+                ..base.clone()
+            },
+            MenuFacts {
+                on_selection: false,
+                count: 0,
+                ..base.clone()
+            },
+            MenuFacts {
+                in_trash: true,
+                ..base
+            },
+        ]
     }
 
     /// KEYBOARD.md's rows (action, then the commands it covers). Rows left

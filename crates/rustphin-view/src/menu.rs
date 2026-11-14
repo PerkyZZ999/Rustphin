@@ -796,27 +796,13 @@ pub fn labels<C>(entries: &[MenuEntry<C>]) -> Vec<&str> {
 mod tests {
     use super::*;
 
+    // That each row shows the command table's key is checked over every
+    // menu in `commands::tests::every_surface_shows_the_table_s_key`.
     #[test]
-    fn menu_rows_show_the_keys_that_do_the_same() {
-        let keys = |command: MenuCommand| command.shortcut();
-        assert_eq!(keys(MenuCommand::Open).as_deref(), Some("Enter"));
-        assert_eq!(keys(MenuCommand::Cut).as_deref(), Some("Ctrl+X"));
-        assert_eq!(keys(MenuCommand::Copy).as_deref(), Some("Ctrl+C"));
-        assert_eq!(keys(MenuCommand::Paste).as_deref(), Some("Ctrl+V"));
-        assert_eq!(
-            keys(MenuCommand::CopyLocation).as_deref(),
-            Some("Ctrl+Alt+C")
-        );
-        assert_eq!(keys(MenuCommand::Duplicate).as_deref(), Some("Ctrl+D"));
-        assert_eq!(keys(MenuCommand::Rename).as_deref(), Some("F2"));
-        assert_eq!(keys(MenuCommand::MoveToTrash).as_deref(), Some("Delete"));
-        assert_eq!(keys(MenuCommand::Delete).as_deref(), Some("Shift+Delete"));
-        assert_eq!(keys(MenuCommand::Properties).as_deref(), Some("Alt+Enter"));
-        assert_eq!(keys(MenuCommand::NewFolder).as_deref(), Some("F10"));
-        assert_eq!(keys(MenuCommand::NewFile).as_deref(), Some("Ctrl+Alt+N"));
-        // Rows without a key of their own show none.
-        assert_eq!(keys(MenuCommand::Restore), None);
-        assert_eq!(keys(MenuCommand::EmptyTrash), None);
+    fn rows_without_a_key_of_their_own_show_none() {
+        assert_eq!(MenuCommand::Restore.shortcut(), None);
+        assert_eq!(MenuCommand::EmptyTrash.shortcut(), None);
+        assert_eq!(MenuCommand::OpenTrash("/t".into()).shortcut(), None);
     }
 
     fn facts(mut change: impl FnMut(&mut MenuFacts)) -> MenuFacts {

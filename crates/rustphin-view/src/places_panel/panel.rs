@@ -1301,6 +1301,21 @@ mod tests {
         assert!(world.panel.view(&p("home")).unwrap().hidden);
     }
 
+    /// The path of the row labelled `label` in a menu as QML gets it,
+    /// submenus included.
+    fn path_of(json: &str, label: &str) -> String {
+        fn find(rows: &serde_json::Value, label: &str) -> Option<String> {
+            rows.as_array()?.iter().find_map(|row| {
+                if row["label"] == label {
+                    row["path"].as_str().map(str::to_owned)
+                } else {
+                    find(&row["items"], label)
+                }
+            })
+        }
+        find(&serde_json::from_str(json).unwrap(), label).unwrap()
+    }
+
     #[test]
     fn a_new_group_takes_the_place_it_was_made_with_and_is_named_at_once() {
         let mut world = world();
@@ -1309,11 +1324,7 @@ mod tests {
         let Some(Effect::Menu(json)) = opened.first() else {
             panic!("no menu in {opened:?}");
         };
-        // The menu's number, before every path in it.
-        let rows: serde_json::Value = serde_json::from_str(json).unwrap();
-        let number = rows[0]["path"].as_str().unwrap().split('.').next().unwrap();
-        // Move to group › Work, Media, separator, New group…
-        let effects = world.panel.run_menu(&format!("{number}.3.3"));
+        let effects = world.panel.run_menu(&path_of(json, "New group\u{2026}"));
         world.carry_out(effects);
         assert_eq!(world.saved_group(2), ["a"]);
         assert_eq!(world.panel.renaming(), Some(&Row::Group(2)));

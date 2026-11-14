@@ -1670,6 +1670,7 @@ dependencies = [
  "rustphin-platform",
  "rustphin-view",
  "serde_json",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
 ]

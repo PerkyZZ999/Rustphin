@@ -2339,19 +2339,29 @@ mod tests {
         assert!(missing.is_empty(), "not in icons/: {missing:?}");
     }
 
+    // Pane.qml's column headings send 0 Name, 1 Size, 2 Modified, 3 Type.
     #[test]
-    fn columns_and_sorts_name_each_other() {
-        for column in 0..4 {
-            assert_eq!(column_of(sort_key(column)), column);
-        }
+    fn columns_are_numbered_as_pane_qml_numbers_its_headings() {
+        assert_eq!(sort_key(0), SortKey::Name);
+        assert_eq!(sort_key(1), SortKey::Size);
+        assert_eq!(sort_key(2), SortKey::Modified);
+        assert_eq!(sort_key(3), SortKey::Type);
         assert_eq!(sort_key(9), SortKey::Name);
+        assert_eq!(column_of(SortKey::Name), 0);
+        assert_eq!(column_of(SortKey::Size), 1);
+        assert_eq!(column_of(SortKey::Modified), 2);
+        assert_eq!(column_of(SortKey::Type), 3);
     }
 
+    // Pane.qml lays out icons for mode 0, compact for 1, details for 2.
     #[test]
-    fn modes_are_numbered_as_qml_sends_them() {
-        for mode in [ViewMode::Icons, ViewMode::Compact, ViewMode::Details] {
-            assert_eq!(mode_of(mode_number(mode)), mode);
-        }
+    fn modes_are_numbered_as_pane_qml_reads_them() {
+        assert_eq!(mode_number(ViewMode::Icons), 0);
+        assert_eq!(mode_number(ViewMode::Compact), 1);
+        assert_eq!(mode_number(ViewMode::Details), 2);
+        assert_eq!(mode_of(0), ViewMode::Icons);
+        assert_eq!(mode_of(1), ViewMode::Compact);
+        assert_eq!(mode_of(2), ViewMode::Details);
     }
 
     #[test]

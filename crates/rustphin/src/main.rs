@@ -235,6 +235,7 @@ fn main() -> ExitCode {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use rustphin_view::{location::Location, workspace::PaneStart};
 
@@ -259,16 +260,14 @@ mod tests {
 
     #[test]
     fn a_file_opens_the_folder_that_contains_it() {
-        let dir = std::env::temp_dir().join(format!("rustphin-launch-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        assert!(std::fs::create_dir_all(&dir).is_ok());
+        let dir = tempfile::tempdir().unwrap();
+        let dir = dir.path();
         let file = dir.join("note.txt");
-        assert!(std::fs::write(&file, b"note").is_ok());
+        std::fs::write(&file, b"note").unwrap();
         assert_eq!(folder_tab(file), dir);
-        assert_eq!(folder_tab(dir.clone()), dir);
+        assert_eq!(folder_tab(dir.to_owned()), dir);
         let missing = dir.join("gone");
         assert_eq!(folder_tab(missing.clone()), missing);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

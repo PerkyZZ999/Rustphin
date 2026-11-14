@@ -161,10 +161,11 @@ mod tests {
     #[test]
     fn the_desktop_entry_handles_folders_and_passes_urls() {
         let text = include_str!("../../../assets/rustphin.desktop");
-        assert!(text.contains("Type=Application"));
-        assert!(text.contains("MimeType=inode/directory;"));
-        assert!(text.contains("Exec=rustphin %U"));
-        assert!(text.contains("StartupWMClass=rustphin"));
+        let has = |line: &str| text.lines().any(|shown| shown == line);
+        assert!(has("Type=Application"));
+        assert!(has("MimeType=inode/directory;"));
+        assert!(has("Exec=rustphin %U"));
+        assert!(has("StartupWMClass=rustphin"));
     }
 
     #[test]

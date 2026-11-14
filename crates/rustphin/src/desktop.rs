@@ -230,9 +230,10 @@ mod tests {
             if command.target() != Target::Window {
                 continue;
             }
-            let handled = main.contains(&format!("case \"{}\":", command.id))
-                || (command.id.starts_with("activate-tab-")
-                    && main.contains("id.indexOf(\"activate-tab-\") === 0"));
+            // Named as a quoted string, whether by a `case` or a key of a
+            // table; the numbered tab commands share one prefix.
+            let handled = main.contains(&format!("\"{}\"", command.id))
+                || (command.id.starts_with("activate-tab-") && main.contains("\"activate-tab-\""));
             assert!(handled, "Main.qml does not run {}", command.id);
         }
     }
