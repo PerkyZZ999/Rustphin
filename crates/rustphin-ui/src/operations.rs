@@ -1174,16 +1174,7 @@ fn detail(progress: &Progress, elapsed: Duration) -> String {
     text
 }
 
-/// A free name like `base`, `base 2`, `base 3`, … given a test for taken names.
-pub fn free_name(base: &str, is_taken: impl Fn(&str) -> bool) -> String {
-    if !is_taken(base) {
-        return base.to_owned();
-    }
-    (2..)
-        .map(|n| format!("{base} {n}"))
-        .find(|name| !is_taken(name))
-        .unwrap_or_else(|| base.to_owned())
-}
+pub use rustphin_view::naming::free_name;
 
 /// The names that duplicating `names` side by side creates, in order, given
 /// which names `exists` in the folder: what the engine will choose, so the

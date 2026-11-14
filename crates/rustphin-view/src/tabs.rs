@@ -27,6 +27,7 @@ impl<T> Tabs<T> {
     }
 
     /// Number of tabs; never zero.
+    #[allow(clippy::len_without_is_empty)] // A window always has a tab.
     pub fn len(&self) -> usize {
         self.items.len()
     }

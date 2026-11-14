@@ -99,13 +99,17 @@ impl Session {
 }
 
 /// Startup tabs and permission to replace the saved session.
-pub(crate) struct RestoredSession {
+pub struct RestoredSession {
+    /// The tabs to open.
     pub session: Session,
+    /// Why the saved session could not be used as it was, if so.
     pub issue: Option<SessionError>,
 }
 
 impl RestoredSession {
-    pub(crate) fn can_save(&self) -> bool {
+    /// Whether the saved session may be replaced: not when it could not be
+    /// read, so a damaged or newer file is kept for the user.
+    pub fn can_save(&self) -> bool {
         self.issue.is_none()
     }
 }
@@ -145,7 +149,8 @@ impl std::error::Error for SessionError {
 }
 
 impl SessionError {
-    pub(crate) fn notice(&self) -> &'static str {
+    /// The notice shown to the user.
+    pub fn notice(&self) -> &'static str {
         match self {
             Self::Read(_) => {
                 "Saved tabs could not be read. Tab saving is off; the file was kept. Check session.toml and its permissions, then restart."
@@ -162,7 +167,7 @@ impl SessionError {
 
 /// Chooses startup tabs without accessing the filesystem. Explicit folders
 /// change what is shown, not permission to replace unreadable/unsupported data.
-pub(crate) fn restore(saved: io::Result<Option<String>>, starts: &[PathBuf]) -> RestoredSession {
+pub fn restore(saved: io::Result<Option<String>>, starts: &[PathBuf]) -> RestoredSession {
     let decoded = match saved {
         Ok(Some(text)) => Session::parse(&text),
         Ok(None) => Ok(Session::default()),
@@ -206,13 +211,14 @@ mod pane_paths {
 
 /// Prepares session snapshots on the UI thread for background publication.
 #[derive(Default)]
-pub(crate) struct SessionSaves {
+pub struct SessionSaves {
     issued: u64,
     latest_attempt: Arc<Mutex<u64>>,
 }
 
 impl SessionSaves {
-    pub(crate) fn prepare(&mut self, session: Session) -> io::Result<SessionSave> {
+    /// Encodes `session` as the next save, numbered after earlier ones.
+    pub fn prepare(&mut self, session: Session) -> io::Result<SessionSave> {
         self.issued = self
             .issued
             .checked_add(1)
@@ -226,14 +232,15 @@ impl SessionSaves {
 }
 
 /// One pending background save.
-pub(crate) struct SessionSave {
+pub struct SessionSave {
     session: Session,
     revision: u64,
     latest_attempt: Arc<Mutex<u64>>,
 }
 
 impl SessionSave {
-    pub(crate) fn write(self, path: &Path) -> io::Result<()> {
+    /// Writes this save to `path`, unless a newer save already reached it.
+    pub fn write(self, path: &Path) -> io::Result<()> {
         let mut latest = self
             .latest_attempt
             .lock()

@@ -7,7 +7,7 @@
 //! window is too narrow, Actions first loses its key hint and its words,
 //! then items leave from the right end inwards.
 
-use crate::theme::{size, space};
+use crate::metrics::{size, space};
 
 /// One thing on the toolbar.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -376,8 +376,8 @@ pub struct Look {
 
 impl Look {
     /// The words `item` shows beside its icon, if it shows them.
-    pub fn words_of(&self, item: &Item) -> Option<gpui_kit::SharedString> {
-        self.words.contains(item).then(|| item.name().into())
+    pub fn words_of(&self, item: &Item) -> Option<String> {
+        self.words.contains(item).then(|| item.name())
     }
 }
 

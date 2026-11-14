@@ -3042,7 +3042,7 @@ impl Browser {
             .model
             .as_ref()
             .is_some_and(|model| model.options().show_hidden);
-        let words = |item: Item| look.words_of(&item);
+        let words = |item: Item| look.words_of(&item).map(SharedString::from);
         // Each button gives the keyboard back to this pane, so its keys
         // keep working after a click.
         let back = tool_button_words(

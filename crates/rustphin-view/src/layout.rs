@@ -81,9 +81,9 @@ impl ViewMode {
                 icon: LARGE_ICONS[zoom],
                 row_height: LARGE_ICONS[zoom] + ICON_CELL_EXTRA_HEIGHT,
                 cell_width: Some(LARGE_ICONS[zoom] + ICON_CELL_EXTRA_WIDTH),
-                name_text: crate::theme::text::NAME,
-                name_line: crate::theme::text::LINE,
-                data_text: crate::theme::text::DATA,
+                name_text: crate::metrics::text::NAME,
+                name_line: crate::metrics::text::LINE,
+                data_text: crate::metrics::text::DATA,
             },
         }
     }
@@ -154,13 +154,21 @@ impl ViewMode {
 /// A key that moves the keyboard focus through the entries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
+    /// The entry above.
     Up,
+    /// The entry below.
     Down,
+    /// The entry to the left (or the previous one in a list).
     Left,
+    /// The entry to the right (or the next one in a list).
     Right,
+    /// One page up.
     PageUp,
+    /// One page down.
     PageDown,
+    /// The first entry.
     First,
+    /// The last entry.
     Last,
 }
 
@@ -351,17 +359,19 @@ pub fn nearest_offset(offset: f32, start: f32, end: f32, viewport: f32) -> f32 {
 
 /// A keyboard movement of the focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Motion {
+pub enum Motion {
     /// Back (negative) or forward (positive) by a number of entries.
     By(isize),
+    /// To the first entry.
     First,
+    /// To the last entry.
     Last,
 }
 
 /// The entry a motion lands on among `len` entries, or `None` when there are
 /// none. With nothing focused, moving forward starts at the first entry and
 /// moving back at the last.
-pub(crate) fn target_row(current: Option<usize>, len: usize, motion: Motion) -> Option<usize> {
+pub fn target_row(current: Option<usize>, len: usize, motion: Motion) -> Option<usize> {
     let last = len.checked_sub(1)?;
     Some(match (motion, current) {
         (Motion::First, _) => 0,
@@ -380,8 +390,8 @@ pub fn step_zoom(zoom: usize, delta: isize) -> usize {
 /// Scroll a content offset by one line, visible page or to an edge; ignore other keys.
 pub fn scroll_offset(key: &str, offset: f32, maximum: f32, page: f32) -> Option<f32> {
     let next = match key {
-        "up" => offset + crate::theme::text::LINE,
-        "down" => offset - crate::theme::text::LINE,
+        "up" => offset + crate::metrics::text::LINE,
+        "down" => offset - crate::metrics::text::LINE,
         "pageup" => offset + page,
         "pagedown" => offset - page,
         "home" => 0.,
@@ -455,7 +465,7 @@ mod tests {
         let default = ViewMode::Details.layout(DEFAULT_ZOOM);
         assert_eq!(
             (default.name_text, default.data_text),
-            (crate::theme::text::NAME, crate::theme::text::DATA)
+            (crate::metrics::text::NAME, crate::metrics::text::DATA)
         );
         // Every name line fits its row.
         for zoom in 0..ZOOM_LEVELS {
@@ -778,7 +788,7 @@ mod tests {
 
     #[test]
     fn scroll_keys_move_by_line_or_visible_page() {
-        let line = crate::theme::text::LINE;
+        let line = crate::metrics::text::LINE;
         assert_eq!(scroll_offset("down", 0., 300., 120.), Some(-line));
         assert_eq!(scroll_offset("up", -100., 300., 120.), Some(-100. + line));
         assert_eq!(scroll_offset("pagedown", 0., 300., 120.), Some(-120.));

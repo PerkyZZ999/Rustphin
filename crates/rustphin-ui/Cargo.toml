@@ -18,6 +18,7 @@ diagnostics = ["gpui-kit/profiler"]
 [dependencies]
 rustphin-core.workspace = true
 rustphin-platform.workspace = true
+rustphin-view.workspace = true
 gpui-kit.workspace = true
 flume.workspace = true
 jiff.workspace = true

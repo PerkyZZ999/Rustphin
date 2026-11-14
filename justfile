@@ -187,6 +187,7 @@ layers:
     }
     forbid rustphin-core 'gpui|wayland|zbus'
     forbid rustphin-platform 'gpui'
+    forbid rustphin-view 'gpui|cxx-qt'
     exit "$status"
 
 

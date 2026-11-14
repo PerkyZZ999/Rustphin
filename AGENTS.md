@@ -63,13 +63,14 @@ Notes on applying them here:
 
 ## Architecture rules
 
-Cargo workspace, dependencies point one way: `rustphin-ui` → `rustphin-platform` → `rustphin-core`.
+Cargo workspace, dependencies point one way: `rustphin-ui` → `rustphin-view` → `rustphin-platform` → `rustphin-core`.
 
 | Crate | Contains | Must not |
 |---|---|---|
 | `rustphin-core` | Directory model, listing, sorting, selection, history, file operation engine, undo, batch rename, fuzzy matching | Depend on GPUI, Wayland or D-Bus crates |
 | `rustphin-platform` | Blur, file clipboard, devices, trash, thumbnails, places, MIME, icons | Depend on `gpui-kit` |
-| `rustphin-ui` | Theme, views, key bindings, bridge to the core | Touch the filesystem directly |
+| `rustphin-view` | Interface logic free of any toolkit: layout, settings, session, tabs, toolbar items, naming, the numeric design tokens (`metrics`) | Depend on GPUI or cxx-qt (W-114, D-034: shared by the GPUI and the coming Qt interface) |
+| `rustphin-ui` | Theme colours, views, key bindings, bridge to the core | Touch the filesystem directly |
 | `rustphin` | Binary; wiring only | Hold logic |
 
 The layering is enforced by `rust-tc layers` (part of `rust-tc doctor`) and by the `gpui-kit` ban in `deny.toml`.

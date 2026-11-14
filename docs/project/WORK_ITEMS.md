@@ -46,6 +46,8 @@ S11 — Hardening for daily use (in progress)
 - [ ] W-114 — Move the interface from GPUI to Qt 6 and QML (the maintainer, 2026-11-13, naming QtBridge for Rust). Plan in [QT_MIGRATION_PLAN.md](QT_MIGRATION_PLAN.md); decided D-033 and D-034 (cxx-qt).
   - [x] W-114a — Spike: cxx-qt and QtBridge measured against the nine criteria; cxx-qt passes 1–4 and 6–9, blur (5) needs the maintainer's desktop. Done 2026-11-13 (see VALIDATION.md).
   - [ ] W-114b — `rustphin-view`: move the toolkit-free interface logic out of `rustphin-ui`, with its tests; the GPUI app unchanged on screen.
+    - [x] W-114b1 — New crate `rustphin-view` (layer rule: no GPUI, no cxx-qt) with the eleven modules that never used GPUI (archives, folder views, format, groups, launch, layout, location, session, settings, tabs, toolbar items), the numeric design tokens (`metrics`: spacing, sizes, type scale, hidden-file opacity floor; `theme.rs` re-exports them and keeps the colours) and `naming::free_name`. `rustphin-ui` uses them under the same paths. Done 2026-11-13.
+    - [ ] W-114b2 — The logic still inside GPUI files: menu facts and entries (`menu.rs`), palette commands and matching, selection movement, history, recovery, file types, place menu, the operations hub's wording, Settings pages' choices; each split into a view-side module plus a thin GPUI part.
   - [ ] W-114c — The Qt shell (`rustphin-qt`): cxx-qt in `rust-tc doctor`, Theme singleton from `theme.rs`, window, blur, fonts, single instance, background mode releasing the QML engine.
   - [ ] W-114d — Item views (details, icons, compact) over a Rust model; R-101 on 500,000 entries.
   - [ ] W-114e — Places, devices, tabs, split view, location bar, status bar, palette, context menu, filter.

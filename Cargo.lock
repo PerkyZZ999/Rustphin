@@ -5924,6 +5924,20 @@ dependencies = [
  "jiff",
  "rustphin-core",
  "rustphin-platform",
+ "rustphin-view",
+ "serde",
+ "tempfile",
+ "toml 0.9.12+spec-1.1.0",
+ "tracing",
+]
+
+[[package]]
+name = "rustphin-view"
+version = "0.1.0"
+dependencies = [
+ "jiff",
+ "rustphin-core",
+ "rustphin-platform",
  "serde",
  "tempfile",
  "toml 0.9.12+spec-1.1.0",

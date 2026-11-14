@@ -85,7 +85,7 @@ impl Groups {
 
     /// A name for a new group that no group has yet.
     pub fn free_name(&self) -> String {
-        crate::operations::free_name("New Group", |name| {
+        crate::naming::free_name("New Group", |name| {
             self.groups.iter().any(|group| group.name == name)
         })
     }

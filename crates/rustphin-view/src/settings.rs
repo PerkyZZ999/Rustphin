@@ -65,7 +65,7 @@ impl Default for Places {
             devices: true,
             remote: true,
             show_hidden: false,
-            width: crate::theme::size::SIDEBAR as u32,
+            width: crate::metrics::size::SIDEBAR as u32,
         }
     }
 }
@@ -86,8 +86,8 @@ pub struct PlacesChoice {
 /// A panel width within what the window allows, on the 4-pixel grid.
 fn clamp_width(width: u32) -> u32 {
     let (min, max) = (
-        crate::theme::size::SIDEBAR_MIN as u32,
-        crate::theme::size::SIDEBAR_MAX as u32,
+        crate::metrics::size::SIDEBAR_MIN as u32,
+        crate::metrics::size::SIDEBAR_MAX as u32,
     );
     (width.clamp(min, max) / 4) * 4
 }
@@ -97,7 +97,7 @@ fn lenient_width<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u3
     Ok(value
         .as_integer()
         .and_then(|width| u32::try_from(width).ok())
-        .map_or(crate::theme::size::SIDEBAR as u32, clamp_width))
+        .map_or(crate::metrics::size::SIDEBAR as u32, clamp_width))
 }
 
 /// What Rustphin asks before doing (W-106e). Deleting for good always asks.
@@ -307,7 +307,7 @@ fn lenient_hidden<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u
 
 /// A hidden opacity within what the contrast tests allow.
 fn clamp_hidden(percent: u32) -> u32 {
-    percent.clamp(crate::theme::HIDDEN_OPACITY_MIN_PERCENT, 100)
+    percent.clamp(crate::metrics::HIDDEN_OPACITY_MIN_PERCENT, 100)
 }
 
 /// Like [`lenient`] for the preview limit, which is at least 1 MB.
@@ -1072,13 +1072,13 @@ mod tests {
         settings.set_appearance(Look::Glass, TitleBar::Rustphin, TextSize::Normal, 10);
         assert_eq!(
             settings.hidden_opacity(),
-            crate::theme::HIDDEN_OPACITY_MIN_PERCENT
+            crate::metrics::HIDDEN_OPACITY_MIN_PERCENT
         );
         let faint =
             Settings::parse("version = 3\n[appearance]\nhidden_opacity = 5\nlook = \"neon\"\n");
         assert_eq!(
             faint.hidden_opacity(),
-            crate::theme::HIDDEN_OPACITY_MIN_PERCENT
+            crate::metrics::HIDDEN_OPACITY_MIN_PERCENT
         );
         assert_eq!(faint.look(), Look::Glass);
         assert_eq!(Settings::default().hidden_opacity(), HIDDEN_OPACITY_PERCENT);
