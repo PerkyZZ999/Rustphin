@@ -10,6 +10,9 @@ import Rustphin
 Popup {
     id: dialog
 
+    // The ticket the pane kept what the dialog acts on under.
+    required property int ticket
+
     // The preview Rust sends as JSON, read once per change into typed parts.
     property string title: ""
     property string problem: ""
@@ -45,7 +48,7 @@ Popup {
         color: Tokens.colors.raised
         border.color: Tokens.colors.border_strong
     }
-    Component.onCompleted: batch.start()
+    Component.onCompleted: batch.start(dialog.ticket)
     onClosed: batch.cancel()
 
     BatchModel {

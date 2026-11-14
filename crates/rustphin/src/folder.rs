@@ -20,7 +20,6 @@ pub use bridge::qobject;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    ffi::OsStr,
     os::unix::ffi::OsStrExt as _,
     path::{Path, PathBuf},
     pin::Pin,
@@ -48,9 +47,10 @@ use rustphin_view::{
     format,
     layout::{Flow, Grid, Rect, Step, ViewMode, ZOOM_LEVELS, step_zoom},
     location::Location,
-    operations::{Listed, duplicate_names, free_name, stem_len},
+    operations::{Listed, stem_len},
     pane::{self, Failure, StatusFacts, TypeAhead, Way},
     pane_state::PaneState,
+    selection_actions::{self, Dialog, Facts, Plan, Select, Selected, SelectionAction},
     toolbar_items::Item,
 };
 
@@ -1656,7 +1656,9 @@ impl qobject::FolderModel {
     }
 
     fn begin_rename(mut self: Pin<&mut Self>) {
-        if self.rust().trash_dir.is_some() || self.as_mut().offer_batch_rename() {
+        if self.rust().trash_dir.is_some()
+            || self.as_mut().act_on_selection(SelectionAction::BatchRename)
+        {
             return;
         }
         let name = self.rust().current().and_then(|snapshot| {
@@ -1872,18 +1874,7 @@ impl qobject::FolderModel {
             .selection()
             .rows(snapshot)
             .into_iter()
-            .map(|row| {
-                let folder = snapshot.is_container(row);
-                (
-                    snapshot.entry_path(row),
-                    Listed {
-                        folder,
-                        size: (!folder)
-                            .then(|| snapshot.metadata(row).map(|meta| meta.size))
-                            .flatten(),
-                    },
-                )
-            })
+            .map(|row| (snapshot.entry_path(row), listed_of(snapshot, row)))
             .unzip()
     }
 
@@ -1896,47 +1887,6 @@ impl qobject::FolderModel {
         if self.rust().trash_dir.is_none() && self.rust().current().is_some() {
             crate::hub::paste(self.rust().folder());
         }
-    }
-
-    fn trash_selected(self: Pin<&mut Self>) {
-        let (paths, listed) = self.listed_selection();
-        // What is already in the trash can only be deleted for good; so can
-        // anything as administrator: KDE's helper has no trash.
-        if self.rust().trash_dir.is_some() || self.rust().as_admin {
-            crate::hub::delete(paths, listed);
-        } else {
-            crate::hub::trash(paths, listed);
-        }
-    }
-
-    fn delete_selected(self: Pin<&mut Self>) {
-        let (paths, listed) = self.listed_selection();
-        crate::hub::delete(paths, listed);
-    }
-
-    fn duplicate_selected(mut self: Pin<&mut Self>) {
-        if self.rust().trash_dir.is_some() {
-            return;
-        }
-        let Some(snapshot) = self.rust().current().cloned() else {
-            return;
-        };
-        let rows = self.rust().pane.selection().rows(&snapshot);
-        if rows.is_empty() {
-            return;
-        }
-        let names: Vec<Vec<u8>> = rows
-            .iter()
-            .map(|&row| snapshot.name(row).to_vec())
-            .collect();
-        let sources = rows.iter().map(|&row| snapshot.entry_path(row)).collect();
-        // Hidden or filtered entries still take a name.
-        let listed = snapshot.listed_names();
-        self.as_mut()
-            .rust_mut()
-            .pane
-            .select_all_when_seen(duplicate_names(&names, |name| listed.contains(name)));
-        crate::hub::start(rustphin_core::ops::Request::Duplicate { sources });
     }
 
     fn restore_selected(self: Pin<&mut Self>) {
@@ -1953,32 +1903,19 @@ impl qobject::FolderModel {
             crate::hub::empty_trash(dir);
         }
     }
+}
 
-    fn create_entry(mut self: Pin<&mut Self>, folder: bool) {
-        if self.rust().trash_dir.is_some() {
-            return;
-        }
-        let Some(snapshot) = self.rust().current().cloned() else {
-            return;
-        };
-        let parent = snapshot.path().to_owned();
-        let base = if folder { "New Folder" } else { "New File" };
-        let name = free_name(base, |name| snapshot.row_of(name.as_bytes()).is_some());
-        self.as_mut()
-            .rust_mut()
-            .pane
-            .select_when_seen(name.clone().into_bytes(), true);
-        let name = name.into();
-        crate::hub::start(if folder {
-            rustphin_core::ops::Request::CreateDir { parent, name }
-        } else {
-            rustphin_core::ops::Request::CreateFile { parent, name }
-        });
+/// What a question shows beside the entry in `row`.
+fn listed_of(snapshot: &Snapshot, row: usize) -> Listed {
+    let folder = snapshot.is_container(row);
+    Listed {
+        folder,
+        size: (!folder)
+            .then(|| snapshot.metadata(row).map(|meta| meta.size))
+            .flatten(),
     }
 }
 
-/// Entries handed to the window's dialogs (Compress, batch rename,
-/// Extract to): QML gets a ticket, the paths stay here as bytes.
 /// What a drop does, from QML's number: 1 copy, 2 move, else ask.
 pub(crate) fn drop_action(action: i32) -> Option<rustphin_view::operations::DropAction> {
     use rustphin_view::operations::DropAction;
@@ -1986,41 +1923,6 @@ pub(crate) fn drop_action(action: i32) -> Option<rustphin_view::operations::Drop
         1 => Some(DropAction::Copy),
         2 => Some(DropAction::Move),
         _ => None,
-    }
-}
-
-pub mod handed {
-    use std::{cell::RefCell, ffi::OsString, path::PathBuf};
-
-    /// What a dialog acts on.
-    #[derive(Debug, Clone, Default)]
-    pub struct Handed {
-        /// The folder.
-        pub folder: PathBuf,
-        /// The entries' paths.
-        pub sources: Vec<PathBuf>,
-        /// Names in the folder that are not among them (batch rename).
-        pub staying: Vec<OsString>,
-        /// Every name in the folder, as bytes (Compress avoids them).
-        pub taken: Vec<Vec<u8>>,
-        /// For Extract to: each archive and whether Rustphin opens it.
-        pub archives: Vec<PathBuf>,
-        /// Extract to: trash the archives afterwards.
-        pub trash: bool,
-    }
-
-    thread_local! {
-        static HANDED: RefCell<Option<Handed>> = const { RefCell::new(None) };
-    }
-
-    /// Keeps `handed` for the dialog about to open.
-    pub fn keep(handed: Handed) {
-        HANDED.with(|slot| *slot.borrow_mut() = Some(handed));
-    }
-
-    /// What the open dialog acts on; it is handed over once.
-    pub fn take() -> Option<Handed> {
-        HANDED.with(|slot| slot.borrow_mut().take())
     }
 }
 
@@ -2130,8 +2032,12 @@ impl qobject::FolderModel {
                 self.choose_zoom(i32::try_from(rustphin_view::layout::DEFAULT_ZOOM).unwrap_or(2));
             }
             PaneCommand::SortBy(key) => self.sort_by(column_of(key)),
-            PaneCommand::NewFolder => self.create_entry(true),
-            PaneCommand::NewFile => self.create_entry(false),
+            PaneCommand::NewFolder => {
+                self.act_on_selection(SelectionAction::NewFolder);
+            }
+            PaneCommand::NewFile => {
+                self.act_on_selection(SelectionAction::NewFile);
+            }
             PaneCommand::Rename => self.begin_rename(),
             PaneCommand::RecoverRenames => {
                 if self.rust().trash_dir.is_none() && self.rust().current().is_some() {
@@ -2144,11 +2050,21 @@ impl qobject::FolderModel {
             PaneCommand::Cut => self.copy_selected(true),
             PaneCommand::Paste => self.paste(),
             PaneCommand::CopyLocation => self.copy_location(),
-            PaneCommand::Duplicate => self.duplicate_selected(),
-            PaneCommand::Extract(how) => self.extract_selected(how),
-            PaneCommand::Compress(how) => self.compress_selected(how),
-            PaneCommand::MoveToTrash => self.trash_selected(),
-            PaneCommand::DeletePermanently => self.delete_selected(),
+            PaneCommand::Duplicate => {
+                self.act_on_selection(SelectionAction::Duplicate);
+            }
+            PaneCommand::Extract(how) => {
+                self.act_on_selection(SelectionAction::Extract(how));
+            }
+            PaneCommand::Compress(how) => {
+                self.act_on_selection(SelectionAction::Compress(how));
+            }
+            PaneCommand::MoveToTrash => {
+                self.act_on_selection(SelectionAction::MoveToTrash);
+            }
+            PaneCommand::DeletePermanently => {
+                self.act_on_selection(SelectionAction::DeletePermanently);
+            }
             PaneCommand::OpenTrash => self.open_trash(),
             PaneCommand::RestoreTrash => self.restore_selected(),
             PaneCommand::EmptyTrash => self.empty_trash(),
@@ -2305,139 +2221,75 @@ impl qobject::FolderModel {
         });
     }
 
-    fn extract_selected(mut self: Pin<&mut Self>, how: rustphin_view::menu::ExtractHow) {
-        use rustphin_core::ops::Layout;
-        use rustphin_view::menu::ExtractHow;
+    /// Carries out `action` on the selection as the planner
+    /// (`rustphin_view::selection_actions`) decides from the listing;
+    /// false when nothing applied.
+    fn act_on_selection(mut self: Pin<&mut Self>, action: SelectionAction) -> bool {
         let Some(snapshot) = self.rust().current().cloned() else {
-            return;
+            return false;
         };
-        let rows = self.rust().pane.selection().rows(&snapshot);
-        let archives: Vec<PathBuf> = rows
-            .iter()
-            .filter(|&&row| {
-                !snapshot.is_container(row) && self.archive_opener(&snapshot, row).is_some()
-            })
-            .map(|&row| snapshot.entry_path(row))
-            .collect();
-        if archives.is_empty() {
-            return crate::hub::say("Select an archive to extract.".to_owned(), false);
-        }
-        let here = snapshot.path().to_owned();
-        let (layout, trash) = match how {
-            ExtractHow::Here | ExtractHow::To => (Layout::Here, false),
-            ExtractHow::NewFolder => (Layout::NewFolder, false),
-            ExtractHow::AndTrash => (Layout::Here, true),
-        };
-        if how == ExtractHow::To {
-            handed::keep(handed::Handed {
-                folder: here.clone(),
-                archives,
-                trash,
-                ..handed::Handed::default()
-            });
-            let json = serde_json::json!({
-                "folder": here.to_string_lossy(),
-                "uri": rustphin_platform::uri::file_uri(&here),
-            })
-            .to_string();
-            return self.as_mut().extract_to_requested(QString::from(&json));
-        }
-        start_extracting(archives, here, layout, trash);
-    }
-
-    fn compress_selected(mut self: Pin<&mut Self>, how: rustphin_view::menu::CompressHow) {
-        use rustphin_core::archive::{Format, Level};
-        use rustphin_view::menu::CompressHow;
-        let Some(snapshot) = self.rust().current().cloned() else {
-            return;
-        };
-        let rows = self.rust().pane.selection().rows(&snapshot);
-        if rows.is_empty() {
-            return crate::hub::say("Select what to compress.".to_owned(), false);
-        }
-        let folder = snapshot.path().to_owned();
-        let sources: Vec<PathBuf> = rows.iter().map(|&row| snapshot.entry_path(row)).collect();
-        let entries: Vec<(&[u8], bool)> = rows
-            .iter()
-            .map(|&row| (snapshot.name(row), snapshot.is_container(row)))
-            .collect();
-        let listed = snapshot.listed_names();
-        let [zip, tar_gz] =
-            rustphin_view::archives::quick_names(&entries, |name| listed.contains(name));
-        let (format, name) = match how {
-            CompressHow::Zip => (Format::Zip, zip),
-            CompressHow::TarGz => (Format::TarGz, tar_gz),
-            CompressHow::Choose => {
-                let base = rustphin_view::archives::compress_base(&entries);
-                handed::keep(handed::Handed {
-                    folder: folder.clone(),
-                    sources,
-                    taken: listed.iter().map(|name| name.to_vec()).collect(),
-                    ..handed::Handed::default()
-                });
-                let json = serde_json::json!({
-                    "folder": folder.to_string_lossy(),
-                    "base": base,
-                    "count": rows.len(),
+        let plan = {
+            let rows = self.rust().pane.selection().rows(&snapshot);
+            let selected = rows
+                .iter()
+                .map(|&row| {
+                    let is_dir = snapshot.is_container(row);
+                    Selected {
+                        name: snapshot.name(row),
+                        is_dir,
+                        listed: listed_of(&snapshot, row),
+                        archive: (action.reads_archives() && !is_dir)
+                            .then(|| self.archive_opener(&snapshot, row))
+                            .flatten(),
+                    }
                 })
-                .to_string();
-                return self.as_mut().compress_requested(QString::from(&json));
+                .collect();
+            selection_actions::plan(
+                action,
+                &Facts {
+                    folder: snapshot.path(),
+                    in_trash: self.rust().trash_dir.is_some(),
+                    as_administrator: self.rust().as_admin,
+                    selected,
+                    listing: &*snapshot,
+                },
+            )
+        };
+        match plan {
+            Plan::Nothing => return false,
+            Plan::Say(words) => crate::hub::say(words, false),
+            Plan::Trash { paths, listed } => crate::hub::trash(paths, listed),
+            Plan::Delete { paths, listed } => crate::hub::delete(paths, listed),
+            Plan::Start { requests, select } => {
+                let pane = &mut self.as_mut().rust_mut().pane;
+                match select {
+                    Select::Nothing => {}
+                    Select::All(names) => pane.select_all_when_seen(names),
+                    Select::AndRename(name) => pane.select_when_seen(name, true),
+                }
+                for request in requests {
+                    crate::hub::start(request);
+                }
             }
-        };
-        crate::hub::start(rustphin_core::ops::Request::Compress {
-            sources,
-            archive: folder.join(name),
-            format,
-            level: Level::Normal,
-        });
-    }
-
-    /// Several selected: F2 renames them together in the batch dialog.
-    fn offer_batch_rename(mut self: Pin<&mut Self>) -> bool {
-        let Some(snapshot) = self.rust().current().cloned() else {
-            return false;
-        };
-        let rows = self.rust().pane.selection().rows(&snapshot);
-        if rows.len() < 2 {
-            return false;
+            Plan::Open(dialog) => self.open_dialog(dialog),
         }
-        let chosen: std::collections::HashSet<&[u8]> =
-            rows.iter().map(|&row| snapshot.name(row)).collect();
-        let staying = (0..snapshot.len())
-            .filter(|row| !chosen.contains(snapshot.name(*row)))
-            .map(|row| OsStr::from_bytes(snapshot.name(row)).to_owned())
-            .collect();
-        handed::keep(handed::Handed {
-            folder: snapshot.path().to_owned(),
-            sources: rows.iter().map(|&row| snapshot.entry_path(row)).collect(),
-            staying,
-            ..handed::Handed::default()
-        });
-        let json = serde_json::json!({
-            "folder": snapshot.path().to_string_lossy(),
-            "count": rows.len(),
-        })
-        .to_string();
-        self.as_mut().batch_rename_requested(QString::from(&json));
         true
     }
-}
 
-/// Extracts each archive into `into` through the operation engine: its
-/// own formats, and the others through libarchive or 7-Zip (D-036).
-pub fn start_extracting(
-    archives: Vec<PathBuf>,
-    into: PathBuf,
-    layout: rustphin_core::ops::Layout,
-    trash: bool,
-) {
-    for archive in archives {
-        crate::hub::start(rustphin_core::ops::Request::Extract {
-            archive,
-            into: into.clone(),
-            layout,
-            trash_archive: trash,
-        });
+    /// Keeps `dialog` with the hub and asks the window to open it; the
+    /// dialog's object takes it back by the ticket the signal carries.
+    fn open_dialog(self: Pin<&mut Self>, dialog: Dialog) {
+        let uri = match &dialog {
+            Dialog::ExtractTo(to) => Some(rustphin_platform::uri::file_uri(&to.folder)),
+            Dialog::Compress(_) | Dialog::BatchRename(_) => None,
+        };
+        let compress = matches!(dialog, Dialog::Compress(_));
+        let ticket = crate::hub::with(|hub| hub.dialogs.keep(dialog));
+        match uri {
+            Some(uri) => self.extract_to_requested(ticket, QString::from(&uri)),
+            None if compress => self.compress_requested(ticket),
+            None => self.batch_rename_requested(ticket),
+        }
     }
 }
 

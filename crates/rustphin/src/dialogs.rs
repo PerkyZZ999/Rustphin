@@ -1,6 +1,7 @@
 //! The Compress to… and batch rename dialogs' objects (W-114f): the
-//! state is `rustphin_view::dialogs`; the entries come from the pane as
-//! paths, never through QML.
+//! state is `rustphin_view::dialogs`, planned by the pane
+//! (`rustphin_view::selection_actions`) and taken from the hub by the
+//! ticket QML passes on; the paths never go through QML.
 
 // cxx-qt generates the unsafe FFI glue for the objects; the bridge file
 // holds declarations only (AGENTS.md, D-034).
@@ -10,14 +11,17 @@ mod bridge;
 
 pub use bridge::qobject;
 
-use std::{collections::HashSet, ffi::OsString, pin::Pin};
+use std::pin::Pin;
 
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use rustphin_core::CaseChange;
-use rustphin_view::dialogs::{BatchRename, Compress, Mode};
+use rustphin_view::{
+    dialogs::{BatchRename, Compress, Mode},
+    selection_actions::Dialog,
+};
 
-use crate::{folder::handed, hub};
+use crate::hub;
 
 /// The Rust side of `CompressModel`.
 #[derive(Default)]
@@ -33,25 +37,10 @@ pub struct CompressModelRust {
 }
 
 impl qobject::CompressModel {
-    fn start(mut self: Pin<&mut Self>) {
-        let Some(given) = handed::take() else {
+    fn start(mut self: Pin<&mut Self>, ticket: i32) {
+        let Some(Dialog::Compress(state)) = hub::with(|hub| hub.dialogs.take(ticket)) else {
             return;
         };
-        let entries: Vec<(&[u8], bool)> = given
-            .sources
-            .iter()
-            .map(|path| {
-                (
-                    path.file_name()
-                        .map(|name| name.as_encoded_bytes())
-                        .unwrap_or_default(),
-                    path.is_dir(),
-                )
-            })
-            .collect();
-        let base = rustphin_view::archives::compress_base(&entries);
-        let taken: HashSet<Vec<u8>> = given.taken.into_iter().collect();
-        let state = Compress::new(given.sources, given.folder, taken, base);
         self.as_mut().set_title(QString::from(&state.title()));
         self.as_mut().set_name(QString::from(&state.name));
         self.as_mut().rust_mut().state = Some(state);
@@ -125,17 +114,11 @@ pub struct BatchModelRust {
 }
 
 impl qobject::BatchModel {
-    fn start(mut self: Pin<&mut Self>) {
-        let Some(given) = handed::take() else {
+    fn start(mut self: Pin<&mut Self>, ticket: i32) {
+        let Some(Dialog::BatchRename(state)) = hub::with(|hub| hub.dialogs.take(ticket)) else {
             return;
         };
-        let selected: Vec<OsString> = given
-            .sources
-            .iter()
-            .filter_map(|path| path.file_name().map(ToOwned::to_owned))
-            .collect();
-        self.as_mut().rust_mut().state =
-            Some(BatchRename::new(given.folder, selected, given.staying));
+        self.as_mut().rust_mut().state = Some(state);
         self.as_mut().show();
         self.set_open(true);
     }

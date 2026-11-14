@@ -320,18 +320,6 @@ pub mod qobject {
         /// Copies or moves the clipboard's files here.
         #[qinvokable]
         fn paste(self: Pin<&mut FolderModel>);
-        /// Moves the selection to the trash (deletes it for good in the trash).
-        #[qinvokable]
-        #[cxx_name = "trashSelected"]
-        fn trash_selected(self: Pin<&mut FolderModel>);
-        /// Deletes the selection for good, after asking.
-        #[qinvokable]
-        #[cxx_name = "deleteSelected"]
-        fn delete_selected(self: Pin<&mut FolderModel>);
-        /// Copies the selection beside itself (Ctrl+D).
-        #[qinvokable]
-        #[cxx_name = "duplicateSelected"]
-        fn duplicate_selected(self: Pin<&mut FolderModel>);
         /// Brings the selected entries back from the trash shown.
         #[qinvokable]
         #[cxx_name = "restoreSelected"]
@@ -358,27 +346,26 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "propertiesRequested"]
         fn properties_requested(self: Pin<&mut FolderModel>, paths: QStringList);
-        /// Asks the window for Compress's dialog (W-111d): the entries, the
-        /// folder, the name offered and the names taken, as JSON.
+        /// Asks the window for Compress's dialog (W-111d); `CompressModel`
+        /// takes what it acts on from the hub by `ticket` (W-126).
         #[qsignal]
         #[cxx_name = "compressRequested"]
-        fn compress_requested(self: Pin<&mut FolderModel>, json: QString);
-        /// Asks the window for batch rename (several selected, F2), as JSON.
+        fn compress_requested(self: Pin<&mut FolderModel>, ticket: i32);
+        /// Asks the window for batch rename (several selected, F2);
+        /// `BatchModel` takes what it acts on by `ticket`.
         #[qsignal]
         #[cxx_name = "batchRenameRequested"]
-        fn batch_rename_requested(self: Pin<&mut FolderModel>, json: QString);
-        /// Asks the window to choose a folder to extract into (W-113).
+        fn batch_rename_requested(self: Pin<&mut FolderModel>, ticket: i32);
+        /// Asks the window to choose a folder to extract into (W-113),
+        /// starting at `uri`; `Shell.extractTo` takes the archives by
+        /// `ticket`.
         #[qsignal]
         #[cxx_name = "extractToRequested"]
-        fn extract_to_requested(self: Pin<&mut FolderModel>, json: QString);
+        fn extract_to_requested(self: Pin<&mut FolderModel>, ticket: i32, uri: QString);
         /// Asks the window to put text on the clipboard.
         #[qsignal]
         #[cxx_name = "copyText"]
         fn copy_text(self: Pin<&mut FolderModel>, text: QString);
-        /// Makes an empty folder (or file) with a free name and renames it.
-        #[qinvokable]
-        #[cxx_name = "createEntry"]
-        fn create_entry(self: Pin<&mut FolderModel>, folder: bool);
     }
 
     impl cxx_qt::Threading for FolderModel {}

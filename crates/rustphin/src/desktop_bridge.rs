@@ -42,11 +42,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "closeQuestion"]
         fn close_question(self: &Shell, count: i32) -> QString;
-        /// Extracts the archives the pane handed over into the folder at
-        /// `url` (a `file://` address the folder dialog chose).
+        /// Extracts the archives the pane kept under `ticket` into the
+        /// folder at `url` (a `file://` address the folder dialog chose).
         #[qinvokable]
         #[cxx_name = "extractTo"]
-        fn extract_to(self: Pin<&mut Shell>, url: &QString);
+        fn extract_to(self: Pin<&mut Shell>, url: &QString, ticket: i32);
         /// Closes every window and ends Rustphin.
         #[qinvokable]
         fn quit(self: Pin<&mut Shell>);

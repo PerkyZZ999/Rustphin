@@ -36,9 +36,9 @@ pub mod qobject {
     }
 
     unsafe extern "RustQt" {
-        /// Takes the entries the pane handed over.
+        /// Takes the dialog the pane kept under `ticket` and opens.
         #[qinvokable]
-        fn start(self: Pin<&mut CompressModel>);
+        fn start(self: Pin<&mut CompressModel>, ticket: i32);
         /// The name typed.
         #[qinvokable]
         #[cxx_name = "typeName"]
@@ -58,9 +58,9 @@ pub mod qobject {
         #[qinvokable]
         fn cancel(self: Pin<&mut CompressModel>);
 
-        /// Takes the entries the pane handed over.
+        /// Takes the dialog the pane kept under `ticket` and opens.
         #[qinvokable]
-        fn start(self: Pin<&mut BatchModel>);
+        fn start(self: Pin<&mut BatchModel>, ticket: i32);
         /// One field changed: find, replace, regex, pattern, start, step.
         #[qinvokable]
         fn edit(self: Pin<&mut BatchModel>, field: &QString, value: &QString);

@@ -31,6 +31,7 @@ use rustphin_view::{
         is_admin,
     },
     operations::{DropAction, Listed, droppable},
+    selection_actions::HandOff,
 };
 
 use crate::{
@@ -46,6 +47,8 @@ pub struct Hub {
     trash: Option<Arc<FreedesktopTrash>>,
     /// What the operations show, and what the clipboard holds.
     pub board: OperationBoard,
+    /// Dialogs a pane asked for, until the window's dialog takes them.
+    pub dialogs: HandOff,
     clipboard: Arc<dyn FileClipboard>,
     _clipboard_watch: Option<clipboard::WatchGuard>,
     watchers: Vec<CxxQtThread<OperationsObject>>,
@@ -135,6 +138,7 @@ impl Hub {
             admin_runs: 0,
             trash,
             board: OperationBoard::new(),
+            dialogs: HandOff::default(),
             clipboard,
             _clipboard_watch: watch,
             watchers: Vec::new(),

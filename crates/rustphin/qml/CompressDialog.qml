@@ -10,6 +10,9 @@ import Rustphin
 Popup {
     id: dialog
 
+    // The ticket the pane kept what the dialog acts on under.
+    required property int ticket
+
     parent: Overlay.overlay
     anchors.centerIn: parent
     width: Math.min(560, parent.width - 2 * Tokens.metrics.space_lg)
@@ -26,7 +29,7 @@ Popup {
         color: Tokens.colors.raised
         border.color: Tokens.colors.border_strong
     }
-    Component.onCompleted: compress.start()
+    Component.onCompleted: compress.start(dialog.ticket)
     onOpened: {
         name.forceActiveFocus()
         name.selectAll()

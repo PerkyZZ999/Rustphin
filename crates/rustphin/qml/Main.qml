@@ -251,10 +251,13 @@ Window {
                 propertiesLoader.active = true
             }
         } else if (kind === "compress") {
+            compressLoader.ticket = data
             compressLoader.active = true
         } else if (kind === "batch") {
+            batchLoader.ticket = data
             batchLoader.active = true
         } else if (kind === "extractTo") {
+            extractFolder.ticket = data.ticket
             extractFolder.currentFolder = data.uri
             // A window of its own: opened once the menu that asked is gone,
             // or the menu is left open behind it and stops answering.
@@ -526,8 +529,12 @@ Window {
     Loader {
         id: compressLoader
 
+        // The ticket the pane kept the dialog's plan under.
+        property int ticket: 0
+
         active: false
         sourceComponent: CompressDialog {
+            ticket: compressLoader.ticket
             onClosed: {
                 compressLoader.active = false
                 root.focusActive()
@@ -537,8 +544,12 @@ Window {
     Loader {
         id: batchLoader
 
+        // The ticket the pane kept the dialog's plan under.
+        property int ticket: 0
+
         active: false
         sourceComponent: BatchDialog {
+            ticket: batchLoader.ticket
             onClosed: {
                 batchLoader.active = false
                 root.focusActive()
@@ -550,9 +561,12 @@ Window {
     FolderDialog {
         id: extractFolder
 
+        // The ticket the pane kept the archives under.
+        property int ticket: 0
+
         title: qsTr("Extract here")
         acceptLabel: qsTr("Extract here")
-        onAccepted: Shell.extractTo(selectedFolder.toString())
+        onAccepted: Shell.extractTo(selectedFolder.toString(), ticket)
     }
 
     ViewMenu {

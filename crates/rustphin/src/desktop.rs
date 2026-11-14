@@ -141,19 +141,17 @@ impl qobject::Shell {
         QString::from(&serde_json::to_string(&shown).unwrap_or_default())
     }
 
-    fn extract_to(self: Pin<&mut Self>, url: &QString) {
-        let Some(given) = crate::folder::handed::take() else {
+    fn extract_to(self: Pin<&mut Self>, url: &QString, ticket: i32) {
+        let dialog = crate::hub::with(|hub| hub.dialogs.take(ticket));
+        let Some(rustphin_view::selection_actions::Dialog::ExtractTo(extract)) = dialog else {
             return;
         };
         let Some(into) = rustphin_platform::uri::path_from_uri(url.to_string().as_bytes()) else {
             return;
         };
-        crate::folder::start_extracting(
-            given.archives,
-            into,
-            rustphin_core::ops::Layout::Here,
-            given.trash,
-        );
+        for request in extract.requests(&into) {
+            crate::hub::start(request);
+        }
     }
 
     fn quit(self: Pin<&mut Self>) {
