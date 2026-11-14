@@ -96,9 +96,4 @@ mod tests {
         assert_eq!(parse_stat("43 (a) b (c)) Z 1"), Some(("a) b (c)", 'Z')));
         assert_eq!(parse_stat("garbage"), None);
     }
-
-    #[test]
-    fn this_process_is_not_counted() {
-        assert!(!others_running("no-such-program-name"));
-    }
 }

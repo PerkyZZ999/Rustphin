@@ -33,18 +33,22 @@ pub fn read(path: &Path) -> io::Result<Option<String>> {
 /// although the new whole file is already visible; callers must not assume an
 /// error means the old contents remain. This is not a hardware power-loss proof.
 pub fn write_atomic(path: &Path, contents: &[u8]) -> io::Result<()> {
-    write_atomic_with_sync(path, contents, &File::sync_all)
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    write_atomic_with(path, contents, &File::sync_all, &NEXT)
 }
 
-fn write_atomic_with_sync(
+/// [`write_atomic`] with the directory sync and the source of temporary
+/// file numbers given.
+fn write_atomic_with(
     path: &Path,
     contents: &[u8],
     sync_directory: &impl Fn(&File) -> io::Result<()>,
+    next_id: &AtomicU64,
 ) -> io::Result<()> {
     let parent = path.parent().ok_or(io::ErrorKind::InvalidInput)?;
     let name = path.file_name().ok_or(io::ErrorKind::InvalidInput)?;
     let folder = ensure_directory(parent, sync_directory)?;
-    let (temporary, mut file) = create_temporary(parent, name)?;
+    let (temporary, mut file) = create_temporary(parent, name, next_id)?;
     let written = (|| {
         file.write_all(contents)?;
         file.sync_all()?;
@@ -105,10 +109,13 @@ fn ensure_directory(
     }
 }
 
-fn create_temporary(parent: &Path, name: &std::ffi::OsStr) -> io::Result<(PathBuf, File)> {
-    static NEXT: AtomicU64 = AtomicU64::new(0);
+fn create_temporary(
+    parent: &Path,
+    name: &std::ffi::OsStr,
+    next_id: &AtomicU64,
+) -> io::Result<(PathBuf, File)> {
     for _ in 0..128 {
-        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        let id = next_id.fetch_add(1, Ordering::Relaxed);
         let mut temporary_name = name.to_os_string();
         temporary_name.push(format!(".tmp-{}-{id}", std::process::id()));
         let temporary = parent.join(temporary_name);
@@ -168,23 +175,26 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_write_keeps_the_old_file_and_cleans_up() {
+    fn a_failed_rename_removes_the_temporary_file() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("settings.toml");
-        write_atomic(&path, b"old").unwrap();
-        // A folder in the way of the temporary file's final name makes the rename fail.
+        // A folder with something in it, in the way of the final name,
+        // makes the rename fail after the temporary file was written.
         let blocked = dir.path().join("blocked.toml");
         fs::create_dir(&blocked).unwrap();
-        fs::write(blocked.join("occupant"), b"").unwrap();
+        fs::write(blocked.join("occupant"), b"kept").unwrap();
 
-        assert!(write_atomic(&blocked, b"new").is_err());
-        assert_eq!(read(&path).unwrap().as_deref(), Some("old"));
-        assert_eq!(names(dir.path()), ["blocked.toml", "settings.toml"]);
+        let error = write_atomic(&blocked, b"new").unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::IsADirectory);
+        assert_eq!(names(dir.path()), ["blocked.toml"]);
+        assert_eq!(fs::read(blocked.join("occupant")).unwrap(), b"kept");
     }
 
     #[test]
     fn a_path_without_a_folder_or_name_is_rejected() {
-        assert!(write_atomic(Path::new("/"), b"x").is_err());
+        let error = write_atomic(Path::new("/"), b"x").unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
     }
 
     #[test]
@@ -193,16 +203,19 @@ mod tests {
         let path = dir.path().join("settings.toml");
         let other = dir.path().join("other");
         fs::write(&other, b"keep me").unwrap();
+        // The link takes the first temporary name the write will try.
         let link = dir
             .path()
-            .join(format!("settings.toml.tmp-{}", std::process::id()));
+            .join(format!("settings.toml.tmp-{}-0", std::process::id()));
         std::os::unix::fs::symlink(&other, &link).unwrap();
 
-        write_atomic(&path, b"new settings").unwrap();
+        write_atomic_with(&path, b"new settings", &File::sync_all, &AtomicU64::new(0)).unwrap();
 
         assert_eq!(fs::read(&other).unwrap(), b"keep me");
         assert_eq!(fs::read_link(&link).unwrap(), other);
         assert_eq!(fs::read(&path).unwrap(), b"new settings");
+        let link_name = link.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(names(dir.path()), ["other", "settings.toml", &link_name]);
     }
 
     #[test]
@@ -223,9 +236,12 @@ mod tests {
         let path = dir.path().join("settings.toml");
         fs::write(&path, b"old").unwrap();
 
-        let error = write_atomic_with_sync(&path, b"new", &|_| {
-            Err(io::Error::other("injected directory sync failure"))
-        })
+        let error = write_atomic_with(
+            &path,
+            b"new",
+            &|_| Err(io::Error::other("injected directory sync failure")),
+            &AtomicU64::new(0),
+        )
         .unwrap_err();
 
         assert_eq!(error.kind(), io::ErrorKind::Other);
@@ -239,9 +255,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("new/settings.toml");
 
-        let error = write_atomic_with_sync(&path, b"new", &|_| {
-            Err(io::Error::other("injected new-directory sync failure"))
-        })
+        let error = write_atomic_with(
+            &path,
+            b"new",
+            &|_| Err(io::Error::other("injected new-directory sync failure")),
+            &AtomicU64::new(0),
+        )
         .unwrap_err();
 
         assert_eq!(error.kind(), io::ErrorKind::Other);

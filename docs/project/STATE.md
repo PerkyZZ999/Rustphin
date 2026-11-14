@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-14 — W-137 Platform bugs: trash records leading outside, mount table bytes, admin stand-in sandbox
+- Latest validation entry: VALIDATION.md, 2026-11-14 — W-138 Test defects from the platform test audit
 
 ## Open loops
 - Task: W-079 design pass done 2026-11-08 (D-024, steps a–g) from the maintainer's HTML mockups; docs/DESIGN.md "Implementation status" lists what is left (list scrollbars, volume name, per-command palette icons, app icons, tab overflow, disabled toolbar colour, saved Devices fold). Glass look needs the real desktop.

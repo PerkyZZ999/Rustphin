@@ -198,15 +198,15 @@ impl Drop for WorkFolder {
     }
 }
 
-/// A new, empty, private folder in `work` for one extraction.
-fn work_folder(work: &Path) -> io::Result<WorkFolder> {
-    static NEXT: AtomicU64 = AtomicU64::new(0);
+/// A new, empty, private folder in `work` for one extraction, numbered
+/// from `next_id`.
+fn work_folder(work: &Path, next_id: &AtomicU64) -> io::Result<WorkFolder> {
     fs::create_dir_all(work)?;
     loop {
         let folder = work.join(format!(
             ".extract-{}-{}",
             std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
+            next_id.fetch_add(1, Ordering::Relaxed)
         ));
         match fs::create_dir(&folder) {
             Ok(()) => {
@@ -228,7 +228,8 @@ fn read_with_tool(
     visit: Visit<'_>,
     work: &Path,
 ) -> Result<(), ReadError> {
-    let folder = work_folder(work)?;
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let folder = work_folder(work, &NEXT)?;
     let program = match tool {
         Tool::SevenZip(program) | Tool::Unrar(program) => program,
     };

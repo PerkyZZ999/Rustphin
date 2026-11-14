@@ -1065,8 +1065,14 @@ mod tests {
     #[test]
     fn an_entry_without_a_usable_name_is_refused() {
         let nameless = decode_entry(&bytes(KIO_NULL_NAME)).unwrap();
-        assert!(AdminEntry::from_uds(&nameless).is_err());
-        assert!(AdminEntry::from_uds(&decode_entry(&bytes("00000000")).unwrap()).is_err());
+        assert!(matches!(
+            AdminEntry::from_uds(&nameless),
+            Err(AdminError::Protocol(_))
+        ));
+        assert!(matches!(
+            AdminEntry::from_uds(&decode_entry(&bytes("00000000")).unwrap()),
+            Err(AdminError::Protocol(_))
+        ));
     }
 
     #[test]
@@ -1138,6 +1144,8 @@ mod tests {
         written: Arc<Mutex<Vec<Vec<u8>>>>,
         asked: Arc<Mutex<Vec<String>>>,
         silent: bool,
+        /// Every folder listed is empty.
+        empty: bool,
     }
 
     impl FakeHelper {
@@ -1170,7 +1178,21 @@ mod tests {
                 result: self.result,
                 silent: self.silent,
             };
-            self.command(server, "listDir", ListDir { command }).await
+            let list = ListDir {
+                command,
+                empty: self.empty,
+            };
+            self.command(server, "listDir", list).await
+        }
+
+        #[zbus(name = "del")]
+        async fn del(
+            &self,
+            url: String,
+            #[zbus(object_server)] server: &zbus::ObjectServer,
+        ) -> zbus::fdo::Result<OwnedObjectPath> {
+            self.asked.lock().unwrap().push(format!("del {url}"));
+            self.command(server, "del", Del).await
         }
 
         #[zbus(name = "stat")]
@@ -1263,6 +1285,23 @@ mod tests {
         ) -> zbus::Result<()>;
     }
 
+    struct Del;
+
+    #[interface(name = "org.kde.kio.admin.DelCommand")]
+    impl Del {
+        #[zbus(name = "start")]
+        async fn start(&self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) {
+            Self::result(&emitter, 0, String::new()).await.unwrap();
+        }
+
+        #[zbus(signal, name = "result")]
+        async fn result(
+            emitter: &SignalEmitter<'_>,
+            error: i32,
+            message: String,
+        ) -> zbus::Result<()>;
+    }
+
     /// The part every command shares: `start` ends with `result`.
     struct Simple {
         result: i32,
@@ -1274,6 +1313,7 @@ mod tests {
 
     struct ListDir {
         command: Simple,
+        empty: bool,
     }
 
     #[interface(name = "org.kde.kio.admin.ListDirCommand")]
@@ -1289,8 +1329,10 @@ mod tests {
             Self::result(&stray, kio_error::ACCESS_DENIED, "stray".into())
                 .await
                 .unwrap();
-            let list = vec![(bytes(KIO_FILE),), (bytes(KIO_DIR),)];
-            Self::entries(&emitter, list).await.unwrap();
+            if !self.empty {
+                let list = vec![(bytes(KIO_FILE),), (bytes(KIO_DIR),)];
+                Self::entries(&emitter, list).await.unwrap();
+            }
             let message = if self.command.result == 0 {
                 String::new()
             } else {
@@ -1400,6 +1442,21 @@ mod tests {
     }
 
     fn helper(refuse: bool, result: i32, silent: bool, timeout: Duration) -> Setup {
+        helper_listing(refuse, result, silent, false, timeout)
+    }
+
+    /// A helper whose folders are all empty.
+    fn helper_of_empty_folders() -> Setup {
+        helper_listing(false, 0, false, true, Duration::from_secs(10))
+    }
+
+    fn helper_listing(
+        refuse: bool,
+        result: i32,
+        silent: bool,
+        empty: bool,
+        timeout: Duration,
+    ) -> Setup {
         let written = Arc::new(Mutex::new(Vec::new()));
         let asked = Arc::new(Mutex::new(Vec::new()));
         let fake = FakeHelper {
@@ -1409,6 +1466,7 @@ mod tests {
             written: Arc::clone(&written),
             asked: Arc::clone(&asked),
             silent,
+            empty,
         };
         let (ours, theirs) = UnixStream::pair().unwrap();
         let guid = zbus::Guid::generate();
@@ -1627,10 +1685,27 @@ mod tests {
         let fs = admin_fs(&setup);
         let error = fs.remove_dir(Path::new("/etc/systemd")).unwrap_err();
         assert_eq!(error.kind(), std::io::ErrorKind::DirectoryNotEmpty);
-        let asked = setup.asked.lock().unwrap();
-        assert!(
-            asked.iter().all(|call| !call.starts_with("del")),
-            "{asked:?}"
+        assert_eq!(
+            *setup.asked.lock().unwrap(),
+            ["stat file:///etc/systemd", "listDir file:///etc/systemd"]
+        );
+    }
+
+    #[test]
+    fn an_empty_folder_is_handed_to_kios_delete() {
+        use rustphin_core::Fs as _;
+        let setup = helper_of_empty_folders();
+        let fs = admin_fs(&setup);
+
+        fs.remove_dir(Path::new("/etc/systemd")).unwrap();
+
+        assert_eq!(
+            *setup.asked.lock().unwrap(),
+            [
+                "stat file:///etc/systemd",
+                "listDir file:///etc/systemd",
+                "del file:///etc/systemd"
+            ]
         );
     }
 

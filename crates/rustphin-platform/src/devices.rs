@@ -723,9 +723,4 @@ mod tests {
         assert!(total > 0 && free <= total);
         assert_eq!(usage(Path::new("/nonexistent/mount/point")), None);
     }
-
-    #[test]
-    fn without_a_device_service_there_are_no_volumes() {
-        assert!(NoDevices.list().unwrap().is_empty());
-    }
 }

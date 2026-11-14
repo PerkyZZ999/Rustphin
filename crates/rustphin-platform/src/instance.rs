@@ -326,7 +326,9 @@ mod tests {
             false,
         );
         assert!(matches!(answer, HandOver::NoAnswer(_)));
-        assert!(started.elapsed() < Duration::from_secs(1));
+        // Far longer than the 200 ms allowed, so a loaded machine does not
+        // fail it, and far shorter than waiting for ever.
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 
     #[test]

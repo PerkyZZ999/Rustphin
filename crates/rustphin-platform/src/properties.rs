@@ -322,6 +322,16 @@ mod tests {
         assert!(read(&root.path().join("missing")).is_err());
     }
 
+    /// Gives a folder its permissions back when the test ends, passed or
+    /// not, so the temporary folder can be removed.
+    struct Reopen<'a>(&'a Path);
+
+    impl Drop for Reopen<'_> {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(self.0, fs::Permissions::from_mode(0o755));
+        }
+    }
+
     #[test]
     fn a_folder_size_adds_files_skips_links_and_counts_what_it_cannot_read() {
         let root = tempfile::tempdir().unwrap();
@@ -335,20 +345,32 @@ mod tests {
         symlink(dir.join("big"), dir.join("link")).unwrap();
         let blocked = dir.join("blocked");
         fs::create_dir(&blocked).unwrap();
+        fs::write(blocked.join("hidden"), b"never counted").unwrap();
         fs::set_permissions(&blocked, fs::Permissions::from_mode(0o000)).unwrap();
+        let _reopen = Reopen(&blocked);
 
         let seen = AtomicU64::new(0);
         let size = folder_size(&dir, &AtomicBool::new(false), &seen).unwrap();
-        assert!(!size.cancelled);
-        assert_eq!(size.bytes, 3 + 2 + 100);
-        assert!(size.unreadable >= 1);
-        // Every entry listed counts, as the dialog says while it waits:
-        // a, nested, nested/b, big, link and blocked.
-        assert_eq!(size.items, 6);
-        assert_eq!(seen.load(Ordering::Relaxed), 6);
 
-        fs::set_permissions(&blocked, fs::Permissions::from_mode(0o755)).unwrap();
-        let stopped = folder_size(&dir, &AtomicBool::new(true), &AtomicU64::new(0)).unwrap();
+        assert!(!size.cancelled);
+        // Root reads the closed folder anyway.
+        let as_root = rustix::process::geteuid().is_root();
+        let hidden = if as_root { 13 } else { 0 };
+        assert_eq!(size.bytes, 3 + 2 + 100 + hidden);
+        assert_eq!(size.unreadable, u64::from(!as_root));
+        // Every entry listed counts, as the dialog says while it waits:
+        // a, nested, nested/b, big, link and blocked (and blocked/hidden).
+        assert_eq!(size.items, 6 + u64::from(as_root));
+        assert_eq!(seen.load(Ordering::Relaxed), size.items);
+    }
+
+    #[test]
+    fn a_cancelled_folder_size_says_so() {
+        let root = tempfile::tempdir().unwrap();
+        fs::write(root.path().join("a"), b"abc").unwrap();
+
+        let stopped = folder_size(root.path(), &AtomicBool::new(true), &AtomicU64::new(0)).unwrap();
+
         assert!(stopped.cancelled);
     }
 

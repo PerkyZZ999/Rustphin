@@ -634,8 +634,13 @@ mod tests {
 
         let error = trash.trash(&h.root.join("data")).unwrap_err();
         assert!(error.to_string().contains("contains the trash"), "{error}");
-        assert!(trash.trash(&h.trash_dir).is_err());
-        assert!(trash.trash(&item.content).is_err());
+        let error = trash.trash(&h.trash_dir).unwrap_err();
+        assert!(error.to_string().contains("contains the trash"), "{error}");
+        let error = trash.trash(&item.content).unwrap_err();
+        assert!(
+            error.to_string().contains("already in the trash"),
+            "{error}"
+        );
         assert!(item.content.exists() && h.trash_dir.exists());
     }
 
@@ -706,30 +711,83 @@ mod tests {
         assert!(!h.trash_dir.exists());
     }
 
-    #[test]
-    fn a_failure_at_any_step_leaves_the_entry_where_it_was_or_whole_in_the_trash() {
-        for step in 0.. {
-            let h = home();
-            let fs = FaultFs::failing_at(step, Fault::Crash);
-            let path = file(&h.work.join("a.txt"), "content");
-            let trash = FreedesktopTrash::new(Arc::new(fs), h.trash_dir.clone(), 1000);
+    /// What trashing a file left when `fault` struck at `step`.
+    struct Outcome {
+        result: io::Result<TrashedItem>,
+        here: Option<String>,
+        there: Option<String>,
+        /// Records in the trash.
+        records: usize,
+        /// Entries the trash offers for restoring, read afterwards.
+        listed: usize,
+    }
 
-            let result = trash.trash(&path);
+    fn trash_with(fault: Fault, step: usize) -> Outcome {
+        let h = home();
+        let path = file(&h.work.join("a.txt"), "content");
+        let failing = FreedesktopTrash::new(
+            Arc::new(FaultFs::failing_at(step, fault)),
+            h.trash_dir.clone(),
+            1000,
+        );
 
-            let in_trash = h.trash_dir.join("files/a.txt");
-            let here = fs::read_to_string(&path).ok();
-            let there = fs::read_to_string(&in_trash).ok();
-            assert!(
-                (here.as_deref(), there.as_deref()) == (Some("content"), None)
-                    || (here.as_deref(), there.as_deref()) == (None, Some("content")),
-                "step {step}: here {here:?}, in the trash {there:?}"
-            );
-            if let Ok(item) = result {
-                assert_eq!(item.content, in_trash);
-                assert!(step >= 4, "only {step} steps were exercised");
-                return;
-            }
+        let result = failing.trash(&path);
+
+        Outcome {
+            result,
+            here: fs::read_to_string(&path).ok(),
+            there: fs::read_to_string(h.trash_dir.join("files/a.txt")).ok(),
+            records: fs::read_dir(h.trash_dir.join("info")).map_or(0, Iterator::count),
+            listed: trash_on(&h, RealFs).list_home().unwrap().len(),
         }
+    }
+
+    /// Trashes with `fault` at each step until it succeeds, checking each
+    /// outcome with `check`; the step it first succeeded at.
+    fn sweep(fault: Fault, check: impl Fn(usize, &Outcome)) -> Option<usize> {
+        // Far more steps than trashing takes; it must succeed before then.
+        (0..64).find(|&step| {
+            let outcome = trash_with(fault, step);
+            let whole = match &outcome.result {
+                Ok(_) => (None, Some("content")),
+                Err(_) => (Some("content"), None),
+            };
+            assert_eq!(
+                (outcome.here.as_deref(), outcome.there.as_deref()),
+                whole,
+                "step {step}: {:?}",
+                outcome.result
+            );
+            check(step, &outcome);
+            outcome.result.is_ok()
+        })
+    }
+
+    #[test]
+    fn a_crash_at_any_step_leaves_the_entry_where_it_was_or_whole_in_the_trash() {
+        let first_success = sweep(Fault::Crash, |step, outcome| {
+            // A crash may leave a record of nothing; it is never offered.
+            let expected = usize::from(outcome.result.is_ok());
+            assert_eq!(outcome.listed, expected, "step {step}");
+        });
+
+        assert!(
+            first_success.is_some_and(|step| step >= 4),
+            "trashing first succeeded at step {first_success:?}"
+        );
+    }
+
+    #[test]
+    fn a_failed_step_leaves_no_record_of_an_entry_that_stayed() {
+        let first_success = sweep(Fault::Error, |step, outcome| {
+            let expected = usize::from(outcome.result.is_ok());
+            assert_eq!(outcome.records, expected, "step {step}");
+        });
+
+        assert!(
+            first_success.is_some_and(|step| step >= 4),
+            "trashing first succeeded at step {first_success:?}"
+        );
     }
 
     #[test]

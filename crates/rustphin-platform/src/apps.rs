@@ -1144,13 +1144,21 @@ mod tests {
             "[Default Applications]\ninode/directory=dolphin.desktop;\n",
         )
         .unwrap();
+        // Unlike the 0o644 a new file gets, whatever the umask.
+        fs::set_permissions(
+            home.path().join("mimeapps.list"),
+            fs::Permissions::from_mode(0o640),
+        )
+        .unwrap();
+
         set_default(home.path(), "inode/directory", "rustphin.desktop").unwrap();
+
         // The desktop's file keeps the permissions it had.
         let mode = fs::metadata(home.path().join("mimeapps.list"))
             .unwrap()
             .permissions()
             .mode();
-        assert_eq!(mode & 0o777, 0o644);
+        assert_eq!(mode & 0o777, 0o640);
         let mut index = Associations::default();
         merge_mimeapps(
             &std::fs::read_to_string(home.path().join("mimeapps.list")).unwrap(),
