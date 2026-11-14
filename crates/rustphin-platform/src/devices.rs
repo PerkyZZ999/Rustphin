@@ -314,13 +314,14 @@ pub fn usage(mount_point: &Path) -> Option<(u64, u64)> {
 /// Where the filesystem holding `path` is mounted, from the kernel's
 /// mount table. Blocking: call from a background thread.
 pub fn mount_point_of(path: &Path) -> Option<PathBuf> {
-    let table = std::fs::read_to_string("/proc/self/mountinfo").ok()?;
+    // Mount points are bytes: one outside UTF-8 must not hide the others.
+    let table = std::fs::read("/proc/self/mountinfo").ok()?;
     mount_point_in(&table, path)
 }
 
 /// The deepest mount point in a `mountinfo` table that holds `path`.
-fn mount_point_in(table: &str, path: &Path) -> Option<PathBuf> {
-    crate::trash::mount_points(table.as_bytes())
+fn mount_point_in(table: &[u8], path: &Path) -> Option<PathBuf> {
+    crate::trash::mount_points(table)
         .into_iter()
         .filter(|mount| path.starts_with(mount))
         .max_by_key(|mount| mount.components().count())
@@ -330,7 +331,8 @@ fn mount_point_in(table: &str, path: &Path) -> Option<PathBuf> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use std::{
-        os::unix::net::UnixStream,
+        ffi::OsString,
+        os::unix::{ffi::OsStringExt, net::UnixStream},
         sync::{Arc, Mutex, mpsc},
         time::Duration,
     };
@@ -562,7 +564,7 @@ mod tests {
 
     #[test]
     fn a_path_belongs_to_the_deepest_mount_above_it_with_escaped_names_decoded() {
-        let table = "\
+        let table = b"\
 22 1 0:21 / / rw - btrfs /dev/nvme0n1p2 rw
 40 22 0:35 / /tmp rw - tmpfs tmpfs rw
 41 22 8:1 / /mnt/my\\040drive rw - ext4 /dev/sda1 rw
@@ -576,7 +578,25 @@ mod tests {
             Some(PathBuf::from("/mnt/my drive"))
         );
         assert_eq!(mount("/mnt/database"), Some(PathBuf::from("/")));
-        assert_eq!(mount_point_in("", Path::new("/x")), None);
+        assert_eq!(mount_point_in(b"", Path::new("/x")), None);
+    }
+
+    #[test]
+    fn a_mount_point_outside_utf8_is_found_and_does_not_hide_the_others() {
+        // The kernel escapes only spaces, tabs, newlines and backslashes;
+        // other bytes of a mount point appear as they are.
+        let table = b"\
+22 1 0:21 / / rw - btrfs /dev/nvme0n1p2 rw
+41 22 8:1 / /media/caf\xe9 rw - vfat /dev/sda1 rw
+42 22 8:2 / /mnt/data rw - ext4 /dev/sdb1 rw
+";
+        let cafe = PathBuf::from(OsString::from_vec(b"/media/caf\xe9".to_vec()));
+
+        assert_eq!(mount_point_in(table, &cafe.join("a")), Some(cafe));
+        assert_eq!(
+            mount_point_in(table, Path::new("/mnt/data/b")),
+            Some(PathBuf::from("/mnt/data"))
+        );
     }
 
     #[test]

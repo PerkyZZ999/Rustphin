@@ -37,3 +37,8 @@ zbus = { workspace = true, features = ["p2p"] }
 rustphin-core = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 
+
+# Its sandbox guard has unit tests; run them with the crate's own.
+[[example]]
+name = "fake_admin_helper"
+test = true

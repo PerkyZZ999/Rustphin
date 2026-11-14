@@ -165,10 +165,8 @@ impl FreedesktopTrash {
             if self.fs.info(&content).is_err() {
                 continue;
             }
-            let original = match (path.is_absolute(), top) {
-                (true, _) => path,
-                (false, Some(top)) => top.join(path),
-                (false, None) => continue,
+            let Some(original) = self.original_of(dir, top, path) else {
+                continue;
             };
             entries.push(TrashEntry {
                 item: TrashedItem {
@@ -180,6 +178,25 @@ impl FreedesktopTrash {
             });
         }
         Ok(entries)
+    }
+
+    /// Where an entry of the trash directory `dir` goes back to, from the
+    /// path its record gives, or `None` when that path may not be trusted.
+    ///
+    /// The specification forbids `..` in recorded paths and supports
+    /// absolute ones only in the home trash. A volume trash, whose records
+    /// anyone with the medium can write, may only restore inside its volume.
+    fn original_of(&self, dir: &Path, top: Option<&Path>, path: PathBuf) -> Option<PathBuf> {
+        if path
+            .components()
+            .any(|part| part == std::path::Component::ParentDir)
+        {
+            return None;
+        }
+        let top = top?;
+        let original = top.join(&path);
+        let volume_trash = dir != self.home_trash;
+        (!volume_trash || original.starts_with(top)).then_some(original)
     }
 
     /// The entries in the home trash.
@@ -582,6 +599,34 @@ mod tests {
     }
 
     #[test]
+    fn two_longest_names_alike_up_to_the_cut_both_fit_and_restore_to_their_own_names() {
+        let h = home();
+        let trash = trash_on(&h, RealFs);
+        // 255 bytes each, the most a name may have, alike but for the last
+        // byte, with a two-byte character where the trash cuts names short.
+        let stem = format!("{}é{}", "a".repeat(236), "b".repeat(16));
+        let first = file(&h.work.join(format!("{stem}1")), "first");
+        let second = file(&h.work.join(format!("{stem}2")), "second");
+
+        let first_item = trash.trash(&first).unwrap();
+        let second_item = trash.trash(&second).unwrap();
+
+        assert_ne!(first_item.content, second_item.content);
+        let mut listed: Vec<PathBuf> = trash
+            .list_home()
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.item.original)
+            .collect();
+        listed.sort();
+        assert_eq!(listed, [first.clone(), second.clone()]);
+        trash.restore(&second_item).unwrap();
+        trash.restore(&first_item).unwrap();
+        assert_eq!(fs::read_to_string(&first).unwrap(), "first");
+        assert_eq!(fs::read_to_string(&second).unwrap(), "second");
+    }
+
+    #[test]
     fn the_trash_and_what_contains_it_cannot_be_trashed() {
         let h = home();
         let trash = trash_on(&h, RealFs);
@@ -754,6 +799,73 @@ mod tests {
             parse_record(b"[Trash Info]\nPath=bad%zzescape\n"),
             Some(("bad%zzescape".into(), String::new()))
         );
+    }
+
+    /// A volume trash holding one entry per record text, named `0`, `1`, ….
+    fn volume_trash_with_records(h: &Home, paths: &[&str]) -> PathBuf {
+        let volume_trash = h.root.join("volume/.Trash-1000");
+        fs::create_dir_all(volume_trash.join("files")).unwrap();
+        fs::create_dir_all(volume_trash.join("info")).unwrap();
+        for (n, path) in paths.iter().enumerate() {
+            file(&volume_trash.join(format!("files/{n}")), "content");
+            file(
+                &volume_trash.join(format!("info/{n}.trashinfo")),
+                &format!("[Trash Info]\nPath={path}\nDeletionDate=2026-01-02T03:04:05\n"),
+            );
+        }
+        volume_trash
+    }
+
+    #[test]
+    fn a_volume_trash_record_pointing_outside_its_volume_is_not_offered_for_restoring() {
+        // Removable media can carry records written by anyone. The
+        // specification forbids `..` in recorded paths and asks for absolute
+        // ones only in the home trash.
+        let h = home();
+        let trash = trash_on(&h, RealFs);
+        let outside = h.root.join("work/planted");
+        let inside = h.root.join("volume/docs/kept");
+        let volume_trash = volume_trash_with_records(
+            &h,
+            &[
+                "../work/planted",
+                "docs/../../work/planted",
+                outside.to_str().unwrap(),
+                &format!("{}/volume/../work/planted", h.root.display()),
+                "docs/kept",
+                inside.to_str().unwrap(),
+            ],
+        );
+
+        let mut originals: Vec<PathBuf> = trash
+            .list_dir(&volume_trash)
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.item.original)
+            .collect();
+        originals.sort();
+
+        assert_eq!(originals, [inside.clone(), inside]);
+    }
+
+    #[test]
+    fn a_home_trash_record_climbing_out_with_dots_is_not_offered_for_restoring() {
+        let h = home();
+        let trash = trash_on(&h, RealFs);
+        fs::create_dir_all(h.trash_dir.join("files")).unwrap();
+        fs::create_dir_all(h.trash_dir.join("info")).unwrap();
+        for (name, path) in [("climbs", "../work/a"), ("relative", "Documents/b")] {
+            file(&h.trash_dir.join("files").join(name), "content");
+            file(
+                &h.trash_dir.join(format!("info/{name}.trashinfo")),
+                &format!("[Trash Info]\nPath={path}\nDeletionDate=2026-01-02T03:04:05\n"),
+            );
+        }
+
+        let listed = trash.list_home().unwrap();
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].item.original, h.root.join("data/Documents/b"));
     }
 
     #[test]

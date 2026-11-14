@@ -12,10 +12,14 @@
 //! ```
 
 use std::{
+    ffi::OsString,
     fs,
     io::Write as _,
-    os::unix::fs::{MetadataExt as _, PermissionsExt as _},
-    path::{Path, PathBuf},
+    os::unix::{
+        ffi::OsStringExt as _,
+        fs::{MetadataExt as _, PermissionsExt as _},
+    },
+    path::{Component, Path, PathBuf},
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -157,9 +161,8 @@ impl Helper {
         let rest = url
             .strip_prefix("file://")
             .ok_or_else(|| Outcome::failed(ACCESS_DENIED, format!("not a file URL: {url}")))?;
-        let bytes = percent_decode(rest);
-        let path = PathBuf::from(String::from_utf8_lossy(&bytes).into_owned());
-        if !path.starts_with(&self.sandbox) {
+        let path = PathBuf::from(OsString::from_vec(percent_decode(rest)));
+        if !inside(&self.sandbox, &path) {
             return Err(Outcome::failed(
                 ACCESS_DENIED,
                 format!("Access denied to {}.", path.display()),
@@ -200,6 +203,23 @@ impl Helper {
         };
         OwnedObjectPath::try_from(path).map_err(|error| zbus::fdo::Error::Failed(error.to_string()))
     }
+}
+
+/// Whether `path` lies inside `sandbox` (a canonical folder): the only
+/// guard between the interface tests and the real home. The path is refused
+/// when it climbs with `..` or when links lead out of the sandbox: what
+/// exists of it is resolved, and the rest must be plain names.
+fn inside(sandbox: &Path, path: &Path) -> bool {
+    let plain = path
+        .components()
+        .all(|part| matches!(part, Component::RootDir | Component::Normal(_)));
+    if !path.is_absolute() || !plain {
+        return false;
+    }
+    path.ancestors()
+        .find(|existing| fs::symlink_metadata(existing).is_ok())
+        .and_then(|existing| existing.canonicalize().ok())
+        .is_some_and(|real| real.starts_with(sandbox))
 }
 
 fn percent_decode(text: &str) -> Vec<u8> {
@@ -748,5 +768,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("fake kio-admin helper serving {}", sandbox.display());
     loop {
         std::thread::park();
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    /// A canonical sandbox and, beside it, the folder it must keep out of.
+    fn sandbox() -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().canonicalize().unwrap();
+        let (sandbox, home) = (root.join("sandbox"), root.join("home"));
+        fs::create_dir_all(sandbox.join("docs")).unwrap();
+        fs::create_dir_all(&home).unwrap();
+        fs::write(home.join("precious"), "real").unwrap();
+        std::os::unix::fs::symlink(&home, sandbox.join("to-home")).unwrap();
+        std::os::unix::fs::symlink(home.join("precious"), sandbox.join("to-precious")).unwrap();
+        (temp, sandbox, home)
+    }
+
+    #[test]
+    fn paths_in_the_sandbox_are_served_even_before_they_exist() {
+        let (_temp, sandbox, _home) = sandbox();
+
+        assert!(inside(&sandbox, &sandbox));
+        assert!(inside(&sandbox, &sandbox.join("docs")));
+        assert!(inside(&sandbox, &sandbox.join("docs/new file")));
+        assert!(inside(&sandbox, &sandbox.join("docs/new folder/new file")));
+    }
+
+    #[test]
+    fn climbing_out_with_dots_is_refused() {
+        let (_temp, sandbox, _home) = sandbox();
+
+        assert!(!inside(&sandbox, &sandbox.join("../home/precious")));
+        assert!(!inside(&sandbox, &sandbox.join("docs/../../home")));
+        assert!(!inside(&sandbox, &sandbox.join("missing/../../home")));
+    }
+
+    #[test]
+    fn links_leading_out_of_the_sandbox_are_refused() {
+        let (_temp, sandbox, _home) = sandbox();
+
+        assert!(!inside(&sandbox, &sandbox.join("to-home")));
+        assert!(!inside(&sandbox, &sandbox.join("to-home/precious")));
+        assert!(!inside(&sandbox, &sandbox.join("to-home/new file")));
+        assert!(!inside(&sandbox, &sandbox.join("to-precious")));
+    }
+
+    #[test]
+    fn a_relative_path_is_refused() {
+        let (_temp, sandbox, _home) = sandbox();
+
+        assert!(!inside(&sandbox, Path::new("docs")));
     }
 }
