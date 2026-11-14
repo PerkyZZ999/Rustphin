@@ -2,12 +2,12 @@
 
 Owner of every record: the maintainer. Evidence references point to VALIDATION.md and DISCOVERY.md.
 
-Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **locked** (confirmed by the maintainer); D-007 is superseded by D-017. Changing one requires the change-impact loop. D-004, D-005 and D-012 to D-016 are **assumptions**: cheap to reverse, changeable without a change-impact loop.
+Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **locked** (confirmed by the maintainer); D-007 is superseded by D-017. On 2026-11-14 (W-114i) D-001 was superseded by D-034: the interface is Qt 6 and QML through cxx-qt. Changing one requires the change-impact loop. D-004, D-005 and D-012 to D-016 are **assumptions**: cheap to reverse, changeable without a change-impact loop.
 
 ---
 
 ## D-001 — UI toolkit: GPUI through GPUI-Kit, pinned
-- **Status:** locked
+- **Status:** superseded by D-034 on 2026-11-14 (W-114i)
 - **Date:** 2026-10-12
 - **Context:** The frontend framework dictates project structure. Candidates were GPUI and Qt6/QML via cxx-qt. Requirements R-003, R-010, R-101, R-105 depend on it.
 - **Decision:** Build the UI on `gpui-kit`, pinned exactly (`=0.7.3`, which pins `gpui-pre` `=0.3.9`). Upgrades are planned work items, never incidental.
@@ -17,13 +17,13 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Alternatives:** Qt6/QML via cxx-qt (rejected: item view and UI logic would sit outside Rust; retained as fallback). Tracking Zed HEAD GPUI directly (rejected: pins Rust 1.98.1, no component library).
 - **Reopen criteria:** A GPUI-Kit release removes drag-out or raw window handles; a blocking rendering or input defect with no fix or workaround within a slice; GPUI-Kit is abandoned.
 - **Confirmed by / date:** The maintainer, 2026-10-12
-- **Supersedes / superseded by:** superseded by D-034 (Qt 6 and QML through cxx-qt) when W-114i ships; governs the shipped interface until then
+- **Supersedes / superseded by:** superseded by D-034 (Qt 6 and QML through cxx-qt) when W-114i shipped on 2026-11-14; the last GPUI version is commit c062d63
 
 ## D-002 — Workspace with a headless, UI-agnostic core
 - **Status:** locked
 - **Date:** 2026-10-12
 - **Context:** Toolkit risk (D-001) and data-safety requirements (R-007, R-103) both call for logic that runs and is tested without a display.
-- **Decision:** A Cargo workspace of three layers with one-way dependencies: `rustphin-core` (directory model, sorting, selection, operation engine, undo, batch rename, fuzzy matching; no UI or desktop dependencies) ← `rustphin-platform` (Wayland, D-Bus, UDisks2, trash, thumbnails, places, MIME, icons; behind traits) ← `rustphin-ui` (GPUI views only). Core and platform never depend on GPUI.
+- **Decision:** A Cargo workspace of three layers with one-way dependencies: `rustphin-core` (directory model, sorting, selection, operation engine, undo, batch rename, fuzzy matching; no UI or desktop dependencies) ← `rustphin-platform` (Wayland, D-Bus, UDisks2, trash, thumbnails, places, MIME, icons; behind traits) ← `rustphin-ui` (GPUI views only). Core and platform never depend on GPUI. Since W-114b/W-114i (D-034): `rustphin-view` (interface logic free of any toolkit) sits between the platform and the interface, and the interface is the `rustphin` crate (Qt 6 and QML through cxx-qt); nothing below it depends on Qt.
 - **Rationale:** Keeps the toolkit replaceable; lets file operations be tested exhaustively without a display; makes performance measurable headlessly.
 - **Evidence:** Listing benchmark ran headless (VALIDATION.md).
 - **Consequences:** Some state is mirrored between core snapshots and views; trait boundaries add indirection; discipline is needed to keep GPUI types out of the lower layers (enforced by `rust-tc layers` and `deny.toml`).
@@ -120,7 +120,7 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Alternatives:** Fork GPUI (rejected: maintenance burden against a fast-moving upstream); wait for upstream (rejected: blocks the MVP).
 - **Reopen criteria:** GPUI gains equivalent features; the borrowed-connection technique stops working.
 - **Confirmed by / date:** The maintainer, 2026-10-12
-- **Supersedes / superseded by:** —
+- **Supersedes / superseded by:** amended by D-034 at W-114i (2026-11-14): blur now comes from KDE's `KWindowEffects` on the Qt windows, and the GPUI-surface code (`blur`, `blur_watch`, `activation`) left the platform layer; the data-control file clipboard stays in `rustphin-platform`
 
 ## D-011 — File operation safety model
 - **Status:** locked
@@ -184,7 +184,7 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Alternatives:** Keep the literal criterion open into the daily-driver trial (rejected by the user); patch the toolkit to drop the crates (rejected: D-001/D-010).
 - **Reopen criteria:** A toolkit upgrade adds a network client, TLS or telemetry crate; a Rustphin feature needs network access; the traces observe a non-local socket.
 - **Confirmed by / date:** The maintainer, 2026-11-08 ("Accept documented exception")
-- **Supersedes / superseded by:** amends R-108 validation; supersedes nothing
+- **Supersedes / superseded by:** amends R-108 validation; supersedes nothing. Since W-114i (2026-11-14) the exception is empty: the GPUI toolkit and the crates it brought are gone, and `deny.toml` bans `async-net`, `http` and every HTTP, TLS and telemetry crate outright
 
 ## D-019 — "60 frames per second" means no dropped frames
 - **Status:** locked
@@ -314,6 +314,7 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** Rustphin's interface moves from GPUI-Kit to Qt 6 Quick and QML, bridged with cxx-qt (0.10, crates.io); QtBridge for Rust is not used (rows must be stored as Rust values, no access to C++ APIs, silent failures). The move follows the plan: W-114b (`rustphin-view`), the Qt interface built beside the GPUI one (W-114c–h), then the switch (W-114i). The GPUI app stays the shipped one until W-114i; `gpui-kit` stays pinned and maintained for fixes until then. When the last window closes, the Qt app releases its window and QML engine to meet R-020.
 - **Confirmed by / date:** The maintainer, 2026-11-13 ("run the spike … then proceed with the QT_MIGRATION_PLAN.md"), on the spike's results
 - **Supersedes / superseded by:** supersedes D-001 at W-114i; until then D-001 governs the shipped interface. D-010's GPUI-specific integrations (blur through GPUI's surface, data-control clipboard) are replaced by Qt and KDE APIs at W-114i
+- **Switched:** 2026-11-14 (W-114i), at the maintainer's request to finish the migration ("Do all the remaining tasks to complete the QT Migration"). `rustphin-qt` became `rustphin`; `rustphin-ui`, `gpui-kit` and the platform's GPUI-only modules were removed. Blur comes from `KWindowEffects`; the data-control clipboard in `rustphin-platform` is kept, since Qt's clipboard cannot exchange file lists with other applications either. The last GPUI version is commit c062d63.
 
 ## D-035 — Minimum Rust version 1.100
 - **Status:** decided

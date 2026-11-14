@@ -1,6 +1,6 @@
 //! The interface's icons, named as in Lucide and free of any toolkit
-//! (W-114b2). Each interface maps an [`Icon`] to its own drawing: GPUI-Kit's
-//! bundled set, or the Lucide SVG file [`Icon::lucide_name`] names.
+//! (W-114b2). The interface draws an [`Icon`] from the Lucide SVG file
+//! [`Icon::lucide_name`] names.
 
 /// Calls `$callback!` with every icon the interface uses, so each toolkit
 /// builds its mapping from the same list.

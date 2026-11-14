@@ -1,6 +1,6 @@
 [package]
 name = "rustphin"
-description = "Rustphin file manager"
+description = "Rustphin, a file manager for KDE Plasma on Wayland, with a Qt 6 and QML interface (D-034)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,9 +10,24 @@ publish.workspace = true
 [lints]
 workspace = true
 
-[features]
-diagnostics = ["rustphin-ui/diagnostics"]
+# The code cxx-qt generates calls cxx's own macros, which cargo-shear cannot
+# see in the sources.
+[package.metadata.cargo-shear]
+ignored = ["cxx"]
 
 [dependencies]
-rustphin-ui.workspace = true
+rustphin-core.workspace = true
+rustphin-view.workspace = true
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+flume.workspace = true
+jiff.workspace = true
+rustphin-platform.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+qt-build-utils.workspace = true

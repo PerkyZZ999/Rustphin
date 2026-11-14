@@ -1,6 +1,6 @@
 //! The toolbar as QML sees it (W-114c2b): the items Settings arranges
 //! (W-106f), each with its icon, name and key, and which of them fit the
-//! window, decided by the same rule as the GPUI toolbar.
+//! window (`Toolbar::fit`).
 
 // cxx-qt generates the unsafe FFI glue between Rust and the C++ QObject
 // for the toolbar; nothing in the bridge file is written by hand but

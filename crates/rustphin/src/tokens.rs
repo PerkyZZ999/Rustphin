@@ -1,6 +1,6 @@
 //! The design tokens as QML sees them: the `Tokens` singleton (W-114c,
-//! D-017). Colours and sizes come from `rustphin-view`, the same values the
-//! GPUI interface draws with.
+//! D-017). Colours and sizes come from `rustphin-view` (`colors`, `metrics`),
+//! which implement docs/DESIGN.md.
 
 // cxx-qt generates the unsafe FFI glue between Rust and the C++ QObject
 // for the tokens object; nothing in the bridge file is written by hand but

@@ -1,10 +1,10 @@
 # Bundled fonts
 
 Static faces of the three typefaces in `docs/DESIGN.md`, at the weights it
-uses. `src/fonts.rs` builds them into the binary and registers them at start.
-They exist because the pinned GPUI ignores a variable font's weight axis, so
-the variable fonts most systems install draw every weight at their default
-(Regular for Inter and JetBrains Mono, Light for Space Grotesk).
+uses. `build.rs` puts them in the QML module's resources (`fonts/`) and the
+C++ shell registers them at start (`cpp/app.cpp`). They were made for the
+GPUI interface, which ignored a variable font's weight axis; the Qt one keeps
+them so every machine draws the same faces whatever fonts it has installed.
 
 | File | Weight | Licence |
 |---|---|---|
@@ -34,5 +34,5 @@ table was then set by hand (family "Space Grotesk", subfamily "SemiBold",
 PostScript name `SpaceGrotesk-SemiBold`), its `STAT` table dropped and its
 OS/2 weight class set to 600.
 
-To add a weight, cut it the same way, add it to `FACES` in `src/fonts.rs`
-and to the test's list of weights in use.
+To add a weight, cut it the same way and put it in this folder; every
+`.ttf` here is bundled.

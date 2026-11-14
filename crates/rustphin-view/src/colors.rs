@@ -350,7 +350,7 @@ mod tests {
 
     #[test]
     fn floating_surfaces_stay_solid_in_the_translucent_theme() {
-        // GPUI cannot blur inside the window (D-017), so menus, the palette
+        // Blur is behind the window only (D-017), so menus, the palette
         // and dialogs must not let the content behind them show through.
         let glass = Colors::obsidian(true);
         assert!(

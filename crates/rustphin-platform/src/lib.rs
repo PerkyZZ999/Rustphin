@@ -4,17 +4,14 @@
 //! at runtime by what the session offers. This crate never depends on the UI
 //! toolkit; it is the only crate in the workspace allowed to use `unsafe`.
 
-pub mod activation;
 pub mod admin;
 pub mod apps;
 pub mod archive_tool;
 pub mod autostart;
-pub mod blur;
 pub mod clipboard;
 pub mod config;
 pub mod devices;
 pub mod file_manager;
-pub mod font_warmup;
 pub mod icons;
 pub mod instance;
 pub mod kdeglobals;

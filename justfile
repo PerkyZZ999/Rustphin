@@ -171,7 +171,8 @@ deep: features-deep
 # ---------------------------------------------------------
 
 # Layering (decision D-002): the core must not depend on a UI toolkit, Wayland
-# or D-Bus, and the platform layer must not depend on the UI toolkit.
+# or D-Bus; the platform layer and the interface logic must not depend on
+# Qt; nothing depends on GPUI, which the Qt interface replaced (W-114i).
 layers:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -185,10 +186,10 @@ layers:
             status=1
         fi
     }
-    forbid rustphin-core 'gpui|wayland|zbus|cxx-qt'
-    forbid rustphin-platform 'gpui|cxx-qt'
-    forbid rustphin-qt 'gpui'
-    forbid rustphin-view 'gpui|cxx-qt'
+    forbid rustphin-core 'gpui|wayland|zbus|cxx'
+    forbid rustphin-platform 'gpui|cxx'
+    forbid rustphin-view 'gpui|cxx'
+    forbid rustphin 'gpui'
     exit "$status"
 
 
@@ -211,11 +212,6 @@ bench-palette:
 # Run the application. Pass a folder to open, e.g. `rust-tc run ~/Documents`.
 run *args:
     cargo run --release --package rustphin -- {{args}}
-
-# Build the optional pinned-toolkit profiler; launch only in the isolated UI harness.
-build-diagnostics:
-    cargo build --release --package rustphin --features diagnostics
-
 
 # ---------------------------------------------------------
 # Convenience

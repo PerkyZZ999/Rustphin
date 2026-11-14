@@ -97,8 +97,7 @@ impl Instance {
         Self::claim_as(NAME)
     }
 
-    /// Claims `name` (the Qt interface uses its own until it replaces the
-    /// GPUI one, W-114c3), unless another process has it.
+    /// Claims `name`, unless another process has it.
     pub fn claim_as(name: &'static str) -> Result<Self, ClaimError> {
         let (requests, incoming) = flume::unbounded();
         let connection = zbus::blocking::connection::Builder::session()?

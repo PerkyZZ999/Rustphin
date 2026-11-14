@@ -1128,7 +1128,7 @@ impl qobject::FolderModel {
             rust.asked = None;
             rust.shown = false;
             eprintln!(
-                "rustphin-qt: first entries ({what}): {:.1} ms to the frame showing {rows} rows{}, own memory {} kB",
+                "rustphin: first entries ({what}): {:.1} ms to the frame showing {rows} rows{}, own memory {} kB",
                 asked.elapsed().as_secs_f64() * 1e3,
                 if loading { " (still loading)" } else { "" },
                 rustphin_platform::process::own_memory().unwrap_or(0) / 1024,
@@ -1148,7 +1148,7 @@ impl qobject::FolderModel {
                 .collect();
             rust.frames.clear();
             let report = rustphin_view::pane::frame_report(&intervals);
-            eprintln!("rustphin-qt: scroll benchmark result: {report}");
+            eprintln!("rustphin: scroll benchmark result: {report}");
         }
     }
 

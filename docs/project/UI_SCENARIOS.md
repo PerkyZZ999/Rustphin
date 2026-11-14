@@ -1,6 +1,6 @@
 # UI scenarios
 
-Replayable checks of the running application, driven by an agent through the kwin-mcp tools. Run them after any change to `rustphin-ui`, and record the result in VALIDATION.md.
+Replayable checks of the running application, driven by an agent through the kwin-mcp tools. Run them after any change to the interface (`crates/rustphin`, Qt since W-114i), and record the result in VALIDATION.md.
 
 ## Setup
 
@@ -11,9 +11,9 @@ Replayable checks of the running application, driven by an agent through the kwi
 
 Notes for the agent:
 
-- The application is not visible to `list_windows` or `find_ui_elements` (nothing is exposed over AT-SPI in these sessions), so observe with screenshots and act by keyboard or coordinates.
-- With the 1280×800 screen the window is centred: toolbar at y≈119, column headings at y≈159, first row at y≈200 and 36 px per row at the default zoom (24 px icons, since W-079d; re-read a screenshot); the labelled Actions button is at the right of the location bar. View controls and hidden-files toggling are in its palette or on their shortcuts. Re-read a screenshot if the layout has changed.
-- Spell punctuation keys literally: `ctrl+=`, `ctrl+-`; use lower-case function keys such as `shift+f10` in kwin-mcp input.
+- Launch with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1` to find elements with `find_ui_elements` (entries, buttons, dialogs are exposed by name, W-114h); otherwise observe with screenshots and act by keyboard or coordinates. Add `QT_FORCE_STDERR_LOGGING=1` to see QML warnings in the app log.
+- With the 1280×800 screen the 1000×700 window is centred: title bar at y≈68, toolbar at y≈108, column headings at y≈181, first row at y≈210 and 32 px per row at the default zoom (re-read a screenshot); the labelled Actions button is at the right of the location bar. View controls and hidden-files toggling are in its palette or on their shortcuts. Re-read a screenshot if the layout has changed.
+- Spell punctuation keys literally: `ctrl+=`, `ctrl+-`, `ctrl+shift+,`; use lower-case function keys such as `shift+f10`, and `Page_Up`/`Page_Down`, in kwin-mcp input.
 - Detect blur in the isolated compositor instead of assuming it is absent: current KWin may expose the background-effect global even with its blur effect unloaded. J12/J14 toggle only the private compositor. Explicit opaque mode is available for deterministic solid-theme checks. Icons use the default `breeze-dark` theme.
 - Stop the session when done. Before deleting the fixture run `chmod 755 <dir>/locked`.
 

@@ -1,6 +1,6 @@
 //! What file operations are called on screen: activity lines, notices,
 //! progress details and the names new entries get (W-114b2). The running
-//! state lives with each interface (GPUI's `Hub`); the words live here.
+//! state lives with the interface (its operations hub); the words live here.
 
 use std::{
     collections::HashSet,

@@ -1,7 +1,8 @@
 //! The file clipboard: the entries picked up with copy or cut, shared with
 //! other file managers.
 //!
-//! GPUI's own clipboard cannot carry files to other applications, so this
+//! A toolkit's own clipboard cannot carry files to other applications (GPUI's
+//! could not; Qt's is used only for text here), so this
 //! talks to the compositor directly through a data-control protocol (decision
 //! D-010). Where the compositor has none, [`LocalClipboard`] keeps copy and
 //! paste working inside the application.

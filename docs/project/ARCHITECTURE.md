@@ -4,17 +4,21 @@ Status: drafted 2026-10-12, consistent with locked decisions D-001 to D-003, D-0
 
 ## Overview
 
-Rustphin is a single desktop process built as a Cargo workspace of three layers plus a thin binary. Dependencies point one way: the UI depends on the platform layer and the core; the platform layer depends on the core; the core depends on neither. All filesystem and desktop work happens off the UI thread; the UI renders immutable snapshots and sends commands.
+Rustphin is a single desktop process built as a Cargo workspace of four layers. Dependencies point one way: the interface (`rustphin`, Qt 6 and QML through cxx-qt, D-034) depends on the interface logic (`rustphin-view`), which depends on the platform layer, which depends on the core; nothing below the interface depends on Qt. All filesystem and desktop work happens off the UI thread; the interface renders immutable snapshots and sends commands. Until W-114i (2026-11-14) the interface was `rustphin-ui`, built on GPUI-Kit (D-001); the last GPUI version is commit c062d63.
 
 ```mermaid
 flowchart LR
-    subgraph ui["rustphin-ui (GPUI-Kit)"]
-        views["Views: places, tabs, location bar,<br/>item views, palette, dialogs"]
-        bridge["Bridge: channels → GPUI entities"]
+    subgraph ui["rustphin (Qt 6 Quick, QML, cxx-qt)"]
+        views["QML: window, places, tabs, location bar,<br/>item views, palette, dialogs"]
+        bridge["Rust QObjects: models over snapshots,<br/>posted to the Qt thread"]
+        shell["C++ shell: windows, QML engine,<br/>KWindowEffects blur"]
+    end
+    subgraph view["rustphin-view (no toolkit)"]
+        vlogic["Layout, settings, session, tabs,<br/>menus, commands, wording, tokens"]
     end
     subgraph platform["rustphin-platform"]
-        wl["Wayland: blur, file clipboard"]
-        dbus["D-Bus: UDisks2, FileManager1"]
+        wl["Wayland: file clipboard"]
+        dbus["D-Bus: UDisks2, FileManager1, instance"]
         desk["Trash, thumbnails, places,<br/>MIME, icons, open-with"]
     end
     subgraph core["rustphin-core (headless)"]
@@ -29,7 +33,8 @@ flowchart LR
     model -- snapshots, events --> bridge
     ops -- progress, results --> bridge
     model --> workers
-    ui --> platform
+    ui --> view
+    view --> platform
     platform --> core
     core --> fs[("Filesystem")]
     platform --> sys[("Compositor, D-Bus, XDG data")]
@@ -40,9 +45,9 @@ flowchart LR
 | Crate | Responsibility | Notes |
 |---|---|---|
 | `rustphin-core` | Directory model, entry storage, listing, lazy metadata, sorting, filtering, selection, navigation history, operation engine, undo, batch-rename planner, fuzzy matcher, config schema | No UI, Wayland or D-Bus dependencies. Synchronous, cancellable API on its own worker pools (D-009). Filesystem reached through an `Fs` trait so tests can inject faults. |
-| `rustphin-platform` | Wayland integrations (blur, file clipboard), UDisks2 devices, `FileManager1` service, freedesktop trash, thumbnail cache and generators, shared places file and place groups, MIME detection, icon-theme lookup, launching applications, atomic config I/O | Each capability is a trait with a real implementation and a fallback or mock (D-010). No GPUI dependency, apart from accepting raw window handles for blur. |
-| `rustphin-ui` | Theme tokens, views, actions and key bindings, the bridge that turns core channels into GPUI entity updates | Only crate that depends on `gpui-kit` (D-001, D-002). Never calls the filesystem directly (D-011). |
-| `rustphin` (binary) | Composition root: parses arguments, builds platform services, starts the core and the UI | Thin; holds no logic. |
+| `rustphin-platform` | File clipboard (Wayland data-control), UDisks2 devices, `FileManager1` service, single-instance bus service, freedesktop trash, thumbnail cache and generators, shared places file and place groups, MIME detection, icon-theme lookup, launching applications, administrator helper client, kio-fuse remote folders, atomic config I/O | Each capability is a trait with a real implementation and a fallback or mock (D-010). No interface-toolkit dependency. |
+| `rustphin-view` | Interface logic free of any toolkit: pane wording and status line, settings store and Settings pages, session and tabs, toolbar items, menus, command table, questions, dialogs (Properties, Compress, batch rename), places panel rows, the numeric design tokens (`metrics`) and colours with their contrast tests | No Qt or GPUI dependency (W-114b, D-034); unit-tested headlessly. |
+| `rustphin` (binary) | The Qt 6 and QML interface: QML files (`qml/`), Rust QObjects through cxx-qt (each bridge alone in a `*_bridge.rs` file of declarations, D-034), the C++ shell (`cpp/`: windows, the QML engine, blur), wiring of platform services and the core | Never calls the filesystem directly for changes (D-011); listing and metadata come from the core's snapshots. Logs to stderr (`RUSTPHIN_LOG`). |
 | `justfile` (via `rust-tc`) | Developer commands and the quality gate: checks, layering check, minimum-version build, benchmarks | Not shipped. The user's Rust-Toolchain; replaces the `xtask` crate first planned. |
 
 ### Core internals
@@ -85,26 +90,22 @@ flowchart LR
 - Remote URI hosts, relative paths and embedded NUL are rejected before pane/tab clamping. Serialization returns its error rather than an empty document; the background publication job reports InvalidData before replacing any file. Revision retirement covers encoding as well as I/O attempts.
 - Newer-version parsing/write protection remains under W-077 review; this format change does not claim that unknown future schemas or read failures are handled safely yet.
 
-### Font preparation (W-073b)
+### Font preparation (W-073b, W-109b; GPUI only)
 
-- Before opening the first window, the UI awaits a background-executor task that calls the pinned text system's `prewarm_fonts`. It prepares the system default and the three design-token families in normal/medium/semibold styles; names remain defined by theme tokens. No fonts are installed, bundled or substituted.
-- The wait yields the UI executor rather than running font matching in a draw. Window creation then uses the same settings/session/geometry/theme/root-background path. This removes measured font-matching prepaint stalls, but does not prove all layout or GPU/bootstrap work fits 16 ms.
-
-- Details cells retain their fixed column surfaces while data is absent, but do not add an empty text child. The pinned shaper otherwise performs a cold generic-font scan for empty text even when the configured fonts are warm (W-073c). This avoids unnecessary layout work without changing visible placeholders or column geometry.
+- The GPUI interface pre-read fonts before its first window; the Qt interface bundles the design's static faces (`crates/rustphin/assets` through `fonts`) and lets Qt's own font database do the rest. The pre-read module left the platform layer at W-114i.
 
 ### Performance diagnostics (W-073a)
 
 - `RUSTPHIN_FRAME_LOG` measures view descriptions, model/selection updates and visible-row construction. `RUSTPHIN_SCROLL_BENCH` drives 1,200 frames; an active benchmark never discards a long interval as idle. All excluded idle/startup gaps are counted with their longest duration.
-- The optional `diagnostics` feature enables the pinned toolkit's profiler through GPUI-Kit. `rust-tc build-diagnostics` builds it. A foreground-journal collector records draw phases, presentation, retained per-view work and foreground task polls, reporting discontinuities. Timing uses wall time, includes scheduler preemption, and logging/profiling adds overhead. Fast Rustphin callbacks do not imply a fast complete draw. Normal builds do not enable the toolkit profiler.
-- The feature adds GPLv3-compatible `hdrhistogram` (MIT/Apache-2.0, existing policy) through the toolkit. Cargo's lock resolution also records the toolkit's optional gpui-fast branch and its extra taffy version; that backend is not enabled or compiled by this feature. Toolkit versions remain pinned.
+- The GPUI-only `diagnostics` feature (toolkit profiler) was removed with GPUI at W-114i; frame timing and the scroll benchmark are measured in the Qt interface by the same variables.
 
 ## Data flow
 
 1. The user acts in a view; the view dispatches an action.
 2. The bridge sends a command over a channel to the core (for example "open directory", "sort by size", "copy these to there").
 3. Core workers do the work and publish snapshots, progress or results on a channel.
-4. The bridge, running on GPUI's executor, receives them and updates the owning entity; GPUI redraws only the visible rows.
-5. Desktop effects (clipboard, mount, trash, blur) are calls from the UI or the core's operation engine into platform traits.
+4. The bridge receives them on a worker thread and posts the update to the Qt thread (`post::on_qt`, or a cxx-qt thread handle), where the model emits row changes; Qt Quick redraws only the visible delegates.
+5. Desktop effects (clipboard, mount, trash) are calls from the interface or the core's operation engine into platform traits; blur is requested from KWin by the C++ shell (`KWindowEffects`).
 
 Stale results are discarded by generation number, so a fast navigation never shows a previous directory's late results.
 
@@ -142,7 +143,7 @@ Stale results are discarded by generation number, so a fast navigation never sho
 - **Fault injection (core):** the `Fs` trait fails or "crashes" at every step of copy, move and batch rename; assertions check the D-011 rules. Kill tests run a child process against a temporary directory.
 - **Integration and contract tests (platform):** places file round trips against fixtures from a real Dolphin; trash and thumbnail cache against their specifications; UDisks2 and FileManager1 against a mocked bus.
 - **Benchmarks:** headless listing, metadata and sort on generated 500,000-entry directories; results tracked over time (R-101, R-102).
-- **Accessibility:** the pinned Wayland adapter follows the session accessibility status. Entry rows expose names, selection and active-descendant focus through the public GPUI API; virtualised items carry positions and their container carries the total count and multiselectable capability. Sort controls are siblings of the selectable collection. Accessibility clicks toggle file selection for the adapter selection interface; ordinary pointer clicks retain their own modifier behavior. An active AT-SPI bus alone does not enable exposure. Places use real group/child ancestry and expose focus/activation; tabs expose their collection, names and selected state. The pinned Unix adapter does not translate expanded state, so group descriptions also state it; the native flag remains an open finding. Input focus and remaining composite widgets remain S11 work; there is no Orca pass (D-023).
+- **Accessibility:** (Qt, since W-114i) Qt Quick exposes the views over AT-SPI: entries are list items by name with their selected state, buttons are named with actions, dialogs carry their title (W-114h). The rest of this paragraph describes the GPUI interface it replaced: the pinned Wayland adapter follows the session accessibility status. Entry rows expose names, selection and active-descendant focus through the public GPUI API; virtualised items carry positions and their container carries the total count and multiselectable capability. Sort controls are siblings of the selectable collection. Accessibility clicks toggle file selection for the adapter selection interface; ordinary pointer clicks retain their own modifier behavior. An active AT-SPI bus alone does not enable exposure. Places use real group/child ancestry and expose focus/activation; tabs expose their collection, names and selected state. The pinned Unix adapter does not translate expanded state, so group descriptions also state it; the native flag remains an open finding. Input focus and remaining composite widgets remain S11 work; there is no Orca pass (D-023).
 - **UI tests:** scripted scenarios in an isolated KWin session with an isolated home, alongside the installed Dolphin: navigation, drag-and-drop, clipboard, tabs, palette. Frame timing collected for scrolling.
 - **Fuzzing:** the separate `fuzz/` workspace targets places parsing/edits, desktop classification/Exec parsing, URI lists/name display and image thumbnail generation. `rust-tc fuzz <target> [seconds]` runs a bounded libFuzzer/AddressSanitizer campaign from reviewed seeds against generated scratch data. The harness checks preserved bytes and successful-edit/cache contracts as well as crashes. `rust-tc doctor` includes harness formatting, lint and dependency-policy checks; campaigns run explicitly. libFuzzer never ships in the application.
 - **Manual checklists:** keyboard-only operation, visual review on the real desktop, real USB drive, a non-KDE drop target.
@@ -159,12 +160,12 @@ Stale results are discarded by generation number, so a fast navigation never sho
 
 ## Alignment to locks
 
-- D-001 → only `rustphin-ui` depends on `gpui-kit`, pinned `=0.7.3`; upgrades are roadmap items.
-- D-002 → three layers with one-way dependencies, enforced by `rust-tc layers` and a `gpui-kit` ban in `deny.toml`.
+- D-001 → superseded by D-034 (W-114i): the interface is Qt 6 and QML through cxx-qt in the `rustphin` crate; `deny.toml` bans `gpui-kit` and `gpui-pre`.
+- D-002 → four layers with one-way dependencies, enforced by `rust-tc layers` (no Qt below the interface, no GPUI anywhere).
 - D-003 → every crate declares GPL-3.0-or-later; licences checked by `cargo-deny`.
 - D-006 → Wayland-only features compiled; no X11 backend.
-- D-017 (supersedes D-007) → theme tokens in `rustphin-ui` implement `docs/DESIGN.md`; opaque mode driven by the platform blur trait.
+- D-017 (supersedes D-007) → the tokens in `rustphin-view` (`colors`, `metrics`) implement `docs/DESIGN.md`; `crates/rustphin/src/tokens.rs` hands them to QML; the opaque theme is used when KWin offers no blur or `RUSTPHIN_OPAQUE` is set.
 - D-008 → `places` module in the platform layer reads/writes the shared file and a separate groups file keyed by place ID.
 - D-009 → core-owned worker pools, snapshots over channels, no async runtime in the core.
-- D-010 → blur and clipboard traits in `rustphin-platform` with runtime detection and fallbacks. Blur requires an advertised capability throughout the window lifetime. A cancellable worker owns a separate connection to the toolkit display's Unix peer, verified by socket address and peer credentials; it never retains the borrowed display or surface. Unnamed/unmonitorable connections, monitor errors and closure fail closed. Capability events update the window/component theme and a persistent read-only status independently from operation notices; recovery reuses the surface's existing effect instead of attaching a duplicate. Explicit opaque mode starts no monitor. An in-process compositor tests the wire contract, disappearance/recovery and cancellation; its server dependency is test-only.
+- D-010 (amended by D-034) → the file clipboard trait in `rustphin-platform` with runtime detection and an in-app fallback; blur comes from KDE's `KWindowEffects` on each window, with the opaque theme when it is unavailable. The GPUI-era borrowed-connection blur and its monitor left with GPUI (W-114i).
 - D-011 → single operation engine in the core; UI has no filesystem access; `Fs` trait for fault injection.

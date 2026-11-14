@@ -1,9 +1,8 @@
 //! Rustphin's interface logic that does not depend on a toolkit (W-114b,
 //! D-034): what the views show and decide, as plain data and functions, so
-//! the GPUI interface and the Qt one being built (W-114c) share it and it
-//! is tested without a display.
+//! it is tested without a display and the Qt interface only draws it.
 //!
-//! Nothing here may depend on GPUI, Qt or a display (`rust-tc layers`).
+//! Nothing here may depend on Qt or a display (`rust-tc layers`).
 
 pub mod archives;
 pub mod colors;

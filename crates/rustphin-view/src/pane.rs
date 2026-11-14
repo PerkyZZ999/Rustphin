@@ -2,9 +2,6 @@
 //! W-114d): why a folder could not be shown, the status line, which detail
 //! columns fit, type-ahead, typed locations, the location's crumbs, fading
 //! of hidden and cut entries.
-//!
-//! The GPUI interface keeps its own copies of these until it is removed
-//! (W-114i); the Qt interface uses these.
 
 use std::{
     ffi::OsStr,

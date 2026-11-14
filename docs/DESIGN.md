@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: Rustphin Obsidian
-description: Navy obsidian glass with royal-blue accents for the Rustphin file manager on KDE Plasma Wayland (GPUI). Adopted by the W-079 design pass from the HTML mockups in docs/mockup/.
+description: Navy obsidian glass with royal-blue accents for the Rustphin file manager on KDE Plasma Wayland (Qt 6 and QML). Adopted by the W-079 design pass from the HTML mockups in docs/mockup/.
 colors:
   # Surfaces over the compositor-blurred desktop (glass mode). Stacked: window, then chrome or content.
   window-glass: "rgba(13, 21, 36, 0.80)"
@@ -446,7 +446,7 @@ components:
 
 This is the design reference for Rustphin (D-017). The tokens in the front
 matter are authoritative and `crates/rustphin-view/src/colors.rs` and
-`metrics.rs` implement them (`crates/rustphin-ui/src/theme.rs` converts them for GPUI);
+`metrics.rs` implement them (`crates/rustphin/src/tokens.rs` hands them to QML);
 the prose explains how to apply them. Change this document first, then the
 theme, and keep "Implementation status" true.
 
@@ -1121,8 +1121,9 @@ except where the list below says otherwise; each W-079 step adds its line.
   in the isolated session with the stand-in helper; KDE's real password
   dialog is the maintainer's check.
 - Font weights (W-088): the app bundles static faces of Inter (400, 500,
-  600), Space Grotesk (600) and JetBrains Mono (400, 500), because the pinned
-  GPUI ignores a variable font's weight axis. Headings render semibold as
+  600), Space Grotesk (600) and JetBrains Mono (400, 500), made because the
+  GPUI interface ignored a variable font's weight axis and kept by the Qt one
+  (`crates/rustphin/fonts/`). Headings render semibold as
   drawn. Weights not listed in the typography tokens fall back to the
   nearest bundled or installed face.
 - Places menu and the "New group" button (W-102), and second menus that

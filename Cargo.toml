@@ -13,7 +13,6 @@ publish = false
 [workspace.dependencies]
 rustphin-core = { path = "crates/rustphin-core" }
 rustphin-platform = { path = "crates/rustphin-platform" }
-rustphin-ui = { path = "crates/rustphin-ui" }
 rustphin-view = { path = "crates/rustphin-view" }
 
 jiff = "0.2"
@@ -36,10 +35,6 @@ roxmltree = "0.21"
 zbus = "5"
 image = { version = "0.25", default-features = false, features = ["bmp", "gif", "jpeg", "png", "webp"] }
 md-5 = "0.10"
-# Font pre-read (W-109b): the versions and file reading GPUI's text system
-# uses (cosmic-text 0.19), so the same parts of each font are read. MIT.
-fontdb = { version = "0.23", default-features = false, features = ["std", "fs", "memmap"] }
-fontconfig-parser = "0.5"
 # Compress and extract (W-111, D-032), in the core's operation engine.
 # Licences checked 2026-11-13: zip MIT; tar, flate2, bzip2 MIT or Apache-2.0;
 # lzma-rust2 and sevenz-rust2 Apache-2.0; zstd BSD-3-Clause. Codecs chosen
@@ -53,18 +48,6 @@ lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "e
 zstd = "0.14"
 sevenz-rust2 = { version = "0.25", default-features = false, features = ["aes256", "bzip2", "compress", "deflate", "zstd", "util"] }
 png = "0.18"
-
-# UI toolkit, pinned exactly (decision D-001). Upgrade only as a planned work item.
-gpui-kit = "=0.7.3"
-# gpui-kit's Linux text system, used directly only by tests of the bundled
-# fonts. Pinned to the version gpui-kit 0.7.3 uses.
-gpui-pre-wgpu = "=0.3.9"
-
-# Direct Wayland access for the platform layer; versions match gpui-pre 0.3.9's lockfile.
-raw-window-handle = "0.6"
-wayland-backend = { version = "0.3", features = ["client_system"] }
-wayland-client = "0.31"
-wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 
 # The Qt 6 interface (W-114, D-034). cxx and cxx-qt are MIT or Apache-2.0;
 # Qt itself is linked from the system under LGPL-3.0.
@@ -84,10 +67,9 @@ expect_used = "deny"
 dbg_macro = "deny"
 todo = "deny"
 
-# Optimise dependencies in debug builds: the toolkit's text shaping and
-# font matching are many times slower unoptimised, which made debug
-# windows take seconds to appear. Workspace crates stay unoptimised for
-# fast rebuilds and full debugging.
+# Optimise dependencies in debug builds: image decoding, archive codecs and
+# the cxx-qt glue are many times slower unoptimised. Workspace crates stay
+# unoptimised for fast rebuilds and full debugging.
 [profile.dev.package."*"]
 opt-level = 2
 

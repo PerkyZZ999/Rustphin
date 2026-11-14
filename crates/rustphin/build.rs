@@ -7,11 +7,12 @@ use std::path::Path;
 use cxx_qt_build::{CxxQtBuilder, QResource, QResources, QmlModule};
 use qt_build_utils::QResourceFile;
 
-/// The small logo the title bar shows (the GPUI title bar's too).
+/// The small logo the title bar shows.
 const LOGO: &str = "../../assets/rustphin-small.svg";
 
-/// The fonts the GPUI interface bundles; the Qt one uses the same files.
-const FONTS: &str = "../rustphin-ui/assets/fonts";
+/// The bundled static faces of the design's fonts (docs/DESIGN.md), with
+/// their licences beside them.
+const FONTS: &str = "fonts";
 
 /// Every `.ttf` file in `dir` aliased as `fonts/<name>`, so QML and C++
 /// find them under the module's `fonts/` folder.

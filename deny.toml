@@ -11,20 +11,16 @@ all-features = true
 
 [advisories]
 yanked = "deny"
-# Informational lifecycle notices, not vulnerability exceptions. The pinned
-# UI toolkit (D-001) retains these crates. The zbus 5 stack also backs our
-# UDisks2 integration; upgrading that alone cannot remove the toolkit copies.
-# Re-check every entry at each toolkit upgrade and remove resolved notices.
+# Informational lifecycle notices, not vulnerability exceptions. The zbus 5
+# stack backs our UDisks2, FileManager1 and instance services; these crates
+# were merged into zbus 6. Re-check at the next zbus upgrade. (The notices
+# the GPUI toolkit brought in went with it in W-114i.)
 ignore = [
     # Approved by the maintainer on 2026-10-18: upstream merged these
-    # standalone crates into zbus 6; the pinned toolkit still requires zbus 5.
-    { id = "RUSTSEC-2026-0370", reason = "zvariant: retained by the pinned toolkit and our zbus 5 device integration; review at toolkit upgrade" },
-    { id = "RUSTSEC-2026-0371", reason = "zbus_names: retained by the pinned toolkit and our zbus 5 device integration; review at toolkit upgrade" },
-    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: retained through zvariant in the pinned toolkit and zbus 5; review at toolkit upgrade" },
-    { id = "RUSTSEC-2024-0384", reason = "instant: transitive dependency of the pinned UI toolkit" },
-    { id = "RUSTSEC-2024-0436", reason = "paste: transitive dependency of the pinned UI toolkit" },
-    { id = "RUSTSEC-2026-0206", reason = "rustybuzz: text shaping inside the pinned UI toolkit" },
-    { id = "RUSTSEC-2026-0192", reason = "ttf-parser: font parsing inside the pinned UI toolkit" },
+    # standalone crates into zbus 6.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: retained by our zbus 5 integrations; review at zbus upgrade" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: retained by our zbus 5 integrations; review at zbus upgrade" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: retained through zvariant in zbus 5; review at zbus upgrade" },
 ]
 
 [licenses]
@@ -38,7 +34,7 @@ allow = [
     "ISC",
     "Unicode-3.0",
     "Zlib",
-    # Present in the UI toolkit's dependency tree; all GPLv3-compatible.
+    # Present in dependency trees; all GPLv3-compatible.
     "0BSD",
     "CC0-1.0",
     "MPL-2.0",
@@ -65,22 +61,17 @@ allow-wildcard-paths = true
 highlight = "all"
 workspace-default-features = "allow"
 external-default-features = "allow"
-# Layering (decision D-002): only the UI crate may depend on the UI toolkit.
+# The GPUI toolkit was replaced by Qt (W-114i, D-034): it must not return
+# by way of a dependency.
 deny = [
-    { crate = "gpui-kit", wrappers = ["rustphin-ui"] },
+    { crate = "gpui-kit" },
+    { crate = "gpui-pre" },
     # Privacy (R-108, decision D-018): Rustphin makes no network connections
-    # of its own. The locked toolkit keeps a socket wrapper and HTTP types it
-    # never uses here; they stay reachable only through the toolkit crates that
-    # bring them in today. Any HTTP client, TLS stack or telemetry crate fails
-    # the gate and needs a new decision.
-    { crate = "async-net", wrappers = ["smol"] },
-    { crate = "http", wrappers = ["gpui-pre-http-client", "http-body"] },
-    { crate = "http-body", wrappers = ["gpui-pre-http-client"] },
-    { crate = "gpui-pre-http-client", wrappers = ["gpui-pre", "gpui-pre-linux"] },
+    # of its own. Any HTTP client, TLS stack or telemetry crate fails the
+    # gate and needs a new decision.
+    { crate = "async-net" },
+    { crate = "http" },
     { crate = "reqwest" },
-    # The toolkit's own reqwest fork; Cargo.lock lists it (with hyper, h2 and
-    # rustls) only for non-Linux targets of gpui-kit-assets.
-    { crate = "gpui-pre-reqwest" },
     { crate = "hyper" },
     { crate = "ureq" },
     { crate = "isahc" },
