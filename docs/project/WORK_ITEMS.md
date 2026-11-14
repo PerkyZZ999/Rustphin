@@ -43,6 +43,7 @@ S11 — Hardening for daily use (in progress)
 
 ## Later (requested, not scheduled)
 
+- [ ] W-114 — Move the interface from GPUI to Qt 6 and QML (the maintainer, 2026-11-13, naming QtBridge for Rust). Plan in [QT_MIGRATION_PLAN.md](QT_MIGRATION_PLAN.md): W-114a spike with go/no-go criteria, W-114b toolkit-free `rustphin-view`, W-114c–g the Qt interface beside the GPUI one, W-114h parity check, W-114i the switch. Reverses D-001: waits for the maintainer's decisions A–E.
 - [ ] W-113 — Extract to… should open the folder dialog in the folder being shown, as Ark does; it opens in the home folder because the pinned toolkit's path prompt takes no start folder. Needs a direct portal call (`current_folder`) or a toolkit upgrade. Found in W-111 (2026-11-13).
 - [x] W-106 — Settings window with a Toolbar page to customize the toolbar entirely, as Dolphin's "Configure Toolbars…" (the maintainer, 2026-11-11). Needs a requirement and a design approved by the maintainer first; see ROADMAP.md "Later". 2026-11-12: the maintainer asked for the whole window to be planned (General, Appearance, Customizations, About, …); proposal in docs/project/SETTINGS_PLAN.md; approved as written (D-029, R-019).
   - [x] W-106a — Mockups of the Settings window, one scene per page and a narrow window: docs/mockup/36-settings.html (drawn 2026-11-12). Approved by the maintainer 2026-11-12.

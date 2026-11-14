@@ -113,6 +113,12 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **2026-11-13:** W-111's plan is [`ARCHIVE_PLAN.md`](ARCHIVE_PLAN.md): Ark's Extract and Compress submenus with the maintainer's extra "into a new folder", done by Rustphin's own engine for ZIP, TAR and 7Z with Ark for other formats (recommended); work W-111a–g and five decisions. The maintainer reviews it, then both plans are built.
 - **Status:** both built 2026-11-13. W-110a–f done (R-020; KWin focus from a real launcher token and a login start need the maintainer's desktop). W-111a–g done (R-021 ticked; RAR and ISO through a real tool not tried). Follow-up W-113: Extract to… should start in the folder shown.
 
+## Proposed — Qt 6 and QML interface (W-114)
+
+- **Requested:** The maintainer, 2026-11-13: move the interface from GPUI to Qt 6 and QML, with QtBridge for Rust.
+- **Plan:** [`QT_MIGRATION_PLAN.md`](QT_MIGRATION_PLAN.md). Gains are maturity and KDE integration (cold start, blur, file exchange with other applications, focus, text input, accessibility); speed targets are already met on GPUI. Recommended: a measured spike first (W-114a) with go/no-go criteria, cxx-qt as the bridge with QtBridge tried alongside, the Qt interface built beside the GPUI one until parity, then the switch (D-033, superseding D-001). Five decisions for the maintainer.
+- **Status:** awaiting the maintainer's decisions; nothing built.
+
 ## Traceability
 
 | Requirement | Slice(s) | Validation |
