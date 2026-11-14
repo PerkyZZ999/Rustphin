@@ -113,6 +113,7 @@ fn now() -> u64 {
 /// The Rust side of `PlacesModel`.
 pub struct PlacesModelRust {
     count: i32,
+    has_places: bool,
     focus_row: i32,
     renaming_row: i32,
     rename_text: QString,
@@ -147,6 +148,7 @@ impl Default for PlacesModelRust {
     fn default() -> Self {
         Self {
             count: 0,
+            has_places: false,
             focus_row: -1,
             renaming_row: -1,
             rename_text: QString::default(),
@@ -222,6 +224,13 @@ impl PlacesModelRust {
 
 fn text(words: &str) -> QString {
     QString::from(words)
+}
+
+/// Whether any place or group is listed, so the panel says how to add
+/// one only when there is none (devices do not count).
+fn has_places(rows: &[Row]) -> bool {
+    rows.iter()
+        .any(|row| matches!(row, Row::Place(_) | Row::Group(_)))
 }
 
 impl qobject::PlacesModel {
@@ -357,6 +366,13 @@ impl qobject::PlacesModel {
     /// Lays the rows out again and redraws them.
     fn refresh(mut self: Pin<&mut Self>) {
         let rows = self.rust().compute_rows();
+        // The same rows (a write of our own came back through the watch):
+        // redraw them in place. A reset would rebuild the delegates and
+        // end a rename in progress, as if its field had lost focus.
+        if rows == self.rust().rows {
+            self.as_mut().redraw_all();
+            return self.after_layout();
+        }
         self.as_mut().begin_reset_model();
         {
             let mut rust = self.as_mut().rust_mut();
@@ -372,6 +388,25 @@ impl qobject::PlacesModel {
         }
         self.as_mut().end_reset_model();
         self.as_mut().count_changed();
+        self.after_layout();
+    }
+
+    /// Every row's data changed, its position did not.
+    fn redraw_all(mut self: Pin<&mut Self>) {
+        let last = *self.count() - 1;
+        if last >= 0 {
+            let first = self.index(0, 0, &QModelIndex::default());
+            let last = self.index(last, 0, &QModelIndex::default());
+            let roles: cxx_qt_lib::QList<i32> = cxx_qt_lib::QList::default();
+            self.as_mut().data_changed(&first, &last, &roles);
+        }
+    }
+
+    /// What follows laying the rows out: the focused and renamed rows, the
+    /// notes, and a group just made opening its name field.
+    fn after_layout(mut self: Pin<&mut Self>) {
+        let has_places = has_places(&self.rust().rows);
+        self.as_mut().set_has_places(has_places);
         let position = |row: &Option<Row>, rows: &[Row]| {
             row.as_ref()
                 .and_then(|row| rows.iter().position(|shown| shown == row))
@@ -904,6 +939,16 @@ impl qobject::PlacesModel {
         self.as_mut().rust_mut().renaming = Some(row);
         self.as_mut().set_rename_text(text(&name));
         self.as_mut().set_renaming_row(at);
+        self.redraw_row(at);
+    }
+
+    /// One row's data changed (its rename field opened or closed).
+    fn redraw_row(mut self: Pin<&mut Self>, at: i32) {
+        if at >= 0 && at < *self.count() {
+            let index = self.index(at, 0, &QModelIndex::default());
+            let roles: cxx_qt_lib::QList<i32> = std::iter::once(Role::Renaming as i32).collect();
+            self.as_mut().data_changed(&index, &index, &roles);
+        }
     }
 
     fn finish_rename(mut self: Pin<&mut Self>, typed: &QString, apply: bool) {
@@ -1421,6 +1466,16 @@ impl qobject::PlacesModel {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_hint_shows_until_a_place_or_group_is_listed_whatever_the_devices() {
+        let devices = [Row::Devices, Row::Device("sda1".into())];
+        assert!(!super::has_places(&devices));
+        assert!(super::has_places(&[Row::Devices, Row::Place("p1".into())]));
+        assert!(super::has_places(&[Row::Group(0)]));
+        assert!(!super::has_places(&[Row::Remote]));
+    }
+
     use super::*;
 
     #[test]

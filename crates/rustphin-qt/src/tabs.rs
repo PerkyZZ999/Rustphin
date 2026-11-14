@@ -362,15 +362,14 @@ impl qobject::TabsModel {
             .map(ToString::to_string)
             .filter(|folder| !folder.is_empty())
             .collect();
-        let mut tabs: Vec<(Vec<String>, usize)> = Vec::new();
-        let mut active = 0;
-        if !folders.is_empty() {
-            tabs = folders
-                .into_iter()
-                .map(|folder| (vec![folder], 0))
-                .collect();
-        } else if start {
-            let starts = start_folders(&home);
+        let (mut tabs, mut active): (Vec<(Vec<String>, usize)>, usize) = if start {
+            // The folders named at launch replace the saved tabs, which the
+            // start window then saves as they change, as in the GPUI app.
+            let starts = if folders.is_empty() {
+                start_folders(&home)
+            } else {
+                folders.iter().map(PathBuf::from).collect()
+            };
             let saved =
                 session_path().map_or(Ok(None), |path| rustphin_platform::config::read(&path));
             let restored = session::restore(saved, &starts);
@@ -383,14 +382,20 @@ impl qobject::TabsModel {
             if can_save {
                 self.as_mut().rust_mut().saved = restored.session.clone();
             }
-            active = restored.session.active;
-            tabs = restored
+            let tabs = restored
                 .session
                 .tabs
                 .iter()
                 .map(|tab| (tab.panes.iter().map(start_of).collect(), tab.active_pane))
                 .collect();
-        }
+            (tabs, restored.session.active)
+        } else {
+            let tabs = folders
+                .into_iter()
+                .map(|folder| (vec![folder], 0))
+                .collect();
+            (tabs, 0)
+        };
         if tabs.is_empty() {
             tabs.push((vec![home.to_string_lossy().into_owned()], 0));
             active = 0;

@@ -316,6 +316,7 @@ Window {
                 Layout.fillHeight: true
                 Layout.preferredWidth: places.model.width
                 current: root.folder ? root.folder.location : ""
+                onOtherPane: root.otherPane()
                 onOpenFolder: (path, newTab) => {
                     if (newTab)
                         tabs.open(path, false, [])
@@ -360,6 +361,7 @@ Window {
                             onMenuRequested: (pane, row, x, y) => root.paneMenu(pane, row, x, y)
                             onCopyText: words => textClip.put(words)
                             onDialogRequested: (kind, data) => root.openDialog(kind, data)
+                            onOtherPane: root.otherPane()
                         }
                     }
                 }
@@ -535,11 +537,13 @@ Window {
         context: Qt.WindowShortcut
     }
     Key {
-        sequences: ["Alt+Left", StandardKey.Back]
+        // Not StandardKey.Back: on Linux it is Alt+Left again, and a key
+        // listed twice is ambiguous, so neither fires.
+        sequences: ["Alt+Left", "Back"]
         onActivated: root.folder.back()
     }
     Key {
-        sequences: ["Alt+Right", StandardKey.Forward]
+        sequences: ["Alt+Right", "Forward"]
         onActivated: root.folder.forward()
     }
     Key {
@@ -551,7 +555,7 @@ Window {
         onActivated: root.folder.home()
     }
     Key {
-        sequences: [StandardKey.Refresh, "F5"]
+        sequences: ["F5", "Refresh"]
         onActivated: root.folder.reload()
     }
     Key {

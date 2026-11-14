@@ -37,6 +37,8 @@ FocusScope {
     signal dialogRequested(string kind, var data)
     // The pane shows another folder, or its title or trash state changed.
     signal reported()
+    // Tab: the keyboard moves on to the other view or the places panel.
+    signal otherPane()
 
     // Entries per line (icons) or per column (compact); one in details.
     function lanes(): int {
@@ -146,9 +148,10 @@ FocusScope {
         spacing: 0
 
         // A folder that failed to re-read keeps its listing under this banner.
+        // It wraps: the path comes first and what happened after it.
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: Tokens.metrics.control
+            Layout.preferredHeight: Math.max(Tokens.metrics.control, bannerText.implicitHeight + 2 * Tokens.metrics.space_sm)
             visible: folder.banner.length > 0
             color: Tokens.colors.danger_surface
             border.color: Tokens.colors.danger_border
@@ -165,8 +168,10 @@ FocusScope {
                     colour: Tokens.colors.danger
                 }
                 Text {
+                    id: bannerText
+
                     Layout.fillWidth: true
-                    elide: Text.ElideRight
+                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                     color: Tokens.colors.text
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.body_text
@@ -363,6 +368,11 @@ FocusScope {
                         [Qt.Key_Up]: 0, [Qt.Key_Down]: 1, [Qt.Key_Left]: 2, [Qt.Key_Right]: 3,
                         [Qt.Key_PageUp]: 4, [Qt.Key_PageDown]: 5, [Qt.Key_Home]: 6, [Qt.Key_End]: 7
                     }
+                    if (!ctrl && !alt && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
+                        pane.otherPane()
+                        event.accepted = true
+                        return
+                    }
                     if (!ctrl && !alt && steps[event.key] !== undefined) {
                         folder.moveFocus(steps[event.key], shift, pane.lanes())
                         event.accepted = true
@@ -407,10 +417,11 @@ FocusScope {
                         pane.showFilter()
                         break
                     case Qt.Key_Escape:
+                        // The filter first, then the selection (Dolphin).
                         if (pane.filterOpen)
                             pane.closeFilter()
                         else
-                            return
+                            folder.clearSelection()
                         break
                     default:
                         return pane.typeAhead(event)
@@ -464,6 +475,14 @@ FocusScope {
                     return pane.view.indexAt(p.x, p.y)
                 }
 
+                // A press on a details row beyond its name's text.
+                function besideName(row: int, x: real, y: real): bool {
+                    if (row < 0 || folder.mode !== 2)
+                        return false
+                    const item = pane.view.itemAtIndex(row)
+                    return item !== null && pointer.mapToItem(item, x, y).x > item.nameEnd + Tokens.metrics.space_sm
+                }
+
                 function modifiersOf(mouse): int {
                     return ((mouse.modifiers & Qt.ControlModifier) ? 1 : 0) | ((mouse.modifiers & Qt.ShiftModifier) ? 2 : 0)
                 }
@@ -493,7 +512,7 @@ FocusScope {
                         pane.menuRequested(row, p.x, p.y)
                         return
                     }
-                    if (row < 0) {
+                    if (row < 0 || besideName(row, mouse.x, mouse.y)) {
                         bandAdd = (mouse.modifiers & Qt.ControlModifier) !== 0
                         folder.beginBand()
                         if (!bandAdd)
@@ -526,6 +545,9 @@ FocusScope {
                 onReleased: mouse => {
                     if (dragging)
                         return
+                    // A click beside a name, without a band: the row.
+                    if (mouse.button === Qt.LeftButton && banding && !moved && pressRow >= 0)
+                        folder.click(pressRow, modifiersOf(mouse))
                     // A press on a selected entry kept the selection for a
                     // drag; without one, the click narrows it to the entry.
                     if (mouse.button === Qt.LeftButton && !banding && !moved && pressRow >= 0
@@ -540,8 +562,13 @@ FocusScope {
                         folder.activate(pressRow)
                 }
                 onDoubleClicked: mouse => {
-                    if (mouse.button === Qt.LeftButton && !folder.oneClick && pressRow >= 0)
-                        folder.activate(pressRow)
+                    if (mouse.button === Qt.LeftButton && !folder.oneClick && pressRow >= 0) {
+                        const row = pressRow
+                        // The release that follows belongs to the folder
+                        // just left, not to the row now under the pointer.
+                        pressRow = -1
+                        folder.activate(row)
+                    }
                 }
                 onExited: pane.hoverIndex = -1
                 onCanceled: {
@@ -983,6 +1010,9 @@ FocusScope {
 
                 readonly property color ink: selected ? Tokens.colors.on_selection : Tokens.colors.text
                 readonly property color quiet: selected ? Tokens.colors.on_selection : Tokens.colors.text_muted
+                // Where the name's text ends: a press beyond it starts a
+                // rubber band, not a drag (Dolphin's details view).
+                readonly property real nameEnd: nameLabel.mapToItem(row, Math.min(nameLabel.contentWidth, nameLabel.width), 0).x
 
                 width: ListView.view.width
                 height: folder.rowHeight
@@ -1026,6 +1056,8 @@ FocusScope {
                         Layout.leftMargin: Tokens.metrics.space_sm
 
                         Text {
+                            id: nameLabel
+
                             anchors.verticalCenter: parent.verticalCenter
                             width: parent.width
                             visible: !row.renaming

@@ -11,10 +11,33 @@ Rectangle {
     required property var pane
     readonly property FolderModel folder: pane ? pane.listing : null
     property bool editing: false
-    // Trailing crumbs that fit the window; the rest collapse into "…".
-    readonly property int fits: Window.width >= 1000 ? 4 : Window.width >= 780 ? 3 : Window.width >= 520 ? 2 : 1
+    // Trailing crumbs shown: at most as many as the window's width allows,
+    // fewer while they do not fit the bar; the rest collapse into "…".
+    readonly property int most: Window.width >= 1000 ? 4 : Window.width >= 780 ? 3 : Window.width >= 520 ? 2 : 1
+    property int dropped: 0
+    readonly property int fits: Math.max(1, most - dropped)
+    readonly property real room: width - crumbs.x - Tokens.metrics.space_sm
+
+    // Starts again from the most whenever there may be more room; the row
+    // then drops one more leading crumb each time it is laid out too wide.
+    function refit() {
+        dropped = 0
+        trim()
+    }
+    function trim() {
+        if (crumbs.implicitWidth > room && fits > 1)
+            dropped += 1
+    }
+
+    onWidthChanged: refit()
+    onMostChanged: refit()
+    Connections {
+        target: bar.folder
+        function onCrumbLabelsChanged() { bar.refit() }
+    }
 
     implicitHeight: Tokens.metrics.tool_button
+    clip: true
     radius: Tokens.metrics.radius
     color: Tokens.colors.content
     border.width: field.activeFocus ? 2 : 1
@@ -56,6 +79,7 @@ Rectangle {
         }
         visible: !bar.editing && bar.folder !== null
         spacing: 0
+        onImplicitWidthChanged: bar.trim()
         Accessible.role: Accessible.Grouping
         Accessible.name: qsTr("Location: %1").arg(bar.folder ? bar.folder.location : "")
 

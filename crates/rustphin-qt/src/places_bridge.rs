@@ -34,6 +34,7 @@ pub mod qobject {
         #[base = QAbstractListModel]
         #[qml_element]
         #[qproperty(i32, count)]
+        #[qproperty(bool, has_places, cxx_name = "hasPlaces")]
         #[qproperty(i32, focus_row, cxx_name = "focusRow")]
         #[qproperty(i32, renaming_row, cxx_name = "renamingRow")]
         #[qproperty(QString, rename_text, cxx_name = "renameText")]

@@ -145,13 +145,15 @@ void activate(QWindow* window, const QString& activation)
     window->requestActivate();
 }
 
-// A window with a tab on each folder; with none, the start window (it
-// restores the session) when no window is open, else one at home. Names
+// A window with a tab on each folder, or with none, the saved tabs when no
+// window is open (the start window, which saves them), else home. Names
 // in `select` are selected in the first folder.
 QWindow* openWindow(const QStringList& folders, const QString& activation,
     const QStringList& select = {})
 {
-    const bool start = folders.isEmpty() && lastActive() == nullptr;
+    // The first window restores and saves the session; folders named at
+    // launch replace its tabs.
+    const bool start = lastActive() == nullptr;
     QQmlApplicationEngine* windows = engine();
     windows->setInitialProperties({
         { QStringLiteral("startFolders"), folders },

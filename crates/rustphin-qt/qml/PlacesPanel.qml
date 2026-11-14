@@ -18,6 +18,8 @@ FocusScope {
     signal openFolder(string path, bool newTab)
     signal openTrash()
     signal done()
+    // Tab: the keyboard goes back to the views.
+    signal otherPane()
 
     function focusPanel() {
         list.forceActiveFocus()
@@ -118,6 +120,11 @@ FocusScope {
                 case Qt.Key_H: key = event.modifiers === Qt.NoModifier ? "H" : ""; break
                 case Qt.Key_G: key = ctrlShift ? "Ctrl+Shift+G" : event.modifiers === Qt.NoModifier ? "G" : ""; break
                 case Qt.Key_E: key = event.modifiers === Qt.NoModifier ? "E" : ""; break
+                case Qt.Key_Tab:
+                case Qt.Key_Backtab:
+                    panel.otherPane()
+                    event.accepted = true
+                    return
                 case Qt.Key_Menu:
                     panel.menuAt(places.focusRow, list.currentItem ? list.currentItem : list, 0, Tokens.metrics.place_row)
                     event.accepted = true
@@ -339,21 +346,25 @@ FocusScope {
                     }
                 }
             }
+            // With no places of its own (devices aside), how to add one.
+            header: Text {
+                visible: !places.hasPlaces
+                width: ListView.view.width
+                height: visible ? implicitHeight : 0
+                leftPadding: Tokens.metrics.space_md
+                rightPadding: Tokens.metrics.space_md
+                bottomPadding: Tokens.metrics.space_sm
+                wrapMode: Text.Wrap
+                color: Tokens.colors.text_muted
+                font.family: Tokens.metrics.family_body
+                font.pixelSize: Tokens.metrics.small_text
+                text: qsTr("No places yet. Add the folder shown with Ctrl+Shift+D, or drag a folder here.")
+            }
             footer: Column {
                 width: ListView.view.width
                 spacing: Tokens.metrics.space_sm
                 topPadding: Tokens.metrics.space_sm
 
-                Text {
-                    visible: places.count === 0
-                    width: parent.width - 2 * Tokens.metrics.space_md
-                    x: Tokens.metrics.space_md
-                    wrapMode: Text.Wrap
-                    color: Tokens.colors.text_muted
-                    font.family: Tokens.metrics.family_body
-                    font.pixelSize: Tokens.metrics.small_text
-                    text: qsTr("No places yet. Add the folder shown with Ctrl+Shift+D, or drag a folder here.")
-                }
                 Text {
                     visible: places.devicesNote.length > 0
                     width: parent.width - 2 * Tokens.metrics.space_md

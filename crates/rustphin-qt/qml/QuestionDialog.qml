@@ -39,7 +39,25 @@ Popup {
 
     parent: Overlay.overlay
     anchors.centerIn: parent
-    width: Math.min(Tokens.metrics.dialog, parent ? parent.width - 2 * Tokens.metrics.space_lg : Tokens.metrics.dialog)
+    // Wide enough for its buttons on one line when the window allows;
+    // narrower windows wrap them.
+    width: Math.min(Math.max(Tokens.metrics.dialog, buttonsWidth + 2 * Tokens.metrics.space_md),
+                    parent ? parent.width - 2 * Tokens.metrics.space_lg : Tokens.metrics.dialog)
+    property real buttonsWidth: 0
+
+    // The buttons' width on one line.
+    function measure() {
+        let width = 0
+        let shown = 0
+        for (let i = 0; i < answers.count; ++i) {
+            const button = answers.itemAt(i)
+            if (button) {
+                width += button.implicitWidth
+                shown += 1
+            }
+        }
+        buttonsWidth = width + Math.max(0, shown - 1) * Tokens.metrics.space_sm
+    }
     modal: true
     focus: true
     visible: shown !== null
@@ -259,22 +277,26 @@ Popup {
             }
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: buttons.implicitHeight + 2 * Tokens.metrics.space_md
+                Layout.preferredHeight: buttons.childrenRect.height + 2 * Tokens.metrics.space_md
                 color: Tokens.colors.chrome
                 radius: Tokens.metrics.radius
 
-                RowLayout {
+                Flow {
                     id: buttons
 
                     anchors.fill: parent
                     anchors.margins: Tokens.metrics.space_md
                     spacing: Tokens.metrics.space_sm
+                    // Right-aligned, so the order is reversed: the primary
+                    // answer ends on the right, as in the mockups.
+                    layoutDirection: Qt.RightToLeft
 
-                    Item {
-                        Layout.fillWidth: true
-                    }
                     Repeater {
-                        model: dialog.shown ? dialog.shown.buttons : []
+                        id: answers
+
+                        onItemAdded: Qt.callLater(dialog.measure)
+                        onItemRemoved: Qt.callLater(dialog.measure)
+                        model: dialog.shown ? dialog.shown.buttons.slice().reverse() : []
 
                         delegate: OutlinedButton {
                             required property var modelData
