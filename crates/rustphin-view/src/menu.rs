@@ -258,8 +258,13 @@ impl<C> MenuEntry<C> {
 
 /// A menu as QML draws it: each entry with its label, key, icon (a Lucide
 /// name or a picture's `file://` address), whether it can be chosen, and
-/// its path ("2" or "3.1") for [`command_at`].
+/// its path ("2" or "3.1") for [`command_at`]. [`OpenMenu`] numbers the paths.
 pub fn to_json<C: Command>(entries: &[MenuEntry<C>]) -> serde_json::Value {
+    json_under(entries, "")
+}
+
+/// [`to_json`] with every path starting `prefix.` (none when empty).
+fn json_under<C: Command>(entries: &[MenuEntry<C>], prefix: &str) -> serde_json::Value {
     fn walk<C: Command>(entries: &[MenuEntry<C>], prefix: &str) -> Vec<serde_json::Value> {
         entries
             .iter()
@@ -298,7 +303,7 @@ pub fn to_json<C: Command>(entries: &[MenuEntry<C>]) -> serde_json::Value {
             })
             .collect()
     }
-    serde_json::Value::Array(walk(entries, ""))
+    serde_json::Value::Array(walk(entries, prefix))
 }
 
 /// How a row's icon is named for QML.
@@ -322,6 +327,68 @@ pub fn command_at<'a, C>(entries: &'a [MenuEntry<C>], path: &str) -> Option<&'a 
         }
     }
     None
+}
+
+/// The menu a view has open: its entries and what it was opened for
+/// (`Ctx`: the row right-clicked, or `()`), until an entry is chosen or
+/// the menu closes (W-131).
+///
+/// Paths in its JSON carry the menu's number ("4.2.1"), so a choice made
+/// in a menu that has since been replaced is not taken for the entry at
+/// the same place in the new one.
+#[derive(Debug, Clone)]
+pub struct OpenMenu<C, Ctx = ()> {
+    shown: Option<(u32, Vec<MenuEntry<C>>, Ctx)>,
+    opened: u32,
+}
+
+impl<C, Ctx> Default for OpenMenu<C, Ctx> {
+    fn default() -> Self {
+        Self {
+            shown: None,
+            opened: 0,
+        }
+    }
+}
+
+impl<C: Command + Clone, Ctx> OpenMenu<C, Ctx> {
+    /// Opens `entries` for `context`, replacing any menu open, and gives
+    /// the JSON QML draws; `None`, leaving the open menu as it is, when
+    /// there are no entries.
+    pub fn open(&mut self, entries: Vec<MenuEntry<C>>, context: Ctx) -> Option<String> {
+        if entries.is_empty() {
+            return None;
+        }
+        self.opened = self.opened.wrapping_add(1);
+        let json = json_under(&entries, &self.opened.to_string()).to_string();
+        self.shown = Some((self.opened, entries, context));
+        Some(json)
+    }
+
+    /// Whether a menu is open.
+    pub fn is_open(&self) -> bool {
+        self.shown.is_some()
+    }
+
+    /// The command at `path` of the open menu and what the menu was opened
+    /// for, and the menu closes; `None` for a disabled entry, a submenu or
+    /// a separator (the menu closes too). A path from a menu that is no
+    /// longer open gives `None` and leaves the open one alone.
+    pub fn choose(&mut self, path: &str) -> Option<(C, Ctx)> {
+        let (number, rest) = path.split_once('.')?;
+        let opened = self.shown.as_ref().map(|(opened, ..)| *opened)?;
+        if number.parse::<u32>().ok()? != opened {
+            return None;
+        }
+        let (_, entries, context) = self.shown.take()?;
+        let command = command_at(&entries, rest)?.clone();
+        Some((command, context))
+    }
+
+    /// Closes the menu without running anything.
+    pub fn close(&mut self) {
+        self.shown = None;
+    }
 }
 
 /// The facts the menu is built from.
@@ -1233,5 +1300,97 @@ mod tests {
         assert_eq!(command_at(&entries, "1"), None);
         assert_eq!(command_at(&entries, "2"), None);
         assert_eq!(command_at(&entries, "9"), None);
+    }
+
+    fn item(label: &str, command: MenuCommand, enabled: bool) -> MenuEntry {
+        MenuEntry::Item {
+            label: label.into(),
+            command,
+            enabled,
+        }
+    }
+
+    /// The path QML reports for the row labelled `label` of `json`.
+    fn path_of(json: &str, label: &str) -> String {
+        fn find(rows: &serde_json::Value, label: &str) -> Option<String> {
+            rows.as_array()?.iter().find_map(|row| {
+                if row["label"] == label {
+                    row["path"].as_str().map(str::to_owned)
+                } else {
+                    find(&row["items"], label)
+                }
+            })
+        }
+        find(&serde_json::from_str(json).unwrap(), label).unwrap()
+    }
+
+    #[test]
+    fn an_open_menu_gives_its_choice_and_context_once() {
+        let mut menu = OpenMenu::default();
+        let json = menu
+            .open(
+                vec![
+                    item("Open", MenuCommand::Open, true),
+                    MenuEntry::Submenu {
+                        label: "Edit".into(),
+                        icon: crate::icons::Icon::Pencil,
+                        items: vec![item("Copy", MenuCommand::Copy, true)],
+                    },
+                ],
+                "row 3",
+            )
+            .unwrap();
+        let copy = path_of(&json, "Copy");
+        assert_eq!(menu.choose(&copy), Some((MenuCommand::Copy, "row 3")));
+        assert!(!menu.is_open());
+        assert_eq!(menu.choose(&copy), None);
+    }
+
+    #[test]
+    fn a_choice_from_a_replaced_menu_is_not_taken_from_the_new_one() {
+        let mut menu = OpenMenu::default();
+        let first = menu
+            .open(vec![item("Open", MenuCommand::Open, true)], 1)
+            .unwrap();
+        let second = menu
+            .open(vec![item("Cut", MenuCommand::Cut, true)], 2)
+            .unwrap();
+        assert_eq!(menu.choose(&path_of(&first, "Open")), None);
+        assert!(menu.is_open());
+        assert_eq!(
+            menu.choose(&path_of(&second, "Cut")),
+            Some((MenuCommand::Cut, 2))
+        );
+    }
+
+    #[test]
+    fn closing_without_choosing_forgets_the_menu() {
+        let mut menu = OpenMenu::default();
+        let json = menu
+            .open(vec![item("Open", MenuCommand::Open, true)], ())
+            .unwrap();
+        menu.close();
+        assert!(!menu.is_open());
+        assert_eq!(menu.choose(&path_of(&json, "Open")), None);
+        // Nothing to offer opens nothing.
+        assert_eq!(menu.open(Vec::new(), ()), None);
+        assert!(!menu.is_open());
+    }
+
+    #[test]
+    fn disabled_entries_and_submenus_are_never_chosen() {
+        let mut menu = OpenMenu::default();
+        let entries = vec![
+            item("Paste", MenuCommand::Paste, false),
+            MenuEntry::Submenu {
+                label: "Edit".into(),
+                icon: crate::icons::Icon::Pencil,
+                items: vec![item("Copy", MenuCommand::Copy, true)],
+            },
+        ];
+        let json = menu.open(entries.clone(), ()).unwrap();
+        assert_eq!(menu.choose(&path_of(&json, "Paste")), None);
+        let json = menu.open(entries, ()).unwrap();
+        assert_eq!(menu.choose(&path_of(&json, "Edit")), None);
     }
 }

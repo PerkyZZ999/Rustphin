@@ -258,8 +258,8 @@ pub struct FolderModelRust {
     model_epoch: u64,
     /// The New menu's files.
     new_files: Vec<rustphin_platform::templates::NewFile>,
-    /// The open menu and what it acts on.
-    menu_entries: Vec<rustphin_view::menu::MenuEntry>,
+    /// The open menu; it acts on the selection when chosen.
+    open_menu: rustphin_view::menu::OpenMenu<rustphin_view::menu::MenuCommand>,
     /// The hub's counters last taken up.
     clip_serial: u64,
     created_serial: u64,
@@ -352,7 +352,7 @@ impl Default for FolderModelRust {
             as_admin: false,
             model_epoch: 0,
             new_files: rustphin_platform::templates::built_in(),
-            menu_entries: Vec::new(),
+            open_menu: rustphin_view::menu::OpenMenu::default(),
             clip_serial: 0,
             created_serial: crate::hub::with(|hub| hub.board.created().0),
             admin_changes: 0,
@@ -2148,21 +2148,29 @@ impl qobject::FolderModel {
             }
             which => menu::context_menu(&self.menu_facts(which == "selection")),
         };
-        if entries.is_empty() {
+        let Some(json) = self.as_mut().rust_mut().open_menu.open(entries, ()) else {
             return false;
-        }
-        let json = menu::to_json(&entries).to_string();
-        self.as_mut().rust_mut().menu_entries = entries;
+        };
         self.as_mut().set_menu(QString::from(&json));
         true
     }
 
     fn run_menu(mut self: Pin<&mut Self>, path: &QString) {
-        use rustphin_view::menu::{self, MenuCommand};
-        let command = menu::command_at(&self.rust().menu_entries, &path.to_string()).cloned();
-        self.as_mut().rust_mut().menu_entries.clear();
-        self.as_mut().set_menu(QString::default());
-        let Some(command) = command else {
+        use rustphin_view::menu::MenuCommand;
+        let path = path.to_string();
+        let chosen = {
+            let mut rust = self.as_mut().rust_mut();
+            if path.is_empty() {
+                rust.open_menu.close();
+                None
+            } else {
+                rust.open_menu.choose(&path)
+            }
+        };
+        if !self.rust().open_menu.is_open() {
+            self.as_mut().set_menu(QString::default());
+        }
+        let Some((command, ())) = chosen else {
             return;
         };
         if let Some(action) = command.action() {

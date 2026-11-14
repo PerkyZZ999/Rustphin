@@ -24,7 +24,7 @@ use super::{
 use crate::{
     commands::PlacesCommand,
     groups::Groups,
-    menu::{self, MenuEntry},
+    menu::OpenMenu,
     place_menu::{self, PlaceCommand, Target},
     settings::PlacesChoice,
 };
@@ -227,8 +227,8 @@ pub struct PlacesPanel {
     renaming: Option<Row>,
     /// A group just made, whose name field opens once it is drawn.
     rename_requested: Option<Row>,
-    menu: Vec<MenuEntry<PlaceCommand>>,
-    menu_row: Option<Row>,
+    /// The open menu and the row it was opened on (none: empty space).
+    menu: OpenMenu<PlaceCommand, Option<Row>>,
 }
 
 impl PlacesPanel {
@@ -249,8 +249,7 @@ impl PlacesPanel {
             focused: None,
             renaming: None,
             rename_requested: None,
-            menu: Vec::new(),
-            menu_row: None,
+            menu: OpenMenu::default(),
         }
     }
 
@@ -578,25 +577,28 @@ impl PlacesPanel {
                 showing_hidden: self.choice.show_hidden,
             }),
         };
-        if entries.is_empty() {
-            return None;
-        }
+        let json = self.menu.open(entries, row.clone())?;
         if row.is_some() {
-            self.focused = row.clone();
+            self.focused = row;
         }
-        let json = menu::to_json(&entries).to_string();
-        self.menu = entries;
-        self.menu_row = row;
         Some(vec![Effect::Menu(json), Effect::Focus])
     }
 
-    /// Runs the menu entry at `path` ("3.1"); an empty path closes the menu.
+    /// Runs the menu entry at `path` (as the menu's JSON gives it); an
+    /// empty path closes the menu. A path from a menu since replaced
+    /// does nothing.
     pub fn run_menu(&mut self, path: &str) -> Vec<Effect> {
-        let command = menu::command_at(&self.menu, path).cloned();
-        let row = self.menu_row.take();
-        self.menu.clear();
-        let mut effects = vec![Effect::Menu(String::new())];
-        let Some(command) = command else {
+        let chosen = if path.is_empty() {
+            self.menu.close();
+            None
+        } else {
+            self.menu.choose(path)
+        };
+        let mut effects = Vec::new();
+        if !self.menu.is_open() {
+            effects.push(Effect::Menu(String::new()));
+        }
+        let Some((command, row)) = chosen else {
             return effects;
         };
         let place = match &row {
@@ -1303,9 +1305,15 @@ mod tests {
     fn a_new_group_takes_the_place_it_was_made_with_and_is_named_at_once() {
         let mut world = world();
         let at = world.at(&p("a"));
-        world.panel.open_menu(Some(at)).unwrap();
+        let opened = world.panel.open_menu(Some(at)).unwrap();
+        let Some(Effect::Menu(json)) = opened.first() else {
+            panic!("no menu in {opened:?}");
+        };
+        // The menu's number, before every path in it.
+        let rows: serde_json::Value = serde_json::from_str(json).unwrap();
+        let number = rows[0]["path"].as_str().unwrap().split('.').next().unwrap();
         // Move to group › Work, Media, separator, New group…
-        let effects = world.panel.run_menu("3.3");
+        let effects = world.panel.run_menu(&format!("{number}.3.3"));
         world.carry_out(effects);
         assert_eq!(world.saved_group(2), ["a"]);
         assert_eq!(world.panel.renaming(), Some(&Row::Group(2)));

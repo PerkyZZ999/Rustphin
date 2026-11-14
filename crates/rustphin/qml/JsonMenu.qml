@@ -11,7 +11,7 @@ Menu {
     id: menu
 
     property string json: ""
-    // The entry chosen, by its path ("2", "3.1").
+    // The entry chosen, by its path ("4.2", "4.3.1": the menu's number first).
     signal chosen(string path)
 
     function build(target, entries) {
