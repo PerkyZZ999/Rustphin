@@ -187,3 +187,7 @@ pub(super) fn remove(fs: &dyn Fs, directory: &Path, stamp: FileInfo) -> io::Resu
         )),
     })
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests;
