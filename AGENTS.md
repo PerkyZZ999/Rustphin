@@ -8,7 +8,7 @@ Rustphin is a file manager for KDE Plasma on Wayland, written in Rust. It is a r
 - UI: Qt 6 Quick and QML through cxx-qt 0.10 (D-034), with KDE Frameworks' `KWindowEffects` for blur. GPUI was replaced at W-114i (2026-11-14); the last GPUI version is commit `c062d63`.
 - Platform: Linux on Wayland only. No X11, macOS or Windows code.
 - Licence: GPL-3.0-or-later. Every dependency must be GPLv3-compatible.
-- Repository: local git only, branch `main`. There is no remote and no hosted CI; do not add one or push anywhere.
+- Repository: branch `main`, pushed to GitHub at `https://github.com/PerkyZZ999/Rustphin.git` (remote `origin`, D-037). There is no hosted CI: `rust-tc doctor` run locally is the gate. Push only when the maintainer asks, and only commits that passed doctor.
 
 ## Read this first
 
@@ -145,7 +145,7 @@ Performance targets on a 500,000-entry directory (R-101): first entries within 2
 
 ## Commits
 
-- Local commits on `main`; small and focused, one work item or coherent step each.
+- Commits on `main`; small and focused, one work item or coherent step each. Push to `origin` only when the maintainer asks (D-037).
 - Message: imperative summary line (≤ 72 characters), blank line, then why. Reference the work item or requirement, for example `W-004` or `R-101`.
 - Commit after every task, once `rust-tc doctor` passes and `docs/project/` reflects what changed. Never commit with failing checks.
 

@@ -159,6 +159,7 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Status:** assumption
 - **Date:** 2026-10-12
 - **Decision:** Local git repository on `main` only (user, 2026-10-12): no remote and no hosted CI. The checks a CI would run are `rust-tc doctor` (the user's Rust-Toolchain), run locally after every task and before each commit.
+- **Supersedes / superseded by:** superseded by D-037 (the repository is also on GitHub, 2026-11-14)
 
 ## D-017 — Visual design follows docs/DESIGN.md
 - **Status:** locked
@@ -328,6 +329,14 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Status:** decided
 - **Date:** 2026-11-14
 - **Context:** D-032 handed formats Rustphin does not read itself (RAR, ISO, CAB, LHA, CPIO, RPM, DEB, lone compressed files…) to Ark, with its own window, progress and questions. The maintainer asked for something more modern and faster. libarchive (BSD-2-Clause, already part of every KDE system, the library behind `bsdtar`) reads those formats in-process; 7-Zip reads the rest, encrypted RAR and 7Z included.
-- **Decision:** Rustphin reads the other formats through libarchive inside its own operation engine: the same progress, Stop, conflict questions, password question and undo as ZIP and TAR, and the same checks on entry names and links. The binding is Rustphin's own small FFI in `rustphin-platform` (names stay bytes; no new crate), registered with the core as its reader of `Format::Foreign`, so the core keeps no C dependency. Archives libarchive cannot open, or whose encryption it cannot read, go to 7-Zip, else unrar, as before. Ark is no longer used. Writing stays ZIP, TAR and 7Z.
+- **Decision:** Rustphin reads the other formats through libarchive inside its own operation engine: the same progress, Stop, conflict questions, password question and undo as ZIP and TAR, and the same checks on entry names and links. The binding is Rustphin's own small FFI in `rustphin-platform` (names stay bytes; no new crate), passed to the operation engine as its reader of `Format::Foreign` (alongside `Fs` and `Trash`, W-129), so the core keeps no C dependency. Archives libarchive cannot open, or whose encryption it cannot read, go to 7-Zip, else unrar, as before. Ark is no longer used. Writing stays ZIP, TAR and 7Z.
 - **Confirmed by / date:** The maintainer, 2026-11-14 ("Yes, use libarchive")
 - **Supersedes / superseded by:** supersedes D-032's hand-over to Ark
+
+## D-037 — The repository is also on GitHub
+- **Status:** decided
+- **Date:** 2026-11-14
+- **Context:** D-016 kept the repository local, with no remote and no hosted CI. The maintainer created a GitHub repository for it.
+- **Decision:** `main` is pushed to `https://github.com/PerkyZZ999/Rustphin.git` (remote `origin`), with the maintainer's go-ahead for each push. There is still no hosted CI: `rust-tc doctor`, run locally before every commit, remains the gate, and nothing is pushed that has not passed it. Build output, fuzz corpora and local tool state stay out of the repository, as `.gitignore` says.
+- **Confirmed by / date:** The maintainer, 2026-11-14 ("push our work on this github repo -> https://github.com/PerkyZZ999/Rustphin.git"; "you can also update the docs that says there is not remote or hosted CI")
+- **Supersedes / superseded by:** supersedes D-016

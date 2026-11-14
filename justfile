@@ -208,10 +208,11 @@ qml-format:
     exit "$status"
 
 
-# QML lint (W-116): qmllint with the maintainer's BestPractices plugin, every
-# category a warning and no warning allowed. The plugin is built from
-# ../QtQmlBestPractices into target/ against the
-# installed Qt. The module's generated type information is copied without
+# QML lint (W-116): qmllint with the maintainer's BestPractices plugin,
+# every category a warning and no warning allowed. The plugin comes from
+# its repository, `QML_BEST_PRACTICES` or else ../QtQmlBestPractices beside
+# this one: its own build when there is one, else built into target/ with
+# cmake against the installed Qt. The module's generated type information is copied without
 # the opaque stand-ins qmltyperegistrar writes for cxx-qt's QString,
 # QStringList, QMap and plain types, which would hide Qt's own types, and
 # the QML files are linked in, so qmllint sees the module as Qt loads it.
@@ -219,9 +220,18 @@ qml-lint:
     #!/usr/bin/env bash
     set -euo pipefail
     plugin=target/qmllint-plugin
+    source="${QML_BEST_PRACTICES:-../QtQmlBestPractices}"
     if [[ ! -f "$plugin/libBestPracticesPlugin.so" ]]; then
-        cmake -S ../QtQmlBestPractices -B "$plugin" -DCMAKE_BUILD_TYPE=Release >/dev/null
-        cmake --build "$plugin" -j"$(nproc)" >/dev/null
+        if [[ -f "$source/build/libBestPracticesPlugin.so" ]]; then
+            mkdir -p "$plugin"
+            cp "$source/build/libBestPracticesPlugin.so" "$plugin/"
+        elif [[ -f "$source/CMakeLists.txt" ]] && command -v cmake >/dev/null; then
+            cmake -S "$source" -B "$plugin" -DCMAKE_BUILD_TYPE=Release >/dev/null
+            cmake --build "$plugin" -j"$(nproc)" >/dev/null
+        else
+            echo "qml-lint needs the BestPractices plugin: set QML_BEST_PRACTICES to its repository (built, or with cmake installed)" >&2
+            exit 1
+        fi
     fi
     cargo build --quiet --package rustphin
     generated="$(find target/debug/build/rustphin -name plugin.qmltypes -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)"

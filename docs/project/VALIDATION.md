@@ -1,5 +1,11 @@
 # Validation evidence
 
+### 2026-11-14 — W-144 The repository goes to GitHub (D-037); QML lint finds its plugin
+- **Change:** D-037 supersedes D-016: `main` is pushed to GitHub, still with no hosted CI; AGENTS.md, ARCHITECTURE.md and REQUIREMENTS.md say so, and D-036's wording follows W-129 (the reader is passed to the engine). The `qml-lint` recipe no longer names an absolute path: it takes the BestPractices plugin's repository from `QML_BEST_PRACTICES` or `../QtQmlBestPractices`, uses that repository's own build when present, else builds it with cmake, else says what is missing (after `cargo clean` there was no cmake on this machine and the gate failed).
+- **Checked:** `rust-tc qml-lint` passed with the plugin taken from the repository's build; qmllint with that plugin flagged a deliberate `property var` (prefer-typed-properties) in a scratch file, so the plugin is loaded.
+- **Tests:** `rust-tc doctor` PASS, 928 tests (3 skipped).
+- **Waiver:** none
+
 ### 2026-11-14 — W-143 A damaged folder-views file is kept, not overwritten
 - **Problem (left open by W-140):** `views.toml`, each folder's remembered view, was read leniently and saved over on the next view change, so a file that could not be read, was not TOML, or came from a newer Rustphin was replaced with what this run knew.
 - **Fix:** `FolderViews::read` reports the issue as `Settings::read` does (`saved_file::FileIssue`); the store keeps no writer for such a file and tells the user ("Folder views are damaged. Saving folder views is off; the file was kept. …"); the settings notice comes first when both are kept.
