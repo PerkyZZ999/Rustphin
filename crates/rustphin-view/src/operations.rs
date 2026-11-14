@@ -306,6 +306,10 @@ pub fn outcome_notice(done: &str, outcome: &Outcome) -> Option<Notice> {
     }
     let mut text = if outcome.completed {
         format!("{}, with problems.", upper_first(done))
+    } else if outcome.changes.is_empty() {
+        // A folder copy is published only when complete (D-011), so a
+        // stopped one can leave nothing at all.
+        "Stopped before anything changed.".to_owned()
     } else {
         format!("Stopped part-way: {done}. What was done stays.")
     };
@@ -571,12 +575,27 @@ mod tests {
 
     #[test]
     fn a_cancelled_operation_says_that_finished_work_stays() {
-        let notice = result_notice("moved 9 items to “x”", false, &done(false, &[])).unwrap();
+        let mut partial = done(false, &[]);
+        if let Finished::Done(outcome) = &mut partial {
+            outcome
+                .changes
+                .push(rustphin_core::ops::Change::Deleted { path: "/a".into() });
+        }
+        let notice = result_notice("moved 9 items to “x”", false, &partial).unwrap();
         assert_eq!(
             notice.text,
             "Stopped part-way: moved 9 items to “x”. What was done stays."
         );
         assert!(!notice.is_error);
+    }
+
+    #[test]
+    fn a_cancelled_operation_that_changed_nothing_says_so() {
+        // A folder copy is published only when complete (D-011): stopped,
+        // it leaves nothing, and the notice must not claim otherwise.
+        let notice = result_notice("copied “big”", false, &done(false, &[])).unwrap();
+        assert_eq!(notice.text, "Stopped before anything changed.");
+        assert!(!notice.offers_undo);
     }
 
     #[test]

@@ -710,7 +710,7 @@ mod tests {
 
         assert_eq!(title(&board), None);
         assert_eq!(board.running_count(), 0);
-        assert!(notice(&board).unwrap().starts_with("Stopped part-way"));
+        assert!(notice(&board).unwrap().starts_with("Stopped"));
     }
 
     #[test]

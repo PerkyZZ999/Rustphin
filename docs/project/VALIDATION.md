@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-14 — W-125 A stopped operation that changed nothing says so
+- **Problem (found in W-124's replay):** stopping a copy of one large folder left the destination empty, as D-011 intends (a folder copy is published only when complete), but the notice said "Stopped part-way: … What was done stays."
+- **Fix:** `outcome_notice` says "Stopped before anything changed." when a stopped operation recorded no change; with changes, the old wording stays.
+- **Tests:** `a_cancelled_operation_that_changed_nothing_says_so` (failed with the old text); `a_cancelled_operation_says_that_finished_work_stays` now has a change; W-124's board test checks for "Stopped".
+- **Not verified:** on screen (wording only; the case was seen in W-124's replay).
+- **Tests:** `rust-tc doctor` PASS, 716 tests.
+- **Waiver:** none
+
 ### 2026-11-14 — W-124 Operation board in rustphin-view
 - **Change:** what the file operations show and decide moved out of `crates/rustphin/src/hub.rs` into `rustphin_view::operation_board::OperationBoard`, driven by the core's `OpEvent`s and the `Instant` each arrived at (no clock inside, no sleeps in tests). It owns the running operations and their progress line (`progress(now)`, shown after `QUIET_PERIOD`), the question queue and what answering the front one means (`answer` returns a `Reply`: resolve, recover, password, or a `Launch` to start), the notice with serial-based `Expiry` tickets (`expire`, `say_until_withdrawn`/`withdraw`), the problems list, the trash/delete/drop/empty-trash decisions, the words of lasting and "Emptying the trash" operations, what an extraction or compression made (`created`), the administrator id range (`admin_first_id`, `is_admin`) and finished-administrator count, and the clipboard state (`clip_read`, `picked_up`, `paste`, `is_cut`, `can_paste`, `clip_serial`). `hub.rs` keeps the adapter work: the user's and the administrator's runners and routing by `OpId`, `RealFs` and the trash, clipboard I/O threads, `post::after` timers for `FollowUp`/`Expiry`, and notifying the Qt objects. `operations.rs` reads typed board state; the problems JSON is `Problems::json` in rustphin-view. Wording and behaviour unchanged.
 - **Kept as before (not changed):** only extraction and compression select what they made; paste, undo (including an undone trash) and the hub do not select anything (Duplicate selects through the pane, as before). `an_undo_reveals_nothing` records this.
