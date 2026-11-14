@@ -57,15 +57,23 @@ Menu {
         }
     }
 
-    // Shows the menu at a point of `owner`.
-    function openAt(owner: Item, x: real, y: real) {
+    // Shows the menu at a point of `owner`, below `y`; when the window has
+    // no room below, it ends at `above` instead (the top of the entry or
+    // button it is for), so it never covers what it was opened on.
+    function openAt(owner: Item, x: real, y: real, above: real) {
         // A menu another window interrupted may still count as open.
         menu.close()
         clear(menu)
         if (json.length === 0)
             return
         build(menu, JSON.parse(json))
-        menu.popup(owner, x, y)
+        const list = menu.contentItem as ListView
+        if (list)
+            list.forceLayout()
+        const height = menu.implicitHeight
+        const top = owner.mapToItem(null, x, y).y
+        const fitsBelow = top + height <= owner.Window.height
+        menu.popup(owner, x, fitsBelow ? y : above - height)
     }
 
     width: Tokens.metrics.menu

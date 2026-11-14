@@ -24,6 +24,8 @@ ToolButton {
     ToolTip.delay: 600
     ToolTip.text: tip
     Accessible.name: text
+    // A hidden button (another row's Eject) is not offered to screen readers.
+    Accessible.ignored: !visible
     Accessible.checked: checked
 
     contentItem: Image {

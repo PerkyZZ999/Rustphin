@@ -246,7 +246,11 @@ Popup {
                     Accessible.name: qsTr("Permissions")
 
                     Repeater {
-                        model: dialog.permissionClasses
+                        // By count: a toggled bit sends the classes again,
+                        // and a new list would rebuild the boxes and lose
+                        // the keyboard focus; the rows read their class by
+                        // index instead.
+                        model: dialog.permissionClasses.length
 
                         delegate: ColumnLayout {
                             id: permissionClass
@@ -285,6 +289,15 @@ Popup {
                                     enabled: dialog.permissionsEditable
                                     Accessible.name: permissionClass.name + " " + modelData
                                     onToggled: info.setBit(permissionClass.index, index, checked)
+                                    // The box keeps Return and Enter from the dialog.
+                                    Keys.onReturnPressed: info.apply()
+                                    Keys.onEnterPressed: info.apply()
+                                    background: Rectangle {
+                                        color: "transparent"
+                                        radius: Tokens.metrics.radius
+                                        border.width: box.visualFocus ? 2 : 0
+                                        border.color: Tokens.colors.accent
+                                    }
                                     contentItem: Text {
                                         textFormat: Text.PlainText
                                         leftPadding: box.indicator.width + Tokens.metrics.space_xs

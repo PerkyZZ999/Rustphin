@@ -17,8 +17,15 @@ Rectangle {
     // The window does what the pane cannot (menus, palette, split).
     signal command(string id, var source)
 
+    // Opens the location field; asked again while it is open, it gives
+    // the breadcrumbs and the keyboard back to the list (Dolphin's Ctrl+L).
     function editLocation() {
-        editingLocation = true
+        if (editingLocation) {
+            editingLocation = false
+            pane.focusList()
+        } else {
+            editingLocation = true
+        }
     }
 
     height: Tokens.metrics.toolbar

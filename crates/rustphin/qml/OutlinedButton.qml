@@ -41,6 +41,8 @@ Button {
     }
     background: Rectangle {
         radius: Tokens.metrics.radius
+        // A disabled default keeps its fill at half opacity (DESIGN.md).
+        opacity: !plain.enabled && (plain.primary || plain.destructive) ? 0.5 : 1
         color: plain.destructive ? (plain.down ? Qt.darker(Tokens.colors.danger, 1.2) : Tokens.colors.danger) : plain.primary ? (plain.down ? Qt.darker(Tokens.colors.accent, 1.2) : Tokens.colors.accent) : plain.down ? Tokens.colors.current : plain.hovered ? Tokens.colors.hover : "transparent"
         border.width: plain.visualFocus ? 2 : (plain.primary || plain.destructive ? 0 : 1)
         border.color: plain.visualFocus ? Tokens.colors.on_selection : Tokens.colors.border_strong

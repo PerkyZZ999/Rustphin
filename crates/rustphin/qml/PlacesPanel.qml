@@ -238,7 +238,8 @@ FocusScope {
                             font.family: Tokens.metrics.family_body
                             font.pixelSize: row.heading ? Tokens.metrics.label_text : Tokens.metrics.body_text
                             font.capitalization: row.heading ? Font.AllUppercase : Font.MixedCase
-                            text: row.title
+                            // A folded group says how many places it hides.
+                            text: row.kind === "group" && row.collapsed ? qsTr("%1 (%2)").arg(row.title).arg(row.detail) : row.title
                         }
                         Text {
                             textFormat: Text.PlainText
@@ -458,7 +459,7 @@ FocusScope {
 
     function menuAt(row: int, owner: Item, x: real, y: real) {
         if (places.openMenu(row))
-            menu.openAt(owner, x, y)
+            menu.openAt(owner, x, y, y)
     }
 
     JsonMenu {

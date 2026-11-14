@@ -126,7 +126,7 @@ Window {
     function paneMenu(pane: Pane, row: int, x: real, y: real) {
         menuPane = pane
         if (pane.listing.openMenu(row >= 0 ? "selection" : "folder"))
-            paneMenuView.openAt(pane, x, y)
+            paneMenuView.openAt(pane, x, y, pane.menuAbove)
     }
 
     property Pane menuPane: null
@@ -285,7 +285,7 @@ Window {
         if (id === "new" || id === "trash") {
             menuPane = activePane
             if (folder.openMenu(id))
-                paneMenuView.openAt(source, 0, source.height)
+                paneMenuView.openAt(source, 0, source.height, 0)
         } else if (id === "split") {
             tabList.toggleSplit()
         } else if (id === "admin") {
@@ -682,7 +682,13 @@ Window {
     }
     Key {
         sequences: ["Ctrl+L", "F6", "Alt+D"]
-        onActivated: toolbar.editLocation()
+        // Not from another text field (a place being renamed, the filter):
+        // the key would end that edit.
+        onActivated: {
+            if (!toolbar.editingLocation && root.activeFocusItem instanceof TextInput)
+                return
+            toolbar.editLocation()
+        }
     }
     Key {
         sequence: "Ctrl+I"

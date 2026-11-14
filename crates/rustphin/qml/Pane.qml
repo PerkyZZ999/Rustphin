@@ -33,7 +33,23 @@ FocusScope {
     // A folder asks for a new tab (middle click).
     signal openInNewTab(string path)
     // The context menu: on `row` (-1 for the folder) at a point in the pane.
+    // Where the view was before the model's last reset, and the folder
+    // that reset showed.
+    property real keptX: 0
+    property real keptY: 0
+    property string shownLocation: ""
+
+    function restoreScroll() {
+        if (!view)
+            return
+        view.contentX = Math.max(view.originX, Math.min(keptX, view.originX + view.contentWidth - view.width))
+        view.contentY = Math.max(view.originY, Math.min(keptY, view.originY + view.contentHeight - view.height))
+    }
+
     signal menuRequested(int row, real x, real y)
+    // Where a menu asked for with menuRequested ends if it opens upward:
+    // the top of the entry it is for, or the pointer.
+    property real menuAbove: 0
     // The pane took the keyboard.
     signal entered
     // Text for the clipboard.
@@ -99,8 +115,10 @@ FocusScope {
         const item = row >= 0 ? itemAtIndex(row) : null
         if (item && folder.isSelected(row)) {
             const point = item.mapToItem(pane, 0, item.height)
+            pane.menuAbove = item.mapToItem(pane, 0, 0).y
             pane.menuRequested(row, point.x, point.y)
         } else {
+            pane.menuAbove = body.y + Tokens.metrics.space_lg
             pane.menuRequested(-1, body.x + Tokens.metrics.space_lg, body.y + Tokens.metrics.space_lg)
         }
     }
@@ -139,13 +157,34 @@ FocusScope {
             else if (pane.gridView)
                 pane.gridView.positionViewAtIndex(row, GridView.Contain)
         }
+        // Each snapshot resets the model; a change in the folder shown
+        // keeps the view where it was (a new folder starts at the top).
+        onModelAboutToBeReset: {
+            if (pane.view) {
+                pane.keptX = pane.view.contentX
+                pane.keptY = pane.view.contentY
+            }
+        }
+        onModelReset: {
+            const same = pane.shownLocation === folder.location
+            pane.shownLocation = folder.location
+            if (same)
+                Qt.callLater(pane.restoreScroll)
+        }
         onTitleChanged: pane.reported()
         onTrashChanged: pane.reported()
         onLocationChanged: {
             pane.reported()
             pane.hoverIndex = -1
-            if (pane.filterOpen && folder.filterText.length === 0)
+            // The filter belongs to the folder it was typed in (Rust clears
+            // it on the way); the bar goes with it.
+            if (pane.filterOpen) {
+                const typing = filterField.activeFocus
                 pane.filterOpen = false
+                filterField.text = ""
+                if (typing)
+                    keys.forceActiveFocus()
+            }
         }
     }
 
@@ -241,7 +280,7 @@ FocusScope {
                         ToolTip.text: qsTr("Restore, empty or browse another trash; also available in Actions")
                         onClicked: {
                             if (folder.openMenu("trash"))
-                                trashMenu.openAt(trashActions, 0, trashActions.height)
+                                trashMenu.openAt(trashActions, 0, trashActions.height, 0)
                         }
                     }
                 }
@@ -508,6 +547,7 @@ FocusScope {
                         else if (row < 0)
                             folder.clearSelection()
                         const p = pointer.mapToItem(pane, mouse.x, mouse.y)
+                        pane.menuAbove = p.y
                         pane.menuRequested(row, p.x, p.y)
                         return
                     }
@@ -1036,6 +1076,8 @@ FocusScope {
                     color: row.ink
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Math.round(folder.nameText * Tokens.metrics.text_scale)
+                    // A symbolic link's name is italic (DESIGN.md).
+                    font.italic: row.link
                     text: row.name
                 }
                 Loader {
@@ -1248,6 +1290,8 @@ FocusScope {
                         color: cell.selected ? Tokens.colors.on_selection : Tokens.colors.text
                         font.family: Tokens.metrics.family_body
                         font.pixelSize: Math.round(folder.nameText * Tokens.metrics.text_scale)
+                        // A symbolic link's name is italic (DESIGN.md).
+                        font.italic: cell.link
                         text: cell.name
                     }
                     Loader {
@@ -1331,6 +1375,8 @@ FocusScope {
                         color: entry.selected ? Tokens.colors.on_selection : Tokens.colors.text
                         font.family: Tokens.metrics.family_body
                         font.pixelSize: Math.round(folder.nameText * Tokens.metrics.text_scale)
+                        // A symbolic link's name is italic (DESIGN.md).
+                        font.italic: entry.link
                         text: entry.name
                     }
                     Loader {

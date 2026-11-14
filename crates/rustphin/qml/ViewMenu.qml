@@ -71,19 +71,19 @@ Popup {
                 color: Tokens.colors.text
                 font.family: Tokens.metrics.family_data
                 font.pixelSize: Tokens.metrics.small_text
-                text: qsTr("%1 px").arg(menu.folder.iconSize)
+                text: menu.folder ? qsTr("%1 px").arg(menu.folder.iconSize) : ""
             }
             IconButton {
                 iconName: "zoom-out"
                 text: qsTr("Smaller (Ctrl+−)")
-                enabled: menu.folder.zoom > 0
-                onClicked: menu.folder.zoomBy(-1)
+                enabled: menu.folder !== null && menu.folder.zoom > 0
+                onClicked: menu.folder?.zoomBy(-1)
             }
             IconButton {
                 iconName: "zoom-in"
                 text: qsTr("Larger (Ctrl+=)")
-                enabled: menu.folder.zoom < 6
-                onClicked: menu.folder.zoomBy(1)
+                enabled: menu.folder !== null && menu.folder.zoom < 6
+                onClicked: menu.folder?.zoomBy(1)
             }
         }
     }
@@ -96,7 +96,7 @@ Popup {
         required property string key
         required property string iconName
         required property int mode
-        readonly property bool chosen: menu.folder.mode === mode
+        readonly property bool chosen: menu.folder !== null && menu.folder.mode === mode
 
         Layout.fillWidth: true
         implicitHeight: Tokens.metrics.menu_row
@@ -135,7 +135,7 @@ Popup {
             }
         }
         onClicked: {
-            menu.folder.chooseMode(row.mode)
+            menu.folder?.chooseMode(row.mode)
             menu.close()
         }
     }
