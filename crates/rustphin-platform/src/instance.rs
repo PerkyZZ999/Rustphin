@@ -94,19 +94,26 @@ impl std::fmt::Debug for Instance {
 impl Instance {
     /// Claims the name on the session bus, unless another process has it.
     pub fn claim() -> Result<Self, ClaimError> {
+        Self::claim_as(NAME)
+    }
+
+    /// Claims `name` (the Qt interface uses its own until it replaces the
+    /// GPUI one, W-114c3), unless another process has it.
+    pub fn claim_as(name: &'static str) -> Result<Self, ClaimError> {
         let (requests, incoming) = flume::unbounded();
         let connection = zbus::blocking::connection::Builder::session()?
             .serve_at(PATH, Service { requests })?
             .build()?;
-        Self::claim_on(connection, incoming)
+        Self::claim_on(connection, name, incoming)
     }
 
     fn claim_on(
         connection: zbus::blocking::Connection,
+        name: &'static str,
         requests: flume::Receiver<Request>,
     ) -> Result<Self, ClaimError> {
         let reply =
-            match connection.request_name_with_flags(NAME, RequestNameFlags::DoNotQueue.into()) {
+            match connection.request_name_with_flags(name, RequestNameFlags::DoNotQueue.into()) {
                 Ok(reply) => reply,
                 // zbus reports an owned name with `DoNotQueue` as this error.
                 Err(zbus::Error::NameTaken) => return Err(ClaimError::Taken),
@@ -142,8 +149,14 @@ pub enum HandOver {
 /// Hands `request` to the running Rustphin on the session bus, waiting at
 /// most `wait` for its answer.
 pub fn hand_over(request: &Request, wait: Duration) -> HandOver {
+    hand_over_to(NAME, request, wait)
+}
+
+/// [`hand_over`] to the Rustphin owning `name`.
+pub fn hand_over_to(name: &'static str, request: &Request, wait: Duration) -> HandOver {
     hand_over_with(
         || zbus::blocking::Connection::session().map_err(|error| error.to_string()),
+        name,
         request,
         wait,
         true,
@@ -153,6 +166,7 @@ pub fn hand_over(request: &Request, wait: Duration) -> HandOver {
 /// [`hand_over`] over the connection `connect` makes.
 fn hand_over_with(
     connect: impl FnOnce() -> Result<zbus::blocking::Connection, String> + Send + 'static,
+    name: &'static str,
     request: &Request,
     wait: Duration,
     check_owner: bool,
@@ -164,7 +178,8 @@ fn hand_over_with(
     let spawned = thread::Builder::new()
         .name("hand-over".into())
         .spawn(move || {
-            let result = connect().and_then(|connection| send(&connection, &request, check_owner));
+            let result =
+                connect().and_then(|connection| send(&connection, name, &request, check_owner));
             let _ = answer.send(result);
         });
     if let Err(error) = spawned {
@@ -178,21 +193,22 @@ fn hand_over_with(
     }
 }
 
-/// Sends `request` over `connection`; `false` when nobody owns the name
-/// (checked first when `check_owner`, as on the session bus).
+/// Sends `request` over `connection` to `name`'s owner; `false` when nobody
+/// owns it (checked first when `check_owner`, as on the session bus).
 fn send(
     connection: &zbus::blocking::Connection,
+    name: &'static str,
     request: &Request,
     check_owner: bool,
 ) -> Result<bool, String> {
     if check_owner {
         let bus = zbus::blocking::fdo::DBusProxy::new(connection).map_err(|e| e.to_string())?;
-        let name = zbus::names::BusName::try_from(NAME).map_err(|e| e.to_string())?;
-        if !bus.name_has_owner(name).map_err(|e| e.to_string())? {
+        let owner = zbus::names::BusName::try_from(name).map_err(|e| e.to_string())?;
+        if !bus.name_has_owner(owner).map_err(|e| e.to_string())? {
             return Ok(false);
         }
     }
-    let proxy = zbus::blocking::Proxy::new(connection, NAME, PATH, NAME)
+    let proxy = zbus::blocking::Proxy::new(connection, name, PATH, NAME)
         .map_err(|error| error.to_string())?;
     match request {
         Request::Open {
@@ -260,7 +276,7 @@ mod tests {
             folders: vec![PathBuf::from("/home/someone/Documents"), odd],
             activation: Some("token-1".into()),
         };
-        assert_eq!(send(&client, &request, false), Ok(true));
+        assert_eq!(send(&client, NAME, &request, false), Ok(true));
         assert_eq!(
             incoming.recv_timeout(Duration::from_secs(2)).unwrap(),
             request
@@ -274,8 +290,8 @@ mod tests {
             folders: Vec::new(),
             activation: None,
         };
-        send(&client, &open, false).unwrap();
-        send(&client, &Request::Quit, false).unwrap();
+        send(&client, NAME, &open, false).unwrap();
+        send(&client, NAME, &Request::Quit, false).unwrap();
         assert_eq!(incoming.recv_timeout(Duration::from_secs(2)).unwrap(), open);
         assert_eq!(
             incoming.recv_timeout(Duration::from_secs(2)).unwrap(),
@@ -286,7 +302,7 @@ mod tests {
     #[test]
     fn a_hand_over_reaches_the_running_rustphin() {
         let (server, client, incoming) = pair();
-        let answer = hand_over_with(move || Ok(client), &Request::Quit, ANSWER_TIME, false);
+        let answer = hand_over_with(move || Ok(client), NAME, &Request::Quit, ANSWER_TIME, false);
         assert_eq!(answer, HandOver::Taken);
         assert_eq!(
             incoming.recv_timeout(Duration::from_secs(2)).unwrap(),
@@ -305,6 +321,7 @@ mod tests {
                 let _ = never.recv();
                 Err("unreachable".into())
             },
+            NAME,
             &Request::Quit,
             Duration::from_millis(200),
             false,
@@ -317,6 +334,7 @@ mod tests {
     fn a_bus_that_fails_says_why() {
         let answer = hand_over_with(
             || Err("no session bus".into()),
+            NAME,
             &Request::Quit,
             ANSWER_TIME,
             false,

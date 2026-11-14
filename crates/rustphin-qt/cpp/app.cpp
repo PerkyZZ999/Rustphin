@@ -1,13 +1,20 @@
 #include "app.h"
 
+#include <malloc.h>
+
 #include <QtCore/QDirIterator>
 #include <QtCore/QFile>
+#include <QtCore/QTimer>
 #include <QtCore/QUrl>
 #include <QtGui/QColor>
 #include <QtGui/QFontDatabase>
+#include <QtGui/QGuiApplication>
 #include <QtGui/QIcon>
 #include <QtGui/QImage>
 #include <QtGui/QPainter>
+#include <QtGui/QPixmapCache>
+#include <QtGui/QWindow>
+#include <QtQml/QQmlApplicationEngine>
 #include <QtQuick/QQuickImageProvider>
 #include <QtSvg/QSvgRenderer>
 
@@ -85,10 +92,78 @@ public:
     }
 };
 
+struct Shell {
+    QQmlApplicationEngine* engine = nullptr;
+    bool keepRunning = true;
+    QString home;
+};
+
+Shell& shell()
+{
+    static Shell instance;
+    return instance;
+}
+
+QQmlApplicationEngine* engine()
+{
+    if (shell().engine == nullptr) {
+        auto* created = new QQmlApplicationEngine;
+        created->addImageProvider(QStringLiteral("lucide"), new LucideProvider);
+        created->addImageProvider(QStringLiteral("theme"), new ThemeProvider);
+        shell().engine = created;
+    }
+    return shell().engine;
+}
+
+void openWindow(const QString& folder, const QString& activation)
+{
+    QQmlApplicationEngine* windows = engine();
+    windows->setInitialProperties({ { QStringLiteral("startFolder"), folder.isEmpty() ? shell().home : folder } });
+    windows->load(QUrl(QStringLiteral("qrc:/qt/qml/Rustphin/qml/Main.qml")));
+    const QList<QObject*> roots = windows->rootObjects();
+    if (auto* window = roots.isEmpty() ? nullptr : qobject_cast<QWindow*>(roots.last())) {
+        // Qt's Wayland support hands this token to KWin with the request.
+        if (!activation.isEmpty()) {
+            qputenv("XDG_ACTIVATION_TOKEN", activation.toUtf8());
+        }
+        window->requestActivate();
+    }
+}
+
+// The windows and the QML engine with them, all at once. Once the engine
+// is gone, the C library hands the freed memory back to the system, which
+// it otherwise keeps for later allocations (R-020).
+void releaseWindows()
+{
+    if (shell().engine != nullptr) {
+        QObject::connect(shell().engine, &QObject::destroyed, [] {
+            // The render threads finish releasing their windows after the
+            // engine is gone; trim once they have.
+            QTimer::singleShot(1000, [] {
+                QPixmapCache::clear();
+                malloc_trim(0);
+            });
+        });
+        shell().engine->deleteLater();
+        shell().engine = nullptr;
+    }
+}
+
+void lastWindowClosed()
+{
+    if (shell().keepRunning) {
+        releaseWindows();
+    } else {
+        QCoreApplication::quit();
+    }
+}
+
 } // namespace
 
-void rustphin_install(QQmlApplicationEngine& engine)
+void rustphin_shell_start(bool keep_running, const QString& home)
 {
+    shell().keepRunning = keep_running;
+    shell().home = home;
     QDirIterator fonts(QStringLiteral(":/qt/qml/Rustphin/fonts"), { QStringLiteral("*.ttf") });
     while (fonts.hasNext()) {
         QFontDatabase::addApplicationFont(fonts.next());
@@ -98,6 +173,32 @@ void rustphin_install(QQmlApplicationEngine& engine)
     if (QIcon::themeName().isEmpty() || QIcon::themeName() == QStringLiteral("hicolor")) {
         QIcon::setThemeName(QStringLiteral("breeze-dark"));
     }
-    engine.addImageProvider(QStringLiteral("lucide"), new LucideProvider);
-    engine.addImageProvider(QStringLiteral("theme"), new ThemeProvider);
+    QGuiApplication::setQuitOnLastWindowClosed(false);
+    QObject::connect(qGuiApp, &QGuiApplication::lastWindowClosed, qGuiApp, &lastWindowClosed);
+}
+
+void rustphin_shell_open(const QStringList& folders, const QString& activation)
+{
+    QMetaObject::invokeMethod(
+        qGuiApp,
+        [folders, activation] {
+            if (folders.isEmpty()) {
+                openWindow(QString(), activation);
+            }
+            for (const QString& folder : folders) {
+                openWindow(folder, activation);
+            }
+        },
+        Qt::QueuedConnection);
+}
+
+void rustphin_shell_quit()
+{
+    QMetaObject::invokeMethod(
+        qGuiApp,
+        [] {
+            releaseWindows();
+            QCoreApplication::quit();
+        },
+        Qt::QueuedConnection);
 }
