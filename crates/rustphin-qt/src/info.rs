@@ -37,6 +37,7 @@ pub struct PropertiesModelRust {
     title: QString,
     kind: QString,
     icon: QString,
+    theme_icon: QString,
     thumbnail: QString,
     facts: QString,
     permissions: QString,
@@ -59,6 +60,7 @@ impl Default for PropertiesModelRust {
             title: QString::default(),
             kind: QString::default(),
             icon: QString::from("file"),
+            theme_icon: QString::default(),
             thumbnail: QString::default(),
             facts: QString::default(),
             permissions: QString::default(),
@@ -111,14 +113,23 @@ impl qobject::PropertiesModel {
         };
         let path = self.rust().path.clone();
         let types = crate::types::when_ready_now();
-        let (description, picture) = types.map_or((String::new(), false), |types| {
-            let name = path
-                .file_name()
-                .map(|name| name.as_encoded_bytes())
-                .unwrap_or_default();
-            let mime = types.mimes.mime_type(name, facts.kind == Kind::Directory);
-            (types.mimes.description(mime), mime.starts_with("image/"))
-        });
+        let directory = facts.kind == Kind::Directory;
+        let (description, picture, theme_icon) =
+            types.map_or((String::new(), false, String::new()), |types| {
+                let name = path
+                    .file_name()
+                    .map(|name| name.as_encoded_bytes())
+                    .unwrap_or_default();
+                let mime = types.mimes.mime_type(name, directory);
+                // The type's icon from the theme, as the pane draws it.
+                let icon = crate::folder::icon_id(&types.mimes.icon_names(mime), directory);
+                (
+                    types.mimes.description(mime),
+                    mime.starts_with("image/"),
+                    icon,
+                )
+            });
+        self.as_mut().set_theme_icon(QString::from(&theme_icon));
         let icon = match facts.kind {
             Kind::Directory => "folder",
             _ if picture => "image",
@@ -139,7 +150,6 @@ impl qobject::PropertiesModel {
         }
         self.as_mut()
             .set_kind(QString::from(&type_label(&facts, &description)));
-        let directory = facts.kind == Kind::Directory;
         {
             let mut rust = self.as_mut().rust_mut();
             rust.mode = facts.mode;

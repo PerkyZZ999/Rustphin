@@ -18,6 +18,7 @@ pub mod qobject {
         #[qproperty(QString, title)]
         #[qproperty(QString, kind)]
         #[qproperty(QString, icon)]
+        #[qproperty(QString, theme_icon, cxx_name = "themeIcon")]
         #[qproperty(QString, thumbnail)]
         #[qproperty(QString, facts)]
         #[qproperty(QString, permissions)]

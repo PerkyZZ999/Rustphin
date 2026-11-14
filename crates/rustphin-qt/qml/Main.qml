@@ -535,6 +535,10 @@ Window {
     // the pane's list instead, so they never fire in a field.
     component Key: Shortcut {
         context: Qt.WindowShortcut
+        // One press can match two of a key's sequences (Shift+= is also
+        // "+"; Shift+, also "<"), which Qt calls ambiguous: no two keys
+        // here share a sequence, so it is still this one.
+        onActivatedAmbiguously: activated()
     }
     Key {
         // Not StandardKey.Back: on Linux it is Alt+Left again, and a key
@@ -603,6 +607,7 @@ Window {
         onActivated: root.openPalette()
     }
     Key {
+        // The layout decides whether Shift+, arrives as "<".
         sequences: ["Ctrl+Shift+,", "Ctrl+Shift+<", "Ctrl+<"]
         onActivated: root.openSettings()
     }

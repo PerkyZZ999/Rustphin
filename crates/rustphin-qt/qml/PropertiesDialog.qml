@@ -109,9 +109,21 @@ Popup {
                         implicitWidth: Tokens.metrics.properties_thumb_width
                         implicitHeight: Tokens.metrics.properties_thumb_height
 
+                        // The type's icon from the theme, as in the views;
+                        // the outline icon only when there is none.
+                        Image {
+                            anchors.centerIn: parent
+                            visible: info.thumbnail.length === 0 && info.themeIcon.length > 0
+                            width: Tokens.metrics.icon_header
+                            height: Tokens.metrics.icon_header
+                            source: visible ? "image://theme/" + info.themeIcon : ""
+                            sourceSize.width: Tokens.metrics.icon_header
+                            sourceSize.height: Tokens.metrics.icon_header
+                            Accessible.ignored: true
+                        }
                         Lucide {
                             anchors.centerIn: parent
-                            visible: info.thumbnail.length === 0
+                            visible: info.thumbnail.length === 0 && info.themeIcon.length === 0
                             name: info.icon
                             side: Tokens.metrics.icon_header
                         }

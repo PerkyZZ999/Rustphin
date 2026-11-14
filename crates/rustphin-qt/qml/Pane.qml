@@ -271,10 +271,12 @@ FocusScope {
             visible: folder.mode === 2
             color: Tokens.colors.chrome
 
+            // Columns as in the GPUI view (M1): each data column keeps
+            // 8 px on both sides, and the last ends 8 px from the edge.
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: Tokens.metrics.space_lg
-                anchors.rightMargin: Tokens.metrics.space_lg
+                anchors.rightMargin: Tokens.metrics.space_sm
                 spacing: 0
 
                 Repeater {
@@ -302,7 +304,8 @@ FocusScope {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: heading.modelData.column === 1 ? parent.right : undefined
                             anchors.left: heading.modelData.column === 1 ? undefined : parent.left
-                            anchors.leftMargin: heading.modelData.column === 0 ? 0 : Tokens.metrics.space_md
+                            anchors.leftMargin: heading.modelData.column === 0 ? 0 : Tokens.metrics.space_sm
+                            anchors.rightMargin: Tokens.metrics.space_sm
                             spacing: Tokens.metrics.space_xs
 
                             Text {
@@ -1041,7 +1044,7 @@ FocusScope {
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: Tokens.metrics.space_lg
-                    anchors.rightMargin: Tokens.metrics.space_lg
+                    anchors.rightMargin: Tokens.metrics.space_sm
                     spacing: 0
                     opacity: row.fade
 
@@ -1077,6 +1080,7 @@ FocusScope {
                     Text {
                         visible: folder.showSize
                         Layout.preferredWidth: Tokens.metrics.column_size
+                        rightPadding: Tokens.metrics.space_sm
                         horizontalAlignment: Text.AlignRight
                         color: row.quiet
                         font.family: Tokens.metrics.family_data
@@ -1086,7 +1090,8 @@ FocusScope {
                     Text {
                         visible: folder.showModified
                         Layout.preferredWidth: Tokens.metrics.column_modified
-                        leftPadding: Tokens.metrics.space_md
+                        leftPadding: Tokens.metrics.space_sm
+                        rightPadding: Tokens.metrics.space_sm
                         elide: Text.ElideRight
                         color: row.quiet
                         font.family: Tokens.metrics.family_data
@@ -1096,7 +1101,8 @@ FocusScope {
                     Text {
                         visible: folder.showType
                         Layout.preferredWidth: Tokens.metrics.column_type
-                        leftPadding: Tokens.metrics.space_md
+                        leftPadding: Tokens.metrics.space_sm
+                        rightPadding: Tokens.metrics.space_sm
                         elide: Text.ElideRight
                         color: row.quiet
                         font.family: Tokens.metrics.family_body

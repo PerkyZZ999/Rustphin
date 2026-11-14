@@ -503,7 +503,7 @@ fn step_of(number: i32) -> Option<Step> {
 
 /// The `image://theme/` id of an entry's icon: the theme's names for its
 /// type, most specific first, then the generic folder or file icon.
-fn icon_id(type_names: &[String], is_folder: bool) -> String {
+pub(crate) fn icon_id(type_names: &[String], is_folder: bool) -> String {
     let generic = if is_folder {
         "folder"
     } else {
