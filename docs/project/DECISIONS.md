@@ -364,5 +364,5 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Consequences:** Royal blue now marks two bars, progress and usage; the 90 % warning is also said in words ("94% used"), so it is not colour alone.
 - **Alternatives:** Keep the neutral `text-muted` bar (D-038).
 - **Reopen criteria:** The maintainer wants the bars neutral again.
-- **Confirmed by / date:** The maintainer, 2026-11-14 (W-148 request)
+- **Confirmed by / date:** The maintainer, 2026-11-14 ("The usage bars should be royal-blue please.")
 - **Supersedes / superseded by:** supersedes D-038's neutral device usage bars

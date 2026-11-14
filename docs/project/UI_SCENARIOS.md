@@ -32,7 +32,7 @@ Notes for the agent:
 - Drags need waypoints with pauses of about 100 ms and a short last move before the release. Holding a modifier during a drag (`keyboard_key_down`) is refused in this environment, so G2, G3 and the Ctrl/Shift drop shortcuts cannot be replayed here.
 - In the user's Dolphin Ctrl+V is an ambiguous shortcut; paste into Dolphin through its context menu.
 - Isolated sessions offer no blur, so Rustphin shows its opaque theme; whether glass is used is decided once, when the QML engine starts (`KWindowEffects::isEffectAvailable` and `RUSTPHIN_OPAQUE`; the engine starts again after the last window has closed). Colours may also shift between screenshots there; judge colour by the tokens and their contrast tests. Icons use the `breeze-dark` theme when the session names none.
-- The isolated session shares the machine's system bus: the Devices section lists the real drives and the trash menu lists their trashes. Never click a device card, open its drive menu or press E on it, and never open another volume's trash, unless Rustphin was launched against the stand-in UDisks2 on a private system bus (DV1–DV6).
+- The isolated session shares the machine's system bus: the Devices section lists the real drives and the trash menu lists their trashes. Never click a device card, or open its drive menu, and never open another volume's trash, unless Rustphin was launched against the stand-in UDisks2 on a private system bus (DV1–DV6).
 - KDE adds its built-in places (Home, Trash, Network…) to `user-places.xbel` the first time one of its applications reads a file without them, so the file changes under Rustphin right after Dolphin starts in a fresh home.
 - Rustphin keeps running after its last window closes (W-110) and later launches hand over to it. Each isolated session has its own session bus, so a test Rustphin never hands over to the maintainer's.
 - Stop test instances by PID or exact path (`pkill -f target/debug/rustphin`), never `pkill -x rustphin`, which also ends the maintainer's own Rustphin. Stop the session when done. Before deleting the fixture run `chmod 755 <dir>/locked`.
@@ -492,10 +492,10 @@ stand-in and nothing else:
 |---|---|---|
 | DV1 | Look at Devices | Five cards. Data: `hard-drive`, "Data" semibold, "used / total" on the right, a blue bar, "Btrfs · Encrypted" and "NN% used". STICK: `usb`, "exFAT · Removable". BACKUP: its size on the right, no bar, "Not mounted". FULL: a red bar and "100% used". No eject buttons |
 | DV2 | Right-click Data; Escape. Right-click System; Escape | Data: Open (Enter), Open in new tab, then Unmount, then Copy location, each with an icon. System: Open, Open in new tab, then Copy location only (no Unmount, no Safely remove) |
-| DV3 | Right-click STICK, Safely remove | The menu has Open, Open in new tab, Unmount, Safely remove (E), Copy location; the stand-in prints Unmount then PowerOff for STICK; "“STICK” can be unplugged now."; the card says "Not mounted" |
+| DV3 | Right-click STICK, Safely remove | The menu has Open, Open in new tab, Unmount, Safely remove, Copy location (no row shows a key but Open's Enter); the stand-in prints Unmount then PowerOff for STICK; "“STICK” can be unplugged now."; the card says "Not mounted" |
 | DV4 | Focus BACKUP with the keyboard (Ctrl+P, Down…), Shift+F10, choose Mount | The menu has Open, Open in new tab, Mount, Safely remove (no Copy location); the stand-in prints Mount for BACKUP; "“BACKUP” was mounted."; the card shows its usage |
 | DV5 | On Data: Menu key, Copy location; paste into the location field (Ctrl+L, Ctrl+V) | "Copied the location of “Data”."; the field holds `<home>/drives/Data` |
-| DV6 | On Data: E; then right-click Data, Mount | The stand-in prints Unmount for Data (no PowerOff: it is fixed); then Mount |
+| DV6 | On Data (focused in the panel): E; then right-click Data, Unmount; then Mount | E does nothing (drive actions have no key); the stand-in prints Unmount for Data (no PowerOff: it is fixed), then Mount |
 
 ## Button icons (W-097)
 

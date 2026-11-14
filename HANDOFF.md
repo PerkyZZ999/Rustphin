@@ -11,8 +11,7 @@ that was in flight, and what the maintainer asked for next.
 - **Version:** 0.1.0. Qt 6 and QML interface through cxx-qt; Rust 1.100.
 - **Repository:** pushed to `https://github.com/PerkyZZ999/Rustphin.git`,
   branch `main`, public (D-037). The last pushed commit is `ca6c6e3` (W-147,
-  the charcoal colour scheme). W-148 (`ed9a765`) and this file are committed
-  locally, not pushed. Push only when the maintainer asks, and only
+  the charcoal colour scheme). W-148 and W-148b are pushed too. Push only when the maintainer asks, and only
   commits that passed `rust-tc doctor`. No hosted CI.
 - **Gate:** `rust-tc doctor` passes at `ed9a765`, with 950 tests and 3 skipped.
 - **Installed build:** `~/.local/bin/rustphin` is the build from before W-147.
@@ -30,13 +29,9 @@ checks ran against the stand-in UDisks2 service
 (`crates/rustphin-platform/examples/fake_udisks2.rs`, UI_SCENARIOS DV1–DV6),
 never against real drives.
 
-**Waiting on the maintainer:**
-- **Confirm D-039.** D-038 said drive usage bars are neutral grey. The
-  maintainer's request makes them the accent blue, so the agent recorded
-  D-039 citing that request as the approval.
-- **The E key.** On a fixed drive that can power off, E now powers it off
-  (Safely remove) instead of only unmounting it.
-- **Push** `ed9a765` once confirmed.
+**Settled by the maintainer afterwards (W-148b):** D-039 is confirmed (usage
+bars in royal blue). The E key was removed: drive actions (Mount, Unmount,
+Safely remove) are only in the drive's right-click menu, with no key.
 
 Not done: `docs/screenshots/rustphin.png` does not show the drive cards yet,
 and real drives were not tried (R-013).

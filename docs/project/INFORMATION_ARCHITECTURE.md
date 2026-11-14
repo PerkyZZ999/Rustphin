@@ -252,7 +252,7 @@ groups separated by hairlines:
 1. A drive appears under Devices when plugged in, with its usage.
 2. User clicks it: it mounts and opens.
 3. User right-clicks it (or presses the Menu key or Shift+F10 on it) and
-   chooses Unmount or Safely remove, or presses E on its card: it unmounts
+   chooses Unmount or Safely remove: it unmounts
    (and a removable drive powers off) and the card updates.
    - If it is busy → a notice names the problem.
 
@@ -281,7 +281,7 @@ Pick one word and use it everywhere: menu, palette, tooltip, notices.
 | The panel on the left | Places | Dolphin's word; the title of the panel |
 | A user-made section in Places | group | "New group", "Move selected place to next group" |
 | A volume | device or drive; the section is "Devices" | Its name, "used / total", "NN% used", its filesystem |
-| Removing a device | Unmount, or Safely remove for removable or power-off capable drives | Drive menu; E does Safely remove where offered, else Unmount |
+| Removing a device | Unmount, or Safely remove for removable or power-off capable drives | Drive menu only (no key) |
 | Sending to the trash | Move to trash | Undoable |
 | Deleting without the trash | Delete… / "Delete for good?" | Always asks; cannot be undone |
 | The trash | Trash | Capital T only as a place name and title |

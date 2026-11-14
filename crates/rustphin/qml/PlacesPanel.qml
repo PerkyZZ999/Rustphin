@@ -151,9 +151,6 @@ FocusScope {
                 case Qt.Key_G:
                     id = plain ? "next-group" : ""
                     break
-                case Qt.Key_E:
-                    id = plain ? "eject" : ""
-                    break
                 case Qt.Key_Tab:
                 case Qt.Key_Backtab:
                     panel.otherPane()

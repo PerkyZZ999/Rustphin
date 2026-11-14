@@ -1240,7 +1240,8 @@ pub const COMMANDS: &[Command] = &[
         id: "eject",
         label: "Places: Unmount or safely remove selected device",
         action: Action::Places(PlacesCommand::Eject),
-        keys: &[places("E")],
+        // No key: a drive's actions are in its menu (the maintainer, W-148).
+        keys: &[],
     },
     Command {
         id: "open-palette",

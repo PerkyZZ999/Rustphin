@@ -445,8 +445,8 @@ mod tests {
     }
 
     #[test]
-    fn a_drive_menu_shows_enter_on_open_and_e_on_safe_removal() {
-        assert_eq!(PlaceCommand::SafelyRemove.shortcut().as_deref(), Some("E"));
+    fn a_drive_menu_shows_enter_on_open_and_no_key_on_removal() {
+        assert_eq!(PlaceCommand::SafelyRemove.shortcut(), None);
         assert_eq!(PlaceCommand::Open.shortcut().as_deref(), Some("Enter"));
         assert_eq!(PlaceCommand::Unmount.shortcut(), None);
     }

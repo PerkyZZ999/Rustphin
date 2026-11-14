@@ -981,7 +981,7 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   empty space: New group (Ctrl+Shift+G), Add to places (the folder shown);
   Show or Hide hidden places. On a drive (W-148): Open (Enter), Open in new
   tab; Mount (`hard-drive`) when it is not mounted, or Unmount
-  (`arrow-up-from-line`) when it is; Safely remove (`power`, E) for a
+  (`arrow-up-from-line`) when it is; Safely remove (`power`) for a
   removable or power-off capable drive; Copy location (`link`) when it is
   mounted. The volumes the system and the home folder run from offer neither
   Unmount nor Safely remove.
@@ -1000,8 +1000,8 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   "Not mounted" below. While it is being mounted or removed the last line
   says "Working…". Hover, the current place's fill and edge and the focus
   outline are those of place rows. There is no eject button: the drive menu
-  holds Unmount and Safely remove, and E does what the eject button did
-  (Safely remove where offered, else Unmount). Clicking an unmounted drive
+  holds every drive action (Mount, Unmount, Safely remove), and none has a
+  key of its own. Clicking an unmounted drive
   mounts and opens it. Its accessible description reads the card's words.
 - **Column headings:** `body-sm` `text-muted`, `hover` under the pointer; the
   sorted column in `text`, semibold, with a 12 px `arrow-up` or `arrow-down`,
