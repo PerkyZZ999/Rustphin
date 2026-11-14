@@ -1018,6 +1018,90 @@ mod tests {
         assert_eq!(lines[1][1], std::ffi::OsString::from("/b"));
     }
 
+    fn os(args: &[&[u8]]) -> Vec<std::ffi::OsString> {
+        args.iter()
+            .map(|arg| std::ffi::OsString::from_vec(arg.to_vec()))
+            .collect()
+    }
+
+    #[test]
+    fn a_list_code_starts_one_command_with_every_file_as_bytes() {
+        let files = [
+            PathBuf::from(std::ffi::OsString::from_vec(b"/srv/caf\xe9.txt".to_vec())),
+            PathBuf::from("/srv/b c.txt"),
+        ];
+
+        let paths = command_lines("viewer %F", &files, "Viewer", None).unwrap();
+        let uris = command_lines("viewer %U", &files, "Viewer", None).unwrap();
+
+        assert_eq!(
+            paths,
+            [os(&[b"viewer", b"/srv/caf\xe9.txt", b"/srv/b c.txt"])]
+        );
+        assert_eq!(
+            uris,
+            [os(&[
+                b"viewer",
+                b"file:///srv/caf%E9.txt",
+                b"file:///srv/b%20c.txt"
+            ])]
+        );
+    }
+
+    #[test]
+    fn a_single_uri_code_starts_one_command_per_file_with_its_uri() {
+        let files = [
+            PathBuf::from(std::ffi::OsString::from_vec(b"/srv/caf\xe9".to_vec())),
+            PathBuf::from("/srv/100%"),
+        ];
+
+        let lines = command_lines("player --open=%u", &files, "Player", None).unwrap();
+
+        assert_eq!(
+            lines,
+            [
+                os(&[b"player", b"--open=file:///srv/caf%E9"]),
+                os(&[b"player", b"--open=file:///srv/100%25"]),
+            ]
+        );
+    }
+
+    #[test]
+    fn name_desktop_file_icon_and_percent_codes_are_filled_in() {
+        let desktop = Path::new("/usr/share/applications/viewer.desktop");
+
+        let lines = command_lines(
+            "viewer %i --title %c --from=%k %k 100%% %% %f",
+            &[PathBuf::from("/a")],
+            "Image Viewer",
+            Some(desktop),
+        )
+        .unwrap();
+        let without_desktop = command_lines("viewer %k --from=%k", &[], "Viewer", None).unwrap();
+
+        assert_eq!(
+            lines,
+            [os(&[
+                b"viewer",
+                b"--title",
+                b"Image Viewer",
+                b"--from=/usr/share/applications/viewer.desktop",
+                b"/usr/share/applications/viewer.desktop",
+                b"100%",
+                b"%",
+                b"/a"
+            ])]
+        );
+        assert_eq!(without_desktop, [os(&[b"viewer", b"--from="])]);
+    }
+
+    #[test]
+    fn without_files_a_file_code_is_left_out() {
+        let lines = command_lines("editor %f --new", &[], "Editor", None).unwrap();
+
+        assert_eq!(lines, [os(&[b"editor", b"--new"])]);
+    }
+
     #[test]
     fn an_unclosed_quote_is_not_a_command() {
         assert!(command_lines("editor \"unterminated", &[], "Editor", None).is_none());

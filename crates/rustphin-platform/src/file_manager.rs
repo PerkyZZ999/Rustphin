@@ -264,6 +264,53 @@ mod tests {
     }
 
     #[test]
+    fn show_folders_opens_folders_and_the_folder_of_a_file_with_nothing_selected() {
+        let dir = dir();
+        let docs = dir.path().join("docs");
+        std::fs::create_dir(&docs).unwrap();
+        let note = docs.join("note.txt");
+        std::fs::write(&note, b"note").unwrap();
+
+        let shown = show_folders(&[
+            file_uri(&note),
+            file_uri(dir.path()),
+            file_uri(&docs),
+            "file://files.example/remote".into(),
+        ]);
+
+        assert_eq!(
+            shown,
+            vec![
+                Shown {
+                    folder: docs,
+                    select: vec![],
+                },
+                Shown {
+                    folder: dir.path().to_path_buf(),
+                    select: vec![],
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn properties_are_asked_for_local_paths_only() {
+        let paths = property_paths(&[
+            "file:///etc/fstab",
+            "smb://server/share/file",
+            "file:///srv/caf%E9",
+        ]);
+
+        assert_eq!(
+            paths,
+            [
+                PathBuf::from("/etc/fstab"),
+                PathBuf::from(OsString::from_vec(b"/srv/caf\xe9".to_vec()))
+            ]
+        );
+    }
+
+    #[test]
     fn a_name_that_is_not_text_is_kept_as_bytes() {
         let dir = dir();
         let name = OsString::from_vec(b"a\xff".to_vec());
@@ -295,7 +342,11 @@ mod tests {
             .p2p()
             .build()
             .unwrap();
-        let server = server.join().unwrap();
+        let handle = ServiceHandle {
+            requests: incoming,
+            _connection: server.join().unwrap(),
+        };
+        let incoming = handle.receiver();
 
         let proxy = Proxy::new(&client, NAME, PATH, NAME).unwrap();
         proxy
@@ -310,19 +361,36 @@ mod tests {
                 &(vec![file_uri(&file)], "chrome-token-2".to_owned()),
             )
             .unwrap();
-        let Call::Show { shown, activation } =
-            incoming.recv_timeout(Duration::from_secs(2)).unwrap()
-        else {
+        // The service has queued both by the time the calls return.
+        let Some(Call::Show { shown, activation }) = handle.try_recv() else {
             panic!("expected a show request");
         };
-        let Call::Properties {
+        let Some(Call::Properties {
+            paths,
             activation: properties_activation,
-            ..
-        } = incoming.recv_timeout(Duration::from_secs(2)).unwrap()
+        }) = handle.try_recv()
         else {
             panic!("expected a properties request");
         };
-        drop(server);
+        assert_eq!(paths, std::slice::from_ref(&file));
+        proxy
+            .call::<_, _, ()>(
+                "ShowFolders",
+                &(vec![file_uri(dir.path())], "chrome-token-3".to_owned()),
+            )
+            .unwrap();
+        let folders = incoming.recv_timeout(Duration::from_secs(2)).unwrap();
+        drop(handle);
+        assert_eq!(
+            folders,
+            Call::Show {
+                shown: vec![Shown {
+                    folder: dir.path().to_path_buf(),
+                    select: vec![],
+                }],
+                activation: "chrome-token-3".to_owned(),
+            }
+        );
         assert_eq!(shown[0].folder, dir.path());
         assert_eq!(shown[0].select, [OsString::from("picked.txt")]);
         // The token the caller sent, for the window to take the focus.

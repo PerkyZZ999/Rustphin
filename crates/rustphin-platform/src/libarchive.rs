@@ -391,13 +391,14 @@ fn header_of(entry: NonNull<ffi::Entry>, name: &[u8], raw: bool) -> Result<Heade
                 .to_vec()
         };
         let kind = match ffi::archive_entry_filetype(e) & ffi::IFMT {
+            // A hard link to an earlier entry is never made. libarchive
+            // gives a TAR hard link no type at all, only the link.
+            _ if bytes(ffi::archive_entry_hardlink(e)).is_some() => Kind::Special,
             ffi::IFDIR => Kind::Directory,
             ffi::IFLNK => match bytes(ffi::archive_entry_symlink(e)) {
                 Some(target) => Kind::Link(target.to_vec()),
                 None => Kind::Special,
             },
-            // A hard link to an earlier entry is never made.
-            ffi::IFREG if bytes(ffi::archive_entry_hardlink(e)).is_some() => Kind::Special,
             // A lone compressed stream has no type.
             ffi::IFREG | 0 => Kind::File,
             _ => Kind::Special,

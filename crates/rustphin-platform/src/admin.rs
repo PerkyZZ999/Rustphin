@@ -1146,6 +1146,9 @@ mod tests {
         silent: bool,
         /// Every folder listed is empty.
         empty: bool,
+        /// Refuses as the real helper does, answering with no object
+        /// rather than an error.
+        no_object: bool,
     }
 
     impl FakeHelper {
@@ -1157,6 +1160,9 @@ mod tests {
         ) -> zbus::fdo::Result<OwnedObjectPath> {
             if self.refuse {
                 return Err(zbus::fdo::Error::AccessDenied("not authorised".into()));
+            }
+            if self.no_object {
+                return Ok(OwnedObjectPath::try_from("/").unwrap());
             }
             let n = self.counter.fetch_add(1, Ordering::SeqCst) + 1;
             let path = format!("/org/kde/kio/admin/{kind}/{n}");
@@ -1457,17 +1463,41 @@ mod tests {
         empty: bool,
         timeout: Duration,
     ) -> Setup {
-        let written = Arc::new(Mutex::new(Vec::new()));
-        let asked = Arc::new(Mutex::new(Vec::new()));
-        let fake = FakeHelper {
-            refuse,
-            result,
-            counter: Arc::default(),
-            written: Arc::clone(&written),
-            asked: Arc::clone(&asked),
-            silent,
-            empty,
-        };
+        serve(
+            FakeHelper {
+                refuse,
+                result,
+                counter: Arc::default(),
+                written: Arc::default(),
+                asked: Arc::default(),
+                silent,
+                empty,
+                no_object: false,
+            },
+            timeout,
+        )
+    }
+
+    /// A helper that refuses every request the way the real one does.
+    fn helper_answering_with_no_object() -> Setup {
+        serve(
+            FakeHelper {
+                refuse: false,
+                result: 0,
+                counter: Arc::default(),
+                written: Arc::default(),
+                asked: Arc::default(),
+                silent: false,
+                empty: false,
+                no_object: true,
+            },
+            Duration::from_secs(10),
+        )
+    }
+
+    fn serve(fake: FakeHelper, timeout: Duration) -> Setup {
+        let written = Arc::clone(&fake.written);
+        let asked = Arc::clone(&fake.asked);
         let (ours, theirs) = UnixStream::pair().unwrap();
         let guid = zbus::Guid::generate();
         let builder = Builder::async_io_unix_stream(theirs)
@@ -1574,6 +1604,32 @@ mod tests {
     }
 
     #[test]
+    fn a_password_refused_the_way_the_real_helper_does_is_reported_as_denied() {
+        // kio-admin answers a refused authorisation with no command object.
+        let setup = helper_answering_with_no_object();
+
+        assert_eq!(
+            setup.helper.list_dir(Path::new("/root")),
+            Err(AdminError::Denied)
+        );
+    }
+
+    #[test]
+    fn a_file_larger_than_a_transfer_may_be_is_never_sent() {
+        let setup = working();
+        // Zeroed pages are not touched until written: this costs little.
+        let huge = vec![0u8; MAX_TRANSFER + 1];
+
+        let result = setup.helper.write_new(Path::new("/etc/huge"), &huge, 0o600);
+
+        assert!(
+            matches!(&result, Err(AdminError::Protocol(message)) if message.contains("too large")),
+            "{result:?}"
+        );
+        assert!(setup.asked.lock().unwrap().is_empty());
+    }
+
+    #[test]
     fn a_failed_operation_carries_kios_reason() {
         let setup = helper(
             false,
@@ -1657,6 +1713,25 @@ mod tests {
         assert!(fs.is_dir(Path::new("/etc/systemd")));
         assert!(!fs.is_dir(Path::new("/etc/fstab")));
         assert_eq!(*setup.asked.lock().unwrap(), ["listDir file:///etc"]);
+    }
+
+    #[test]
+    fn what_a_listing_said_of_an_entry_is_forgotten_once_it_is_renamed() {
+        use rustphin_core::Fs as _;
+        let setup = working();
+        let fs = admin_fs(&setup);
+        fs.read_dir(Path::new("/etc")).unwrap().for_each(drop);
+        assert!(!fs.is_dir(Path::new("/etc/fstab")), "listed as a file");
+
+        fs.rename_new(Path::new("/etc/fstab"), Path::new("/etc/fstab.old"))
+            .unwrap();
+
+        // Asked again: this helper describes everything as a folder.
+        assert!(fs.is_dir(Path::new("/etc/fstab")));
+        assert_eq!(
+            setup.asked.lock().unwrap().last().map(String::as_str),
+            Some("stat file:///etc/fstab")
+        );
     }
 
     #[test]

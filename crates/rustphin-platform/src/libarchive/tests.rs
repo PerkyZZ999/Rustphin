@@ -73,7 +73,8 @@ fn a_cpio_gives_its_folder_files_and_link() {
     assert_eq!(kind("link"), Kind::Link(b"notes.txt".to_vec()));
     let notes = seen.iter().find(|(h, _)| h.name == b"notes.txt").unwrap();
     assert_eq!(notes.0.size, 6);
-    assert!(notes.0.mode.is_some() && notes.0.modified.is_some());
+    assert_eq!(notes.0.mode, Some(0o644));
+    assert!(notes.0.modified.is_some());
 }
 
 #[test]
@@ -244,4 +245,210 @@ fn a_failing_source_fails_the_probe_rather_than_go_to_7_zip() {
         matches!(&result, Err(error) if error.to_string() == "the disk went away"),
         "{result:?}"
     );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn a_hard_link_is_never_read_as_a_file() {
+    // libarchive gives a TAR hard link no file type, only a link name.
+    let seen = entries("hardlink.tar", None).unwrap();
+
+    let kinds: Vec<_> = seen
+        .iter()
+        .map(|(header, content)| (header.name.clone(), header.kind.clone(), content.clone()))
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            (b"notes.txt".to_vec(), Kind::File, b"hello\n".to_vec()),
+            (b"again.txt".to_vec(), Kind::Special, Vec::new()),
+        ]
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn a_name_libarchive_cannot_convert_to_the_locale_still_arrives_as_its_bytes() {
+    // Tests run in the C locale, where libarchive warns that "café"
+    // cannot be converted, and still gives the name.
+    let seen = entries("pax-cafe.tar", None).unwrap();
+
+    assert_eq!(names(&seen), ["café.txt"]);
+    assert_eq!(content_of(&seen, "café.txt"), b"hello\n");
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn a_damaged_block_between_entries_is_passed_over() {
+    // libarchive asks to be called again after a bad TAR header.
+    let seen = entries("gap.tar", None).unwrap();
+
+    assert_eq!(names(&seen), ["deep.txt", "notes.txt"]);
+    assert_eq!(content_of(&seen, "notes.txt"), b"hello\n");
+    assert_eq!(content_of(&seen, "deep.txt"), b"deep\n");
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn nothing_at_all_is_no_archive() {
+    let result = read_entries(
+        b"empty",
+        Box::new(Cursor::new(Vec::new())),
+        None,
+        &mut |_, _| Ok(ControlFlow::Continue(())),
+    );
+
+    assert!(
+        matches!(&result, Err(ReadError::Damaged(message)) if message.contains("Unrecognized")),
+        "{result:?}"
+    );
+}
+
+/// Where `notes.txt`'s content starts in `bundle.cpio`.
+const NOTES_AT: usize = 86;
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn a_source_failing_inside_an_entry_is_an_io_error() {
+    let bytes = std::fs::read(fixture("bundle.cpio")).unwrap();
+    assert_eq!(&bytes[NOTES_AT..NOTES_AT + 6], b"hello\n");
+    let source = Failing {
+        inner: Cursor::new(bytes),
+        good: NOTES_AT as u64 + 3,
+    };
+
+    let result = read_entries(b"bundle.cpio", Box::new(source), None, &mut |_, content| {
+        content.read_to_end(&mut Vec::new())?;
+        Ok(ControlFlow::Continue(()))
+    });
+
+    assert!(
+        matches!(&result, Err(ReadError::Io(error)) if error.to_string() == "the disk went away"),
+        "{result:?}"
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn an_archive_cut_short_inside_an_entry_is_damaged() {
+    let bytes = std::fs::read(fixture("bundle.cpio")).unwrap();
+    let cut = bytes[..NOTES_AT + 3].to_vec();
+
+    let result = read_entries(
+        b"bundle.cpio",
+        Box::new(Cursor::new(cut)),
+        None,
+        &mut |_, content| {
+            content.read_to_end(&mut Vec::new())?;
+            Ok(ControlFlow::Continue(()))
+        },
+    );
+
+    assert!(matches!(result, Err(ReadError::Damaged(_))), "{result:?}");
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn a_compressed_stream_cut_short_is_damaged_in_libarchives_words() {
+    let bytes = std::fs::read(fixture("disc.iso.gz")).unwrap();
+    let cut = bytes[..bytes.len() / 2].to_vec();
+
+    let result = read_entries(
+        b"disc.iso.gz",
+        Box::new(Cursor::new(cut)),
+        None,
+        &mut |_, content| {
+            content.read_to_end(&mut Vec::new())?;
+            Ok(ControlFlow::Continue(()))
+        },
+    );
+
+    assert!(
+        matches!(&result, Err(ReadError::Damaged(message)) if message.contains("truncated")),
+        "{result:?}"
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn what_is_no_archive_is_probed_unreadable_saying_why() {
+    assert_eq!(
+        probed("README.md"),
+        (Probe::Unreadable("it is not an archive".to_owned()), 0)
+    );
+}
+
+/// Content that records when it is let go.
+struct Watched {
+    inner: Cursor<Vec<u8>>,
+    dropped: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl io::Read for Watched {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.inner.read(buffer)
+    }
+}
+
+impl Seek for Watched {
+    fn seek(&mut self, to: SeekFrom) -> io::Result<u64> {
+        self.inner.seek(to)
+    }
+}
+
+impl Drop for Watched {
+    fn drop(&mut self) {
+        self.dropped
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn the_content_is_let_go_when_reading_ends() {
+    let dropped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let source = Watched {
+        inner: Cursor::new(std::fs::read(fixture("bundle.cpio")).unwrap()),
+        dropped: std::sync::Arc::clone(&dropped),
+    };
+
+    read_entries(b"bundle.cpio", Box::new(source), None, &mut |_, _| {
+        Ok(ControlFlow::Continue(()))
+    })
+    .unwrap();
+
+    assert!(
+        dropped.load(std::sync::atomic::Ordering::SeqCst),
+        "the archive file would stay open"
+    );
+}
+
+#[test]
+fn only_words_about_a_password_are_password_errors() {
+    let wrong = Some("guess");
+    let cases: [(&str, Option<&str>, Option<ReadError>); 7] = [
+        (
+            "Passphrase required for this entry",
+            None,
+            Some(ReadError::NeedsPassword),
+        ),
+        (
+            "Incorrect passphrase",
+            wrong,
+            Some(ReadError::WrongPassword),
+        ),
+        ("Wrong PASSWORD", wrong, Some(ReadError::WrongPassword)),
+        ("Encryption is not supported", wrong, None),
+        ("Passphrase encryption not supported", wrong, None),
+        ("Unsupported passphrase method", None, None),
+        ("Truncated input file", None, None),
+    ];
+
+    for (message, password, expected) in cases {
+        assert_eq!(
+            format!("{:?}", password_error(message, password)),
+            format!("{expected:?}"),
+            "{message}"
+        );
+    }
 }
