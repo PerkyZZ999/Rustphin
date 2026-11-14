@@ -15,10 +15,7 @@ use std::pin::Pin;
 
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
-use rustphin_view::{
-    settings::Settings,
-    toolbar_items::{Item, Toolbar},
-};
+use rustphin_view::toolbar_items::{Item, Toolbar};
 
 /// The roles QML reads, after Qt's own (`Qt::UserRole` is 0x100).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,13 +95,9 @@ fn tip(item: &Item) -> String {
     }
 }
 
-/// The toolbar the settings file arranges, or today's.
+/// The toolbar the settings arrange, or today's.
 fn saved_toolbar() -> Toolbar {
-    rustphin_platform::config::config_dir()
-        .map(|dir| dir.join("settings.toml"))
-        .and_then(|path| rustphin_platform::config::read(&path).ok().flatten())
-        .map(|text| Settings::parse(&text).toolbar())
-        .unwrap_or_default()
+    crate::prefs::settings().toolbar()
 }
 
 /// The Rust side of `ToolbarModel`.

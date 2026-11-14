@@ -27,6 +27,12 @@ impl OpId {
     pub fn as_u64(self) -> u64 {
         self.0
     }
+
+    /// The id numbered `number`, as [`Self::as_u64`] gave it: for a view
+    /// that keeps an operation's number apart from the operation.
+    pub fn from_u64(number: u64) -> Self {
+        Self(number)
+    }
 }
 
 /// Something an operation has to tell or ask.

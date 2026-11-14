@@ -35,6 +35,23 @@ fn fonts(dir: &Path) -> Vec<QResourceFile> {
         .collect()
 }
 
+/// Every `.qml` file in `qml/`.
+fn qml_files() -> Vec<String> {
+    let mut files: Vec<String> = std::fs::read_dir("qml")
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .filter_map(|entry| {
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    name.ends_with(".qml").then(|| format!("qml/{name}"))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort();
+    files
+}
+
 /// Every `.svg` file in `icons/`.
 fn icons() -> Vec<String> {
     let mut files: Vec<String> = std::fs::read_dir("icons")
@@ -60,21 +77,22 @@ fn main() {
         .resource(QResource::new().files(icons()))
         .resource(QResource::new().files(fonts(Path::new(FONTS))))
         .resource(QResource::new().file(QResourceFile::new(LOGO).alias("logo.svg")));
-    let builder =
-        CxxQtBuilder::new_qml_module(QmlModule::new("Rustphin").qml_files(["qml/Main.qml"]))
-            .qt_module("Gui")
-            .qt_module("Quick")
-            .qt_module("Svg")
-            .files([
-                "src/app_bridge.rs",
-                "src/folder_bridge.rs",
-                "src/tokens_bridge.rs",
-                "src/toolbar_bridge.rs",
-            ])
-            .cpp_file("cpp/app.cpp")
-            .cpp_file("cpp/window.cpp")
-            .include_dir("cpp")
-            .qrc_resources(resources);
+    let builder = CxxQtBuilder::new_qml_module(QmlModule::new("Rustphin").qml_files(qml_files()))
+        .qt_module("Gui")
+        .qt_module("Quick")
+        .qt_module("Svg")
+        .files([
+            "src/app_bridge.rs",
+            "src/desktop_bridge.rs",
+            "src/folder_bridge.rs",
+            "src/operations_bridge.rs",
+            "src/tokens_bridge.rs",
+            "src/toolbar_bridge.rs",
+        ])
+        .cpp_file("cpp/app.cpp")
+        .cpp_file("cpp/window.cpp")
+        .include_dir("cpp")
+        .qrc_resources(resources);
     // SAFETY: adds KDE's KWindowSystem headers to the include path; no option
     // that changes how C++ code is compiled or linked.
     let builder = unsafe {
@@ -86,6 +104,7 @@ fn main() {
     println!("cargo::rustc-link-lib=KF6WindowSystem");
     println!("cargo::rerun-if-changed=cpp");
     println!("cargo::rerun-if-changed=icons");
+    println!("cargo::rerun-if-changed=qml");
     println!("cargo::rerun-if-changed={FONTS}");
     println!("cargo::rerun-if-changed={LOGO}");
 }

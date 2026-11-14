@@ -202,3 +202,8 @@ void rustphin_shell_quit()
         },
         Qt::QueuedConnection);
 }
+
+void rustphin_post(rust::Fn<void()> run)
+{
+    QMetaObject::invokeMethod(qGuiApp, [run] { run(); }, Qt::QueuedConnection);
+}

@@ -7,7 +7,12 @@
 //! it and exit. Until the switch (W-114i) it owns its own bus name, so the
 //! GPUI Rustphin in use never receives its launches.
 
+mod desktop;
 mod folder;
+mod hub;
+mod operations;
+mod post;
+mod prefs;
 mod tokens;
 mod toolbar;
 
@@ -21,10 +26,7 @@ use std::{path::PathBuf, process::ExitCode};
 
 use cxx_qt_lib::{QGuiApplication, QString, QStringList};
 use rustphin_platform::instance::{self, ANSWER_TIME, ClaimError, HandOver, Instance, Request};
-use rustphin_view::{
-    launch::{Command, parse_launch},
-    settings::Settings,
-};
+use rustphin_view::launch::{Command, parse_launch};
 
 /// The Qt interface's bus name until it replaces the GPUI one.
 const BUS_NAME: &str = "org.rustphin.RustphinQt";
@@ -42,15 +44,6 @@ fn quit_outcome(answer: &HandOver) -> (Option<String>, bool) {
         HandOver::NoneRunning => (Some("Rustphin is not running.".to_owned()), true),
         HandOver::NoAnswer(reason) => (Some(format!("Rustphin did not answer: {reason}")), false),
     }
-}
-
-/// The settings file, read once at start; the defaults when there is none.
-fn saved_settings() -> Settings {
-    rustphin_platform::config::config_dir()
-        .map(|dir| dir.join("settings.toml"))
-        .and_then(|path| rustphin_platform::config::read(&path).ok().flatten())
-        .map(|text| Settings::parse(&text))
-        .unwrap_or_default()
 }
 
 fn folder_list(folders: &[PathBuf]) -> QStringList {
@@ -109,7 +102,7 @@ fn main() -> ExitCode {
         }
     };
     let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("/"), PathBuf::from);
-    let keep = keeps_running(instance.is_some(), saved_settings().keep_running());
+    let keep = keeps_running(instance.is_some(), prefs::settings().keep_running());
     let mut app = QGuiApplication::new();
     shell::qobject::rustphin_shell_start(keep, &QString::from(home.to_string_lossy().as_ref()));
     if launch.command == Command::Open {

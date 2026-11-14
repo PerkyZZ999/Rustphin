@@ -18,5 +18,7 @@ pub mod qobject {
         fn rustphin_shell_open(folders: &QStringList, activation: &QString);
         /// Closes every window and ends the process. Any thread.
         fn rustphin_shell_quit();
+        /// Runs `run` on the GUI thread, from its event loop. Any thread.
+        fn rustphin_post(run: fn());
     }
 }

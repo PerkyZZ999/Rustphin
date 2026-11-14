@@ -6153,11 +6153,14 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "flume 0.11.1",
  "jiff",
  "qt-build-utils",
  "rustphin-core",
  "rustphin-platform",
  "rustphin-view",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
