@@ -43,7 +43,17 @@ S11 — Hardening for daily use (in progress)
 
 ## Later (requested, not scheduled)
 
-- [ ] W-114 — Move the interface from GPUI to Qt 6 and QML (the maintainer, 2026-11-13, naming QtBridge for Rust). Plan in [QT_MIGRATION_PLAN.md](QT_MIGRATION_PLAN.md): W-114a spike with go/no-go criteria, W-114b toolkit-free `rustphin-view`, W-114c–g the Qt interface beside the GPUI one, W-114h parity check, W-114i the switch. Reverses D-001: waits for the maintainer's decisions A–E.
+- [ ] W-114 — Move the interface from GPUI to Qt 6 and QML (the maintainer, 2026-11-13, naming QtBridge for Rust). Plan in [QT_MIGRATION_PLAN.md](QT_MIGRATION_PLAN.md); decided D-033 and D-034 (cxx-qt).
+  - [x] W-114a — Spike: cxx-qt and QtBridge measured against the nine criteria; cxx-qt passes 1–4 and 6–9, blur (5) needs the maintainer's desktop. Done 2026-11-13 (see VALIDATION.md).
+  - [ ] W-114b — `rustphin-view`: move the toolkit-free interface logic out of `rustphin-ui`, with its tests; the GPUI app unchanged on screen.
+  - [ ] W-114c — The Qt shell (`rustphin-qt`): cxx-qt in `rust-tc doctor`, Theme singleton from `theme.rs`, window, blur, fonts, single instance, background mode releasing the QML engine.
+  - [ ] W-114d — Item views (details, icons, compact) over a Rust model; R-101 on 500,000 entries.
+  - [ ] W-114e — Places, devices, tabs, split view, location bar, status bar, palette, context menu, filter.
+  - [ ] W-114f — Operations and dialogs: progress, conflicts, errors, passwords, Undo, Properties, batch rename, Compress to…, Settings, administrator mode, remote folders.
+  - [ ] W-114g — Exchange with the desktop: clipboard, drag-and-drop (also with a non-KDE application), Open with, default file manager, portal dialog starting in the folder shown (W-113).
+  - [ ] W-114h — Parity: every UI scenario, KEYBOARD.md, the mockup comparison, accessibility and performance again.
+  - [ ] W-114i — The switch: `rustphin-qt` becomes `rustphin`; GPUI, GPUI-Kit and their workarounds removed; docs and deny.toml updated.
+- [ ] W-115 — Reloading a very large folder grows memory by about 25 MB each time (500,000 entries: 73 → 211 MB after six reloads, GPUI and Qt alike), so the growth is below the interface. Find what keeps the old listings (snapshots still referenced, the core's caches, or the allocator not returning memory) and fix it with a regression test. Found in W-114a (2026-11-13).
 - [ ] W-113 — Extract to… should open the folder dialog in the folder being shown, as Ark does; it opens in the home folder because the pinned toolkit's path prompt takes no start folder. Needs a direct portal call (`current_folder`) or a toolkit upgrade. Found in W-111 (2026-11-13).
 - [x] W-106 — Settings window with a Toolbar page to customize the toolbar entirely, as Dolphin's "Configure Toolbars…" (the maintainer, 2026-11-11). Needs a requirement and a design approved by the maintainer first; see ROADMAP.md "Later". 2026-11-12: the maintainer asked for the whole window to be planned (General, Appearance, Customizations, About, …); proposal in docs/project/SETTINGS_PLAN.md; approved as written (D-029, R-019).
   - [x] W-106a — Mockups of the Settings window, one scene per page and a narrow window: docs/mockup/36-settings.html (drawn 2026-11-12). Approved by the maintainer 2026-11-12.

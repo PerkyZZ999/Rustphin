@@ -1,0 +1,17 @@
+[package]
+name = "qtbridgespike"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+license = "GPL-3.0-or-later"
+
+# Throwaway W-114a spike: outside the workspace.
+[workspace]
+
+[dependencies]
+qtbridge = "=0.4.1"
+rustphin-core = { path = "../../crates/rustphin-core" }
+
+[profile.release]
+debug = 1

@@ -17,7 +17,7 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Alternatives:** Qt6/QML via cxx-qt (rejected: item view and UI logic would sit outside Rust; retained as fallback). Tracking Zed HEAD GPUI directly (rejected: pins Rust 1.98.1, no component library).
 - **Reopen criteria:** A GPUI-Kit release removes drag-out or raw window handles; a blocking rendering or input defect with no fix or workaround within a slice; GPUI-Kit is abandoned.
 - **Confirmed by / date:** The maintainer, 2026-10-12
-- **Supersedes / superseded by:** —
+- **Supersedes / superseded by:** superseded by D-034 (Qt 6 and QML through cxx-qt) when W-114i ships; governs the shipped interface until then
 
 ## D-002 — Workspace with a headless, UI-agnostic core
 - **Status:** locked
@@ -298,3 +298,19 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** as ARCHIVE_PLAN.md proposes, with its five recommendations. Rustphin's own operation engine reads and writes ZIP, TAR (plain, .gz, .bz2, .xz, .zst) and 7Z; other formats are handed to Ark, else 7-Zip or unrar, when installed. Extract › Extract here, Extract into "name/", Extract and trash archive, Extract to…; Compress › Compress to "name.zip" (first), Compress to "name.tar.gz", Compress to…. Creating encrypted archives is later work; opening them is in. After extracting, the result is selected in the current view; no folder is opened. Work W-111a–g, requirement R-021.
 - **Confirmed by / date:** The maintainer, 2026-11-13 ("Approve, build both")
 - **Supersedes / superseded by:** adds scope beyond the MVP at the maintainer's request
+
+## D-033 — Qt 6 interface: spike first, cxx-qt, own look, own engine
+- **Status:** decided
+- **Date:** 2026-11-13
+- **Context:** The maintainer asked to move the interface from GPUI to Qt 6 and QML (W-114). docs/project/QT_MIGRATION_PLAN.md weighs it and asks five decisions (A–E).
+- **Decision:** A: run the measured spike W-114a with the plan's go/no-go criteria. B: cxx-qt is the bridge; QtBridge for Rust is tried alongside in the spike. C: the Qt interface keeps DESIGN.md's own look (D-017), drawn with plain Qt Quick, not Kirigami or Breeze controls. D: file operations stay in the core's engine (D-011), not KIO. E (the switch, superseding D-001) is decided on the spike's numbers; the maintainer asked to proceed with the plan once the spike is done.
+- **Confirmed by / date:** The maintainer, 2026-11-13 ("I agree with your recommendations for the decisions ! You can run the spike … then proceed with the QT_MIGRATION_PLAN.md")
+- **Supersedes / superseded by:** D-001 stays locked until E is recorded
+
+## D-034 — Move the interface to Qt 6 and QML through cxx-qt
+- **Status:** decided
+- **Date:** 2026-11-13
+- **Context:** D-033 approved the W-114a spike and asked to proceed with QT_MIGRATION_PLAN.md once it was done; decision E was left to the spike's numbers. The spike (QT_MIGRATION_PLAN.md "Spike results", VALIDATION.md 2026-11-13) passed criteria 1–4 and 6–9; blur (5) needs the maintainer's desktop.
+- **Decision:** Rustphin's interface moves from GPUI-Kit to Qt 6 Quick and QML, bridged with cxx-qt (0.10, crates.io); QtBridge for Rust is not used (rows must be stored as Rust values, no access to C++ APIs, silent failures). The move follows the plan: W-114b (`rustphin-view`), the Qt interface built beside the GPUI one (W-114c–h), then the switch (W-114i). The GPUI app stays the shipped one until W-114i; `gpui-kit` stays pinned and maintained for fixes until then. When the last window closes, the Qt app releases its window and QML engine to meet R-020.
+- **Confirmed by / date:** The maintainer, 2026-11-13 ("run the spike … then proceed with the QT_MIGRATION_PLAN.md"), on the spike's results
+- **Supersedes / superseded by:** supersedes D-001 at W-114i; until then D-001 governs the shipped interface. D-010's GPUI-specific integrations (blur through GPUI's surface, data-control clipboard) are replaced by Qt and KDE APIs at W-114i

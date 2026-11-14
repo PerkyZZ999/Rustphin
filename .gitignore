@@ -2,3 +2,6 @@
 /fuzz/target/
 /fuzz/corpus/
 /fuzz/artifacts/
+/spikes/*/target/
+/spikes/qt-bridge/shim/
+/spikes/*/.qmlls.ini

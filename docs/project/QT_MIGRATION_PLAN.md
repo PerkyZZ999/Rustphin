@@ -7,6 +7,44 @@ a locked decision (D-001) and needs the maintainer's approval and a superseding
 record. The plan asks for that approval in two steps: first for a
 measured spike, then, on its results, for the switch itself.
 
+**Approved 2026-11-13:** decisions A–D as recommended (D-033). E follows the spike's numbers.
+
+## Spike results (W-114a, 2026-11-13)
+
+Two throwaway spikes in `spikes/qt-cxx` (cxx-qt 0.10) and `spikes/qt-bridge`
+(QtBridge 0.4.1) show a details list over `rustphin-core`. Both were
+measured in an isolated KWin session at 60 Hz, release builds, on the
+500,000-entry benchmark folder (`rust-tc bench-listing`: core alone 48 ms
+to first entries, re-sorts 56–91 ms). Rustphin on GPUI was measured in
+the same session for reference.
+
+| # | Criterion | cxx-qt | QtBridge | GPUI today | Verdict |
+|---|---|---|---|---|---|
+| 1 | First entries ≤ 200 ms (folder opened in a running window) | 7–13 ms (4 reopens); 148–203 ms when it is the window's first frame | 52–90 ms at start | 59–78 ms (W-073g) | pass |
+| 1 | Re-sort shown ≤ 500 ms, details loaded | 75–115 ms | 156–248 ms | 92.7 ms (W-078) | pass |
+| 2 | Scrolling, ≤ 5% dropped frames | 2 of 1,200 (0.17%) | 2 of 1,200 (0.17%) | 0–0.25% (W-085) | pass |
+| 3 | Launch to first frame < 1 s | 0.31–0.44 s | 0.65 s | about 9.9 s to first entries in the same session (3.2 s reading 9,018 font files, 5.9 s warming font caches) | pass |
+| 4 | Own memory (RssAnon) | 59 MB with a small folder; 59 MB after the window closed with the QML engine kept; 7.5 MB as a windowless process; 78 MB with 500,000 entries | 116–187 MB with 500,000 entries | 41 MB after closing (W-110e), 11.6 MB windowless, 73 MB with 500,000 entries | pass if the window and QML engine are released when the last window closes |
+| 5 | Blur on the real desktop, opaque without it | translucency works; KWin reports no blur effect in an isolated session | not reachable (C++ API) | — | **open: the maintainer's desktop** |
+| 6 | Drag to Dolphin; clipboard both ways | drag: Dolphin offered Copy Here and copied the file; copy → Dolphin's "Paste One File"; Dolphin's copy read back as the path | not reachable (C++ API) | Rustphin's own protocol code (D-010) | pass with Dolphin; a non-KDE application not tried |
+| 7 | Rows named and selected over AT-SPI | list items by name, "selected" state | — | W-074 | pass |
+| 8 | Licences and Rust 1.95 | deny.toml licences ok; builds with 1.95.0 | — | — | pass (inside `rust-tc doctor` from W-114c) |
+| 9 | Which bridge | everything above, model rows made on demand, C++ helpers for KDE | every row stored as a Rust value (memory 1.5–2.4×, re-sorts 2×); no C++ reach; QML errors go to the journal and the program exits 0 silently; needs `qmake` on the PATH (Qt 5's here) | — | **cxx-qt** |
+
+**Also found:** reloading the 500,000-entry folder grows memory by about
+25 MB each time, in today's Rustphin (73 → 211 MB after six reloads) as in
+the spike. The growth is in the core or the allocator, not in Qt: W-115.
+
+**Not measured:** a true cold start with emptied disk caches (the numbers
+above are warm); KWin's focus from a launcher token; icons and thumbnails
+in the delegates (the spike draws a coloured square).
+
+**Recommendation for E:** switch, with cxx-qt. Criteria 1–4 and 6–9 pass,
+startup is more than ten times faster, and the file exchange with Dolphin
+works with no protocol code of ours. Blur (5) is the one open check;
+`KWindowEffects` is how KDE's own applications blur, and the opaque
+fallback stays.
+
 ## Short answer
 
 Yes, the switch would improve Rustphin, but mainly through maturity and

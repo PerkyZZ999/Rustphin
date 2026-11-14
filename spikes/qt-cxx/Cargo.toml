@@ -1,0 +1,23 @@
+[package]
+name = "qt-cxx-spike"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+license = "GPL-3.0-or-later"
+
+# Throwaway W-114a spike: outside the workspace.
+[workspace]
+
+[dependencies]
+cxx = "1"
+cxx-qt = "0.10"
+cxx-qt-lib = { version = "0.10", features = ["qt_full"] }
+rustphin-core = { path = "../../crates/rustphin-core" }
+flume = "0.11"
+
+[build-dependencies]
+cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }
+
+[profile.release]
+debug = 1
