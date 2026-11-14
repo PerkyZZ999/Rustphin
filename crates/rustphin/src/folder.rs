@@ -174,6 +174,7 @@ pub struct FolderModelRust {
     count: i32,
     loading: bool,
     location: QString,
+    location_uri: QString,
     title: QString,
     total: QString,
     selection_text: QString,
@@ -278,6 +279,7 @@ impl Default for FolderModelRust {
             count: 0,
             loading: false,
             location: QString::default(),
+            location_uri: QString::default(),
             title: QString::default(),
             total: QString::default(),
             selection_text: QString::default(),
@@ -698,6 +700,7 @@ impl qobject::FolderModel {
         }
         self.as_mut().listen(events);
         self.as_mut().set_location(QString::default());
+        self.as_mut().set_location_uri(QString::default());
         self.go_to(location);
     }
 
@@ -974,7 +977,9 @@ impl qobject::FolderModel {
     }
 
     fn reveal(mut self: Pin<&mut Self>, path: &QString, names: &QStringList) {
-        let folder = PathBuf::from(path.to_string());
+        let path = path.to_string();
+        let folder = rustphin_platform::uri::path_from_uri(path.as_bytes())
+            .unwrap_or_else(|| PathBuf::from(path));
         let names: Vec<Vec<u8>> = QList::<QString>::from(names)
             .iter()
             .map(|name| name.to_string().into_bytes())
@@ -1245,6 +1250,9 @@ impl qobject::FolderModel {
         if !self.as_mut().rust_mut().pane.set_folder(path) {
             return;
         }
+        // The URI first: panes report to their tab when `location` changes.
+        self.as_mut()
+            .set_location_uri(QString::from(&rustphin_platform::uri::file_uri(path)));
         self.as_mut().set_location(path_text(path));
         if !self.notice().is_empty() {
             self.as_mut().set_notice(QString::default());

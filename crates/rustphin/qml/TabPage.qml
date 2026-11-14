@@ -30,7 +30,7 @@ Item {
     function report(side: int, pane: Pane) {
         const folder = pane.listing
         const icon = folder.trash ? "trash" : (page.places.iconFor(folder.location) || "folder")
-        page.tabs.setPane(page.key, side, folder.location, folder.title, icon)
+        page.tabs.setPane(page.key, side, folder.locationUri, folder.title, icon)
     }
 
     // Places arrive after the first folder: its icon is looked up again.

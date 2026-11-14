@@ -134,7 +134,7 @@ FocusScope {
     }
     // The tab joined its views and this one goes on with the other's folder.
     onStartFolderChanged: {
-        if (startFolder.length > 0 && startFolder !== folder.location)
+        if (startFolder.length > 0 && startFolder !== folder.locationUri && startFolder !== folder.location)
             folder.openTyped(startFolder)
     }
     onActiveFocusChanged: {

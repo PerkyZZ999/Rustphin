@@ -180,7 +180,7 @@ Window {
             command("trash", toolbar)
             break
         case "new-tab":
-            tabList.open(folder ? folder.location : home, true, [])
+            tabList.open(folder ? folder.locationUri : home, true, [])
             break
         case "reopen-closed-tab":
             tabList.reopen()
@@ -417,7 +417,7 @@ Window {
                 TabStrip {
                     Layout.fillWidth: true
                     tabs: root.tabsModel
-                    onNewTab: tabList.open(root.folder ? root.folder.location : root.home, true, [])
+                    onNewTab: tabList.open(root.folder ? root.folder.locationUri : root.home, true, [])
                     onCloseTab: index => root.closeTab(index)
                 }
                 StackLayout {

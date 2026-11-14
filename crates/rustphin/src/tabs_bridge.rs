@@ -144,14 +144,14 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "moveTab"]
         fn move_tab(self: Pin<&mut TabsModel>, from: i32, to: i32);
-        /// A pane shows a new folder: its path, title and icon.
+        /// A pane shows a new folder: its `file:` URI (or path), title and icon.
         #[qinvokable]
         #[cxx_name = "setPane"]
         fn set_pane(
             self: Pin<&mut TabsModel>,
             key: i32,
             side: i32,
-            path: &QString,
+            location: &QString,
             title: &QString,
             icon: &QString,
         );

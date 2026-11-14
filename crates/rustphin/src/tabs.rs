@@ -1,8 +1,10 @@
-//! A window's tabs as a QML list model (W-114e): one or two panes per tab,
-//! the active tab and pane, the tabs closed lately, and the session saved
-//! as it changes. The rules are `rustphin_view::tabs` and `::workspace`;
-//! QML keeps a delegate (with its panes) per row, so rows are inserted,
-//! removed and moved, never reset.
+//! A window's tabs as a QML list model (W-114e, W-130). The tabs, their
+//! panes, the active tab and pane, the tabs closed lately and the session
+//! they make are `rustphin_view::workspace::Workspace`; this model turns
+//! its changes into row inserts, removals and moves (QML keeps a delegate,
+//! with its panes, per row, so the model is never reset) and saves the
+//! session as it changes. Folders cross to QML as byte-preserving `file:`
+//! URIs (`PaneStart::to_text`, `FolderModel.locationUri`).
 
 // cxx-qt generates the unsafe FFI glue for the model; the bridge file
 // holds declarations only (AGENTS.md, D-034).
@@ -21,15 +23,12 @@ use cxx_qt::CxxQtType;
 use cxx_qt_lib::{
     QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant,
 };
-use rustphin_platform::remote::RemoteAddress;
+use rustphin_platform::{remote::RemoteAddress, uri::path_from_uri};
 use rustphin_view::{
     location::Location,
-    session::{self, Session, SessionSaves, SessionTab},
+    session::{self, Session, SessionSaves},
     settings::Start,
-    tabs::Tabs,
-    workspace::{
-        Transfer, folder_label, remember_closed_tab, tab_for_number, transfer_to_other_view,
-    },
+    workspace::{Closing, PaneStart, TabStart, Transfer, Workspace},
 };
 
 use crate::{hub, prefs};
@@ -79,87 +78,6 @@ impl Role {
     }
 }
 
-/// One pane of a tab, as last reported.
-#[derive(Debug, Clone, Default)]
-struct PaneState {
-    /// Where it started: a path or a remote address, as QML opens it.
-    start: String,
-    /// The folder it shows.
-    path: Option<PathBuf>,
-    title: String,
-    icon: String,
-}
-
-/// One tab.
-#[derive(Debug, Clone)]
-struct Tab {
-    key: i32,
-    panes: Vec<PaneState>,
-    active_pane: usize,
-    /// Names to select when the first pane arrives.
-    select: Vec<String>,
-}
-
-impl Tab {
-    fn new(key: i32, starts: Vec<String>, active_pane: usize) -> Self {
-        let panes: Vec<PaneState> = starts
-            .into_iter()
-            .map(|start| PaneState {
-                title: start_title(&start),
-                start,
-                ..PaneState::default()
-            })
-            .collect();
-        Self {
-            key,
-            active_pane: active_pane.min(panes.len().saturating_sub(1)),
-            panes,
-            select: Vec::new(),
-        }
-    }
-
-    fn active(&self) -> Option<&PaneState> {
-        self.panes.get(self.active_pane)
-    }
-
-    /// The tab as the session keeps it.
-    fn saved(&self) -> SessionTab {
-        SessionTab {
-            panes: self.panes.iter().filter_map(saved_location).collect(),
-            active_pane: self.active_pane,
-        }
-    }
-}
-
-/// What a tab is called before its pane has said: its folder's name.
-fn start_title(start: &str) -> String {
-    match RemoteAddress::parse(start).filter(|_| start.contains("://")) {
-        Some(_) => rustphin_view::remote::short_name(start).to_owned(),
-        None => folder_label(Path::new(start)),
-    }
-}
-
-/// How a pane is saved: a remote folder by its address, else its path.
-fn saved_location(pane: &PaneState) -> Option<Location> {
-    let path = pane.path.clone().or_else(|| {
-        (!pane.start.contains("://"))
-            .then(|| PathBuf::from(&pane.start))
-            .filter(|path| path.is_absolute())
-    })?;
-    match crate::remote::address_of(&path).and_then(|text| RemoteAddress::parse(&text)) {
-        Some(address) => Some(Location::Remote(address)),
-        None => Some(Location::Folder(path)),
-    }
-}
-
-/// How a saved location is opened: its path, or its remote address.
-fn start_of(location: &Location) -> String {
-    match location {
-        Location::Folder(path) => path.to_string_lossy().into_owned(),
-        Location::Remote(address) => address.to_string(),
-    }
-}
-
 /// The folders a start window opens with: none to restore the session.
 fn start_folders(home: &Path) -> Vec<PathBuf> {
     let settings = prefs::settings();
@@ -177,51 +95,35 @@ fn session_path() -> Option<PathBuf> {
     rustphin_platform::config::state_dir().map(|dir| dir.join("session.toml"))
 }
 
+/// The remote address of a folder under a kio-fuse mount.
+fn remote_of(path: &Path) -> Option<RemoteAddress> {
+    crate::remote::address_of(path).and_then(|text| RemoteAddress::parse(&text))
+}
+
 fn text(words: &str) -> QString {
     QString::from(words)
 }
 
+fn strings(list: &QStringList) -> Vec<String> {
+    QList::<QString>::from(list)
+        .iter()
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn row_number(row: usize) -> i32 {
+    i32::try_from(row).unwrap_or(i32::MAX)
+}
+
 /// The Rust side of `TabsModel`.
+#[derive(Default)]
 pub struct TabsModelRust {
     count: i32,
     active: i32,
     saves: bool,
-    tabs: Option<Tabs<Tab>>,
-    closed: Vec<SessionTab>,
-    next_key: i32,
+    workspace: Option<Workspace>,
     session_saves: SessionSaves,
     saved: Session,
-}
-
-impl Default for TabsModelRust {
-    fn default() -> Self {
-        Self {
-            count: 0,
-            active: 0,
-            saves: false,
-            tabs: None,
-            closed: Vec::new(),
-            next_key: 1,
-            session_saves: SessionSaves::default(),
-            saved: Session::default(),
-        }
-    }
-}
-
-impl TabsModelRust {
-    fn key(&mut self) -> i32 {
-        let key = self.next_key;
-        self.next_key += 1;
-        key
-    }
-
-    fn get(&self, row: usize) -> Option<&Tab> {
-        self.tabs.as_ref()?.iter().nth(row)
-    }
-
-    fn row_of_key(&self, key: i32) -> Option<usize> {
-        self.tabs.as_ref()?.iter().position(|tab| tab.key == key)
-    }
 }
 
 impl qobject::TabsModel {
@@ -230,39 +132,39 @@ impl qobject::TabsModel {
     }
 
     fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let rust = self.rust();
+        let Some(workspace) = self.rust().workspace.as_ref() else {
+            return QVariant::default();
+        };
         let (Ok(row), Some(role)) = (usize::try_from(index.row()), Role::from_number(role)) else {
             return QVariant::default();
         };
-        let Some(tab) = rust.get(row) else {
+        let Some(tab) = workspace.tab(row) else {
             return QVariant::default();
         };
-        let start = |side: usize| tab.panes.get(side).map_or("", |pane| pane.start.as_str());
+        let start = |side: usize| {
+            text(
+                &tab.panes()
+                    .get(side)
+                    .map(|pane| pane.start().to_text())
+                    .unwrap_or_default(),
+            )
+        };
         match role {
-            Role::Key => QVariant::from(&tab.key),
-            Role::Title => {
-                QVariant::from(&text(tab.active().map_or("", |pane| pane.title.as_str())))
-            }
-            Role::Icon => {
-                QVariant::from(&text(match tab.active().map(|pane| pane.icon.as_str()) {
-                    Some(icon) if !icon.is_empty() => icon,
-                    _ => "folder",
-                }))
-            }
-            Role::Split => QVariant::from(&(tab.panes.len() > 1)),
-            Role::ActivePane => QVariant::from(&i32::try_from(tab.active_pane).unwrap_or(0)),
-            Role::LeftStart => QVariant::from(&text(start(0))),
-            Role::RightStart => QVariant::from(&text(start(1))),
+            Role::Key => QVariant::from(&i32::try_from(tab.key()).unwrap_or(-1)),
+            Role::Title => QVariant::from(&text(tab.active().title())),
+            Role::Icon => QVariant::from(&text(match tab.active().icon() {
+                "" => "folder",
+                icon => icon,
+            })),
+            Role::Split => QVariant::from(&tab.is_split()),
+            Role::ActivePane => QVariant::from(&i32::try_from(tab.active_pane()).unwrap_or(0)),
+            Role::LeftStart => QVariant::from(&start(0)),
+            Role::RightStart => QVariant::from(&start(1)),
             Role::Select => {
-                let list: QList<QString> = tab.select.iter().map(|name| text(name)).collect();
+                let list: QList<QString> = tab.select().iter().map(|name| text(name)).collect();
                 QVariant::from(&QStringList::from(&list))
             }
-            Role::Current => QVariant::from(
-                &(rust
-                    .tabs
-                    .as_ref()
-                    .is_some_and(|tabs| tabs.active_index() == row)),
-            ),
+            Role::Current => QVariant::from(&(workspace.active_index() == row)),
         }
     }
 
@@ -287,10 +189,10 @@ impl qobject::TabsModel {
 
     /// Publishes the count and the active tab, and saves the session.
     fn settle(mut self: Pin<&mut Self>) {
-        let (count, active) = self.rust().tabs.as_ref().map_or((0, 0), |tabs| {
+        let (count, active) = self.rust().workspace.as_ref().map_or((0, 0), |workspace| {
             (
-                i32::try_from(tabs.len()).unwrap_or(i32::MAX),
-                i32::try_from(tabs.active_index()).unwrap_or(0),
+                row_number(workspace.len()),
+                row_number(workspace.active_index()),
             )
         });
         self.as_mut().set_count(count);
@@ -305,6 +207,14 @@ impl qobject::TabsModel {
         self.save_session();
     }
 
+    /// Changes the workspace, then publishes the result.
+    fn update(mut self: Pin<&mut Self>, change: impl FnOnce(&mut Workspace)) {
+        if let Some(workspace) = self.as_mut().rust_mut().workspace.as_mut() {
+            change(workspace);
+        }
+        self.settle();
+    }
+
     /// Stores the session if it changed, on another thread.
     fn save_session(mut self: Pin<&mut Self>) {
         if !self.rust().saves {
@@ -313,16 +223,14 @@ impl qobject::TabsModel {
         let Some(path) = session_path() else {
             return;
         };
-        let Some(tabs) = self.rust().tabs.as_ref() else {
+        let Some(session) = self
+            .rust()
+            .workspace
+            .as_ref()
+            .map(|workspace| workspace.session(remote_of))
+        else {
             return;
         };
-        let session = Session::new(
-            tabs.iter()
-                .map(Tab::saved)
-                .filter(|tab| !tab.panes.is_empty())
-                .collect(),
-            tabs.active_index(),
-        );
         if session == self.rust().saved || session.tabs.is_empty() {
             return;
         }
@@ -353,22 +261,31 @@ impl qobject::TabsModel {
         start: bool,
         home: &QString,
     ) {
-        if self.rust().tabs.is_some() {
+        if self.rust().workspace.is_some() {
             return;
         }
-        let home = PathBuf::from(home.to_string());
-        let folders: Vec<String> = QList::<QString>::from(folders)
+        let home = PaneStart::parse(&home.to_string());
+        let folders: Vec<PaneStart> = strings(folders)
             .iter()
-            .map(ToString::to_string)
             .filter(|folder| !folder.is_empty())
+            .map(|folder| PaneStart::parse(folder))
             .collect();
-        let (mut tabs, mut active): (Vec<(Vec<String>, usize)>, usize) = if start {
+        let (tabs, active): (Vec<TabStart>, usize) = if start {
             // The folders named at launch replace the saved tabs, which the
             // start window then saves as they change, as in the GPUI app.
-            let starts = if folders.is_empty() {
-                start_folders(&home)
+            let starts: Vec<PathBuf> = if folders.is_empty() {
+                match &home {
+                    PaneStart::At(Location::Folder(home)) => start_folders(home),
+                    _ => Vec::new(),
+                }
             } else {
-                folders.iter().map(PathBuf::from).collect()
+                folders
+                    .iter()
+                    .filter_map(|folder| match folder {
+                        PaneStart::At(Location::Folder(path)) => Some(path.clone()),
+                        _ => None,
+                    })
+                    .collect()
             };
             let saved =
                 session_path().map_or(Ok(None), |path| rustphin_platform::config::read(&path));
@@ -382,163 +299,135 @@ impl qobject::TabsModel {
             if can_save {
                 self.as_mut().rust_mut().saved = restored.session.clone();
             }
-            let tabs = restored
-                .session
-                .tabs
-                .iter()
-                .map(|tab| (tab.panes.iter().map(start_of).collect(), tab.active_pane))
-                .collect();
+            let tabs = restored.session.tabs.iter().map(TabStart::from).collect();
             (tabs, restored.session.active)
         } else {
             let tabs = folders
                 .into_iter()
-                .map(|folder| (vec![folder], 0))
+                .map(|folder| TabStart {
+                    panes: vec![folder],
+                    active_pane: 0,
+                })
                 .collect();
             (tabs, 0)
         };
-        if tabs.is_empty() {
-            tabs.push((vec![home.to_string_lossy().into_owned()], 0));
-            active = 0;
-        }
-        let mut items: Vec<Tab> = tabs
-            .into_iter()
-            .map(|(starts, pane)| {
-                let key = self.as_mut().rust_mut().key();
-                Tab::new(key, starts, pane)
-            })
-            .collect();
-        if let Some(first) = items.first_mut() {
-            first.select = QList::<QString>::from(select)
-                .iter()
-                .map(ToString::to_string)
-                .collect();
-        }
-        let last = i32::try_from(items.len()).unwrap_or(1) - 1;
+        let workspace = Workspace::new(tabs, active, home, strings(select));
+        let last = row_number(workspace.len()) - 1;
         self.as_mut()
             .begin_insert_rows(&QModelIndex::default(), 0, last);
-        self.as_mut().rust_mut().tabs = Tabs::from_parts(items, active);
+        self.as_mut().rust_mut().workspace = Some(workspace);
         self.as_mut().rust_mut().count = last + 1;
         self.as_mut().end_insert_rows();
         self.settle();
     }
 
-    /// Inserts `tab` after the active one; keeps the previous one active
-    /// unless `activate`.
-    fn insert(mut self: Pin<&mut Self>, tab: Tab, activate: bool) {
-        let Some(previous) = self.rust().tabs.as_ref().map(Tabs::active_index) else {
+    /// Inserts the tab `add` opens after the active one, if `add` does.
+    fn insert(mut self: Pin<&mut Self>, add: impl FnOnce(&mut Workspace) -> bool) {
+        let Some(at) = self.rust().workspace.as_ref().map(Workspace::insert_row) else {
             return;
         };
-        let at = i32::try_from(previous + 1).unwrap_or(i32::MAX);
+        let at = row_number(at);
         self.as_mut()
             .begin_insert_rows(&QModelIndex::default(), at, at);
-        if let Some(tabs) = self.as_mut().rust_mut().tabs.as_mut() {
-            tabs.open(tab);
-            if !activate {
-                tabs.activate(previous);
-            }
+        let added = self.as_mut().rust_mut().workspace.as_mut().is_some_and(add);
+        if added {
+            self.as_mut().rust_mut().count += 1;
         }
-        self.as_mut().rust_mut().count += 1;
         self.as_mut().end_insert_rows();
         self.settle();
     }
 
-    fn open(mut self: Pin<&mut Self>, location: &QString, activate: bool, select: &QStringList) {
-        let key = self.as_mut().rust_mut().key();
-        let mut tab = Tab::new(key, vec![location.to_string()], 0);
-        tab.select = QList::<QString>::from(select)
-            .iter()
-            .map(ToString::to_string)
-            .collect();
-        self.insert(tab, activate);
+    fn open(self: Pin<&mut Self>, location: &QString, activate: bool, select: &QStringList) {
+        let start = PaneStart::parse(&location.to_string());
+        let select = strings(select);
+        self.insert(move |workspace| {
+            workspace.open(start, select, activate);
+            true
+        });
     }
 
     fn close(mut self: Pin<&mut Self>, index: i32) -> bool {
         let Ok(row) = usize::try_from(index) else {
             return true;
         };
-        if self.rust().tabs.as_ref().is_none_or(|tabs| tabs.len() <= 1) {
-            return false;
+        let closing = self
+            .rust()
+            .workspace
+            .as_ref()
+            .map_or(Closing::Missing, |workspace| workspace.closing(row));
+        match closing {
+            Closing::Missing => true,
+            Closing::LastTab => false,
+            Closing::Closes => {
+                self.as_mut()
+                    .begin_remove_rows(&QModelIndex::default(), index, index);
+                if let Some(workspace) = self.as_mut().rust_mut().workspace.as_mut() {
+                    workspace.close(row);
+                }
+                self.as_mut().rust_mut().count -= 1;
+                self.as_mut().end_remove_rows();
+                self.settle();
+                true
+            }
         }
-        self.as_mut()
-            .begin_remove_rows(&QModelIndex::default(), index, index);
-        let closed = self
-            .as_mut()
-            .rust_mut()
-            .tabs
-            .as_mut()
-            .and_then(|tabs| tabs.close(row));
-        if let Some(closed) = closed {
-            let saved = closed.saved();
-            remember_closed_tab(&mut self.as_mut().rust_mut().closed, saved);
-        }
-        self.as_mut().rust_mut().count -= 1;
-        self.as_mut().end_remove_rows();
-        self.settle();
-        true
     }
 
-    fn reopen(mut self: Pin<&mut Self>) -> bool {
-        if self.rust().closed.is_empty() {
+    fn reopen(self: Pin<&mut Self>) -> bool {
+        if !self
+            .rust()
+            .workspace
+            .as_ref()
+            .is_some_and(Workspace::can_reopen)
+        {
             hub::say("There are no closed tabs to reopen.".to_owned(), false);
             return false;
         }
-        let saved = self.as_mut().rust_mut().closed.remove(0);
-        let key = self.as_mut().rust_mut().key();
-        let tab = Tab::new(
-            key,
-            saved.panes.iter().map(start_of).collect(),
-            saved.active_pane,
-        );
-        self.insert(tab, true);
+        self.insert(Workspace::reopen);
         true
     }
 
-    fn activate(mut self: Pin<&mut Self>, index: i32) {
-        if let (Ok(index), Some(tabs)) = (
-            usize::try_from(index),
-            self.as_mut().rust_mut().tabs.as_mut(),
-        ) {
-            tabs.activate(index);
-        }
-        self.settle();
+    fn activate(self: Pin<&mut Self>, index: i32) {
+        self.update(|workspace| {
+            if let Ok(row) = usize::try_from(index) {
+                workspace.activate(row);
+            }
+        });
     }
 
     fn activate_number(self: Pin<&mut Self>, number: i32) {
-        let len = self.rust().tabs.as_ref().map_or(0, Tabs::len);
-        if let Some(index) = usize::try_from(number)
-            .ok()
-            .and_then(|number| tab_for_number(number, len))
-        {
-            self.activate(i32::try_from(index).unwrap_or(0));
+        if let Ok(number) = usize::try_from(number) {
+            self.update(|workspace| {
+                workspace.activate_number(number);
+            });
         }
     }
 
-    fn cycle(mut self: Pin<&mut Self>, step: i32) {
-        if let Some(tabs) = self.as_mut().rust_mut().tabs.as_mut() {
-            tabs.cycle(step as isize);
-        }
-        self.settle();
+    fn cycle(self: Pin<&mut Self>, step: i32) {
+        self.update(|workspace| workspace.cycle(step as isize));
     }
 
     fn shift_active(self: Pin<&mut Self>, step: i32) {
-        let Some(active) = self.rust().tabs.as_ref().map(Tabs::active_index) else {
+        let Some((from, to)) = self
+            .rust()
+            .workspace
+            .as_ref()
+            .and_then(|workspace| workspace.shift_target(step as isize))
+        else {
             return;
         };
-        let Some(to) = active.checked_add_signed(step as isize) else {
-            return;
-        };
-        self.move_tab(
-            i32::try_from(active).unwrap_or(0),
-            i32::try_from(to).unwrap_or(0),
-        );
+        self.move_tab(row_number(from), row_number(to));
     }
 
     fn move_tab(mut self: Pin<&mut Self>, from: i32, to: i32) {
-        let len = self.rust().tabs.as_ref().map_or(0, Tabs::len);
         let (Ok(source), Ok(target)) = (usize::try_from(from), usize::try_from(to)) else {
             return;
         };
-        if source >= len || target >= len || source == target {
+        if !self
+            .rust()
+            .workspace
+            .as_ref()
+            .is_some_and(|workspace| workspace.can_move(source, target))
+        {
             return;
         }
         // Qt counts the destination before the move: one past when moving down.
@@ -550,110 +439,67 @@ impl qobject::TabsModel {
         {
             return;
         }
-        if let Some(tabs) = self.as_mut().rust_mut().tabs.as_mut() {
-            tabs.move_tab(source, target);
+        if let Some(workspace) = self.as_mut().rust_mut().workspace.as_mut() {
+            workspace.move_tab(source, target);
         }
         self.as_mut().end_move_rows();
         self.settle();
     }
 
     fn set_pane(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         key: i32,
         side: i32,
-        path: &QString,
+        location: &QString,
         title: &QString,
         icon: &QString,
     ) {
-        let (Some(row), Ok(side)) = (self.rust().row_of_key(key), usize::try_from(side)) else {
+        let (Ok(key), Ok(side)) = (u32::try_from(key), usize::try_from(side)) else {
             return;
         };
-        if let Some(tab) = self
-            .as_mut()
-            .rust_mut()
-            .tabs
-            .as_mut()
-            .and_then(|tabs| tabs.get_mut(row))
-            && let Some(pane) = tab.panes.get_mut(side)
-        {
-            let path = path.to_string();
-            pane.path = (!path.is_empty()).then(|| PathBuf::from(path));
-            pane.title = title.to_string();
-            pane.icon = icon.to_string();
-        }
-        self.settle();
+        let location = location.to_string();
+        let folder = path_from_uri(location.as_bytes())
+            .or_else(|| (!location.is_empty()).then(|| PathBuf::from(&location)));
+        let (title, icon) = (title.to_string(), icon.to_string());
+        self.update(|workspace| workspace.report(key, side, folder, title, icon));
     }
 
-    fn set_active_pane(mut self: Pin<&mut Self>, key: i32, side: i32) {
-        let (Some(row), Ok(side)) = (self.rust().row_of_key(key), usize::try_from(side)) else {
+    fn set_active_pane(self: Pin<&mut Self>, key: i32, side: i32) {
+        let (Ok(key), Ok(side)) = (u32::try_from(key), usize::try_from(side)) else {
             return;
         };
-        if let Some(tab) = self
-            .as_mut()
-            .rust_mut()
-            .tabs
-            .as_mut()
-            .and_then(|tabs| tabs.get_mut(row))
-        {
-            tab.active_pane = side.min(tab.panes.len().saturating_sub(1));
-        }
-        self.settle();
+        self.update(|workspace| workspace.set_active_pane(key, side));
     }
 
     fn toggle_split(mut self: Pin<&mut Self>) {
-        let Some(index) = self.rust().tabs.as_ref().map(Tabs::active_index) else {
-            return;
-        };
-        if let Some(tab) = self
-            .as_mut()
-            .rust_mut()
-            .tabs
-            .as_mut()
-            .and_then(|tabs| tabs.get_mut(index))
-        {
-            if tab.panes.len() == 1 {
-                // The new view opens on the same folder, as in Dolphin.
-                let mut second = tab.panes[0].clone();
-                if let Some(path) = &second.path {
-                    second.start = path.to_string_lossy().into_owned();
-                }
-                tab.panes.push(second);
-                tab.active_pane = 1;
-            } else {
-                let keep = tab.active_pane.min(tab.panes.len() - 1);
-                tab.panes.swap(0, keep);
-                tab.panes.truncate(1);
-                tab.active_pane = 0;
-                // The kept view goes on from where it is.
-                if let Some(path) = tab.panes[0].path.clone() {
-                    tab.panes[0].start = path.to_string_lossy().into_owned();
-                }
-            }
+        if let Some(workspace) = self.as_mut().rust_mut().workspace.as_mut() {
+            workspace.toggle_split();
         }
         self.as_mut().changed(&[Role::LeftStart, Role::RightStart]);
         self.settle();
     }
 
     fn row_of(&self, key: i32) -> i32 {
-        self.rust()
-            .row_of_key(key)
-            .and_then(|row| i32::try_from(row).ok())
-            .unwrap_or(-1)
+        u32::try_from(key)
+            .ok()
+            .and_then(|key| self.rust().workspace.as_ref()?.row_of(key))
+            .map_or(-1, row_number)
     }
 
     fn palette_json(&self) -> QString {
         let tabs: Vec<serde_json::Value> = self
             .rust()
-            .tabs
+            .workspace
             .as_ref()
-            .map(|tabs| {
-                tabs.iter()
+            .map(|workspace| {
+                workspace
+                    .tabs()
                     .map(|tab| {
                         let pane = tab.active();
                         serde_json::json!({
-                            "title": pane.map_or("", |pane| pane.title.as_str()),
+                            "title": pane.title(),
                             "path": pane
-                                .and_then(|pane| pane.path.as_ref())
+                                .folder()
                                 .map(|path| path.to_string_lossy().into_owned())
                                 .unwrap_or_default(),
                         })
@@ -665,23 +511,16 @@ impl qobject::TabsModel {
     }
 
     fn transfer(self: Pin<&mut Self>, selected: &QStringList, moving: bool) {
-        let Some(tab) = self.rust().tabs.as_ref().map(Tabs::active).cloned() else {
+        let Some(workspace) = self.rust().workspace.as_ref() else {
             return;
         };
-        let here = tab.active().and_then(|pane| pane.path.clone());
-        let there = (tab.panes.len() == 2)
-            .then(|| tab.panes[1 - tab.active_pane.min(1)].path.clone())
-            .flatten();
-        let selected: Vec<PathBuf> = QList::<QString>::from(selected)
-            .iter()
-            .map(|path| PathBuf::from(path.to_string()))
-            .collect();
+        let selected: Vec<PathBuf> = strings(selected).into_iter().map(PathBuf::from).collect();
         let how = if moving {
             Transfer::Move
         } else {
             Transfer::Copy
         };
-        match transfer_to_other_view(how, selected, here.as_deref(), there.as_deref()) {
+        match workspace.transfer(how, selected) {
             Ok(request) => hub::start(request),
             Err(reason) => hub::say(reason.to_owned(), false),
         }
@@ -701,38 +540,5 @@ mod tests {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), Role::ALL.len());
-    }
-
-    #[test]
-    fn tabs_are_titled_by_their_folder_or_remote_name_until_the_pane_says() {
-        assert_eq!(start_title("/srv/data"), "data");
-        assert_eq!(start_title("sftp://me@host/srv/www"), "www");
-        assert_eq!(start_title("/"), "/");
-    }
-
-    #[test]
-    fn a_pane_is_saved_by_where_it_is_or_where_it_started() {
-        let pane = PaneState {
-            start: "/srv".into(),
-            path: Some("/srv/data".into()),
-            ..PaneState::default()
-        };
-        assert_eq!(
-            saved_location(&pane),
-            Some(Location::Folder("/srv/data".into()))
-        );
-        let unvisited = PaneState {
-            start: "/srv".into(),
-            ..PaneState::default()
-        };
-        assert_eq!(
-            saved_location(&unvisited),
-            Some(Location::Folder("/srv".into()))
-        );
-        let relative = PaneState {
-            start: "docs".into(),
-            ..PaneState::default()
-        };
-        assert_eq!(saved_location(&relative), None);
     }
 }

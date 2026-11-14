@@ -39,6 +39,9 @@ pub mod qobject {
         #[qproperty(i32, count)]
         #[qproperty(bool, loading)]
         #[qproperty(QString, location)]
+        // `locationUri`: the folder as a byte-preserving `file:` URI, for
+        // handing it on (tabs, session) where `location` would lose bytes.
+        #[qproperty(QString, location_uri, cxx_name = "locationUri")]
         #[qproperty(QString, title)]
         #[qproperty(QString, total)]
         #[qproperty(QString, selection_text, cxx_name = "selectionText")]
@@ -134,7 +137,8 @@ pub mod qobject {
         /// Shows the folder at `path`.
         #[qinvokable]
         fn open(self: Pin<&mut FolderModel>, path: &QString);
-        /// Shows the folder at `path` with the entries `names` selected.
+        /// Shows the folder at `path` (or its `file:` URI) with the
+        /// entries `names` selected.
         #[qinvokable]
         fn reveal(self: Pin<&mut FolderModel>, path: &QString, names: &QStringList);
         /// Opens a typed location; false when there was nothing to open.
