@@ -133,7 +133,7 @@ pub(crate) fn row(
         .when(!current && enabled, |row| row.text_color(theme.text))
         .when(!enabled, |row| row.text_color(theme.text_disabled))
         .child(match icon {
-            RowIcon::Symbol(icon) => Icon::new(icon)
+            RowIcon::Symbol(icon) => Icon::new(crate::icon_map::gpui_icon(icon))
                 .size(px(size::ICON))
                 .flex_none()
                 .into_any_element(),

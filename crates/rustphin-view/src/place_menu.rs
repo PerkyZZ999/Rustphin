@@ -5,7 +5,7 @@
 //! row has a key that does the same while the panel has the focus, and the
 //! row shows it.
 
-use gpui_kit::assets::IconName;
+use crate::icons::Icon as IconName;
 
 use crate::menu::{Command, MenuEntry, RowIcon};
 

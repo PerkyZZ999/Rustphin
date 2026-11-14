@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-13 — W-114b2 Icons, menus, operation wording and palette results in `rustphin-view`
+- **Code:** `icons::Icon` lists the 110 Lucide icons the interface uses, once, in `for_each_icon!`; `Icon::lucide_name` gives Lucide's file name (for Qt). `rustphin-ui/src/icon_map.rs` generates `gpui_icon` from the same list. `menu.rs` and `place_menu.rs` moved whole (they used GPUI only for icon names); `menu::labels` is no longer test-only. `operations.rs` split: `DropAction`, `Notice`, `Problems`, `Listed` and the wording functions (activity, past tense, notices, progress detail, quoted names, duplicate names, stem length) with all fourteen tests moved to `rustphin_view::operations`; the GPUI `Hub` re-exports them. `palette.rs` split: `Target`, `Candidate`, the icon table and `Results` (with six tests) moved; the test that every icon's command exists stays in the UI, where the command list is.
+- **Tests:** `rust-tc doctor` PASS, 670 tests. New: `lucide_names_follow_lucides_file_names`, proved by removing the hyphen before digits (failed with "columns3"), then restored.
+- **On screen (isolated session, release build):** the context menu of a ZIP shows every row's icon, submenus included; the palette shows its rows' icons; "extract here" from the palette extracted `n.txt`, selected it and showed "Extracted “docs.zip”." with Undo.
+- **Blur (W-114a criterion 5):** confirmed on the maintainer's desktop with `spikes/qt-cxx` (the maintainer: "Blur is fine with Kwin").
+- **Waiver:** none
+
 ### 2026-11-13 — W-114b1 `rustphin-view`, the toolkit-free interface crate
 - **Code:** `crates/rustphin-view` holds eleven modules moved with `git mv` from `rustphin-ui` (none used GPUI), plus `metrics` (spacing, sizes, type scale and the hidden-file floor from `theme.rs`, which now re-exports them and keeps the colours and `text::scaled`) and `naming::free_name` (from `operations.rs`, re-exported there). `toolbar_items::Toolbar::words_of` returns a `String`; the GPUI toolbar converts it. Items that were `pub(crate)` became `pub`, with doc comments for those that had none. `rust-tc layers` gains `forbid rustphin-view 'gpui|cxx-qt'` (a first rule that also forbade Wayland failed: the view crate uses the platform layer, which uses Wayland).
 - **Tests:** `rust-tc doctor` PASS, 669 tests (the moved modules' tests now run in `rustphin-view`); clippy found `Tabs::len` without `is_empty` (narrow allow: a window always has a tab) and a needless conversion.

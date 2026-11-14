@@ -23,7 +23,7 @@ pub struct AppChoice {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RowIcon {
     /// One of the interface's Lucide outlines.
-    Symbol(gpui_kit::assets::IconName),
+    Symbol(crate::icons::Icon),
     /// An application's own icon, in colour.
     Image(Arc<Path>),
 }
@@ -197,8 +197,8 @@ impl MenuCommand {
     }
 
     /// The Lucide icon of the row.
-    pub fn icon(&self) -> gpui_kit::assets::IconName {
-        use gpui_kit::assets::IconName as I;
+    pub fn icon(&self) -> crate::icons::Icon {
+        use crate::icons::Icon as I;
         match self {
             Self::Open => I::SquareArrowOutUpRight,
             Self::OpenWith(_) => I::AppWindow,
@@ -635,8 +635,7 @@ fn step<C>(entries: &[MenuEntry<C>], from: usize, forward: bool) -> usize {
 }
 
 /// The words on the top-level rows, separators included as an empty string.
-#[cfg(test)]
-pub(crate) fn labels<C>(entries: &[MenuEntry<C>]) -> Vec<&str> {
+pub fn labels<C>(entries: &[MenuEntry<C>]) -> Vec<&str> {
     entries
         .iter()
         .map(|entry| match entry {
@@ -852,11 +851,11 @@ mod tests {
         );
         assert_eq!(
             kate(None).row_icon(),
-            RowIcon::Symbol(gpui_kit::assets::IconName::AppWindow)
+            RowIcon::Symbol(crate::icons::Icon::AppWindow)
         );
         assert_eq!(
             MenuCommand::Copy.row_icon(),
-            RowIcon::Symbol(gpui_kit::assets::IconName::Copy)
+            RowIcon::Symbol(crate::icons::Icon::Copy)
         );
     }
 
@@ -1012,7 +1011,7 @@ mod tests {
                 kind: TemplateKind::Html
             }
         );
-        assert_eq!(command.icon(), gpui_kit::assets::IconName::FileCode);
+        assert_eq!(command.icon(), crate::icons::Icon::FileCode);
         assert_eq!(labels(&new_menu(&[])), ["Folder\u{2026}"]);
     }
 

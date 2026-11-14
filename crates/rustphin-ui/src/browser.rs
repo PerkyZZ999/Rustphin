@@ -4913,7 +4913,7 @@ impl Browser {
                 .into_any_element(),
             menu::MenuEntry::Submenu { label, .. } => crate::menu_view::row(
                 label,
-                menu::RowIcon::Symbol(gpui_kit::assets::IconName::AppWindow),
+                menu::RowIcon::Symbol(rustphin_view::icons::Icon::AppWindow),
                 None,
                 true,
                 true,

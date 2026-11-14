@@ -1652,7 +1652,7 @@ impl Sidebar {
                 .into_any_element(),
             MenuEntry::Submenu { label, .. } => menu_view::row(
                 label,
-                menu::RowIcon::Symbol(gpui_kit::assets::IconName::FolderInput),
+                menu::RowIcon::Symbol(rustphin_view::icons::Icon::FolderInput),
                 None,
                 true,
                 true,

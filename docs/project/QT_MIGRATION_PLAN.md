@@ -25,7 +25,7 @@ the same session for reference.
 | 2 | Scrolling, ≤ 5% dropped frames | 2 of 1,200 (0.17%) | 2 of 1,200 (0.17%) | 0–0.25% (W-085) | pass |
 | 3 | Launch to first frame < 1 s | 0.31–0.44 s | 0.65 s | about 9.9 s to first entries in the same session (3.2 s reading 9,018 font files, 5.9 s warming font caches) | pass |
 | 4 | Own memory (RssAnon) | 59 MB with a small folder; 59 MB after the window closed with the QML engine kept; 7.5 MB as a windowless process; 78 MB with 500,000 entries | 116–187 MB with 500,000 entries | 41 MB after closing (W-110e), 11.6 MB windowless, 73 MB with 500,000 entries | pass if the window and QML engine are released when the last window closes |
-| 5 | Blur on the real desktop, opaque without it | translucency works; KWin reports no blur effect in an isolated session | not reachable (C++ API) | — | **open: the maintainer's desktop** |
+| 5 | Blur on the real desktop, opaque without it | translucency works; KWin reports no blur effect in an isolated session; **on the maintainer's desktop blur works** (the maintainer, 2026-11-13) | not reachable (C++ API) | — | pass |
 | 6 | Drag to Dolphin; clipboard both ways | drag: Dolphin offered Copy Here and copied the file; copy → Dolphin's "Paste One File"; Dolphin's copy read back as the path | not reachable (C++ API) | Rustphin's own protocol code (D-010) | pass with Dolphin; a non-KDE application not tried |
 | 7 | Rows named and selected over AT-SPI | list items by name, "selected" state | — | W-074 | pass |
 | 8 | Licences and Rust 1.95 | deny.toml licences ok; builds with 1.95.0 | — | — | pass (inside `rust-tc doctor` from W-114c) |
@@ -41,9 +41,8 @@ in the delegates (the spike draws a coloured square).
 
 **Recommendation for E:** switch, with cxx-qt. Criteria 1–4 and 6–9 pass,
 startup is more than ten times faster, and the file exchange with Dolphin
-works with no protocol code of ours. Blur (5) is the one open check;
-`KWindowEffects` is how KDE's own applications blur, and the opaque
-fallback stays.
+works with no protocol code of ours. Blur (5) was confirmed on the maintainer's desktop afterwards ("Blur is fine
+with KWin").
 
 ## Short answer
 
