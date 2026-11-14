@@ -57,7 +57,10 @@ fn links_must_point_inside_the_destination() {
     assert!(!link_stays_inside(entry, b"../../../outside"));
     assert!(!link_stays_inside(entry, b"/etc/passwd"));
     assert!(!link_stays_inside(Path::new("link"), b".."));
-    assert!(link_stays_inside(Path::new("link"), b"./x/../y"));
+    assert!(link_stays_inside(Path::new("link"), b"./x/y"));
+    // A name before `..` may be a link the archive makes (W-133).
+    assert!(!link_stays_inside(Path::new("link"), b"./x/../y"));
+    assert!(!link_stays_inside(entry, b"l/../.."));
     assert!(!link_stays_inside(Path::new("link"), b""));
 }
 

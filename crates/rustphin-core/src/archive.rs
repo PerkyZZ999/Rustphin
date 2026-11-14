@@ -189,6 +189,17 @@ pub fn entry_path(raw: &[u8]) -> Result<PathBuf, &'static str> {
 
 /// Whether a link at `entry` (relative to the destination) pointing to
 /// `target` stays inside the destination. An absolute target never does.
+///
+/// The rule (W-133): `..` parts may only come first, and no more of them
+/// than `entry` has folders above it; after the first name, only names
+/// follow (`../../lib/a.so`, never `x/../y`). Counting `..` alone is not
+/// enough, because a name on the way may be a link the same archive makes:
+/// with `d/l -> ..`, the target `l/../..` of `d/m` climbs from where `l`
+/// leads, not from `d/l`. With this rule every link in an extracted tree
+/// stays inside, whatever the order of its entries: its `..` parts climb
+/// real folders (the engine makes every folder that holds an entry a real
+/// folder, never a link), and each name after them is a folder, a file or
+/// a link that itself stays inside.
 pub fn link_stays_inside(entry: &Path, target: &[u8]) -> bool {
     if target.is_empty() || target.starts_with(b"/") || target.contains(&0) {
         return false;
@@ -196,10 +207,12 @@ pub fn link_stays_inside(entry: &Path, target: &[u8]) -> bool {
     let mut depth: usize = entry
         .parent()
         .map_or(0, |parent| parent.components().count());
+    let mut named = false;
     for part in Path::new(OsStr::from_bytes(target)).components() {
         match part {
-            Component::Normal(_) => depth += 1,
+            Component::Normal(_) => named = true,
             Component::CurDir => {}
+            Component::ParentDir if named => return false,
             Component::ParentDir => match depth.checked_sub(1) {
                 Some(up) => depth = up,
                 None => return false,

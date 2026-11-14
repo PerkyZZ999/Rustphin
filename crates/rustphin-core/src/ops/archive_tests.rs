@@ -254,6 +254,151 @@ fn a_hostile_archive_writes_nothing_outside_and_says_what_it_left_out() {
     assert!(reasons.iter().any(|reason| reason.contains("device")));
 }
 
+/// The links under `root` whose real target, once every link on the way is
+/// followed, lies outside `root`.
+fn links_resolving_outside(root: &Path) -> Vec<PathBuf> {
+    let inside = fs::canonicalize(root).unwrap();
+    tree(root)
+        .into_iter()
+        .filter(|(_, item)| matches!(item, Item::Link(_)))
+        .map(|(relative, _)| relative)
+        .filter(|relative| {
+            fs::canonicalize(root.join(relative)).is_ok_and(|real| !real.starts_with(&inside))
+        })
+        .collect()
+}
+
+/// W-133: each link of a chain stays inside on its own, but `d/m` walks
+/// through the link `d/l` and back up, two levels above the destination.
+#[test]
+fn a_link_that_climbs_back_through_another_link_is_left_out() {
+    let d = dirs();
+    let archive = d.src.join("chain.tar");
+    fs::write(
+        &archive,
+        raw_tar(&[
+            (b"d/l", tar::EntryType::Symlink, b".."),
+            (b"d/m", tar::EntryType::Symlink, b"l/../.."),
+        ]),
+    )
+    .unwrap();
+
+    let outcome = run(
+        &RealFs,
+        &NoTrash,
+        &NoForeignReader,
+        &extract(&archive, &d.dst, Layout::Here),
+        &mut Archivist::default(),
+    )
+    .unwrap();
+
+    assert!(outcome.completed);
+    assert_eq!(links_resolving_outside(&d.dst), Vec::<PathBuf>::new());
+    assert_eq!(names(&d.dst), ["d", "d/l"]);
+    assert_eq!(outcome.skipped.len(), 1, "{:?}", outcome.skipped);
+    assert_eq!(outcome.skipped[0].path, archive.join("d/m"));
+    assert!(
+        outcome.skipped[0].reason.contains("link points outside"),
+        "{}",
+        outcome.skipped[0].reason
+    );
+}
+
+/// W-133: a link made after the link that walks through it closes the same
+/// chain in the other order.
+#[test]
+fn a_link_is_left_out_whatever_the_order_of_the_chain() {
+    let d = dirs();
+    let archive = d.src.join("chain.tar");
+    fs::write(
+        &archive,
+        raw_tar(&[
+            (b"d/m", tar::EntryType::Symlink, b"x/../.."),
+            (b"d/x", tar::EntryType::Symlink, b".."),
+        ]),
+    )
+    .unwrap();
+
+    let outcome = run(
+        &RealFs,
+        &NoTrash,
+        &NoForeignReader,
+        &extract(&archive, &d.dst, Layout::Here),
+        &mut Archivist::default(),
+    )
+    .unwrap();
+
+    assert_eq!(links_resolving_outside(&d.dst), Vec::<PathBuf>::new());
+    assert_eq!(names(&d.dst), ["d", "d/x"]);
+    assert_eq!(outcome.skipped.len(), 1, "{:?}", outcome.skipped);
+    assert_eq!(outcome.skipped[0].path, archive.join("d/m"));
+}
+
+/// W-133: ordinary relative links, up and down, still extract.
+#[test]
+fn relative_links_that_stay_inside_are_kept() {
+    let d = dirs();
+    let archive = d.src.join("links.tar");
+    fs::write(
+        &archive,
+        raw_tar(&[
+            (b"top/notes.txt", tar::EntryType::Regular, b"notes"),
+            (b"top/link", tar::EntryType::Symlink, b"notes.txt"),
+            (b"top/sub/up", tar::EntryType::Symlink, b"../notes.txt"),
+            (b"top/sub/here", tar::EntryType::Symlink, b"./up"),
+            (b"top/sub/via", tar::EntryType::Symlink, b"../sub/up"),
+        ]),
+    )
+    .unwrap();
+
+    let outcome = run(
+        &RealFs,
+        &NoTrash,
+        &NoForeignReader,
+        &extract(&archive, &d.dst, Layout::Here),
+        &mut Archivist::default(),
+    )
+    .unwrap();
+
+    assert_eq!(outcome.skipped, []);
+    for link in ["top/link", "top/sub/up", "top/sub/here", "top/sub/via"] {
+        assert_eq!(read(d.dst.join(link)), "notes", "{link}");
+    }
+}
+
+/// W-133: an entry beneath a link is never written through it.
+#[test]
+fn a_file_beneath_a_link_is_not_written_through_it() {
+    let d = dirs();
+    let archive = d.src.join("through.tar");
+    fs::write(
+        &archive,
+        raw_tar(&[
+            (b"box/up", tar::EntryType::Symlink, b"."),
+            (b"box/up/x", tar::EntryType::Regular, b"x"),
+        ]),
+    )
+    .unwrap();
+
+    let outcome = run(
+        &RealFs,
+        &NoTrash,
+        &NoForeignReader,
+        &extract(&archive, &d.dst, Layout::Here),
+        &mut Archivist::default(),
+    )
+    .unwrap();
+
+    assert_eq!(names(&d.dst), ["box", "box/up"]);
+    assert_eq!(outcome.skipped.len(), 1, "{:?}", outcome.skipped);
+    assert_eq!(outcome.skipped[0].path, archive.join("box/up/x"));
+    assert!(
+        outcome.skipped[0].reason.contains("could not be written"),
+        "{}",
+        outcome.skipped[0].reason
+    );
+}
+
 #[test]
 fn a_taken_name_asks_and_keep_both_gets_a_numbered_folder() {
     let d = dirs();

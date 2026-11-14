@@ -5,6 +5,12 @@
 //! a failure, a wrong password or Stop removes that folder, so nothing half
 //! extracted ever shows. Only then is the result given its place, with the
 //! usual conflict question, and recorded as copied, so Undo trashes it.
+//!
+//! Every format, the libarchive and 7-Zip routes included, comes through
+//! the same visit in `Engine::unpack`. No link in the result leads outside
+//! the destination, whatever the order of the entries (W-133): a link's
+//! target may climb only with leading `..` parts, and every folder that
+//! holds an entry is made as a real folder, never followed through a link.
 //! Compression writes a temporary file beside the archive and renames it
 //! into place when complete.
 

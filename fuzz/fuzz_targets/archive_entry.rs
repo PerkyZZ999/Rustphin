@@ -1,6 +1,12 @@
 #![no_main]
 
-use std::{io::Read, ops::ControlFlow, path::Component};
+use std::{
+    ffi::OsStr,
+    io::Read,
+    ops::ControlFlow,
+    os::unix::ffi::OsStrExt as _,
+    path::{Component, Path},
+};
 
 use libfuzzer_sys::fuzz_target;
 use rustphin_core::archive::{
@@ -26,6 +32,20 @@ fuzz_target!(|data: &[u8]| {
         );
         if link_stays_inside(&path, target) {
             assert!(!target.starts_with(b"/"));
+            // W-133: no `..` after a name, which a link made by the same
+            // archive could lead somewhere else (`l/../..`).
+            let parts: Vec<Component<'_>> =
+                Path::new(OsStr::from_bytes(target)).components().collect();
+            if let Some(first) = parts
+                .iter()
+                .position(|part| matches!(part, Component::Normal(_)))
+            {
+                assert!(
+                    !parts[first..]
+                        .iter()
+                        .any(|part| matches!(part, Component::ParentDir))
+                );
+            }
         }
         return;
     }
