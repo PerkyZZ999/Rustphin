@@ -40,9 +40,9 @@
 - None for the agent. The real-desktop and hardware checks above wait on the maintainer.
 
 ## Next action
-- The maintainer's next task: a colour scheme and UI refactor (the maintainer starts it). Change `docs/DESIGN.md` first, then the tokens in `crates/rustphin-view/src/colors.rs` and `metrics.rs`, and keep the contrast tests passing.
-- Agent work that can go alongside: W-117 (with the Appearance › Look and Title bar choices), the blur notice and the Qt keyboard pass (W-076), W-115.
-- For the maintainer on the real desktop: after installing a build, run `rustphin --quit` once so the new build answers launches; then the checks under "Manual" above (ACCEPTANCE.md lists them by criterion; ADMIN_MODE.md has the W-098e checklist). The GPUI build is kept as `~/.local/bin/rustphin.gpui-backup`, its source at commit 72ccb06.
+- Slice S12 (ROADMAP.md): the charcoal colour scheme (W-147), then the UI completion items (W-146) and the Qt leftovers (W-117). Change `docs/DESIGN.md` first, then the tokens in `crates/rustphin-view/src/colors.rs` and `metrics.rs`, with their contrast tests.
+- Also open: W-115 (memory on reloading a very large folder) and the Qt keyboard pass (W-076).
+- For the maintainer on the real desktop: after installing a build, run `rustphin --quit` once so the new build answers launches; then the checks under "Manual" above.
 - Then: the two-week daily-driver trial, and phase 7 (release).
 
 ## Phase checklist

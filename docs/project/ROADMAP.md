@@ -121,10 +121,68 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Plan:** [`QT_MIGRATION_PLAN.md`](QT_MIGRATION_PLAN.md). Gains are maturity and KDE integration (cold start, blur, file exchange with other applications, focus, text input, accessibility); speed targets are already met on GPUI. Recommended: a measured spike first (W-114a) with go/no-go criteria, cxx-qt as the bridge with QtBridge tried alongside, the Qt interface built beside the GPUI one until parity, then the switch (D-033, superseding D-001). Five decisions for the maintainer.
 - **Status:** A–D approved (D-033). Spike W-114a done 2026-11-13: cxx-qt passes 1–4 and 6–9 (startup 0.3–0.4 s against about 10 s); blur confirmed on the maintainer's desktop with the spike. Switch decided (D-034, cxx-qt) and made 2026-11-14 (W-114i): GPUI, GPUI-Kit and `rustphin-ui` removed. W-116 (Qt quality pass: `qmllint` with the BestPractices plugin and `qmlformat` in `rust-tc doctor`, the qt-qml-review findings, 36 scenarios replayed) done 2026-11-14. Then W-118–W-144: libarchive (D-036), interface logic moved into `rustphin-view` (commands, pane state, operation board, selection actions, places panel, workspace, menus), byte-safe paths to QML, test audits and the bugs they found, the GitHub repository (D-037).
 
+## Next — Slice S12: Charcoal colour scheme and UI completion (W-147, W-146, W-117)
+
+**Goal:** Rustphin's look moves from navy to dark charcoal, and everything the
+documents describe but the interface does not yet do is built. Asked for by the
+maintainer on 2026-11-14.
+
+**Colour scheme (W-147):**
+- Base colours are dark charcoal, with black and grey tints for every surface:
+  window, chrome, content, panels, menus, dialogs, rows, borders.
+- Royal blue is kept only as a small brand accent: primary buttons and glows
+  (the focus glow, and the accent glow on menus and dialogs). Selection, the
+  current place, the current tab, hover and other states use neutral tints,
+  never blue fills.
+- Order of work: `docs/DESIGN.md` and a decision record first, then the tokens
+  in `crates/rustphin-view/src/colors.rs` with their WCAG contrast tests (glass
+  and opaque), then any QML that hard-codes a colour.
+- Done when every text and state pair meets WCAG AA, including the default and
+  destructive buttons (now about 2:1). State is never shown by colour alone.
+  The screens are compared with the mockups in an isolated session, and the
+  glass look on the maintainer's desktop.
+
+**UI completion (W-146):** each is a defect against the documents.
+- Styling not yet built: the accent outline and glow on menus and dialogs;
+  tooltips and scrollbars drawn from the tokens rather than Qt's Basic style;
+  the Medium (500) weights; the fixed sizes in QML moved into `metrics.rs`;
+  unused tokens removed or used.
+- Settings that do nothing today:
+  - Appearance › Look (glass or opaque) and Title bar (Rustphin's or KDE's);
+  - Toolbar › Show its words;
+  - the Settings pages become tabs in a narrow window;
+  - a text-size change shows at once.
+- Blur: a "Background blur unavailable" status line, and following blur when it
+  appears or goes while Rustphin runs (R-109).
+- Administrator mode as D-028 and ADMIN_MODE.md say: per window, ended when its
+  window closes, "(administrator)" in the title, a warning line in folders not
+  owned by root, and batch rename refused.
+- A notice when the device service (UDisks2) is missing, instead of only a log
+  line. A panic in an operation thread is reported to the user.
+- Smaller items:
+  - the status line names the volume ("(System)");
+  - right-clicking the title bar offers KWin's window menu;
+  - Extract's "here" entries are disabled in read-only folders.
+
+**Qt leftovers (W-117):**
+- The one-tab strip: settle hidden or shown.
+- Ctrl+0's default zoom.
+- The Trash place highlighted while the trash is shown.
+- Notice icons by kind (information, success, error).
+- The rename-recovery wording.
+- The Run prompt's default button.
+- Unnamed buttons over AT-SPI.
+- A link's Properties icon.
+- Replay J7.
+
+**Done when:** the items above are built and tested, `docs/DESIGN.md` and the
+other documents describe exactly what is built, and the UI scenarios they touch
+are replayed on screen.
+
 ## What remains
 
-- **Next (the maintainer):** a colour scheme and UI refactor, started by the maintainer.
-- **Small Qt leftovers:** W-117 (one-tab strip, Ctrl+0 zoom, Trash place highlight, notice icons, recovery wording, Run prompt default, unnamed buttons, a link's Properties icon, J7); the Appearance › Look and Title bar choices; the blur notice (R-109); W-115 (memory grows on each reload of a very large folder).
+- **Next:** Slice S12 above (charcoal colour scheme, W-146, W-117).
+- **Also open:** W-115 (memory grows on each reload of a very large folder).
 - **S11 acceptance:** a keyboard-only pass of the Qt interface (R-004, R-107, R-019); the maintainer's real-desktop and hardware checks (R-013, R-105, R-020 focus, W-098e administrator mode).
 - **Then:** the two-week daily-driver trial (the MVP success signal), and phase 7 (release).
 
