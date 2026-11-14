@@ -3,7 +3,9 @@
 use std::{io::Read, ops::ControlFlow, path::Component};
 
 use libfuzzer_sys::fuzz_target;
-use rustphin_core::archive::{Format, entry_path, link_stays_inside, read_entries};
+use rustphin_core::archive::{
+    Format, NoForeignReader, entry_path, link_stays_inside, read_entries,
+};
 
 // Archive entries are untrusted (W-111): an accepted name must stay inside
 // the destination, an accepted link must not lead out of it, and any bytes
@@ -42,6 +44,7 @@ fuzz_target!(|data: &[u8]| {
         std::path::Path::new("fuzz"),
         Box::new(std::io::Cursor::new(rest.to_vec())),
         Some("password"),
+        &NoForeignReader,
         &mut |_, _| ControlFlow::Continue(()),
         &mut |header, content| {
             if let Ok(path) = entry_path(&header.name) {

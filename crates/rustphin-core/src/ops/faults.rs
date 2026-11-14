@@ -52,6 +52,8 @@ pub struct FaultFs {
     meddler: Option<Box<dyn Fn(usize) + Send + Sync>>,
     /// Free space to report instead of the real filesystem's.
     free_space: Option<u64>,
+    /// Files opened with `open_read` fail to read past this many bytes.
+    read_limit: Option<u64>,
 }
 
 impl FaultFs {
@@ -63,6 +65,13 @@ impl FaultFs {
     /// Reports `bytes` as the free space everywhere.
     pub fn with_free_space(mut self, bytes: u64) -> Self {
         self.free_space = Some(bytes);
+        self
+    }
+
+    /// Makes every file opened with `open_read` fail to read past its first
+    /// `bytes` bytes, as when the disk goes away part way through.
+    pub fn failing_reads_after(mut self, bytes: u64) -> Self {
+        self.read_limit = Some(bytes);
         self
     }
 
@@ -303,7 +312,11 @@ impl Fs for FaultFs {
 
     fn open_read(&self, path: &Path) -> io::Result<Box<dyn crate::fs::ReadSeek>> {
         self.alive()?;
-        RealFs.open_read(path)
+        let file = RealFs.open_read(path)?;
+        Ok(match self.read_limit {
+            Some(limit) => Box::new(FailingRead { file, limit }),
+            None => file,
+        })
     }
 
     fn create_new_file(&self, path: &Path, mode: u32) -> io::Result<Box<dyn crate::fs::NewFile>> {
@@ -342,5 +355,29 @@ impl Fs for FaultFs {
     fn create_file_with(&self, path: &Path, content: &[u8]) -> io::Result<()> {
         self.plain_step()?;
         RealFs.create_file_with(path, content)
+    }
+}
+
+/// A file that fails to read past `limit` bytes ([`FaultFs::failing_reads_after`]).
+struct FailingRead {
+    file: Box<dyn crate::fs::ReadSeek>,
+    limit: u64,
+}
+
+impl io::Read for FailingRead {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        let at = self.file.stream_position()?;
+        let left = self.limit.saturating_sub(at);
+        if left == 0 && !buffer.is_empty() {
+            return Err(io::Error::other("injected read fault"));
+        }
+        let take = usize::try_from(left).map_or(buffer.len(), |left| left.min(buffer.len()));
+        self.file.read(&mut buffer[..take])
+    }
+}
+
+impl io::Seek for FailingRead {
+    fn seek(&mut self, to: io::SeekFrom) -> io::Result<u64> {
+        self.file.seek(to)
     }
 }

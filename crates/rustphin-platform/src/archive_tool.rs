@@ -24,10 +24,10 @@ use std::{
 
 use rustphin_core::{
     ReadSeek,
-    archive::{Header, Kind, ReadError, Visit},
+    archive::{ForeignReader, Header, Kind, ReadError, Visit},
 };
 
-use crate::libarchive;
+use crate::libarchive::{self, Probe};
 
 /// An installed extraction tool.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,44 +105,88 @@ pub fn arguments(
     }
 }
 
-/// Reads the archive at `path` (`archive::ForeignReader`, registered at
-/// start): libarchive when it can read it, else the installed tool.
-pub fn read_entries(
-    path: &Path,
-    source: Box<dyn ReadSeek>,
-    password: Option<&str>,
-    visit: Visit<'_>,
-) -> Result<(), ReadError> {
-    read_entries_with(
-        path,
-        source,
-        password,
-        visit,
-        find(std::env::var_os("PATH").as_deref()),
-        crate::xdg::cache_home().map(|cache| cache.join("rustphin")),
-    )
+/// What reads an archive libarchive cannot.
+#[derive(Debug, Clone)]
+enum Fallback {
+    /// The tool installed at the time, working in Rustphin's cache.
+    Installed,
+    /// This tool, if any, working in this folder.
+    Given {
+        tool: Option<Tool>,
+        work: Option<PathBuf>,
+    },
+    /// Nothing: the engine works with administrator rights, and a tool
+    /// would open the archive by its path with the user's own.
+    Refused,
 }
 
-/// [`read_entries`] with the tool and the folder for its work given.
-pub fn read_entries_with(
-    path: &Path,
-    source: Box<dyn ReadSeek>,
-    password: Option<&str>,
-    visit: Visit<'_>,
-    tool: Option<Tool>,
-    work: Option<PathBuf>,
-) -> Result<(), ReadError> {
-    let name = path.file_name().map(OsStr::as_bytes).unwrap_or_default();
-    let reason = match libarchive::probe(path) {
-        Ok(()) => return libarchive::read_entries(name, source, password, visit),
-        Err(reason) => reason,
-    };
-    let (Some(tool), Some(work)) = (tool, work) else {
-        return Err(ReadError::Damaged(format!(
-            "{reason}, and 7-Zip is not installed to open it"
-        )));
-    };
-    read_with_tool(&tool, path, password, visit, &work)
+/// The engine's reader of the formats Rustphin does not read itself
+/// (D-036): libarchive, on the content the engine opened through its `Fs`,
+/// else the installed 7-Zip or unrar, which opens the archive by its path.
+#[derive(Debug, Clone)]
+pub struct ForeignArchives {
+    fallback: Fallback,
+}
+
+impl ForeignArchives {
+    /// libarchive, then the tool installed when an archive is read, for
+    /// the engine that works with the user's own rights.
+    pub fn installed() -> Self {
+        Self {
+            fallback: Fallback::Installed,
+        }
+    }
+
+    /// libarchive, then `tool`, working in a folder of its own in `work`.
+    pub fn with_tool(tool: Option<Tool>, work: Option<PathBuf>) -> Self {
+        Self {
+            fallback: Fallback::Given { tool, work },
+        }
+    }
+
+    /// libarchive only, for the engine that works with administrator
+    /// rights: a tool reads the archive by its path with the user's own
+    /// rights, so what libarchive cannot read is refused, saying why.
+    pub fn as_administrator() -> Self {
+        Self {
+            fallback: Fallback::Refused,
+        }
+    }
+}
+
+impl ForeignReader for ForeignArchives {
+    fn read_entries(
+        &self,
+        path: &Path,
+        mut source: Box<dyn ReadSeek>,
+        password: Option<&str>,
+        visit: Visit<'_>,
+    ) -> Result<(), ReadError> {
+        let name = path.file_name().map(OsStr::as_bytes).unwrap_or_default();
+        let reason = match libarchive::probe(&mut *source)? {
+            Probe::Readable => return libarchive::read_entries(name, source, password, visit),
+            Probe::Unreadable(reason) => reason,
+        };
+        drop(source);
+        let (tool, work) = match &self.fallback {
+            Fallback::Installed => (
+                find(std::env::var_os("PATH").as_deref()),
+                crate::xdg::cache_home().map(|cache| cache.join("rustphin")),
+            ),
+            Fallback::Given { tool, work } => (tool.clone(), work.clone()),
+            Fallback::Refused => {
+                return Err(ReadError::Damaged(format!(
+                    "{reason}, and 7-Zip cannot open it with administrator rights"
+                )));
+            }
+        };
+        let (Some(tool), Some(work)) = (tool, work) else {
+            return Err(ReadError::Damaged(format!(
+                "{reason}, and 7-Zip is not installed to open it"
+            )));
+        };
+        read_with_tool(&tool, path, password, visit, &work)
+    }
 }
 
 /// Removes its folder when dropped, whatever happened.

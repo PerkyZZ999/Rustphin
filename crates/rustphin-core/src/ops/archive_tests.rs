@@ -16,7 +16,7 @@ use super::{
 };
 use crate::{
     RealFs,
-    archive::{Format, Level},
+    archive::{ForeignReader, Format, Level, NoForeignReader, ReadError},
 };
 
 /// A controller for archive operations: scripted conflicts and passwords,
@@ -138,6 +138,7 @@ fn extract_here_keeps_one_top_folder_and_gathers_several_in_a_new_one() {
     let one = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&d.src.join("one.zip"), &d.dst, Layout::Here),
         &mut archivist,
     )
@@ -145,6 +146,7 @@ fn extract_here_keeps_one_top_folder_and_gathers_several_in_a_new_one() {
     let many = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&d.src.join("many.zip"), &d.dst, Layout::Here),
         &mut archivist,
     )
@@ -182,6 +184,7 @@ fn extract_into_a_new_folder_always_makes_one_named_after_the_archive() {
     let outcome = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&d.src.join("pack.tar.gz"), &d.dst, Layout::NewFolder),
         &mut Archivist::default(),
     )
@@ -214,6 +217,7 @@ fn a_hostile_archive_writes_nothing_outside_and_says_what_it_left_out() {
     let outcome = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&archive, &d.dst, Layout::Here),
         &mut Archivist::default(),
     )
@@ -267,6 +271,7 @@ fn a_taken_name_asks_and_keep_both_gets_a_numbered_folder() {
     let outcome = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&d.src.join("many.zip"), &d.dst, Layout::Here),
         &mut archivist,
     )
@@ -294,6 +299,7 @@ fn skip_and_cancel_at_a_conflict_leave_only_what_was_there() {
         let outcome = run(
             &RealFs,
             &NoTrash,
+            &NoForeignReader,
             &extract(&d.src.join("a.zip"), &d.dst, Layout::Here),
             &mut archivist,
         )
@@ -322,6 +328,7 @@ fn stopping_part_way_leaves_nothing_half_extracted() {
     let outcome = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&d.src.join("big.zip"), &d.dst, Layout::Here),
         &mut archivist,
     )
@@ -356,6 +363,7 @@ fn a_fault_at_any_step_leaves_no_partial_result_behind() {
         let result = run(
             &fs,
             &NoTrash,
+            &NoForeignReader,
             &extract(&d.src.join("t.zip"), &d.dst, Layout::Here),
             &mut Archivist::default(),
         );
@@ -399,6 +407,7 @@ fn an_encrypted_archive_asks_for_the_password_and_asks_again_when_wrong() {
     let outcome = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&d.src.join("s.zip"), &d.dst, Layout::Here),
         &mut archivist,
     )
@@ -419,14 +428,21 @@ fn no_password_stops_and_three_wrong_ones_refuse() {
     .unwrap();
     let request = extract(&d.src.join("s.zip"), &d.dst, Layout::Here);
 
-    let declined = run(&RealFs, &NoTrash, &request, &mut Archivist::default()).unwrap();
+    let declined = run(
+        &RealFs,
+        &NoTrash,
+        &NoForeignReader,
+        &request,
+        &mut Archivist::default(),
+    )
+    .unwrap();
     assert!(!declined.completed);
 
     let mut guesses = Archivist {
         passwords: (0..3).map(|_| Some("nope".to_owned())).collect(),
         ..Archivist::default()
     };
-    let refused = run(&RealFs, &NoTrash, &request, &mut guesses);
+    let refused = run(&RealFs, &NoTrash, &NoForeignReader, &request, &mut guesses);
     assert!(matches!(refused, Err(OpError::WrongPassword(_))));
     assert!(names(&d.dst).is_empty());
 }
@@ -444,6 +460,7 @@ fn an_archive_larger_than_the_free_space_is_refused_before_writing() {
     let result = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&d.src.join("a.zip"), &d.dst, Layout::Here),
         &mut Archivist::default(),
     );
@@ -470,12 +487,14 @@ fn damaged_and_unknown_files_are_refused_with_nothing_left() {
     let broken = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&d.src.join("broken.zip"), &d.dst, Layout::Here),
         &mut Archivist::default(),
     );
     let unknown = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&d.src.join("notes.txt"), &d.dst, Layout::Here),
         &mut Archivist::default(),
     );
@@ -500,7 +519,14 @@ fn extract_and_trash_trashes_the_archive_and_undo_brings_it_back() {
         trash_archive: true,
     };
 
-    let outcome = run(&RealFs, &trash, &request, &mut Archivist::default()).unwrap();
+    let outcome = run(
+        &RealFs,
+        &trash,
+        &NoForeignReader,
+        &request,
+        &mut Archivist::default(),
+    )
+    .unwrap();
     assert!(!archive.exists());
     assert_eq!(names(&d.dst), ["a", "a/a.txt", "a/b.txt"]);
 
@@ -532,6 +558,7 @@ fn compressing_makes_an_archive_that_extracts_to_the_same_files() {
         let made = run(
             &RealFs,
             &NoTrash,
+            &NoForeignReader,
             &Request::Compress {
                 sources,
                 archive: archive.clone(),
@@ -550,6 +577,7 @@ fn compressing_makes_an_archive_that_extracts_to_the_same_files() {
         run(
             &RealFs,
             &NoTrash,
+            &NoForeignReader,
             &extract(&archive, &out, Layout::Here),
             &mut Archivist::default(),
         )
@@ -591,12 +619,18 @@ fn compressing_never_replaces_and_a_stop_leaves_nothing() {
         cancel_after: Some(3),
         ..Archivist::default()
     };
-    let stopped = run(&RealFs, &NoTrash, &request, &mut stopping).unwrap();
+    let stopped = run(&RealFs, &NoTrash, &NoForeignReader, &request, &mut stopping).unwrap();
     assert!(!stopped.completed);
     assert!(names(&d.dst).is_empty());
 
     file(&archive, "already here");
-    let refused = run(&RealFs, &NoTrash, &request, &mut Archivist::default());
+    let refused = run(
+        &RealFs,
+        &NoTrash,
+        &NoForeignReader,
+        &request,
+        &mut Archivist::default(),
+    );
     assert!(matches!(refused, Err(OpError::AlreadyExists(_))));
     assert_eq!(read(&archive), "already here");
 }
@@ -612,6 +646,7 @@ fn undoing_a_compression_trashes_the_archive() {
     let made = run(
         &RealFs,
         &trash,
+        &NoForeignReader,
         &Request::Compress {
             sources: vec![d.src.join("a.txt")],
             archive: archive.clone(),
@@ -652,6 +687,7 @@ fn the_archive_stays_when_anything_was_left_out_or_cancelled() {
     let partial = run(
         &RealFs,
         &trash,
+        &NoForeignReader,
         &trashing(&hostile),
         &mut Archivist::default(),
     )
@@ -665,7 +701,14 @@ fn the_archive_stays_when_anything_was_left_out_or_cancelled() {
         conflicts: [ConflictChoice::Cancel].into(),
         ..Archivist::default()
     };
-    let cancelled = run(&RealFs, &trash, &trashing(&plain), &mut cancelling).unwrap();
+    let cancelled = run(
+        &RealFs,
+        &trash,
+        &NoForeignReader,
+        &trashing(&plain),
+        &mut cancelling,
+    )
+    .unwrap();
     assert!(!cancelled.completed);
     assert!(plain.exists(), "a cancelled extraction keeps its archive");
 }
@@ -682,6 +725,7 @@ fn folders_the_archive_only_implies_get_the_usual_rights() {
     run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &extract(&d.src.join("deep.zip"), &d.dst, Layout::Here),
         &mut Archivist::default(),
     )
@@ -699,53 +743,60 @@ fn folders_the_archive_only_implies_get_the_usual_rights() {
 }
 
 /// Stands in for libarchive (D-036): a folder, a file inside it, a file at
-/// the top and a hostile `../` name; the content is the archive's own name.
-/// "locked.iso" needs the password "secret".
-fn foreign(
-    path: &Path,
-    _source: Box<dyn crate::fs::ReadSeek>,
-    password: Option<&str>,
-    visit: crate::archive::Visit<'_>,
-) -> Result<(), crate::archive::ReadError> {
-    use crate::archive::{Header, Kind, ReadError};
-    let name = path.file_name().unwrap().as_bytes();
-    if name == b"locked.iso" {
-        match password {
-            None => return Err(ReadError::NeedsPassword),
-            Some("secret") => {}
-            Some(_) => return Err(ReadError::WrongPassword),
+/// the top and a hostile `../` name. The top file holds what the reader
+/// read from the source it was given. "locked.iso" needs the password
+/// "secret".
+struct FakeForeign;
+
+impl ForeignReader for FakeForeign {
+    fn read_entries(
+        &self,
+        path: &Path,
+        mut source: Box<dyn crate::fs::ReadSeek>,
+        password: Option<&str>,
+        visit: crate::archive::Visit<'_>,
+    ) -> Result<(), ReadError> {
+        use crate::archive::{Header, Kind};
+        if path.file_name().unwrap().as_bytes() == b"locked.iso" {
+            match password {
+                None => return Err(ReadError::NeedsPassword),
+                Some("secret") => {}
+                Some(_) => return Err(ReadError::WrongPassword),
+            }
         }
-    }
-    let entries: [(&[u8], Kind, &[u8]); 4] = [
-        (b"sub/", Kind::Directory, b""),
-        (b"sub/deep.txt", Kind::File, b"deep"),
-        (b"notes.txt", Kind::File, name),
-        (b"../escape.txt", Kind::File, b"out"),
-    ];
-    for (entry, kind, content) in entries {
-        let header = Header {
-            name: entry.to_vec(),
-            kind,
-            mode: Some(0o644),
-            modified: None,
-            size: content.len() as u64,
-        };
-        if visit(&header, &mut &content[..])?.is_break() {
-            break;
+        let mut read = Vec::new();
+        source.read_to_end(&mut read)?;
+        let entries: [(&[u8], Kind, &[u8]); 4] = [
+            (b"sub/", Kind::Directory, b""),
+            (b"sub/deep.txt", Kind::File, b"deep"),
+            (b"notes.txt", Kind::File, &read),
+            (b"../escape.txt", Kind::File, b"out"),
+        ];
+        for (entry, kind, content) in entries {
+            let header = Header {
+                name: entry.to_vec(),
+                kind,
+                mode: Some(0o644),
+                modified: None,
+                size: content.len() as u64,
+            };
+            if visit(&header, &mut &content[..])?.is_break() {
+                break;
+            }
         }
+        Ok(())
     }
-    Ok(())
 }
 
 #[test]
-fn formats_rustphin_does_not_read_itself_go_through_the_registered_reader() {
-    crate::archive::set_foreign_reader(foreign);
+fn formats_rustphin_does_not_read_itself_go_through_the_foreign_reader() {
     let d = dirs();
     fs::write(d.src.join("disc.iso"), b"not a format Rustphin knows").unwrap();
 
     let outcome = run(
         &RealFs,
         &NoTrash,
+        &FakeForeign,
         &extract(&d.src.join("disc.iso"), &d.dst, Layout::NewFolder),
         &mut Archivist::default(),
     )
@@ -757,14 +808,60 @@ fn formats_rustphin_does_not_read_itself_go_through_the_registered_reader() {
         names(&d.dst),
         ["disc", "disc/notes.txt", "disc/sub", "disc/sub/deep.txt"]
     );
-    assert_eq!(read(d.dst.join("disc/notes.txt")), "disc.iso");
+    // The reader got the archive's content from its start.
+    assert_eq!(
+        read(d.dst.join("disc/notes.txt")),
+        "not a format Rustphin knows"
+    );
     assert!(!d.dst.parent().unwrap().join("escape.txt").exists());
     assert!(no_leftovers(&d.dst));
 }
 
 #[test]
-fn the_registered_reader_gets_the_password_the_user_gives() {
-    crate::archive::set_foreign_reader(foreign);
+fn without_a_foreign_reader_an_unknown_format_is_not_an_archive() {
+    let d = dirs();
+    fs::write(d.src.join("disc.iso"), b"not a format Rustphin knows").unwrap();
+
+    let result = run(
+        &RealFs,
+        &NoTrash,
+        &NoForeignReader,
+        &extract(&d.src.join("disc.iso"), &d.dst, Layout::NewFolder),
+        &mut Archivist::default(),
+    );
+
+    assert!(
+        matches!(result, Err(OpError::NotAnArchive(_))),
+        "{result:?}"
+    );
+    assert!(names(&d.dst).is_empty());
+}
+
+#[test]
+fn the_foreign_reader_reads_through_the_engines_fs() {
+    let d = dirs();
+    // Longer than the 512 bytes read to judge the format, so the fault is
+    // met by the reader, not by that first look.
+    fs::write(d.src.join("disc.iso"), vec![b'x'; 4096]).unwrap();
+    let fs = FaultFs::new().failing_reads_after(1024);
+
+    let result = run(
+        &fs,
+        &NoTrash,
+        &FakeForeign,
+        &extract(&d.src.join("disc.iso"), &d.dst, Layout::NewFolder),
+        &mut Archivist::default(),
+    );
+
+    assert!(
+        matches!(&result, Err(OpError::Io { source, .. }) if source.to_string() == "injected read fault"),
+        "{result:?}"
+    );
+    assert!(names(&d.dst).is_empty());
+}
+
+#[test]
+fn the_foreign_reader_gets_the_password_the_user_gives() {
     let d = dirs();
     fs::write(d.src.join("locked.iso"), b"encrypted").unwrap();
     let mut archivist = Archivist {
@@ -775,6 +872,7 @@ fn the_registered_reader_gets_the_password_the_user_gives() {
     let outcome = run(
         &RealFs,
         &NoTrash,
+        &FakeForeign,
         &extract(&d.src.join("locked.iso"), &d.dst, Layout::NewFolder),
         &mut archivist,
     )

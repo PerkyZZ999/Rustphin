@@ -72,6 +72,8 @@ pub fn undo(
     let mut engine = Engine {
         fs,
         trash,
+        // Undo never reads an archive.
+        foreign: &crate::archive::NoForeignReader,
         controller,
         changes: Vec::new(),
         skipped: Vec::new(),

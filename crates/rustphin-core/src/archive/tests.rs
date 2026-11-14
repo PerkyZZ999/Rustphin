@@ -191,6 +191,7 @@ fn read_back(format: Format, bytes: Vec<u8>) -> BTreeMap<Vec<u8>, (Kind, Vec<u8>
         Path::new("test"),
         Box::new(Cursor::new(bytes)),
         None,
+        &NoForeignReader,
         &mut |_, _| ControlFlow::Continue(()),
         &mut |header, content| {
             let mut data = Vec::new();
@@ -317,6 +318,7 @@ fn a_damaged_archive_says_so() {
         Path::new("test.zip"),
         Box::new(Cursor::new(bytes)),
         None,
+        &NoForeignReader,
         &mut |_, _| ControlFlow::Continue(()),
         &mut |_, _| Ok(ControlFlow::Continue(())),
     );
@@ -341,6 +343,7 @@ fn an_encrypted_zip_asks_for_its_password_and_refuses_a_wrong_one() {
             Path::new("test.zip"),
             Box::new(Cursor::new(bytes.clone())),
             password,
+            &NoForeignReader,
             &mut |_, _| ControlFlow::Continue(()),
             &mut |_, data| {
                 data.read_to_end(&mut content)?;

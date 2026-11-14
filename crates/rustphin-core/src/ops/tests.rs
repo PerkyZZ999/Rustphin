@@ -15,7 +15,7 @@ use super::{
     faults::{Fault, FaultFs},
     *,
 };
-use crate::RealFs;
+use crate::{RealFs, archive::NoForeignReader};
 
 /// What one entry of a directory tree is, for comparing trees.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -159,7 +159,7 @@ pub(super) fn move_(sources: &[PathBuf], into: &Path) -> Request {
 }
 
 fn go(request: &Request, script: &mut Script) -> Outcome {
-    run(&RealFs, &NoTrash, request, script).unwrap()
+    run(&RealFs, &NoTrash, &NoForeignReader, request, script).unwrap()
 }
 
 #[test]
@@ -200,6 +200,7 @@ fn creating_over_an_existing_entry_is_refused_and_leaves_it_alone() {
     let error = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &Request::CreateFile {
             parent: d.src.clone(),
             name: "taken".into(),
@@ -253,6 +254,7 @@ fn a_template_never_replaces_an_existing_entry() {
     let error = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &from_template(&d.src, "taken.txt", Template::Contents(b"new".to_vec())),
         &mut Script::default(),
     )
@@ -273,6 +275,7 @@ fn a_template_that_fails_to_be_written_leaves_nothing_behind() {
         let created = run(
             &fs,
             &NoTrash,
+            &NoForeignReader,
             &from_template(&d.src, "new.odt", Template::File(template.clone())),
             &mut Script::default(),
         );
@@ -285,6 +288,7 @@ fn a_template_that_fails_to_be_written_leaves_nothing_behind() {
         run(
             &fs,
             &NoTrash,
+            &NoForeignReader,
             &from_template(&d.src, "a.txt", Template::Contents(b"x".to_vec())),
             &mut Script::default(),
         )
@@ -351,6 +355,7 @@ fn renaming_onto_an_existing_name_is_refused_and_both_survive() {
     let error = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &Request::Rename {
             path: d.src.join("a"),
             new_name: "b".into(),
@@ -423,6 +428,7 @@ fn a_failed_sync_never_publishes_a_copy() {
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &copy(std::slice::from_ref(&source), &d.dst),
         &mut script,
     )
@@ -449,6 +455,7 @@ fn a_failed_sync_keeps_the_destination_that_would_be_replaced() {
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &copy(std::slice::from_ref(&source), &d.dst),
         &mut script,
     )
@@ -473,6 +480,7 @@ fn a_failed_sync_keeps_a_cross_filesystem_moves_source() {
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &move_(std::slice::from_ref(&source), &d.dst),
         &mut script,
     )
@@ -496,6 +504,7 @@ fn retrying_a_failed_sync_copies_the_whole_file() {
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &copy(std::slice::from_ref(&source), &d.dst),
         &mut script,
     )
@@ -543,6 +552,7 @@ fn a_published_move_copy_keeps_its_source_when_the_destination_directory_cannot_
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &move_(std::slice::from_ref(&source), &d.dst),
         &mut script,
     )
@@ -566,6 +576,7 @@ fn retrying_a_published_move_sync_does_not_copy_or_replace_again() {
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &move_(std::slice::from_ref(&source), &d.dst),
         &mut script,
     )
@@ -590,7 +601,14 @@ fn a_folder_sync_failure_keeps_the_complete_source_tree() {
     let fs = FaultFs::failing_directory_sync(0).with_device(&d.dst);
     let mut script = Script::failures(&[Recovery::Skip]);
 
-    let outcome = run(&fs, &NoTrash, &move_(&[source], &d.dst), &mut script).unwrap();
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &NoForeignReader,
+        &move_(&[source], &d.dst),
+        &mut script,
+    )
+    .unwrap();
 
     assert_eq!(tree(&d.src), before);
     assert_eq!(read(d.dst.join("folder/nested/a")), "whole file");
@@ -609,6 +627,7 @@ fn a_source_directory_sync_failure_reports_a_visible_move_without_repeating_it()
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &move_(std::slice::from_ref(&source), &d.dst),
         &mut script,
     )
@@ -804,6 +823,7 @@ fn a_move_to_another_filesystem_copies_then_removes_the_source() {
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &move_(&[d.src.join("folder"), d.src.join("single.txt")], &d.dst),
         &mut script,
     )
@@ -897,8 +917,16 @@ fn requests_that_cannot_work_are_refused_before_anything_changes() {
     file(d.dst.join("ok.txt"), "other ok");
     let (before_src, before_dst) = (tree(&d.src), tree(&d.dst));
     let ok = d.src.join("ok.txt");
-    let refused =
-        |request: Request| run(&RealFs, &NoTrash, &request, &mut Script::default()).unwrap_err();
+    let refused = |request: Request| {
+        run(
+            &RealFs,
+            &NoTrash,
+            &NoForeignReader,
+            &request,
+            &mut Script::default(),
+        )
+        .unwrap_err()
+    };
 
     assert!(matches!(
         refused(copy(
@@ -939,6 +967,7 @@ fn a_failing_file_can_be_skipped_and_the_rest_of_the_folder_is_copied() {
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &copy(&[d.src.join("folder")], &d.dst),
         &mut script,
     )
@@ -963,6 +992,7 @@ fn retrying_a_failed_file_copies_it_whole() {
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &copy(&[d.src.join("a.txt")], &d.dst),
         &mut script,
     )
@@ -985,6 +1015,7 @@ fn a_cross_filesystem_move_keeps_the_originals_it_could_not_copy() {
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &move_(&[d.src.join("folder")], &d.dst),
         &mut script,
     )
@@ -1030,6 +1061,7 @@ fn a_source_that_changes_during_a_cross_filesystem_move_is_not_removed() {
     let outcome = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &move_(std::slice::from_ref(&source), &d.dst),
         &mut Meddler(&source),
     )
@@ -1056,6 +1088,7 @@ fn an_entry_that_appears_just_before_a_move_is_asked_about_not_replaced() {
     run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &move_(&[d.src.join("a.txt")], &d.dst),
         &mut script,
     )
@@ -1150,6 +1183,7 @@ fn trashing_moves_entries_into_the_trash_and_records_where() {
     let outcome = run(
         &RealFs,
         &trash,
+        &NoForeignReader,
         &Request::Trash {
             paths: vec![d.src.join("folder"), d.src.join("a.txt")],
         },
@@ -1178,6 +1212,7 @@ fn an_entry_that_cannot_be_trashed_stays_and_is_reported() {
     let outcome = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &Request::Trash {
             paths: vec![d.src.join("a.txt")],
         },
@@ -1251,7 +1286,14 @@ fn a_file_that_cannot_be_deleted_keeps_its_folders_and_is_reported_once() {
     let fs = FaultFs::failing_at(0, faults::Fault::Error);
 
     let mut script = Script::failures(&[Recovery::Skip]);
-    let outcome = run(&fs, &NoTrash, &delete(&[d.src.join("folder")]), &mut script).unwrap();
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &NoForeignReader,
+        &delete(&[d.src.join("folder")]),
+        &mut script,
+    )
+    .unwrap();
 
     let kept = script.failed[0].clone();
     assert_eq!(tree(&d.src).len(), 2, "the folder and the kept file");
@@ -1388,7 +1430,7 @@ fn sweep(fault: faults::Fault, moving: bool, across_filesystems: bool) -> usize 
             ..Script::default()
         };
 
-        let outcome = run(&fs, &NoTrash, &request, &mut script).unwrap();
+        let outcome = run(&fs, &NoTrash, &NoForeignReader, &request, &mut script).unwrap();
 
         let context = format!("{fault:?} at step {step}");
         assert_nothing_lost(
@@ -1492,6 +1534,7 @@ fn an_entry_that_appears_while_copying_is_asked_about_not_replaced() {
     run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &copy(&[d.src.join("a.txt")], &d.dst),
         &mut racer,
     )
@@ -1520,6 +1563,7 @@ fn kill_child() {
     run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &move_(&[src.join("folder"), src.join("one.txt")], &dst),
         &mut script,
     )
@@ -1649,6 +1693,7 @@ fn a_batch_rename_refuses_a_name_that_is_staying_and_changes_nothing() {
     let error = run(
         &RealFs,
         &NoTrash,
+        &NoForeignReader,
         &Request::RenameBatch {
             directory: d.src.clone(),
             pairs: vec![("a".into(), "b".into())],
@@ -1673,7 +1718,13 @@ fn a_failed_batch_rename_puts_every_file_back() {
             pairs: vec![("a".into(), "a2".into()), ("b".into(), "b2".into())],
         };
         let fs = FaultFs::failing_at(step, faults::Fault::Error);
-        let result = run(&fs, &NoTrash, &request, &mut Script::default());
+        let result = run(
+            &fs,
+            &NoTrash,
+            &NoForeignReader,
+            &request,
+            &mut Script::default(),
+        );
         if !fs.hit() {
             assert!(result.unwrap().completed);
             assert!(step >= 9);
@@ -1729,6 +1780,7 @@ fn permissions_change_and_come_back_and_a_failure_changes_nothing() {
     let failed = run(
         &fs,
         &NoTrash,
+        &NoForeignReader,
         &Request::SetMode {
             path: path.clone(),
             mode: 0o707,
@@ -1754,6 +1806,7 @@ fn interrupted_batch(d: &Dirs) {
     let _ = run(
         &FaultFs::failing_at(3, faults::Fault::Crash),
         &NoTrash,
+        &NoForeignReader,
         &request,
         &mut Script::default(),
     );
@@ -1824,7 +1877,14 @@ fn a_batch_never_stages_entries_when_its_journal_directory_cannot_sync() {
     file(d.src.join("b"), "B");
     let fs = FaultFs::failing_directory_sync(0);
 
-    let error = run(&fs, &NoTrash, &batch_swap(&d.src), &mut Script::default()).unwrap_err();
+    let error = run(
+        &fs,
+        &NoTrash,
+        &NoForeignReader,
+        &batch_swap(&d.src),
+        &mut Script::default(),
+    )
+    .unwrap_err();
 
     assert!(matches!(error, OpError::Io { .. }));
     assert_eq!(read(d.src.join("a")), "A");
@@ -1842,7 +1902,14 @@ fn a_batch_keeps_recovery_until_published_names_are_synced() {
     file(d.src.join("b"), "B");
     let fs = FaultFs::failing_directory_sync(1);
 
-    let outcome = run(&fs, &NoTrash, &batch_swap(&d.src), &mut Script::default()).unwrap();
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &NoForeignReader,
+        &batch_swap(&d.src),
+        &mut Script::default(),
+    )
+    .unwrap();
 
     assert!(!outcome.completed);
     assert!(outcome.changes.is_empty());
@@ -1860,7 +1927,14 @@ fn a_batch_does_not_roll_back_after_its_record_has_been_removed() {
     file(d.src.join("b"), "B");
     let fs = FaultFs::failing_directory_sync(2);
 
-    let outcome = run(&fs, &NoTrash, &batch_swap(&d.src), &mut Script::default()).unwrap();
+    let outcome = run(
+        &fs,
+        &NoTrash,
+        &NoForeignReader,
+        &batch_swap(&d.src),
+        &mut Script::default(),
+    )
+    .unwrap();
 
     assert!(outcome.completed);
     assert!(matches!(
@@ -1909,6 +1983,7 @@ fn batch_kill_child() {
             run(
                 &fs,
                 &NoTrash,
+                &NoForeignReader,
                 &batch_swap(&directory),
                 &mut Script::default(),
             )
@@ -1986,6 +2061,7 @@ fn a_second_batch_or_recovery_cannot_enter_a_locked_directory() {
         run(
             &RealFs,
             &NoTrash,
+            &NoForeignReader,
             &batch_swap(&d.src),
             &mut Script::default()
         )
@@ -2075,6 +2151,7 @@ fn recovery_preserves_raw_names_and_long_names() {
     let _ = run(
         &FaultFs::failing_at(3, faults::Fault::Crash),
         &NoTrash,
+        &NoForeignReader,
         &request,
         &mut Script::default(),
     );
@@ -2092,6 +2169,7 @@ fn a_recovery_request_reports_a_pause_and_keeps_its_record() {
     let outcome = run(
         &FaultFs::failing_at(0, faults::Fault::Error),
         &NoTrash,
+        &NoForeignReader,
         &request,
         &mut Script::default(),
     )

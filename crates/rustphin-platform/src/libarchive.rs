@@ -2,8 +2,8 @@
 //! CPIO, RPM, DEB, lone compressed files…), read through libarchive inside
 //! the operation engine (D-036).
 //!
-//! [`read_entries`] is registered with the core as its reader of
-//! `Format::Foreign`: it hands each entry's header and content to the
+//! [`read_entries`] reads `Format::Foreign` for the engine (through
+//! `archive_tool::ForeignArchives`): it hands each entry's header and content to the
 //! engine, which checks names and links and writes through `Fs` as for
 //! ZIP and TAR. Names stay bytes. [`probe`] says beforehand whether
 //! libarchive can read an archive at all; what it cannot (encrypted RAR
@@ -14,7 +14,6 @@ use std::{
     ffi::{CStr, CString, c_char, c_int, c_void},
     io::{self, Read, Seek, SeekFrom},
     ops::ControlFlow,
-    path::Path,
     ptr::NonNull,
 };
 
@@ -105,27 +104,28 @@ mod ffi {
 
 /// What libarchive reads from: the archive's content, a buffer it reads
 /// into, and the first error the content gave.
-struct Client {
-    source: Box<dyn ReadSeek>,
+struct Client<'s> {
+    source: Box<dyn ReadSeek + 's>,
     buffer: Vec<u8>,
     error: Option<io::Error>,
 }
 
-/// An open libarchive reader and the client its callbacks use.
-struct Reader {
+/// An open libarchive reader and the client its callbacks use, reading
+/// content that lives for `'s`.
+struct Reader<'s> {
     archive: NonNull<ffi::Archive>,
     /// From `Box::into_raw`; freed in `drop`, after the reader that uses it.
-    client: NonNull<Client>,
+    client: NonNull<Client<'s>>,
 }
 
 /// Bytes libarchive reads at a time.
 const BUFFER: usize = 64 * 1024;
 
-impl Reader {
+impl<'s> Reader<'s> {
     /// Opens `source` with every filter libarchive has and the archive
     /// formats, raw (a lone compressed file) last. Not mtree, which takes
     /// any text for a list of files, nor libarchive's other text formats.
-    fn open(source: Box<dyn ReadSeek>, password: Option<&str>) -> Result<Self, ReadError> {
+    fn open(source: Box<dyn ReadSeek + 's>, password: Option<&str>) -> Result<Self, ReadError> {
         let client = Box::new(Client {
             source,
             buffer: vec![0; BUFFER],
@@ -262,7 +262,7 @@ impl Reader {
     }
 }
 
-impl Drop for Reader {
+impl Drop for Reader<'_> {
     fn drop(&mut self) {
         // SAFETY: the reader is freed once, here, before the client its
         // callbacks use; `client` came from `Box::into_raw` and nothing
@@ -300,7 +300,7 @@ unsafe extern "C" fn read_callback(
 ) -> isize {
     // SAFETY: `data` is the live `Client` of this reader, and libarchive
     // calls one callback at a time, so this is the only reference to it.
-    let client = unsafe { &mut *data.cast::<Client>() };
+    let client = unsafe { &mut *data.cast::<Client<'_>>() };
     loop {
         match client.source.read(&mut client.buffer) {
             Ok(read) => {
@@ -329,7 +329,7 @@ unsafe extern "C" fn skip_callback(
         return 0;
     }
     // SAFETY: as in `read_callback`.
-    let client = unsafe { &mut *data.cast::<Client>() };
+    let client = unsafe { &mut *data.cast::<Client<'_>>() };
     // Skipping 0 bytes tells libarchive to read past the data instead.
     match client.source.seek(SeekFrom::Current(request)) {
         Ok(_) => request,
@@ -346,7 +346,7 @@ unsafe extern "C" fn seek_callback(
     whence: c_int,
 ) -> i64 {
     // SAFETY: as in `read_callback`.
-    let client = unsafe { &mut *data.cast::<Client>() };
+    let client = unsafe { &mut *data.cast::<Client<'_>>() };
     let to = match whence {
         0 => match u64::try_from(offset) {
             Ok(offset) => SeekFrom::Start(offset),
@@ -420,12 +420,12 @@ fn header_of(entry: NonNull<ffi::Entry>, name: &[u8], raw: bool) -> Result<Heade
 
 /// An entry's content, read through libarchive. Remembers libarchive's
 /// own failure, so it is told apart from the visitor's.
-struct Content<'a> {
-    reader: &'a Reader,
+struct Content<'a, 's> {
+    reader: &'a Reader<'s>,
     failed: &'a Cell<Option<String>>,
 }
 
-impl Read for Content<'_> {
+impl Read for Content<'_, '_> {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         loop {
             // SAFETY: the reader is open at an entry; `buffer` is valid for
@@ -454,7 +454,7 @@ impl Read for Content<'_> {
 }
 
 /// Reads the archive called `name` from `source` through libarchive,
-/// calling `visit` for each entry until it breaks (`archive::ForeignReader`).
+/// calling `visit` for each entry until it breaks.
 pub fn read_entries(
     name: &[u8],
     source: Box<dyn ReadSeek>,
@@ -490,27 +490,45 @@ pub fn read_entries(
     Ok(())
 }
 
-/// Whether libarchive can read the archive at `path`, judged by its first
-/// entry: `Err` with the reason when it cannot (an unknown format, or
-/// encryption libarchive does not undo), and the archive goes to 7-Zip.
-pub fn probe(path: &Path) -> Result<(), String> {
-    let file = std::fs::File::open(path).map_err(|error| error.to_string())?;
-    let reader = Reader::open(Box::new(file), None).map_err(|error| describe(&error))?;
-    match reader.next(None) {
-        Ok(Some(entry)) => {
-            // SAFETY: `entry` is the reader's current entry.
-            let encrypted = unsafe { ffi::archive_entry_is_encrypted(entry.as_ptr()) } != 0;
-            if encrypted {
-                // Among the formats that reach here, libarchive decrypts
-                // none: ZIP, the one it can, Rustphin reads itself.
-                Err("it is encrypted".to_owned())
-            } else {
-                Ok(())
+/// Whether libarchive can read an archive, judged by its first entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Probe {
+    /// libarchive reads it.
+    Readable,
+    /// libarchive cannot read it, for this reason (an unknown format, or
+    /// encryption libarchive does not undo), and it goes to 7-Zip.
+    Unreadable(String),
+}
+
+/// Whether libarchive can read the archive `source`, which was opened
+/// through the engine's `Fs`. `source` is left at its start for the reader.
+/// `Err` when `source` itself fails: that is no reason to try 7-Zip.
+pub fn probe(source: &mut dyn ReadSeek) -> io::Result<Probe> {
+    let verdict = {
+        let reader = match Reader::open(Box::new(&mut *source), None) {
+            Ok(reader) => reader,
+            Err(ReadError::Io(error)) => return Err(error),
+            Err(error) => return Ok(Probe::Unreadable(describe(&error))),
+        };
+        match reader.next(None) {
+            Ok(Some(entry)) => {
+                // SAFETY: `entry` is the reader's current entry.
+                let encrypted = unsafe { ffi::archive_entry_is_encrypted(entry.as_ptr()) } != 0;
+                if encrypted {
+                    // Among the formats that reach here, libarchive decrypts
+                    // none: ZIP, the one it can, Rustphin reads itself.
+                    Probe::Unreadable("it is encrypted".to_owned())
+                } else {
+                    Probe::Readable
+                }
             }
+            Ok(None) => Probe::Readable,
+            Err(ReadError::Io(error)) => return Err(error),
+            Err(error) => Probe::Unreadable(describe(&error)),
         }
-        Ok(None) => Ok(()),
-        Err(error) => Err(describe(&error)),
-    }
+    };
+    source.rewind()?;
+    Ok(verdict)
 }
 
 /// A [`ReadError`] in a few words.

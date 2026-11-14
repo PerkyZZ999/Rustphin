@@ -22,7 +22,7 @@ fn read(
     let work = tempfile::tempdir().unwrap();
     let path = fixture(name);
     let mut seen = Vec::new();
-    let result = read_entries_with(
+    let result = ForeignArchives::with_tool(tool, Some(work.path().to_owned())).read_entries(
         &path,
         Box::new(fs::File::open(&path).unwrap()),
         password,
@@ -32,8 +32,6 @@ fn read(
             seen.push((String::from_utf8_lossy(&header.name).into_owned(), bytes));
             Ok(ControlFlow::Continue(()))
         },
-        tool,
-        Some(work.path().to_owned()),
     );
     let left: Vec<_> = fs::read_dir(work.path()).unwrap().collect();
     assert!(left.is_empty(), "work folders left behind: {left:?}");
@@ -126,6 +124,70 @@ fn without_a_tool_an_archive_libarchive_cannot_read_says_to_install_7_zip() {
 
     assert!(
         matches!(&result, Err(ReadError::Damaged(message)) if message.contains("7-Zip")),
+        "{result:?}"
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn as_administrator_what_libarchive_cannot_read_is_refused_not_given_to_a_tool() {
+    let read_as_administrator = |name: &str| {
+        let path = fixture(name);
+        let mut seen = 0;
+        ForeignArchives::as_administrator()
+            .read_entries(
+                &path,
+                Box::new(fs::File::open(&path).unwrap()),
+                Some("secret"),
+                &mut |_, _| {
+                    seen += 1;
+                    Ok(ControlFlow::Continue(()))
+                },
+            )
+            .map(|()| seen)
+    };
+
+    // libarchive reads the content the administrator's Fs opened…
+    assert!(read_as_administrator("bundle.cpio").unwrap() > 0);
+    // …but 7-Zip would open the path with the user's own rights.
+    let refused = read_as_administrator("locked.7z");
+    assert!(
+        matches!(&refused, Err(ReadError::Damaged(message)) if message.contains("administrator")),
+        "{refused:?}"
+    );
+}
+
+/// Content that fails once read, as a failing disk would.
+struct GoneDisk;
+
+impl io::Read for GoneDisk {
+    fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::other("the disk went away"))
+    }
+}
+
+impl io::Seek for GoneDisk {
+    fn seek(&mut self, _: io::SeekFrom) -> io::Result<u64> {
+        Ok(0)
+    }
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn a_failing_source_is_an_io_error_and_never_reaches_the_tool() {
+    let work = tempfile::tempdir().unwrap();
+    // A tool that cannot start: reaching it would say so instead.
+    let tool = Tool::SevenZip(work.path().join("no-such-7z"));
+
+    let result = ForeignArchives::with_tool(Some(tool), Some(work.path().to_owned())).read_entries(
+        &fixture("bundle.cpio"),
+        Box::new(GoneDisk),
+        None,
+        &mut |_, _| Ok(ControlFlow::Continue(())),
+    );
+
+    assert!(
+        matches!(&result, Err(ReadError::Io(error)) if error.to_string() == "the disk went away"),
         "{result:?}"
     );
 }

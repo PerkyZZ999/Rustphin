@@ -16,7 +16,7 @@ use super::{
     Conflict, ConflictChoice, Controller, Failure, History, Outcome, Progress, Recovery, Request,
     Resolution, Trash, run,
 };
-use crate::Fs;
+use crate::{Fs, archive::ForeignReader};
 
 /// Identifies one running or finished operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -120,6 +120,7 @@ struct Running {
 struct Shared {
     fs: Arc<dyn Fs>,
     trash: Arc<dyn Trash>,
+    foreign: Arc<dyn ForeignReader>,
     events: flume::Sender<OpEvent>,
     history: Mutex<History>,
     running: Mutex<HashMap<OpId, Running>>,
@@ -140,9 +141,15 @@ pub struct Operations {
 }
 
 impl Operations {
-    /// Creates the runner and the channel its events arrive on.
-    pub fn new(fs: Arc<dyn Fs>, trash: Arc<dyn Trash>) -> (Self, flume::Receiver<OpEvent>) {
-        Self::with_first_id(fs, trash, 0)
+    /// Creates the runner and the channel its events arrive on. Its
+    /// operations change files through `fs`, trash through `trash` and read
+    /// the archive formats Rustphin does not read itself through `foreign`.
+    pub fn new(
+        fs: Arc<dyn Fs>,
+        trash: Arc<dyn Trash>,
+        foreign: Arc<dyn ForeignReader>,
+    ) -> (Self, flume::Receiver<OpEvent>) {
+        Self::with_first_id(fs, trash, foreign, 0)
     }
 
     /// As [`Self::new`], numbering operations from `first`, so the ids of two
@@ -150,12 +157,14 @@ impl Operations {
     pub fn with_first_id(
         fs: Arc<dyn Fs>,
         trash: Arc<dyn Trash>,
+        foreign: Arc<dyn ForeignReader>,
         first: u64,
     ) -> (Self, flume::Receiver<OpEvent>) {
         let (events, receiver) = flume::unbounded();
         let shared = Arc::new(Shared {
             fs,
             trash,
+            foreign,
             events,
             history: Mutex::default(),
             running: Mutex::default(),
@@ -287,7 +296,13 @@ fn perform(
         request: request.clone(),
         undo: false,
     });
-    match run(&*shared.fs, &*shared.trash, &request, controller) {
+    match run(
+        &*shared.fs,
+        &*shared.trash,
+        &*shared.foreign,
+        &request,
+        controller,
+    ) {
         Ok(outcome) => {
             lock(&shared.history).push(request, outcome.changes.clone());
             Finished::Done(outcome)
@@ -416,12 +431,12 @@ mod tests {
         },
         *,
     };
-    use crate::RealFs;
+    use crate::{RealFs, archive::NoForeignReader};
 
     const TIMEOUT: Duration = Duration::from_secs(20);
 
     fn operations(fs: impl Fs) -> (Operations, flume::Receiver<OpEvent>) {
-        Operations::new(Arc::new(fs), Arc::new(NoTrash))
+        Operations::new(Arc::new(fs), Arc::new(NoTrash), Arc::new(NoForeignReader))
     }
 
     /// Waits for the next event that is not a progress report.
@@ -471,7 +486,12 @@ mod tests {
     fn a_runner_numbers_its_operations_from_where_it_is_told() {
         let d = dirs();
         file(d.src.join("a.txt"), "a");
-        let (ops, events) = Operations::with_first_id(Arc::new(RealFs), Arc::new(NoTrash), 1 << 62);
+        let (ops, events) = Operations::with_first_id(
+            Arc::new(RealFs),
+            Arc::new(NoTrash),
+            Arc::new(NoForeignReader),
+            1 << 62,
+        );
 
         let id = ops.start(copy(&[d.src.join("a.txt")], &d.dst));
 

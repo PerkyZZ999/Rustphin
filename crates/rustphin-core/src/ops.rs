@@ -24,7 +24,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use crate::{EntryKind, FileInfo, Fs};
+use crate::{EntryKind, FileInfo, Fs, archive::ForeignReader};
 
 /// What a file created from a template starts with.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -486,12 +486,14 @@ pub struct Outcome {
 pub fn run(
     fs: &dyn Fs,
     trash: &dyn Trash,
+    foreign: &dyn ForeignReader,
     request: &Request,
     controller: &mut dyn Controller,
 ) -> Result<Outcome, OpError> {
     let mut engine = Engine {
         fs,
         trash,
+        foreign,
         controller,
         changes: Vec::new(),
         skipped: Vec::new(),
@@ -675,6 +677,8 @@ impl Node {
 struct Engine<'a> {
     fs: &'a dyn Fs,
     trash: &'a dyn Trash,
+    /// Reads the archive formats Rustphin does not read itself (D-036).
+    foreign: &'a dyn ForeignReader,
     controller: &'a mut dyn Controller,
     changes: Vec<Change>,
     skipped: Vec<Skipped>,

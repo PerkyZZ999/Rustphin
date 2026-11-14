@@ -184,30 +184,64 @@ fn something_that_is_no_archive_is_damaged() {
     assert!(matches!(result, Err(ReadError::Damaged(_))), "{result:?}");
 }
 
-#[test]
-#[cfg_attr(miri, ignore)]
-fn probe_accepts_what_libarchive_reads_and_sends_the_rest_to_7_zip() {
-    assert_eq!(probe(&fixture("bundle.cpio")), Ok(()));
-    assert_eq!(probe(&fixture("disc.iso.gz")), Ok(()));
-    assert_eq!(probe(&fixture("notes.txt.gz")), Ok(()));
-    // 7Z encryption libarchive cannot undo.
-    assert_eq!(
-        probe(&fixture("locked.7z")),
-        Err("it is encrypted".to_owned())
-    );
-    assert!(probe(&fixture("README.md")).is_err());
+/// What [`probe`] says of the fixture `name`, given as content alone (no
+/// path), and where it left that content.
+fn probed(name: &str) -> (Probe, u64) {
+    let mut source = Cursor::new(std::fs::read(fixture(name)).unwrap());
+    let verdict = probe(&mut source).unwrap();
+    (verdict, source.position())
 }
 
 #[test]
-fn password_errors_are_told_apart_by_libarchives_words() {
-    assert!(matches!(
-        password_error("Passphrase required for this entry", None),
-        Some(ReadError::NeedsPassword)
-    ));
-    assert!(matches!(
-        password_error("Incorrect passphrase", Some("guess")),
-        Some(ReadError::WrongPassword)
-    ));
-    assert!(password_error("Encryption is not supported", None).is_none());
-    assert!(password_error("Truncated input file", None).is_none());
+#[cfg_attr(miri, ignore)]
+fn probe_accepts_what_libarchive_reads_and_sends_the_rest_to_7_zip() {
+    assert_eq!(probed("bundle.cpio"), (Probe::Readable, 0));
+    assert_eq!(probed("disc.iso.gz"), (Probe::Readable, 0));
+    assert_eq!(probed("notes.txt.gz"), (Probe::Readable, 0));
+    // 7Z encryption libarchive cannot undo.
+    assert_eq!(
+        probed("locked.7z"),
+        (Probe::Unreadable("it is encrypted".to_owned()), 0)
+    );
+    assert!(matches!(probed("README.md"), (Probe::Unreadable(_), 0)));
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn the_reader_gets_the_probed_source_whole() {
+    let mut source = Cursor::new(std::fs::read(fixture("bundle.cpio")).unwrap());
+    assert_eq!(probe(&mut source).unwrap(), Probe::Readable);
+    let mut seen = Vec::new();
+
+    read_entries(
+        b"bundle.cpio",
+        Box::new(source),
+        None,
+        &mut |header, content| {
+            let mut bytes = Vec::new();
+            content.read_to_end(&mut bytes)?;
+            seen.push((header.clone(), bytes));
+            Ok(ControlFlow::Continue(()))
+        },
+    )
+    .unwrap();
+
+    assert_eq!(seen, entries("bundle.cpio", None).unwrap());
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn a_failing_source_fails_the_probe_rather_than_go_to_7_zip() {
+    let bytes = std::fs::read(fixture("bundle.cpio")).unwrap();
+    let mut source = Failing {
+        inner: Cursor::new(bytes),
+        good: 0,
+    };
+
+    let result = probe(&mut source);
+
+    assert!(
+        matches!(&result, Err(error) if error.to_string() == "the disk went away"),
+        "{result:?}"
+    );
 }

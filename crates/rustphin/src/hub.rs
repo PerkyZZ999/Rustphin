@@ -21,6 +21,7 @@ use rustphin_core::{
     ops::{NoTrash, OpEvent, OpId, Operations, Request},
 };
 use rustphin_platform::{
+    archive_tool::ForeignArchives,
     clipboard::{self, FileClip, FileClipboard},
     trash::FreedesktopTrash,
 };
@@ -121,7 +122,9 @@ impl Hub {
                 Arc::new(NoTrash)
             }
         };
-        let (ops, events) = Operations::new(fs, engine_trash);
+        // Archives Rustphin does not read itself: libarchive, else 7-Zip (D-036).
+        let foreign = Arc::new(ForeignArchives::installed());
+        let (ops, events) = Operations::new(fs, engine_trash, foreign);
         forward(events);
         let clipboard = clipboard::for_session();
         if !clipboard.is_shared() {
@@ -224,7 +227,9 @@ pub fn set_admin(admin: Option<Arc<dyn rustphin_core::Fs>>) {
         Some(fs) => {
             hub.admin_runs += 1;
             let first = admin_first_id(hub.admin_runs);
-            let (ops, events) = Operations::with_first_id(fs, Arc::new(NoTrash), first);
+            // No 7-Zip: it would read the archive with the user's own rights.
+            let foreign = Arc::new(ForeignArchives::as_administrator());
+            let (ops, events) = Operations::with_first_id(fs, Arc::new(NoTrash), foreign, first);
             forward(events);
             hub.admin_ops = Some(ops);
             hub.admin_active = true;

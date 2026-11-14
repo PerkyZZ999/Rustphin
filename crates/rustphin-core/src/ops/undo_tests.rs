@@ -12,7 +12,7 @@ use super::{
     tests::{Dirs, FolderTrash, Script, copy, dirs, file, move_, names, read, tree},
     *,
 };
-use crate::RealFs;
+use crate::{RealFs, archive::NoForeignReader};
 
 /// Runs `request`, undoes it, and checks that `src` and `dst` are as before.
 fn assert_undo_restores(d: &Dirs, fs: &dyn Fs, request: Request, mut script: Script) -> Outcome {
@@ -21,7 +21,7 @@ fn assert_undo_restores(d: &Dirs, fs: &dyn Fs, request: Request, mut script: Scr
     fs::create_dir_all(&trash_dir).unwrap();
     let trash = FolderTrash::new(&trash_dir);
 
-    let outcome = run(fs, &trash, &request, &mut script).unwrap();
+    let outcome = run(fs, &trash, &NoForeignReader, &request, &mut script).unwrap();
     assert!(!outcome.changes.is_empty(), "the operation did nothing");
     assert_ne!(
         (tree(&d.src), tree(&d.dst)),
@@ -153,6 +153,7 @@ fn restoring_from_the_trash_puts_entries_back_and_its_undo_trashes_them_again() 
     let trashed = run(
         &RealFs,
         &trash,
+        &NoForeignReader,
         &Request::Trash {
             paths: vec![d.src.join("a.txt"), d.src.join("b.txt")],
         },
@@ -171,7 +172,14 @@ fn restoring_from_the_trash_puts_entries_back_and_its_undo_trashes_them_again() 
     file(d.src.join("b.txt"), "newcomer");
 
     let mut script = Script::failures(&[Recovery::Skip]);
-    let outcome = run(&RealFs, &trash, &Request::Restore { items }, &mut script).unwrap();
+    let outcome = run(
+        &RealFs,
+        &trash,
+        &NoForeignReader,
+        &Request::Restore { items },
+        &mut script,
+    )
+    .unwrap();
 
     assert_eq!(read(d.src.join("a.txt")), "a");
     assert_eq!(read(d.src.join("b.txt")), "newcomer");
@@ -192,7 +200,9 @@ fn restoring_from_the_trash_puts_entries_back_and_its_undo_trashes_them_again() 
 
 /// Runs `request` on the real filesystem and returns its changes.
 fn changes_of(request: Request, script: &mut Script) -> Vec<Change> {
-    run(&RealFs, &NoTrash, &request, script).unwrap().changes
+    run(&RealFs, &NoTrash, &NoForeignReader, &request, script)
+        .unwrap()
+        .changes
 }
 
 fn refused(changes: &[Change]) -> UndoFailure {
@@ -290,9 +300,15 @@ fn a_refused_undo_touches_none_of_the_operations_entries() {
     let trash_request = Request::Trash {
         paths: vec![d.src.join("c"), d.src.join("d")],
     };
-    let trashed = run(&RealFs, &trash, &trash_request, &mut Script::default())
-        .unwrap()
-        .changes;
+    let trashed = run(
+        &RealFs,
+        &trash,
+        &NoForeignReader,
+        &trash_request,
+        &mut Script::default(),
+    )
+    .unwrap()
+    .changes;
     // The places of the older entry of each pair are taken.
     file(d.src.join("a"), "newcomer");
     file(d.src.join("c"), "newcomer");
@@ -414,9 +430,15 @@ fn undoing_a_trash_is_refused_when_something_took_the_place() {
     let request = Request::Trash {
         paths: vec![d.src.join("a.txt")],
     };
-    let changes = run(&RealFs, &trash, &request, &mut Script::default())
-        .unwrap()
-        .changes;
+    let changes = run(
+        &RealFs,
+        &trash,
+        &NoForeignReader,
+        &request,
+        &mut Script::default(),
+    )
+    .unwrap()
+    .changes;
     file(d.src.join("a.txt"), "newcomer");
 
     let failure = undo(&RealFs, &trash, &changes, &mut Script::default()).unwrap_err();
@@ -453,7 +475,14 @@ fn history_undoes_operations_newest_first_and_keeps_refused_ones() {
     let original = (tree(&d.src), tree(&d.dst));
     let mut history = History::default();
     let mut perform = |request: Request| {
-        let outcome = run(&RealFs, &NoTrash, &request, &mut Script::default()).unwrap();
+        let outcome = run(
+            &RealFs,
+            &NoTrash,
+            &NoForeignReader,
+            &request,
+            &mut Script::default(),
+        )
+        .unwrap();
         history.push(request, outcome.changes);
     };
     perform(Request::Rename {
@@ -521,7 +550,14 @@ fn an_operation_that_cannot_be_undone_does_not_block_undoing_the_one_before() {
             paths: vec![d.src.join("gone")],
         },
     ] {
-        let outcome = run(&RealFs, &NoTrash, &request, &mut Script::default()).unwrap();
+        let outcome = run(
+            &RealFs,
+            &NoTrash,
+            &NoForeignReader,
+            &request,
+            &mut Script::default(),
+        )
+        .unwrap();
         history.push(request, outcome.changes);
     }
 
@@ -657,7 +693,7 @@ proptest! {
         for step in &steps {
             let Some(request) = request_for(step, &root, &root.join("a")) else { continue };
             // Refused requests (a folder into itself, a taken name) change nothing.
-            if let Ok(outcome) = run(&fs, &trash, &request, &mut NeverReplace) {
+            if let Ok(outcome) = run(&fs, &trash, &NoForeignReader, &request, &mut NeverReplace) {
                 prop_assert!(outcome.skipped.is_empty(), "{:?}", outcome.skipped);
                 history.push(request, outcome.changes);
             }

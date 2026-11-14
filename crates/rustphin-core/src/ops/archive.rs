@@ -75,7 +75,7 @@ impl Engine<'_> {
         head.truncate(filled);
         let name = file_name(path)?;
         archive::detect(name.as_bytes(), &head)
-            .or_else(|| archive::foreign_reader().map(|_| Format::Foreign))
+            .or_else(|| self.foreign.reads_any().then_some(Format::Foreign))
             .ok_or_else(|| OpError::NotAnArchive(path.to_owned()))
     }
 
@@ -197,6 +197,7 @@ impl Engine<'_> {
             archive,
             source,
             password,
+            self.foreign,
             &mut |items, bytes| {
                 declared.set(Some((items, bytes)));
                 match free {

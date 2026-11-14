@@ -310,8 +310,14 @@ pub(super) fn revert_batch(
         directory: parent.to_owned(),
         pairs,
     };
-    let outcome = super::run(fs, &super::NoTrash, &request, controller)
-        .map_err(|e| undo_io(parent)(io::Error::other(e.to_string())))?;
+    let outcome = super::run(
+        fs,
+        &super::NoTrash,
+        &crate::archive::NoForeignReader,
+        &request,
+        controller,
+    )
+    .map_err(|e| undo_io(parent)(io::Error::other(e.to_string())))?;
     if outcome.completed {
         Ok(())
     } else {

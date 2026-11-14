@@ -36,7 +36,7 @@ pub enum Format {
     /// 7-Zip.
     SevenZ,
     /// Any other format, read (never written) by the reader the
-    /// application registers with [`set_foreign_reader`]: libarchive (D-036).
+    /// application's [`ForeignReader`]: libarchive (D-036).
     Foreign,
 }
 
@@ -265,48 +265,66 @@ pub type Totals<'a> = &'a mut dyn FnMut(u64, u64) -> ControlFlow<()>;
 /// Called for each entry with its header and its content.
 pub type Visit<'a> = &'a mut dyn FnMut(&Header, &mut dyn Read) -> io::Result<ControlFlow<()>>;
 
-/// Reads archives of [`Format::Foreign`]: the archive's path (for a tool
-/// that opens it itself, and a lone compressed file, whose entry is named
-/// after it), its content, the password and the visitor of
-/// [`read_entries`]. Declares no totals.
-pub type ForeignReader = fn(
-    path: &Path,
-    source: Box<dyn ReadSeek>,
-    password: Option<&str>,
-    visit: Visit<'_>,
-) -> Result<(), ReadError>;
+/// Reads archives of [`Format::Foreign`], the formats Rustphin does not
+/// read itself (D-036). The application hands one to the engine beside its
+/// `Fs` and `Trash`, so the core keeps no C dependency of its own.
+pub trait ForeignReader: Send + Sync {
+    /// Whether it reads any format at all. When not, a file Rustphin does
+    /// not recognise is not an archive.
+    fn reads_any(&self) -> bool {
+        true
+    }
 
-static FOREIGN: std::sync::OnceLock<ForeignReader> = std::sync::OnceLock::new();
-
-/// Registers the reader of every format Rustphin does not read itself.
-/// The application does this once at start (D-036); the core has no C
-/// dependency of its own. Later calls are ignored.
-pub fn set_foreign_reader(reader: ForeignReader) {
-    let _ = FOREIGN.set(reader);
+    /// Reads the archive `source`, found at `path`, calling `visit` for
+    /// each entry in order until it breaks. `source` was opened through the
+    /// engine's `Fs` and is at its start; `path` names a lone compressed
+    /// file's entry and is there for a tool that opens the archive itself.
+    /// Declares no totals.
+    fn read_entries(
+        &self,
+        path: &Path,
+        source: Box<dyn ReadSeek>,
+        password: Option<&str>,
+        visit: Visit<'_>,
+    ) -> Result<(), ReadError>;
 }
 
-/// The reader registered with [`set_foreign_reader`], if any.
-pub fn foreign_reader() -> Option<ForeignReader> {
-    FOREIGN.get().copied()
+/// No reader of other formats: Rustphin reads only its own.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoForeignReader;
+
+impl ForeignReader for NoForeignReader {
+    fn reads_any(&self) -> bool {
+        false
+    }
+
+    fn read_entries(
+        &self,
+        _: &Path,
+        _: Box<dyn ReadSeek>,
+        _: Option<&str>,
+        _: Visit<'_>,
+    ) -> Result<(), ReadError> {
+        Err(ReadError::Damaged(
+            "no reader for this format is available".to_owned(),
+        ))
+    }
 }
 
 /// Reads the archive `source` of `format`, found at `path`, calling
-/// `visit` for each entry in order until it breaks.
+/// `visit` for each entry in order until it breaks. [`Format::Foreign`]
+/// goes to `foreign`.
 pub fn read_entries(
     format: Format,
     path: &Path,
     source: Box<dyn ReadSeek>,
     password: Option<&str>,
+    foreign: &dyn ForeignReader,
     totals: Totals<'_>,
     visit: Visit<'_>,
 ) -> Result<(), ReadError> {
     match format {
-        Format::Foreign => match foreign_reader() {
-            Some(reader) => reader(path, source, password, visit),
-            None => Err(ReadError::Damaged(
-                "no reader for this format is available".to_owned(),
-            )),
-        },
+        Format::Foreign => foreign.read_entries(path, source, password, visit),
         Format::Zip => read_zip(source, password, &TimeZone::system(), totals, visit),
         Format::SevenZ => read_seven_z(source, password, totals, visit),
         Format::Tar => read_tar(source, visit),
