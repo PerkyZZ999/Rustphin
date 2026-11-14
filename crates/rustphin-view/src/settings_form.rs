@@ -1076,21 +1076,14 @@ pub fn shortcut_groups(search: &str) -> Vec<(String, Vec<Shortcut>)> {
     let search = search.trim().to_lowercase();
     let mut groups: Vec<(String, Vec<Shortcut>)> = Vec::new();
     for command in crate::commands::COMMANDS {
-        if command.shortcut.is_empty() {
+        let keys = command.shown_keys();
+        if keys.is_empty() {
             continue;
         }
         let (category, name) = command
             .label
             .split_once(": ")
             .unwrap_or(("Other", command.label));
-        let keys: Vec<String> = command
-            .shortcut
-            .split(" or ")
-            .flat_map(|part| part.split(", "))
-            .map(str::trim)
-            .filter(|key| !key.is_empty())
-            .map(str::to_owned)
-            .collect();
         let matches = search.is_empty()
             || command.label.to_lowercase().contains(&search)
             || keys.iter().any(|key| key.to_lowercase().contains(&search));

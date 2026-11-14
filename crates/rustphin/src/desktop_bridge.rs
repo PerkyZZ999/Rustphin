@@ -55,6 +55,16 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "keyboardModifiers"]
         fn keyboard_modifiers(self: &Shell) -> i32;
+        /// The window's shortcuts (`rustphin_view::commands`), as a JSON
+        /// list of string rows: a command's id, "list" (only while the file
+        /// list has the focus) or "window", then its sequences.
+        #[qinvokable]
+        fn shortcuts(self: &Shell) -> QString;
+        /// What the command `id` acts on: "pane", "places", "window", or
+        /// "" for no command.
+        #[qinvokable]
+        #[cxx_name = "commandTarget"]
+        fn command_target(self: &Shell, id: &QString) -> QString;
     }
 
     impl cxx_qt::Threading for Shell {}

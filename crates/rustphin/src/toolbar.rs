@@ -72,26 +72,8 @@ fn kind(item: &Item) -> &'static str {
 /// drawn in their place but unavailable until their work item (W-114d–f).
 fn available(item: &Item) -> bool {
     match item {
-        Item::Command(label) => command_id(label).is_some(),
+        Item::Command(_) => item.command_id().is_some(),
         _ => true,
-    }
-}
-
-/// The palette command a toolbar button runs, by its label.
-fn command_id(label: &str) -> Option<&'static str> {
-    rustphin_view::commands::COMMANDS
-        .iter()
-        .find(|command| command.label == label)
-        .map(|command| command.id)
-}
-
-/// The id QML acts on: a command button by its command's id.
-fn qml_id(item: &Item) -> String {
-    match item {
-        Item::Command(label) => {
-            command_id(label).map_or_else(|| item.id(), |id| format!("command:{id}"))
-        }
-        _ => item.id(),
     }
 }
 
@@ -149,7 +131,7 @@ impl qobject::ToolbarModel {
         let text = |words: &str| QVariant::from(&QString::from(words));
         match role {
             Role::Kind => text(kind(item)),
-            Role::ItemId => text(&qml_id(item)),
+            Role::ItemId => text(&item.id()),
             Role::Name => text(&item.name()),
             Role::Tip => text(&tip(item)),
             Role::Icon => text(&item.icon().lucide_name()),
@@ -216,8 +198,8 @@ mod tests {
 
     #[test]
     fn a_command_button_runs_its_palette_command() {
-        let item = Item::Command("Files: Copy location".to_owned());
-        assert_eq!(qml_id(&item), "command:copy-location");
+        let item = Item::Command("copy-location".to_owned());
+        assert_eq!(item.id(), "command:copy-location");
         assert!(available(&item));
         assert!(!available(&Item::Command("Files: Gone".to_owned())));
     }

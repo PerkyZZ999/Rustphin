@@ -18,7 +18,7 @@ use rustphin_core::{SearchQuery, display_name};
 use rustphin_view::{
     commands::COMMANDS,
     location::Location,
-    palette::{Candidate, Results, Target, result_icon, split_label},
+    palette::{Candidate, Results, Target, command_candidates, result_icon, split_label},
     workspace::folder_label,
 };
 
@@ -76,18 +76,7 @@ fn candidates(tabs: &str, places: &str, recent: &[Location]) -> Vec<Candidate> {
             })
             .collect()
     };
-    let mut candidates: Vec<Candidate> = COMMANDS
-        .iter()
-        .enumerate()
-        .map(|(index, command)| {
-            Candidate::new(
-                command.label.to_owned(),
-                command.scope.detail().to_owned(),
-                command.shortcut.to_owned(),
-                Target::Command(index),
-            )
-        })
-        .collect();
+    let mut candidates: Vec<Candidate> = command_candidates();
     for (index, (title, path)) in listed(tabs).into_iter().enumerate() {
         if !path.is_empty() {
             candidates.push(Candidate::new(

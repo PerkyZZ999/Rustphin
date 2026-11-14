@@ -191,11 +191,6 @@ pub mod qobject {
         /// follow).
         #[qinvokable]
         fn press(self: Pin<&mut FolderModel>, row: i32, modifiers: i32);
-        /// Moves the focus by keyboard (`layout::Step` order), `lanes` to a
-        /// line or column; with `extend`, selects the range to it.
-        #[qinvokable]
-        #[cxx_name = "moveFocus"]
-        fn move_focus(self: Pin<&mut FolderModel>, step: i32, extend: bool, lanes: i32);
         /// Selects what a rubber band from (x0, y0) to (x1, y1), in list
         /// coordinates, touches; with `add`, on top of `kept`.
         #[qinvokable]
@@ -345,9 +340,8 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "emptyTrash"]
         fn empty_trash(self: Pin<&mut FolderModel>);
-        /// Runs the palette command `id` (`rustphin_view::commands`) that
-        /// acts on this pane, `lanes` entries to a line; false when it is
-        /// not a pane command.
+        /// Runs the command `id` (`rustphin_view::commands`) when it acts on
+        /// this pane, `lanes` entries to a line; false when it does not.
         #[qinvokable]
         fn command(self: Pin<&mut FolderModel>, id: &QString, lanes: i32) -> bool;
         /// Builds the context menu into `menu`: for the selection when

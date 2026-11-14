@@ -31,6 +31,7 @@ use rustphin_platform::{
     xdg,
 };
 use rustphin_view::{
+    commands::{self, Action, PlacesCommand},
     groups::Groups,
     menu::{self, MenuEntry},
     place_menu::{self, PlaceCommand, Target},
@@ -1119,31 +1120,40 @@ impl qobject::PlacesModel {
         self.refresh();
     }
 
-    fn key(mut self: Pin<&mut Self>, key: &QString) -> bool {
+    fn command(self: Pin<&mut Self>, id: &QString) -> bool {
+        match commands::parse(&id.to_string()) {
+            Some(Action::Places(command)) => self.run_command(command),
+            _ => false,
+        }
+    }
+
+    /// Runs a places command on the focused row (`commands::PlacesCommand`),
+    /// from a key or the palette; false when it does not apply here.
+    fn run_command(mut self: Pin<&mut Self>, command: PlacesCommand) -> bool {
         let focused = self.rust().focused.clone();
-        match key.to_string().as_str() {
-            "Up" => self.move_focus(-1),
-            "Down" => self.move_focus(1),
-            "Enter" => match focused {
+        match command {
+            PlacesCommand::FocusPrevious => self.move_focus(-1),
+            PlacesCommand::FocusNext => self.move_focus(1),
+            PlacesCommand::Open => match focused {
                 Some(row) => self.open_row(&row, false),
                 None => return false,
             },
-            "F2" => match focused {
+            PlacesCommand::Rename => match focused {
                 Some(row) => self.begin_rename(row),
                 None => return false,
             },
-            "Delete" => self.remove_focused(),
-            "H" => {
+            PlacesCommand::Remove => self.remove_focused(),
+            PlacesCommand::ToggleHide => {
                 if let Some(Row::Place(id)) = focused
                     && let Some(hidden) = self.rust().place(&id).map(|place| place.hidden)
                 {
                     self.set_hidden(id, !hidden);
                 }
             }
-            "Alt+Up" => self.shift_focused(false),
-            "Alt+Down" => self.shift_focused(true),
-            "Left" | "Right" => {
-                let collapse = key.to_string() == "Left";
+            PlacesCommand::MoveUp => self.shift_focused(false),
+            PlacesCommand::MoveDown => self.shift_focused(true),
+            PlacesCommand::Collapse | PlacesCommand::Expand => {
+                let collapse = command == PlacesCommand::Collapse;
                 match focused {
                     Some(Row::Group(index)) => {
                         self.as_mut()
@@ -1166,19 +1176,18 @@ impl qobject::PlacesModel {
                     _ => return false,
                 }
             }
-            "G" => self.cycle_group(),
-            "Ctrl+Shift+G" => {
+            PlacesCommand::NextGroup => self.cycle_group(),
+            PlacesCommand::NewGroup => {
                 self.new_group();
             }
-            "E" => {
+            PlacesCommand::Eject => {
                 let at = *self.focus_row();
                 self.eject(at);
             }
-            "ToggleHiddenPlaces" => {
+            PlacesCommand::ToggleHiddenPlaces => {
                 let show = !self.rust().choice.show_hidden;
                 self.set_show_hidden(show);
             }
-            _ => return false,
         }
         true
     }

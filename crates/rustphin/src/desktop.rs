@@ -19,6 +19,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use rustphin_platform::apps::{self, LaunchKind};
 use rustphin_view::{
+    commands::{self, Target},
     questions::{self, Answer},
     settings::Programs,
 };
@@ -162,6 +163,41 @@ impl qobject::Shell {
     fn keyboard_modifiers(&self) -> i32 {
         crate::shell::qobject::rustphin_keyboard_modifiers()
     }
+
+    fn shortcuts(&self) -> QString {
+        QString::from(&shortcuts_json())
+    }
+
+    fn command_target(&self, id: &QString) -> QString {
+        QString::from(target_name(&id.to_string()))
+    }
+}
+
+/// The window's shortcuts for QML (`Main.qml` builds a `Shortcut` from
+/// each): rows of strings, the command's id, "list" or "window", then its
+/// sequences.
+fn shortcuts_json() -> String {
+    let rows: Vec<Vec<&str>> = commands::window_shortcuts()
+        .into_iter()
+        .map(|shortcut| {
+            let catcher = if shortcut.list { "list" } else { "window" };
+            [shortcut.id, catcher]
+                .into_iter()
+                .chain(shortcut.keys)
+                .collect()
+        })
+        .collect();
+    serde_json::to_string(&rows).unwrap_or_else(|_| "[]".to_owned())
+}
+
+/// What the command `id` acts on, as QML names it.
+fn target_name(id: &str) -> &'static str {
+    match commands::find(id).map(commands::Command::target) {
+        Some(Target::Pane) => "pane",
+        Some(Target::Places) => "places",
+        Some(Target::Window) => "window",
+        None => "",
+    }
 }
 
 /// An empty name: the file's own name is used.
@@ -172,6 +208,34 @@ fn file_label_owned() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn qml_learns_each_command_s_target_and_the_window_s_shortcuts() {
+        assert_eq!(target_name("go-back"), "pane");
+        assert_eq!(target_name("rename-row"), "places");
+        assert_eq!(target_name("quit"), "window");
+        assert_eq!(target_name("no-such-command"), "");
+        let rows: Vec<Vec<String>> = serde_json::from_str(&shortcuts_json()).unwrap_or_default();
+        let has = |row: &[&str]| rows.iter().any(|found| found == row);
+        assert!(has(&["go-back", "window", "Alt+Left", "Back"]));
+        assert!(has(&["copy", "list", "Ctrl+C"]));
+    }
+
+    /// The window's commands run in QML (Main.qml's `runCommand`): each
+    /// needs its case there, or its key and palette entry do nothing.
+    #[test]
+    fn main_qml_runs_every_window_command() {
+        let main = include_str!("../qml/Main.qml");
+        for command in commands::COMMANDS {
+            if command.target() != Target::Window {
+                continue;
+            }
+            let handled = main.contains(&format!("case \"{}\":", command.id))
+                || (command.id.starts_with("activate-tab-")
+                    && main.contains("id.indexOf(\"activate-tab-\") === 0"));
+            assert!(handled, "Main.qml does not run {}", command.id);
+        }
+    }
 
     #[test]
     fn settings_may_answer_the_run_question_for_good() {

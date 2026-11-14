@@ -8,16 +8,22 @@ action. "Replayed" names the scenario in UI_SCENARIOS.md that exercised it
 by keyboard in an isolated session; "—" means bound but not replayed yet.
 
 Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
+Since W-123 (2026-11-14) every key Rustphin binds is written once, in
+`crates/rustphin-view/src/commands.rs`; the first key of a command is the
+one menus, tooltips and the palette show. The test
+`keyboard_md_lists_the_table_s_keys` fails when a row below and the table
+disagree (the selection-movement row and the places panel's prose are not
+checked).
 
 ## Navigation
 
 | Action | Dolphin | Rustphin | Replayed |
 |---|---|---|---|
-| Back | Backspace, Alt+Left, Back key | Backspace, Alt+Left, Back key | K9 (Back key not replayed) |
+| Back | Alt+Left, Backspace, Back key | Alt+Left, Backspace, Back key | K9 (Back key not replayed) |
 | Forward | Alt+Right, Forward key | Alt+Right, Forward key | — |
 | Up one folder | Alt+Up | Alt+Up | K9 |
 | Home folder | Alt+Home | Alt+Home | K9 |
-| Reload | F5 | F5 | — |
+| Reload | F5, Refresh key | F5, Refresh key | — |
 | Edit location | Ctrl+L, Alt+D, F6 (selects the location; again returns to the view) | same (also from the places panel) | K8, K9, K19 |
 | Open selected | Enter | Enter | N2 |
 | Move selection, first/last, page | arrows, Home/End, Page Up/Down | same, with Shift to extend | S6, F12, L1 |
@@ -29,6 +35,7 @@ Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 |---|---|---|---|
 | Select all | Ctrl+A | Ctrl+A | S7 |
 | Invert selection | Ctrl+Shift+A | Ctrl+Shift+A | S3 |
+| Clear selection | Escape | Escape (closes the filter first) | — |
 | Icons / Compact / Details | Ctrl+1 / Ctrl+2 / Ctrl+3 | same | V1 |
 | Columns view | Ctrl+4 | not offered (no columns view) | — |
 | Zoom in / out / reset | Ctrl++ / Ctrl+- / Ctrl+0 | same (Ctrl+= too) | V3 |
@@ -60,8 +67,8 @@ Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 | New tab | Ctrl+T | Ctrl+T | K9 |
 | Close tab | Ctrl+W | Ctrl+W | T4 |
 | Next / previous tab | Ctrl+Tab, Ctrl+Page Down / Ctrl+Shift+Tab, Ctrl+Page Up | same | T2, J8 |
-| Activate tab 1–9 / last | Alt+1…Alt+9 / Alt+0 | same | K9 |
-| Move tab left / right | (none) | Ctrl+Shift+Page Up / Down | — |
+| Activate tab 1–9 / last | Alt+1…Alt+9 / Alt+0 | Alt+1, Alt+2, Alt+3, Alt+4, Alt+5, Alt+6, Alt+7, Alt+8, Alt+9 / Alt+0 | K9 |
+| Move tab left / right | (none) | Ctrl+Shift+Page Up / Ctrl+Shift+Page Down | — |
 | Reopen closed tab | Ctrl+Shift+T (last 6) | Ctrl+Shift+T (last 6, split panes included) | K11 |
 | Split view | F3 | F3 | D1, K9, K10 |
 | Focus other view | Ctrl+F3 | Ctrl+F3 (toggles the two views), Tab (also visits the places panel) | Tab: K10. Ctrl+F3 is taken by KWin's default desktop switch, so it never reaches Dolphin or Rustphin on a default Plasma desktop |
@@ -79,7 +86,9 @@ Last reviewed: 2026-11-08 (W-076o to W-076r), Dolphin source at `master`.
 Up/Down move, Enter opens, F2 renames, Delete removes, H hides, Alt+Up/Down
 reorder, Left/Right fold groups, G next group, Ctrl+Shift+G new group,
 E ejects a device. These single-letter keys apply only while the panel has
-focus and no text field is being edited (K7, K8).
+focus and no text field is being edited (K7, K8). The panel takes Alt+Up and
+Alt+Down ahead of the window's Alt+Up (up one folder) while it has the focus
+(W-123).
 
 ## Not offered yet
 

@@ -48,6 +48,23 @@ impl Candidate {
     }
 }
 
+/// The palette's commands, in the table's order, each with its main key
+/// (`commands::COMMANDS`); `Target::Command` is the index in the table.
+pub fn command_candidates() -> Vec<Candidate> {
+    crate::commands::COMMANDS
+        .iter()
+        .enumerate()
+        .map(|(index, command)| {
+            Candidate::new(
+                command.label.to_owned(),
+                command.target().detail().to_owned(),
+                command.shown_key().unwrap_or_default(),
+                Target::Command(index),
+            )
+        })
+        .collect()
+}
+
 /// A result's label split into its category and its name: "View: Show
 /// hidden files" gives ("View", "Show hidden files").
 pub fn split_label(label: &str) -> (&str, &str) {

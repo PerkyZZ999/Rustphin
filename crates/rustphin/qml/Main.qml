@@ -131,34 +131,30 @@ Window {
 
     property Pane menuPane: null
 
-    // Runs a palette command (`rustphin_view::commands`) by its id: the
-    // pane's own, the places panel's, or the window's.
+    // Runs a command (`rustphin_view::commands`) by its id, from a key, the
+    // palette or the toolbar: the pane's own, the places panel's, or the
+    // window's (below).
     function runCommand(id: string) {
-        const placeKeys = {
-            "new-group": "Ctrl+Shift+G",
-            "rename-row": "F2",
-            "remove-row": "Delete",
-            "hide-row": "H",
-            "toggle-hidden-places": "ToggleHiddenPlaces",
-            "move-row-up": "Alt+Up",
-            "move-row-down": "Alt+Down",
-            "collapse": "Left",
-            "expand": "Right",
-            "next-group": "G",
-            "focus-previous": "Up",
-            "focus-next": "Down",
-            "open": "Enter",
-            "eject": "E"
-        }
-        if (placeKeys[id] !== undefined) {
+        const target = Shell.commandTarget(id)
+        if (target === "places") {
             placesShown = true
-            places.model.key(placeKeys[id])
+            places.model.command(id)
             places.focusPanel()
             return
         }
-        if (activePane && folder.command(id, activePane.lanes()))
+        if (target === "pane") {
+            if (activePane)
+                folder.command(id, activePane.lanes())
             return
+        }
+        if (id.indexOf("activate-tab-") === 0) {
+            tabList.activateNumber(Number(id.slice(13)))
+            return
+        }
         switch (id) {
+        case "activate-last-tab":
+            tabList.activateNumber(0)
+            break
         case "edit-location":
             toolbar.editLocation()
             break
@@ -226,6 +222,8 @@ Window {
             break
         case "toggle-sidebar":
             placesShown = !placesShown
+            if (!placesShown)
+                focusActive()
             break
         case "add-place":
             places.model.addFolder(folder.location)
@@ -234,6 +232,15 @@ Window {
             openPalette()
             break
         }
+    }
+
+    // A window shortcut's command. Editing the location is not taken from
+    // another text field (a place being renamed, the filter): the key would
+    // end that edit.
+    function runShortcut(id: string) {
+        if (id === "edit-location" && !toolbar.editingLocation && root.activeFocusItem instanceof TextInput)
+            return
+        runCommand(id)
     }
 
     // Opens a dialog a pane asked for.
@@ -475,9 +482,16 @@ Window {
                 tabList.activate(target.index)
             else if (target.kind === "folder")
                 root.folder.openTyped(target.path)
-            Qt.callLater(root.focusActive)
+            Qt.callLater(root.focusAfterPalette)
         }
-        onClosed: Qt.callLater(root.focusActive)
+        onClosed: Qt.callLater(root.focusAfterPalette)
+    }
+
+    // Back to the pane after the palette, unless a places command took the
+    // keyboard to the places panel (a new group's name being typed).
+    function focusAfterPalette() {
+        if (!places.activeFocus)
+            focusActive()
     }
 
     // Settings (W-106), opened on demand.
@@ -641,219 +655,25 @@ Window {
         h: 16
     }
 
-    // The window's keys (KEYBOARD.md). Keys that also edit text belong to
-    // the pane's list instead, so they never fire in a field.
-    component Key: Shortcut {
-        context: Qt.WindowShortcut
-        // One press can match two of a key's sequences (Shift+= is also
-        // "+"; Shift+, also "<"), which Qt calls ambiguous: no two keys
-        // here share a sequence, so it is still this one.
-        onActivatedAmbiguously: activated()
-    }
-    Key {
-        // Not StandardKey.Back: on Linux it is Alt+Left again, and a key
-        // listed twice is ambiguous, so neither fires.
-        sequences: ["Alt+Left", "Back"]
-        onActivated: root.folder.back()
-    }
-    Key {
-        sequences: ["Alt+Right", "Forward"]
-        onActivated: root.folder.forward()
-    }
-    Key {
-        sequence: "Alt+Up"
-        onActivated: root.folder.up()
-    }
-    Key {
-        sequence: "Alt+Home"
-        onActivated: root.folder.home()
-    }
-    Key {
-        sequences: ["F5", "Refresh"]
-        onActivated: root.folder.reload()
-    }
-    Key {
-        sequences: ["Ctrl+H", "Alt+."]
-        onActivated: root.folder.run("hidden")
-    }
-    Key {
-        sequence: "Shift+F4"
-        onActivated: root.folder.run("terminal")
-    }
-    Key {
-        sequences: ["Ctrl+L", "F6", "Alt+D"]
-        // Not from another text field (a place being renamed, the filter):
-        // the key would end that edit.
-        onActivated: {
-            if (!toolbar.editingLocation && root.activeFocusItem instanceof TextInput)
-                return
-            toolbar.editLocation()
-        }
-    }
-    Key {
-        sequence: "Ctrl+I"
-        onActivated: root.command("filter", null)
-    }
-    Key {
-        sequences: ["Ctrl+=", "Ctrl++"]
-        onActivated: root.folder.zoomBy(1)
-    }
-    Key {
-        sequence: "Ctrl+-"
-        onActivated: root.folder.zoomBy(-1)
-    }
-    Key {
-        sequence: "Ctrl+0"
-        onActivated: root.folder.chooseZoom(2)
-    }
-    Key {
-        sequence: "Ctrl+1"
-        onActivated: root.folder.chooseMode(0)
-    }
-    Key {
-        sequence: "Ctrl+2"
-        onActivated: root.folder.chooseMode(1)
-    }
-    Key {
-        sequence: "Ctrl+3"
-        onActivated: root.folder.chooseMode(2)
-    }
-    Key {
-        sequences: ["Ctrl+Shift+P"]
-        onActivated: root.openPalette()
-    }
-    Key {
-        // The layout decides whether Shift+, arrives as "<".
-        sequences: ["Ctrl+Shift+,", "Ctrl+Shift+<", "Ctrl+<"]
-        onActivated: root.openSettings()
-    }
-    Key {
-        sequence: "Ctrl+Z"
-        onActivated: Operations.undo()
-    }
-    Key {
-        sequence: "Ctrl+Q"
-        onActivated: Shell.quit()
-    }
-    Key {
-        sequence: "Ctrl+T"
-        onActivated: tabList.open(root.folder ? root.folder.location : root.home, true, [])
-    }
-    Key {
-        sequence: "Ctrl+W"
-        onActivated: root.closeTab(tabList.active)
-    }
-    Key {
-        sequence: "Ctrl+Shift+T"
-        onActivated: tabList.reopen()
-    }
-    Key {
-        sequences: ["Ctrl+Tab", "Ctrl+PgDown"]
-        onActivated: tabList.cycle(1)
-    }
-    Key {
-        sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]
-        onActivated: tabList.cycle(-1)
-    }
-    Key {
-        sequence: "Ctrl+Shift+PgUp"
-        onActivated: tabList.shiftActive(-1)
-    }
-    Key {
-        sequence: "Ctrl+Shift+PgDown"
-        onActivated: tabList.shiftActive(1)
-    }
+    // The window's keys, from the command table (`rustphin_view::commands`,
+    // KEYBOARD.md). Keys that also edit text belong to the pane's and the
+    // places panel's own handlers instead, so they never fire in a field.
     Instantiator {
-        model: 10
+        model: JSON.parse(Shell.shortcuts())
         delegate: Shortcut {
-            required property int index
+            // The command's id, "list" or "window", then its sequences.
+            required property list<string> modelData
+
             context: Qt.WindowShortcut
-            sequence: "Alt+" + index
-            onActivated: tabList.activateNumber(index)
+            sequences: Array.from(modelData).slice(2)
+            // The list's file commands: not while a field has the keyboard.
+            enabled: modelData[1] !== "list" || (root.activePane !== null && root.activePane.activeFocus && !(root.activeFocusItem instanceof TextInput))
+            onActivated: root.runShortcut(modelData[0])
+            // One press can match two of a command's sequences (Shift+= is
+            // also "+"; Shift+, also "<"), which Qt calls ambiguous: the
+            // table gives no two commands one sequence, so it is still this.
+            onActivatedAmbiguously: activated()
         }
-    }
-    Key {
-        sequence: "F3"
-        onActivated: tabList.toggleSplit()
-    }
-    Key {
-        sequence: "Ctrl+F3"
-        onActivated: {
-            if (root.page && root.page.split)
-                tabList.setActivePane(root.page.key, root.page.activePane === 1 ? 0 : 1)
-        }
-    }
-    Key {
-        sequence: "F9"
-        onActivated: {
-            root.placesShown = !root.placesShown
-            if (!root.placesShown)
-                root.focusActive()
-        }
-    }
-    Key {
-        sequence: "Ctrl+P"
-        onActivated: {
-            root.placesShown = true
-            places.focusPanel()
-        }
-    }
-    Key {
-        sequence: "Ctrl+Shift+D"
-        onActivated: places.model.addFolder(root.folder.location)
-    }
-    Key {
-        sequence: "Ctrl+Shift+G"
-        onActivated: places.model.key("Ctrl+Shift+G")
-    }
-    Key {
-        sequence: "Ctrl+Alt+N"
-        onActivated: root.folder.createEntry(false)
-    }
-    // The list's file commands; not while a field has the keyboard.
-    component ListKey: Shortcut {
-        context: Qt.WindowShortcut
-        enabled: root.activePane && root.activePane.activeFocus && !(root.activeFocusItem instanceof TextInput)
-    }
-    ListKey {
-        sequence: "Delete"
-        onActivated: root.folder.trashSelected()
-    }
-    ListKey {
-        sequence: "Shift+Delete"
-        onActivated: root.folder.deleteSelected()
-    }
-    ListKey {
-        sequence: "Ctrl+C"
-        onActivated: root.folder.copySelected(false)
-    }
-    ListKey {
-        sequence: "Ctrl+X"
-        onActivated: root.folder.copySelected(true)
-    }
-    ListKey {
-        sequence: "Ctrl+V"
-        onActivated: root.folder.paste()
-    }
-    ListKey {
-        sequence: "Ctrl+D"
-        onActivated: root.folder.duplicateSelected()
-    }
-    ListKey {
-        sequences: ["Alt+Return", "Alt+Enter"]
-        onActivated: root.runCommand("show-properties")
-    }
-    ListKey {
-        sequence: "Ctrl+Alt+C"
-        onActivated: root.runCommand("copy-location")
-    }
-    ListKey {
-        sequence: "Shift+F5"
-        onActivated: tabList.transfer(root.folder.selectedPaths(), false)
-    }
-    ListKey {
-        sequence: "Shift+F6"
-        onActivated: tabList.transfer(root.folder.selectedPaths(), true)
     }
 
     // A band that resizes the window from `edges`. Negative `l`/`t` count

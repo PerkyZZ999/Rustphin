@@ -7,7 +7,10 @@
 
 use crate::icons::Icon as IconName;
 
-use crate::menu::{Command, MenuEntry, RowIcon};
+use crate::{
+    commands::Action,
+    menu::{Command, MenuEntry, RowIcon},
+};
 
 /// An operation the places menu can run.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,25 +51,33 @@ pub enum PlaceCommand {
     ToggleHiddenPlaces,
 }
 
-impl Command for PlaceCommand {
-    fn shortcut(&self) -> Option<&'static str> {
+impl PlaceCommand {
+    /// The command the row runs from the keyboard and the palette too
+    /// (W-123), whose key the row shows.
+    pub fn action(&self) -> Option<Action> {
+        use crate::commands::{PlacesCommand as P, WindowCommand};
         Some(match self {
-            Self::Open => "Enter",
-            Self::Rename => "F2",
-            Self::Hide | Self::Show => "H",
-            Self::Remove | Self::DeleteGroup => "Del",
-            Self::MoveUp => "Alt+Up",
-            Self::MoveDown => "Alt+Down",
-            Self::Collapse => "Left",
-            Self::Expand => "Right",
-            Self::NewGroup => "Ctrl+Shift+G",
-            Self::AddShownFolder => "Ctrl+Shift+D",
-            Self::OpenInNewTab
-            | Self::MoveToGroup(_)
-            | Self::NewGroupWith
-            | Self::LeaveGroup
-            | Self::ToggleHiddenPlaces => return None,
+            Self::Open => Action::Places(P::Open),
+            Self::Rename => Action::Places(P::Rename),
+            Self::Hide | Self::Show => Action::Places(P::ToggleHide),
+            Self::Remove | Self::DeleteGroup => Action::Places(P::Remove),
+            Self::MoveUp => Action::Places(P::MoveUp),
+            Self::MoveDown => Action::Places(P::MoveDown),
+            Self::Collapse => Action::Places(P::Collapse),
+            Self::Expand => Action::Places(P::Expand),
+            Self::NewGroup => Action::Places(P::NewGroup),
+            Self::ToggleHiddenPlaces => Action::Places(P::ToggleHiddenPlaces),
+            Self::AddShownFolder => Action::Window(WindowCommand::AddPlace),
+            Self::OpenInNewTab | Self::MoveToGroup(_) | Self::NewGroupWith | Self::LeaveGroup => {
+                return None;
+            }
         })
+    }
+}
+
+impl Command for PlaceCommand {
+    fn shortcut(&self) -> Option<String> {
+        self.action().and_then(crate::commands::key_of)
     }
 
     fn row_icon(&self) -> RowIcon {
@@ -318,10 +329,11 @@ mod tests {
 
     #[test]
     fn rows_show_the_panel_key_that_does_the_same() {
-        assert_eq!(PlaceCommand::Rename.shortcut(), Some("F2"));
-        assert_eq!(PlaceCommand::Hide.shortcut(), Some("H"));
-        assert_eq!(PlaceCommand::Remove.shortcut(), Some("Del"));
-        assert_eq!(PlaceCommand::NewGroup.shortcut(), Some("Ctrl+Shift+G"));
-        assert_eq!(PlaceCommand::MoveToGroup(0).shortcut(), None);
+        let key = |command: PlaceCommand| command.shortcut();
+        assert_eq!(key(PlaceCommand::Rename).as_deref(), Some("F2"));
+        assert_eq!(key(PlaceCommand::Hide).as_deref(), Some("H"));
+        assert_eq!(key(PlaceCommand::Remove).as_deref(), Some("Delete"));
+        assert_eq!(key(PlaceCommand::NewGroup).as_deref(), Some("Ctrl+Shift+G"));
+        assert_eq!(key(PlaceCommand::MoveToGroup(0)), None);
     }
 }

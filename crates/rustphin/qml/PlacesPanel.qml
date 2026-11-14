@@ -84,7 +84,7 @@ FocusScope {
                 tip: qsTr("New group (Ctrl+Shift+G)")
                 side: Tokens.metrics.small_button
                 onClicked: {
-                    places.key("Ctrl+Shift+G")
+                    places.command("new-group")
                     list.forceActiveFocus()
                 }
             }
@@ -107,41 +107,48 @@ FocusScope {
                 policy: ScrollBar.AsNeeded
             }
 
+            // The panel's keys run its commands from the table
+            // (`rustphin_view::commands`, KEYBOARD.md). Alt+Up and Alt+Down
+            // move rows here, so the panel takes them before the window's
+            // Alt+Up (up one folder) does.
+            Keys.onShortcutOverride: event => {
+                event.accepted = event.modifiers === Qt.AltModifier && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)
+            }
             Keys.onPressed: event => {
-                const alt = (event.modifiers & Qt.AltModifier) !== 0
-                const ctrlShift = (event.modifiers & Qt.ControlModifier) && (event.modifiers & Qt.ShiftModifier)
-                let key = ""
+                const alt = event.modifiers === Qt.AltModifier
+                const plain = event.modifiers === Qt.NoModifier
+                let id = ""
                 switch (event.key) {
                 case Qt.Key_Up:
-                    key = alt ? "Alt+Up" : "Up"
+                    id = alt ? "move-row-up" : "focus-previous"
                     break
                 case Qt.Key_Down:
-                    key = alt ? "Alt+Down" : "Down"
+                    id = alt ? "move-row-down" : "focus-next"
                     break
                 case Qt.Key_Left:
-                    key = "Left"
+                    id = "collapse"
                     break
                 case Qt.Key_Right:
-                    key = "Right"
+                    id = "expand"
                     break
                 case Qt.Key_Return:
                 case Qt.Key_Enter:
-                    key = "Enter"
+                    id = "open"
                     break
                 case Qt.Key_F2:
-                    key = "F2"
+                    id = "rename-row"
                     break
                 case Qt.Key_Delete:
-                    key = "Delete"
+                    id = "remove-row"
                     break
                 case Qt.Key_H:
-                    key = event.modifiers === Qt.NoModifier ? "H" : ""
+                    id = plain ? "hide-row" : ""
                     break
                 case Qt.Key_G:
-                    key = ctrlShift ? "Ctrl+Shift+G" : event.modifiers === Qt.NoModifier ? "G" : ""
+                    id = plain ? "next-group" : ""
                     break
                 case Qt.Key_E:
-                    key = event.modifiers === Qt.NoModifier ? "E" : ""
+                    id = plain ? "eject" : ""
                     break
                 case Qt.Key_Tab:
                 case Qt.Key_Backtab:
@@ -163,9 +170,9 @@ FocusScope {
                     event.accepted = true
                     return
                 }
-                if (key.length > 0 && places.key(key)) {
+                if (id.length > 0 && places.command(id)) {
                     event.accepted = true
-                    if (key === "Enter")
+                    if (id === "open")
                         panel.done()
                 }
             }

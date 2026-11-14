@@ -390,27 +390,31 @@ FocusScope {
                 focus: true
                 Accessible.ignored: true
 
+                // Each key runs its command from the table
+                // (`rustphin_view::commands`, KEYBOARD.md).
                 Keys.onPressed: event => {
                     const shift = (event.modifiers & Qt.ShiftModifier) !== 0
                     const ctrl = (event.modifiers & Qt.ControlModifier) !== 0
                     const alt = (event.modifiers & Qt.AltModifier) !== 0
-                    const steps = {
-                        [Qt.Key_Up]: 0,
-                        [Qt.Key_Down]: 1,
-                        [Qt.Key_Left]: 2,
-                        [Qt.Key_Right]: 3,
-                        [Qt.Key_PageUp]: 4,
-                        [Qt.Key_PageDown]: 5,
-                        [Qt.Key_Home]: 6,
-                        [Qt.Key_End]: 7
+                    // Each movement key's command, then with Shift.
+                    const moves = {
+                        [Qt.Key_Up]: ["select-previous", "extend-previous"],
+                        [Qt.Key_Down]: ["select-next", "extend-next"],
+                        [Qt.Key_Left]: ["select-left", "extend-left"],
+                        [Qt.Key_Right]: ["select-right", "extend-right"],
+                        [Qt.Key_PageUp]: ["page-up", "extend-page-up"],
+                        [Qt.Key_PageDown]: ["page-down", "extend-page-down"],
+                        [Qt.Key_Home]: ["select-first", "extend-first"],
+                        [Qt.Key_End]: ["select-last", "extend-last"]
                     }
+                    const run = id => folder.command(id, pane.lanes())
                     if (!ctrl && !alt && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
                         pane.otherPane()
                         event.accepted = true
                         return
                     }
-                    if (!ctrl && !alt && steps[event.key] !== undefined) {
-                        folder.moveFocus(steps[event.key], shift, pane.lanes())
+                    if (!ctrl && !alt && moves[event.key] !== undefined) {
+                        run(moves[event.key][shift ? 1 : 0])
                         event.accepted = true
                         return
                     }
@@ -419,32 +423,29 @@ FocusScope {
                     switch (event.key) {
                     case Qt.Key_Return:
                     case Qt.Key_Enter:
-                        folder.activateSelected()
+                        run("activate")
                         break
                     case Qt.Key_Backspace:
-                        folder.back()
+                        run("go-back")
                         break
                     case Qt.Key_A:
                         if (!ctrl)
                             return pane.typeAhead(event)
-                        if (shift)
-                            folder.invertSelection()
-                        else
-                            folder.selectAll()
+                        run(shift ? "invert-selection" : "select-all")
                         break
                     case Qt.Key_N:
                         if (!(ctrl && shift))
                             return pane.typeAhead(event)
-                        folder.createEntry(true)
+                        run("new-folder")
                         break
                     case Qt.Key_F2:
-                        folder.beginRename()
+                        run("rename")
                         break
                     case Qt.Key_F10:
                         if (shift)
                             pane.menuForKeyboard()
                         else
-                            folder.createEntry(true)
+                            run("new-folder")
                         break
                     case Qt.Key_Menu:
                         pane.menuForKeyboard()
@@ -457,7 +458,7 @@ FocusScope {
                         if (pane.filterOpen)
                             pane.closeFilter()
                         else
-                            folder.clearSelection()
+                            run("cancel-edit")
                         break
                     default:
                         return pane.typeAhead(event)

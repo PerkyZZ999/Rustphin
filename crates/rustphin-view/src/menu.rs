@@ -119,13 +119,13 @@ pub enum TemplateKind {
 /// panel's (`sidebar::PlaceCommand`).
 pub trait Command: Clone {
     /// The key that does the same outside the menu, as the row shows it.
-    fn shortcut(&self) -> Option<&'static str>;
+    fn shortcut(&self) -> Option<String>;
     /// What the row shows before its words.
     fn row_icon(&self) -> RowIcon;
 }
 
 impl Command for MenuCommand {
-    fn shortcut(&self) -> Option<&'static str> {
+    fn shortcut(&self) -> Option<String> {
         MenuCommand::shortcut(self)
     }
 
@@ -160,31 +160,37 @@ pub enum MenuEntry<C = MenuCommand> {
 }
 
 impl MenuCommand {
-    /// The key that does the same outside the menu, as the row shows it.
-    pub fn shortcut(&self) -> Option<&'static str> {
+    /// The pane command the row runs, when it is one the palette and keys
+    /// run too (W-123); rows tied to one application, trash or template
+    /// have none.
+    pub fn action(&self) -> Option<crate::commands::PaneCommand> {
+        use crate::commands::PaneCommand as P;
         Some(match self {
-            Self::Open => "Enter",
-            Self::Cut => "Ctrl+X",
-            Self::Copy => "Ctrl+C",
-            Self::Paste => "Ctrl+V",
-            Self::CopyLocation => "Ctrl+Alt+C",
-            Self::Duplicate => "Ctrl+D",
-            Self::Rename => "F2",
-            Self::MoveToTrash => "Del",
-            Self::Delete => "Shift+Del",
-            Self::Properties => "Alt+Enter",
-            Self::NewFolder => "F10",
-            Self::NewFile => "Ctrl+Alt+N",
-            Self::OpenWith(_)
-            | Self::Extract(_)
-            | Self::Compress(_)
-            | Self::Restore
-            | Self::EmptyTrash
-            | Self::OpenTrash(_)
-            | Self::NewFromTemplate { .. } => {
-                return None;
-            }
+            Self::Open => P::Activate,
+            Self::Cut => P::Cut,
+            Self::Copy => P::Copy,
+            Self::Paste => P::Paste,
+            Self::CopyLocation => P::CopyLocation,
+            Self::Duplicate => P::Duplicate,
+            Self::Rename => P::Rename,
+            Self::MoveToTrash => P::MoveToTrash,
+            Self::Delete => P::DeletePermanently,
+            Self::Properties => P::Properties,
+            Self::NewFolder => P::NewFolder,
+            Self::NewFile => P::NewFile,
+            Self::Extract(how) => P::Extract(*how),
+            Self::Compress(how) => P::Compress(*how),
+            Self::Restore => P::RestoreTrash,
+            Self::EmptyTrash => P::EmptyTrash,
+            Self::OpenWith(_) | Self::OpenTrash(_) | Self::NewFromTemplate { .. } => return None,
         })
+    }
+
+    /// The key that does the same outside the menu, as the row shows it
+    /// (`commands::COMMANDS`).
+    pub fn shortcut(&self) -> Option<String> {
+        self.action()
+            .and_then(|action| crate::commands::key_of(crate::commands::Action::Pane(action)))
     }
 
     /// What the row shows before its words: an application's own icon
@@ -272,7 +278,7 @@ pub fn to_json<C: Command>(entries: &[MenuEntry<C>]) -> serde_json::Value {
                     } => serde_json::json!({
                         "kind": "item",
                         "label": label,
-                        "shortcut": command.shortcut().unwrap_or(""),
+                        "shortcut": command.shortcut().unwrap_or_default(),
                         "icon": icon_text(&command.row_icon()),
                         "enabled": enabled,
                         "path": path,
@@ -726,18 +732,21 @@ mod tests {
     #[test]
     fn menu_rows_show_the_keys_that_do_the_same() {
         let keys = |command: MenuCommand| command.shortcut();
-        assert_eq!(keys(MenuCommand::Open), Some("Enter"));
-        assert_eq!(keys(MenuCommand::Cut), Some("Ctrl+X"));
-        assert_eq!(keys(MenuCommand::Copy), Some("Ctrl+C"));
-        assert_eq!(keys(MenuCommand::Paste), Some("Ctrl+V"));
-        assert_eq!(keys(MenuCommand::CopyLocation), Some("Ctrl+Alt+C"));
-        assert_eq!(keys(MenuCommand::Duplicate), Some("Ctrl+D"));
-        assert_eq!(keys(MenuCommand::Rename), Some("F2"));
-        assert_eq!(keys(MenuCommand::MoveToTrash), Some("Del"));
-        assert_eq!(keys(MenuCommand::Delete), Some("Shift+Del"));
-        assert_eq!(keys(MenuCommand::Properties), Some("Alt+Enter"));
-        assert_eq!(keys(MenuCommand::NewFolder), Some("F10"));
-        assert_eq!(keys(MenuCommand::NewFile), Some("Ctrl+Alt+N"));
+        assert_eq!(keys(MenuCommand::Open).as_deref(), Some("Enter"));
+        assert_eq!(keys(MenuCommand::Cut).as_deref(), Some("Ctrl+X"));
+        assert_eq!(keys(MenuCommand::Copy).as_deref(), Some("Ctrl+C"));
+        assert_eq!(keys(MenuCommand::Paste).as_deref(), Some("Ctrl+V"));
+        assert_eq!(
+            keys(MenuCommand::CopyLocation).as_deref(),
+            Some("Ctrl+Alt+C")
+        );
+        assert_eq!(keys(MenuCommand::Duplicate).as_deref(), Some("Ctrl+D"));
+        assert_eq!(keys(MenuCommand::Rename).as_deref(), Some("F2"));
+        assert_eq!(keys(MenuCommand::MoveToTrash).as_deref(), Some("Delete"));
+        assert_eq!(keys(MenuCommand::Delete).as_deref(), Some("Shift+Delete"));
+        assert_eq!(keys(MenuCommand::Properties).as_deref(), Some("Alt+Enter"));
+        assert_eq!(keys(MenuCommand::NewFolder).as_deref(), Some("F10"));
+        assert_eq!(keys(MenuCommand::NewFile).as_deref(), Some("Ctrl+Alt+N"));
         // Rows without a key of their own show none.
         assert_eq!(keys(MenuCommand::Restore), None);
         assert_eq!(keys(MenuCommand::EmptyTrash), None);

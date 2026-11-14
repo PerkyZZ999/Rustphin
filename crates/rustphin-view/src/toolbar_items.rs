@@ -40,7 +40,7 @@ pub enum Item {
     Actions,
     /// A thin line between groups.
     Separator,
-    /// A palette command, by its label.
+    /// A palette command, by its id (`commands::COMMANDS`).
     Command(String),
 }
 
@@ -79,7 +79,7 @@ impl Item {
             Item::Filter => Icon::Funnel,
             Item::Actions => Icon::Menu,
             Item::Separator => Icon::Minus,
-            Item::Command(label) => crate::palette::command_icon(label),
+            Item::Command(id) => crate::palette::command_icon(&self.name_of_command(id)),
         }
     }
 
@@ -100,11 +100,12 @@ impl Item {
             Self::Filter => "filter".to_owned(),
             Self::Actions => "actions".to_owned(),
             Self::Separator => "separator".to_owned(),
-            Self::Command(label) => format!("command:{label}"),
+            Self::Command(id) => format!("command:{id}"),
         }
     }
 
-    /// The item an id names, if this build knows it.
+    /// The item an id names, if this build knows it. A command saved by
+    /// its label, as before W-123, is read as its id.
     pub fn from_id(id: &str) -> Option<Self> {
         Some(match id {
             "admin" => Self::Admin,
@@ -121,12 +122,15 @@ impl Item {
             "filter" => Self::Filter,
             "actions" => Self::Actions,
             "separator" => Self::Separator,
-            other => Self::Command(
-                other
+            other => {
+                let named = other
                     .strip_prefix("command:")
-                    .filter(|label| !label.is_empty())?
-                    .to_owned(),
-            ),
+                    .filter(|named| !named.is_empty())?;
+                let by_label = crate::commands::COMMANDS
+                    .iter()
+                    .find(|command| command.label == named);
+                Self::Command(by_label.map_or(named, |command| command.id).to_owned())
+            }
         })
     }
 
@@ -147,24 +151,38 @@ impl Item {
             Self::Filter => "Filter by name".to_owned(),
             Self::Actions => "Actions".to_owned(),
             Self::Separator => "Separator".to_owned(),
-            Self::Command(label) => label.clone(),
+            Self::Command(id) => self.name_of_command(id),
         }
     }
 
-    /// The key that does the same, as its tooltip names it (KEYBOARD.md).
-    pub fn keys(&self) -> Option<&'static str> {
-        match self {
-            Self::Back => Some("Alt+Left"),
-            Self::Forward => Some("Alt+Right"),
-            Self::Up => Some("Alt+Up"),
-            Self::Reload => Some("F5"),
-            Self::Terminal => Some("Shift+F4"),
-            Self::Split => Some("F3"),
-            Self::Hidden => Some("Ctrl+H"),
-            Self::Filter => Some("Ctrl+I"),
-            Self::Actions => Some("Ctrl+Shift+P"),
-            _ => None,
-        }
+    /// A command's label, or the id of one this build does not know.
+    fn name_of_command(&self, id: &str) -> String {
+        crate::commands::find(id).map_or_else(|| id.to_owned(), |command| command.label.to_owned())
+    }
+
+    /// The command the button runs (`commands::COMMANDS`), if it runs one.
+    pub fn command_id(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::Back => "go-back",
+            Self::Forward => "go-forward",
+            Self::Up => "go-up",
+            Self::Reload => "reload",
+            Self::Terminal => "open-terminal",
+            Self::Split => "toggle-split",
+            Self::Hidden => "toggle-hidden",
+            Self::Filter => "show-filter",
+            Self::Actions => "open-palette",
+            Self::Command(id) => return crate::commands::find(id).map(|command| command.id),
+            Self::Admin | Self::Location | Self::New | Self::View | Self::Separator => {
+                return None;
+            }
+        })
+    }
+
+    /// The key that does the same, as its tooltip names it: its command's
+    /// (`commands::COMMANDS`).
+    pub fn keys(&self) -> Option<String> {
+        crate::commands::find(self.command_id()?)?.shown_key()
     }
 
     /// Whether it must stay on the toolbar.
@@ -440,7 +458,7 @@ pub fn available(toolbar: &Toolbar, search: &str) -> Vec<Item> {
         .chain(
             crate::commands::COMMANDS
                 .iter()
-                .map(|command| Item::Command(command.label.to_owned())),
+                .map(|command| Item::Command(command.id.to_owned())),
         )
         .filter(|item| !toolbar.contains(item))
         .filter(|item| search.is_empty() || item.name().to_lowercase().contains(&search))
@@ -470,7 +488,7 @@ mod tests {
     #[test]
     fn the_saved_lists_round_trip_and_keep_what_must_stay() {
         let mut toolbar = Toolbar::default();
-        toolbar.add(Item::Command("Edit: Copy location".to_owned()), None);
+        toolbar.add(Item::Command("copy-location".to_owned()), None);
         toolbar.set_words(2, true);
         let (items, words) = toolbar.to_ids();
         assert_eq!(Toolbar::from_ids(&items, &words), toolbar);
@@ -488,6 +506,22 @@ mod tests {
         assert!(!odd.items[2].1, "a separator has none");
         assert_eq!(Toolbar::from_ids(&[], &[]), Toolbar::default());
         assert_eq!(Item::from_id("command:"), None);
+    }
+
+    #[test]
+    fn a_command_button_is_saved_by_its_id_and_read_from_its_old_label() {
+        let item = Item::Command("copy-location".to_owned());
+        assert_eq!(item.id(), "command:copy-location");
+        assert_eq!(Item::from_id("command:copy-location"), Some(item.clone()));
+        assert_eq!(
+            Item::from_id("command:Files: Copy location"),
+            Some(item.clone())
+        );
+        assert_eq!(item.name(), "Files: Copy location");
+        assert_eq!(item.keys().as_deref(), Some("Ctrl+Alt+C"));
+        let gone = Item::Command("Files: Gone".to_owned());
+        assert_eq!(Item::from_id("command:Files: Gone"), Some(gone.clone()));
+        assert_eq!(gone.command_id(), None);
     }
 
     #[test]

@@ -43,6 +43,7 @@ use rustphin_platform::{
     xdg,
 };
 use rustphin_view::{
+    commands::{self, Action, PaneCommand},
     folder_views::FolderView,
     format,
     layout::{Flow, Grid, Rect, Step, ViewMode, ZOOM_LEVELS, step_zoom},
@@ -468,21 +469,6 @@ fn column_of(key: SortKey) -> i32 {
         SortKey::Type => 3,
         _ => 0,
     }
-}
-
-/// The keyboard step a QML number names.
-fn step_of(number: i32) -> Option<Step> {
-    Some(match number {
-        0 => Step::Up,
-        1 => Step::Down,
-        2 => Step::Left,
-        3 => Step::Right,
-        4 => Step::PageUp,
-        5 => Step::PageDown,
-        6 => Step::First,
-        7 => Step::Last,
-        _ => return None,
-    })
 }
 
 /// The icon-theme name an entry is drawn with: its type's icon; a link
@@ -1231,32 +1217,11 @@ impl qobject::FolderModel {
     }
 
     fn run(self: Pin<&mut Self>, id: &QString) {
-        match Item::from_id(&id.to_string()) {
-            Some(Item::Back) => self.back(),
-            Some(Item::Forward) => self.forward(),
-            Some(Item::Up) => self.up(),
-            Some(Item::Reload) => self.reload(),
-            Some(Item::Hidden) => {
-                let show = !*self.show_hidden();
-                self.set_hidden(show);
-            }
-            Some(Item::Terminal) => {
-                let folder = self.rust().folder();
-                let command = prefs::settings().terminal().map(str::to_owned);
-                let thread = self.qt_thread();
-                std::thread::spawn(move || {
-                    let result = rustphin_platform::terminal::open_in(
-                        &folder,
-                        command.as_deref(),
-                        xdg::config_home(),
-                    );
-                    if let Err(error) = result {
-                        let words = format!("The terminal could not be opened: {error}.");
-                        let _ = thread.queue(move |model| model.say(&text(&words)));
-                    }
-                });
-            }
-            _ => {}
+        let action = Item::from_id(&id.to_string())
+            .and_then(|item| item.command_id())
+            .and_then(commands::parse);
+        if let Some(Action::Pane(command)) = action {
+            self.run_command(command, 1);
         }
     }
 
@@ -1616,8 +1581,8 @@ impl qobject::FolderModel {
         self.click(row, modifiers);
     }
 
-    fn move_focus(self: Pin<&mut Self>, step: i32, extend: bool, lanes: i32) {
-        let (Some(step), Some(grid)) = (step_of(step), self.grid(lanes)) else {
+    fn move_focus(self: Pin<&mut Self>, step: Step, extend: bool, lanes: i32) {
+        let Some(grid) = self.grid(lanes) else {
             return;
         };
         let from = self
@@ -2110,94 +2075,86 @@ impl qobject::FolderModel {
         }
     }
 
-    fn command(mut self: Pin<&mut Self>, id: &QString, lanes: i32) -> bool {
-        use rustphin_view::menu::{CompressHow, ExtractHow};
-        let id = id.to_string();
-        let step = |id: &str| -> Option<(i32, bool)> {
-            Some(match id {
-                "select-previous" => (0, false),
-                "select-next" => (1, false),
-                "select-left" => (2, false),
-                "select-right" => (3, false),
-                "page-up" => (4, false),
-                "page-down" => (5, false),
-                "select-first" => (6, false),
-                "select-last" => (7, false),
-                "extend-previous" => (0, true),
-                "extend-next" => (1, true),
-                "extend-left" => (2, true),
-                "extend-right" => (3, true),
-                "extend-page-up" => (4, true),
-                "extend-page-down" => (5, true),
-                "extend-first" => (6, true),
-                "extend-last" => (7, true),
-                _ => return None,
-            })
-        };
-        if let Some((step, extend)) = step(&id) {
-            self.move_focus(step, extend, lanes);
-            return true;
-        }
-        match id.as_str() {
-            "go-back" => self.back(),
-            "go-forward" => self.forward(),
-            "go-up" => self.up(),
-            "go-home" => self.home(),
-            "reload" => self.reload(),
-            "open-terminal" => self.run(&QString::from("terminal")),
-            "activate" => self.activate_selected(),
-            "show-icons" => self.choose_mode(0),
-            "show-compact" => self.choose_mode(1),
-            "show-details" => self.choose_mode(2),
-            "toggle-hidden" => self.run(&QString::from("hidden")),
-            "toggle-folders-first" => self.toggle_folders_first(),
-            "zoom-in" => self.zoom_by(1),
-            "zoom-out" => self.zoom_by(-1),
-            "zoom-reset" => {
-                self.choose_zoom(i32::try_from(rustphin_view::layout::DEFAULT_ZOOM).unwrap_or(2))
+    fn command(self: Pin<&mut Self>, id: &QString, lanes: i32) -> bool {
+        match commands::parse(&id.to_string()) {
+            Some(Action::Pane(command)) => {
+                self.run_command(command, lanes);
+                true
             }
-            "sort-name" => self.sort_by(0),
-            "sort-size" => self.sort_by(1),
-            "sort-modified" => self.sort_by(2),
-            "sort-type" => self.sort_by(3),
-            "new-folder" => self.create_entry(true),
-            "new-file" => self.create_entry(false),
-            "rename" => self.begin_rename(),
-            "recover-renames" => {
+            _ => false,
+        }
+    }
+
+    /// Runs a pane command (`commands::PaneCommand`), from a key, the
+    /// palette, the toolbar or a menu; `lanes` entries to a line.
+    fn run_command(mut self: Pin<&mut Self>, command: PaneCommand, lanes: i32) {
+        match command {
+            PaneCommand::Back => self.back(),
+            PaneCommand::Forward => self.forward(),
+            PaneCommand::Up => self.up(),
+            PaneCommand::Home => self.home(),
+            PaneCommand::Reload => self.reload(),
+            PaneCommand::OpenTerminal => {
+                let folder = self.rust().folder();
+                let command = prefs::settings().terminal().map(str::to_owned);
+                let thread = self.qt_thread();
+                std::thread::spawn(move || {
+                    let result = rustphin_platform::terminal::open_in(
+                        &folder,
+                        command.as_deref(),
+                        xdg::config_home(),
+                    );
+                    if let Err(error) = result {
+                        let words = format!("The terminal could not be opened: {error}.");
+                        let _ = thread.queue(move |model| model.say(&text(&words)));
+                    }
+                });
+            }
+            PaneCommand::Activate => self.activate_selected(),
+            PaneCommand::Show(mode) => self.choose_mode(mode_number(mode)),
+            PaneCommand::ToggleHidden => {
+                let show = !*self.show_hidden();
+                self.set_hidden(show);
+            }
+            PaneCommand::ToggleFoldersFirst => self.toggle_folders_first(),
+            PaneCommand::ZoomIn => self.zoom_by(1),
+            PaneCommand::ZoomOut => self.zoom_by(-1),
+            PaneCommand::ZoomReset => {
+                self.choose_zoom(i32::try_from(rustphin_view::layout::DEFAULT_ZOOM).unwrap_or(2));
+            }
+            PaneCommand::SortBy(key) => self.sort_by(column_of(key)),
+            PaneCommand::NewFolder => self.create_entry(true),
+            PaneCommand::NewFile => self.create_entry(false),
+            PaneCommand::Rename => self.begin_rename(),
+            PaneCommand::RecoverRenames => {
                 if self.rust().trash_dir.is_none() && self.rust().current().is_some() {
                     crate::hub::start(rustphin_core::ops::Request::RecoverRenameBatch {
                         directory: self.rust().folder(),
                     });
                 }
             }
-            "copy" => self.copy_selected(false),
-            "cut" => self.copy_selected(true),
-            "paste" => self.paste(),
-            "copy-location" => self.copy_location(),
-            "duplicate" => self.duplicate_selected(),
-            "extract-here" => self.extract_selected(ExtractHow::Here),
-            "extract-into-folder" => self.extract_selected(ExtractHow::NewFolder),
-            "extract-and-trash" => self.extract_selected(ExtractHow::AndTrash),
-            "extract-to" => self.extract_selected(ExtractHow::To),
-            "compress-zip" => self.compress_selected(CompressHow::Zip),
-            "compress-tar-gz" => self.compress_selected(CompressHow::TarGz),
-            "compress-choose" => self.compress_selected(CompressHow::Choose),
-            "move-to-trash" => self.trash_selected(),
-            "delete-permanently" => self.delete_selected(),
-            "open-trash" => self.open_trash(),
-            "restore-trash" => self.restore_selected(),
-            "empty-trash" => self.empty_trash(),
-            "select-all" => self.select_all(),
-            "invert-selection" => self.invert_selection(),
-            "cancel-edit" => self.clear_selection(),
-            "show-properties" => {
+            PaneCommand::Copy => self.copy_selected(false),
+            PaneCommand::Cut => self.copy_selected(true),
+            PaneCommand::Paste => self.paste(),
+            PaneCommand::CopyLocation => self.copy_location(),
+            PaneCommand::Duplicate => self.duplicate_selected(),
+            PaneCommand::Extract(how) => self.extract_selected(how),
+            PaneCommand::Compress(how) => self.compress_selected(how),
+            PaneCommand::MoveToTrash => self.trash_selected(),
+            PaneCommand::DeletePermanently => self.delete_selected(),
+            PaneCommand::OpenTrash => self.open_trash(),
+            PaneCommand::RestoreTrash => self.restore_selected(),
+            PaneCommand::EmptyTrash => self.empty_trash(),
+            PaneCommand::SelectAll => self.select_all(),
+            PaneCommand::InvertSelection => self.invert_selection(),
+            PaneCommand::ClearSelection => self.clear_selection(),
+            PaneCommand::Properties => {
                 let (paths, _) = self.listed_selection();
                 let list: QList<QString> = paths.iter().map(|path| path_text(path)).collect();
                 self.as_mut().properties_requested(QStringList::from(&list));
             }
-            _ => return false,
+            PaneCommand::Move { step, extend } => self.move_focus(step, extend, lanes),
         }
-        true
     }
 
     /// Which tool opens the archive at `row`, if any.
@@ -2277,8 +2234,10 @@ impl qobject::FolderModel {
         let Some(command) = command else {
             return;
         };
+        if let Some(action) = command.action() {
+            return self.run_command(action, 1);
+        }
         match command {
-            MenuCommand::Open => self.activate_selected(),
             MenuCommand::OpenWith(app) => {
                 let (paths, _) = self.listed_selection();
                 if let [path] = paths.as_slice() {
@@ -2290,27 +2249,10 @@ impl qobject::FolderModel {
                     });
                 }
             }
-            MenuCommand::Cut => self.copy_selected(true),
-            MenuCommand::Copy => self.copy_selected(false),
-            MenuCommand::Paste => self.paste(),
-            MenuCommand::CopyLocation => self.copy_location(),
-            MenuCommand::Duplicate => self.duplicate_selected(),
-            MenuCommand::Rename => self.begin_rename(),
-            MenuCommand::MoveToTrash => self.trash_selected(),
-            MenuCommand::Delete => self.delete_selected(),
-            MenuCommand::Restore => self.restore_selected(),
-            MenuCommand::EmptyTrash => self.empty_trash(),
             MenuCommand::OpenTrash(files) => self.go_to(files),
-            MenuCommand::NewFolder => self.create_entry(true),
-            MenuCommand::NewFile => self.create_entry(false),
             MenuCommand::NewFromTemplate { index, .. } => self.create_from_template(index),
-            MenuCommand::Properties => {
-                let (paths, _) = self.listed_selection();
-                let list: QList<QString> = paths.iter().map(|path| path_text(path)).collect();
-                self.as_mut().properties_requested(QStringList::from(&list));
-            }
-            MenuCommand::Extract(how) => self.extract_selected(how),
-            MenuCommand::Compress(how) => self.compress_selected(how),
+            // Every other row runs its pane command above.
+            _ => {}
         }
     }
 
@@ -2563,13 +2505,10 @@ mod tests {
     }
 
     #[test]
-    fn modes_and_steps_are_numbered_as_qml_sends_them() {
+    fn modes_are_numbered_as_qml_sends_them() {
         for mode in [ViewMode::Icons, ViewMode::Compact, ViewMode::Details] {
             assert_eq!(mode_of(mode_number(mode)), mode);
         }
-        assert_eq!(step_of(0), Some(Step::Up));
-        assert_eq!(step_of(7), Some(Step::Last));
-        assert_eq!(step_of(8), None);
     }
 
     #[test]

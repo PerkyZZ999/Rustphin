@@ -98,10 +98,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "moveFocus"]
         fn move_focus(self: Pin<&mut PlacesModel>, delta: i32);
-        /// A key over the panel (as `PlaceCommand` keys: F2, Delete, H, G,
-        /// Alt+Up, Alt+Down, Left, Right, Ctrl+Shift+G, E); true when used.
+        /// Runs the command `id` (`rustphin_view::commands`) when it acts on
+        /// the places panel's focused row; true when it was used.
         #[qinvokable]
-        fn key(self: Pin<&mut PlacesModel>, key: &QString) -> bool;
+        fn command(self: Pin<&mut PlacesModel>, id: &QString) -> bool;
         /// Builds the right-click menu for `row` (-1: the empty space) into `menu`.
         #[qinvokable]
         #[cxx_name = "openMenu"]
