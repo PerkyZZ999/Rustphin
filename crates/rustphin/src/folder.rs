@@ -3,7 +3,10 @@
 //! own threads and is swapped in on the Qt thread (D-009). The pane's
 //! decisions (selection, keyboard movement, rubber band, type-ahead, view
 //! mode and zoom, renaming, the status line) are made here and in
-//! `rustphin_view::pane`; QML only draws them. No file is read here.
+//! `rustphin_view::pane`; what each snapshot changes (the folder, the
+//! selection carried and awaited, the rename, the failure, history) is
+//! decided by `rustphin_view::pane_state` (W-122). QML only draws them. No
+//! file is read here.
 
 // cxx-qt generates the unsafe FFI glue between Rust and the C++ QObject
 // for the list model; nothing in the bridge file is written by hand but
@@ -214,28 +217,12 @@ pub struct FolderModelRust {
     crumb_paths: QStringList,
     one_click: bool,
 
-    /// The pane's folder, kept as a path: `location` only shows it.
+    /// The pane's folder, listing, selection and what waits for entries;
+    /// `location` only shows the folder.
     pane: PaneState,
     model: Option<DirectoryModel>,
-    /// The listing shown; it may belong to another folder while the next
-    /// one is requested.
-    snapshot: Option<Arc<Snapshot>>,
-    /// The newest generation asked of the model.
-    generation: u64,
-    selection: Selection,
     /// The selection a rubber band adds to.
     band_kept: Selection,
-    /// The selection's revision when a carry-over started for a re-sort.
-    carrying: Option<u64>,
-    failure: Option<Failure>,
-    /// Names to select once the folder now requested is listed.
-    select_on_arrival: Option<Vec<Vec<u8>>>,
-    /// A name to select once it appears; `true` to rename it then.
-    select_when_seen: Option<(Vec<u8>, bool)>,
-    /// Names to select together once every one has appeared.
-    select_all_when_seen: Vec<Vec<u8>>,
-    /// The name being edited in place.
-    renaming: Option<Vec<u8>>,
     type_ahead: TypeAhead,
     /// The file types, once loaded in the background.
     types: Option<Arc<crate::types::Types>>,
@@ -251,8 +238,6 @@ pub struct FolderModelRust {
     view_epoch: u64,
     zone: TimeZone,
     width: f32,
-    /// The folder last reported as visited.
-    visited: Option<PathBuf>,
     /// The folder, total and free bytes of its volume.
     usage: Option<(PathBuf, u64, u64)>,
     frame_log: bool,
@@ -337,16 +322,7 @@ impl Default for FolderModelRust {
             one_click: prefs::with(|store| store.opens_with_one_click()),
             pane: PaneState::default(),
             model: None,
-            snapshot: None,
-            generation: 0,
-            selection: Selection::default(),
             band_kept: Selection::default(),
-            carrying: None,
-            failure: None,
-            select_on_arrival: None,
-            select_when_seen: None,
-            select_all_when_seen: Vec::new(),
-            renaming: None,
             type_ahead: TypeAhead::default(),
             types: None,
             descriptions: RefCell::new(HashMap::new()),
@@ -362,7 +338,6 @@ impl Default for FolderModelRust {
             view_epoch: prefs::with(|store| store.view_epoch()),
             zone: TimeZone::system(),
             width: 1000.,
-            visited: None,
             usage: None,
             menu: QString::default(),
             frame_log: std::env::var_os("RUSTPHIN_FRAME_LOG").is_some()
@@ -405,7 +380,7 @@ impl FolderModelRust {
 
     /// The snapshot of the folder now shown, if it is the one requested.
     fn current(&self) -> Option<&Arc<Snapshot>> {
-        self.snapshot.as_ref()
+        self.pane.snapshot()
     }
 
     /// The type's description, looked up once.
@@ -451,7 +426,7 @@ impl FolderModelRust {
         f64::from(pane::entry_opacity(
             snapshot.is_hidden(row),
             crate::hub::is_cut(&snapshot.entry_path(row)),
-            self.selection.contains(snapshot, row),
+            self.pane.selection().contains(snapshot, row),
             opacity,
         ))
     }
@@ -560,7 +535,7 @@ impl qobject::FolderModel {
     fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
         let rust = self.rust();
         let (Some(snapshot), Ok(row), Some(role)) = (
-            rust.snapshot.as_ref(),
+            rust.pane.snapshot(),
             usize::try_from(index.row()),
             Role::from_number(role),
         ) else {
@@ -570,7 +545,7 @@ impl qobject::FolderModel {
             return QVariant::default();
         }
         let words = |words: &str| QVariant::from(&QString::from(words));
-        let renaming = rust.renaming.as_deref() == Some(snapshot.name(row));
+        let renaming = rust.pane.renaming() == Some(snapshot.name(row));
         match role {
             Role::Name => words(&display_name(snapshot.name(row))),
             Role::Size => words(&format::size_column(
@@ -595,11 +570,11 @@ impl qobject::FolderModel {
             Role::Icon => words(&entry_icon(rust.types.as_deref(), snapshot, row)),
             Role::Thumbnail => words(&rust.thumbnail(snapshot, row).unwrap_or_default()),
             Role::Selected => {
-                QVariant::from(&(rust.selection.contains(snapshot, row) && !renaming))
+                QVariant::from(&(rust.pane.selection().contains(snapshot, row) && !renaming))
             }
-            Role::Current => {
-                QVariant::from(&(rust.selection.focus_row(snapshot) == Some(row) || renaming))
-            }
+            Role::Current => QVariant::from(
+                &(rust.pane.selection().focus_row(snapshot) == Some(row) || renaming),
+            ),
             Role::Opacity => QVariant::from(&rust.fade(snapshot, row)),
             Role::Link => QVariant::from(&(snapshot.kind(row) == EntryKind::Symlink)),
             Role::Renaming => QVariant::from(&renaming),
@@ -733,11 +708,7 @@ impl qobject::FolderModel {
             rust.as_admin = admin;
             rust.model = Some(model);
             rust.model_epoch += 1;
-            rust.generation = 0;
-            rust.snapshot = None;
-            rust.visited = None;
-            rust.selection = Selection::default();
-            rust.pane.forget_folder();
+            rust.pane.leave_filesystem();
         }
         self.as_mut().listen(events);
         self.as_mut().set_location(QString::default());
@@ -747,17 +718,16 @@ impl qobject::FolderModel {
     /// One event from the core's model.
     fn on_event(mut self: Pin<&mut Self>, event: ModelEvent) {
         match event {
-            ModelEvent::Snapshot(snapshot) if snapshot.generation() >= self.rust().generation => {
+            ModelEvent::Snapshot(snapshot)
+                if self.rust().pane.is_current(snapshot.generation()) =>
+            {
                 // A re-sort or re-read of the folder shown: its selection is
                 // carried over by name on the core's threads first.
-                let carry = self.rust().snapshot.as_ref().filter(|old| {
-                    old.path() == snapshot.path() && old.listing() != snapshot.listing()
-                });
-                if let (Some(old), Some(model)) = (carry.cloned(), self.rust().model.as_ref()) {
+                let carry = self.rust().pane.carry_to(&snapshot);
+                if let (Some(carry), Some(model)) = (carry, self.rust().model.as_ref()) {
                     let receive =
-                        model.carry_selection(self.rust().selection.clone(), old, snapshot.clone());
-                    let revision = self.rust().selection.revision();
-                    self.as_mut().rust_mut().carrying = Some(revision);
+                        model.carry_selection(carry.selection, carry.old, snapshot.clone());
+                    let revision = carry.revision;
                     let thread = self.qt_thread();
                     std::thread::spawn(move || {
                         if let Ok(selection) = receive.recv() {
@@ -770,115 +740,65 @@ impl qobject::FolderModel {
                     self.show(snapshot, None);
                 }
             }
-            ModelEvent::Moved { generation, from } if generation >= self.rust().generation => {
-                self.as_mut().rust_mut().generation = generation;
-                self.as_mut().rust_mut().select_on_arrival = None;
-                self.as_mut().set_failure(Some(Failure {
-                    path: from,
-                    error: LoadError::NotFound,
-                    moved: true,
-                }));
+            ModelEvent::Moved { generation, from } => {
+                if self.as_mut().rust_mut().pane.moved(generation) {
+                    self.as_mut().set_failure(Some(Failure {
+                        path: from,
+                        error: LoadError::NotFound,
+                        moved: true,
+                    }));
+                }
             }
             ModelEvent::Failed {
                 generation,
                 path,
                 error,
-            } if generation == self.rust().generation => {
-                self.as_mut().rust_mut().select_on_arrival = None;
-                self.as_mut().measure_free_space(path.clone());
-                self.as_mut().set_location_text(&path);
-                self.as_mut().set_failure(Some(Failure {
-                    path,
-                    error,
-                    moved: false,
-                }));
+            } => {
+                if self.as_mut().rust_mut().pane.failed(generation) {
+                    self.as_mut().measure_free_space(path.clone());
+                    self.as_mut().set_location_text(&path);
+                    self.as_mut().set_failure(Some(Failure {
+                        path,
+                        error,
+                        moved: false,
+                    }));
+                }
             }
-            _ => {}
+            ModelEvent::Snapshot(_) => {}
         }
     }
 
     /// Swaps in the newest snapshot, with the selection carried over to it
-    /// when one was (and nothing has changed it since).
+    /// when one was (and nothing has changed it since). What it changes is
+    /// decided by `PaneState::arrive`; this only redraws.
     fn show(mut self: Pin<&mut Self>, snapshot: Arc<Snapshot>, carried: Option<(u64, Selection)>) {
-        if snapshot.generation() < self.rust().generation {
+        if !self.rust().pane.is_current(snapshot.generation()) {
             return;
-        }
-        let arrived = self
-            .rust()
-            .snapshot
-            .as_ref()
-            .is_none_or(|shown| shown.path() != snapshot.path());
-        let reread = !arrived
-            && self
-                .rust()
-                .snapshot
-                .as_ref()
-                .is_some_and(|shown| shown.listing() != snapshot.listing());
-        {
-            let mut rust = self.as_mut().rust_mut();
-            rust.generation = snapshot.generation();
-            rust.carrying = None;
-            match carried {
-                Some((revision, selection)) if rust.selection.revision() == revision => {
-                    rust.selection = selection;
-                }
-                _ => rust.selection.sync(&snapshot),
-            }
-            if arrived {
-                rust.renaming = None;
-                rust.select_when_seen = None;
-                rust.select_all_when_seen.clear();
-                rust.thumbs.borrow_mut().drop_waiting();
-            } else if reread {
-                let folder = snapshot.path().to_owned();
-                rust.thumbs
-                    .borrow_mut()
-                    .known
-                    .retain(|(file, _), _| file.parent() != Some(folder.as_path()));
-            }
-            let arrival = rust.select_on_arrival.take_if(|_| !snapshot.is_loading());
-            if let Some(names) = arrival {
-                pane::select_names(&mut rust.selection, &snapshot, &names);
-            }
-            let awaited = rust
-                .select_when_seen
-                .as_ref()
-                .and_then(|(name, _)| snapshot.row_of(name));
-            if let Some(row) = awaited {
-                rust.selection.select_only(&snapshot, row);
-            }
-            if !rust.select_all_when_seen.is_empty()
-                && snapshot
-                    .rows_of(&rust.select_all_when_seen)
-                    .iter()
-                    .all(Option::is_some)
-            {
-                let names = std::mem::take(&mut rust.select_all_when_seen);
-                pane::select_names(&mut rust.selection, &snapshot, &names);
-            }
-            if let Some(name) = &rust.renaming
-                && snapshot.row_of(name).is_none()
-            {
-                rust.renaming = None;
-            }
-        }
-        let rename_now = self
-            .rust()
-            .select_when_seen
-            .as_ref()
-            .filter(|(name, _)| snapshot.row_of(name).is_some())
-            .map(|(name, rename)| (name.clone(), *rename));
-        if rename_now.is_some() {
-            self.as_mut().rust_mut().select_when_seen = None;
         }
         let rows = i32::try_from(snapshot.len()).unwrap_or(i32::MAX);
         self.as_mut().begin_reset_model();
-        {
+        let arrival = {
             let mut rust = self.as_mut().rust_mut();
-            rust.snapshot = Some(Arc::clone(&snapshot));
+            let arrival = rust.pane.arrive(Arc::clone(&snapshot), carried);
             rust.count = rows;
-        }
+            arrival
+        };
         self.as_mut().end_reset_model();
+        let Some(arrival) = arrival else {
+            return;
+        };
+        {
+            let rust = self.rust();
+            let mut thumbs = rust.thumbs.borrow_mut();
+            if arrival.new_folder {
+                thumbs.drop_waiting();
+            } else if arrival.reread {
+                let folder = snapshot.path();
+                thumbs
+                    .known
+                    .retain(|(file, _), _| file.parent() != Some(folder));
+            }
+        }
         self.as_mut().count_changed();
         if !snapshot.is_empty()
             && self
@@ -890,28 +810,22 @@ impl qobject::FolderModel {
         }
         self.as_mut().set_loading(snapshot.is_loading());
         self.as_mut().set_location_text(snapshot.path());
-        if self
-            .rust()
-            .failure
-            .as_ref()
-            .is_some_and(|failure| !failure.moved || failure.path.parent() != Some(snapshot.path()))
-        {
+        if arrival.failure_cleared {
             self.as_mut().set_failure(None);
         }
-        if arrived {
+        if arrival.new_folder {
             self.as_mut().set_filter_text(QString::default());
             self.as_mut().detect_trash(snapshot.path().to_owned());
             self.as_mut().measure_free_space(snapshot.path().to_owned());
             self.as_mut().adopt_folder_view();
         }
-        if !snapshot.is_loading() && self.rust().visited.as_deref() != Some(snapshot.path()) {
-            self.as_mut().rust_mut().visited = Some(snapshot.path().to_owned());
+        if arrival.visited {
             crate::history::visit(snapshot.path());
             self.as_mut().visited(path_text(snapshot.path()));
         }
         self.as_mut().update_navigation();
         self.as_mut().selection_changed();
-        if let Some((name, true)) = rename_now {
+        if let Some(name) = arrival.rename {
             self.as_mut().rename_name(name);
         }
     }
@@ -921,8 +835,8 @@ impl qobject::FolderModel {
     fn selection_changed(mut self: Pin<&mut Self>) {
         let (focus, selected) = match self.rust().current() {
             Some(snapshot) => (
-                self.rust().selection.focus_row(snapshot),
-                self.rust().selection.len(),
+                self.rust().pane.selection().focus_row(snapshot),
+                self.rust().pane.selection().len(),
             ),
             None => (None, 0),
         };
@@ -944,21 +858,21 @@ impl qobject::FolderModel {
         let Some(snapshot) = self.rust().current().cloned() else {
             return;
         };
-        change(&mut self.as_mut().rust_mut().selection, &snapshot);
+        change(self.as_mut().rust_mut().pane.selection_mut(), &snapshot);
         self.selection_changed();
     }
 
     /// The status line, the empty state and the in-place error.
     fn update_status(mut self: Pin<&mut Self>) {
         let rust = self.rust();
-        let Some(snapshot) = rust.snapshot.clone() else {
+        let Some(snapshot) = rust.pane.snapshot().cloned() else {
             return;
         };
-        let selected_rows = rust.selection.rows(&snapshot);
+        let selected_rows = rust.pane.selection().rows(&snapshot);
         let filter = snapshot.filter().map(|filter| filter.text().to_owned());
         let renaming = rust
-            .renaming
-            .as_deref()
+            .pane
+            .renaming()
             .map(|name| display_name(name).into_owned());
         let facts = StatusFacts {
             shown: snapshot.len(),
@@ -1002,12 +916,12 @@ impl qobject::FolderModel {
     /// Shows or clears a failure: in place when nothing is listed for the
     /// folder that failed, else as a banner over the listing.
     fn set_failure(mut self: Pin<&mut Self>, failure: Option<Failure>) {
-        self.as_mut().rust_mut().failure = failure.clone();
+        self.as_mut().rust_mut().pane.set_failure(failure.clone());
         let location = self.rust().folder();
         let listed = self
             .rust()
-            .snapshot
-            .as_ref()
+            .pane
+            .snapshot()
             .is_some_and(|snapshot| snapshot.path() == location);
         let (title, explanation, status, way, banner) = match &failure {
             Some(failure) if failure.in_place(Some(&location), listed) => {
@@ -1052,7 +966,7 @@ impl qobject::FolderModel {
             let rust = self.rust();
             let mut thumbs = rust.thumbs.borrow_mut();
             for done in batch {
-                if let Some(snapshot) = &rust.snapshot
+                if let Some(snapshot) = &rust.pane.snapshot()
                     && done.file.parent() == Some(snapshot.path())
                     && let Some(row) = done
                         .file
@@ -1088,7 +1002,7 @@ impl qobject::FolderModel {
                 pane::select_names(selection, snapshot, &names);
             });
         } else {
-            self.as_mut().rust_mut().select_on_arrival = Some(names);
+            self.as_mut().rust_mut().pane.select_on_arrival(names);
             self.go_to(folder);
         }
     }
@@ -1106,7 +1020,7 @@ impl qobject::FolderModel {
             .as_mut()
             .map(|model| model.open(&path));
         if let Some(generation) = generation {
-            self.as_mut().rust_mut().generation = generation;
+            self.as_mut().rust_mut().pane.asked(generation);
             self.as_mut().note_asked("open", generation);
         }
         self.as_mut().set_failure(None);
@@ -1128,10 +1042,10 @@ impl qobject::FolderModel {
             return;
         };
         if rust.shown {
-            let rows = rust.snapshot.as_ref().map_or(0, |snapshot| snapshot.len());
+            let rows = rust.pane.snapshot().map_or(0, |snapshot| snapshot.len());
             let loading = rust
-                .snapshot
-                .as_ref()
+                .pane
+                .snapshot()
                 .is_some_and(|snapshot| snapshot.is_loading());
             rust.asked = None;
             rust.shown = false;
@@ -1197,7 +1111,7 @@ impl qobject::FolderModel {
     fn navigate(mut self: Pin<&mut Self>, step: fn(&mut DirectoryModel) -> Option<u64>) {
         let generation = self.as_mut().rust_mut().model.as_mut().and_then(step);
         if let Some(generation) = generation {
-            self.as_mut().rust_mut().generation = generation;
+            self.as_mut().rust_mut().pane.asked(generation);
             self.as_mut().note_asked("navigate", generation);
             if let Some(path) = self
                 .rust()
@@ -1235,7 +1149,10 @@ impl qobject::FolderModel {
             .and_then(DirectoryModel::location)
             .is_some_and(|path| path.parent().is_some());
         if moved {
-            self.as_mut().rust_mut().select_on_arrival = came_from.map(|name| vec![name]);
+            self.as_mut()
+                .rust_mut()
+                .pane
+                .select_on_arrival(came_from.into_iter().collect());
         }
         self.navigate(DirectoryModel::up);
     }
@@ -1288,7 +1205,7 @@ impl qobject::FolderModel {
         let Some(snapshot) = self.rust().current().cloned() else {
             return;
         };
-        let rows = self.rust().selection.rows(&snapshot);
+        let rows = self.rust().pane.selection().rows(&snapshot);
         // One folder opens here; files open through the window.
         if let [row] = rows[..] {
             return self.activate(i32::try_from(row).unwrap_or(-1));
@@ -1450,7 +1367,7 @@ impl qobject::FolderModel {
             .as_mut()
             .and_then(|model| model.set_options(options));
         if let Some(generation) = generation {
-            self.as_mut().rust_mut().generation = generation;
+            self.as_mut().rust_mut().pane.asked(generation);
             self.as_mut().note_asked("re-sort", generation);
         }
         self.as_mut().set_sort_column(column_of(options.sort));
@@ -1706,7 +1623,7 @@ impl qobject::FolderModel {
         let from = self
             .rust()
             .current()
-            .and_then(|snapshot| self.rust().selection.focus_row(snapshot));
+            .and_then(|snapshot| self.rust().pane.selection().focus_row(snapshot));
         let Some(row) = grid.step(from, step) else {
             return;
         };
@@ -1720,7 +1637,7 @@ impl qobject::FolderModel {
     }
 
     fn begin_band(mut self: Pin<&mut Self>) {
-        let kept = self.rust().selection.clone();
+        let kept = self.rust().pane.selection().clone();
         self.as_mut().rust_mut().band_kept = kept;
     }
 
@@ -1762,7 +1679,7 @@ impl qobject::FolderModel {
         let Some(snapshot) = self.rust().current().cloned() else {
             return;
         };
-        let focus = self.rust().selection.focus_row(&snapshot);
+        let focus = self.rust().pane.selection().focus_row(&snapshot);
         let found =
             self.as_mut()
                 .rust_mut()
@@ -1778,9 +1695,10 @@ impl qobject::FolderModel {
             return;
         }
         let name = self.rust().current().and_then(|snapshot| {
-            let row = self.rust().selection.focus_row(snapshot)?;
+            let row = self.rust().pane.selection().focus_row(snapshot)?;
             self.rust()
-                .selection
+                .pane
+                .selection()
                 .contains(snapshot, row)
                 .then(|| snapshot.name(row).to_vec())
         });
@@ -1800,7 +1718,7 @@ impl qobject::FolderModel {
         };
         let shown = display_name(&name).into_owned();
         let stem = stem_len(&shown, folder);
-        self.as_mut().rust_mut().renaming = Some(name);
+        self.as_mut().rust_mut().pane.start_renaming(name);
         self.as_mut().set_rename_text(text(&shown));
         self.as_mut()
             .set_rename_stem(i32::try_from(shown[..stem].chars().count()).unwrap_or(0));
@@ -1812,14 +1730,17 @@ impl qobject::FolderModel {
     }
 
     fn finish_rename(mut self: Pin<&mut Self>, typed: &QString, apply: bool) {
-        let Some(old) = self.as_mut().rust_mut().renaming.take() else {
+        let Some(old) = self.as_mut().rust_mut().pane.take_renaming() else {
             return;
         };
         let typed = typed.to_string();
         let unchanged = typed.is_empty() || typed == display_name(&old);
         let path = self.rust().pane.entry_path(&old);
         if let Some(path) = path.filter(|_| apply && !unchanged) {
-            self.as_mut().rust_mut().select_when_seen = Some((typed.clone().into_bytes(), false));
+            self.as_mut()
+                .rust_mut()
+                .pane
+                .select_when_seen(typed.clone().into_bytes(), false);
             crate::hub::start(rustphin_core::ops::Request::Rename {
                 path,
                 new_name: typed.into(),
@@ -1844,14 +1765,15 @@ impl qobject::FolderModel {
             .as_mut()
             .and_then(|model| model.set_filter(NameFilter::new(&words)));
         if let Some(generation) = generation {
-            self.as_mut().rust_mut().generation = generation;
+            self.as_mut().rust_mut().pane.asked(generation);
         }
     }
 
     fn selected_paths(&self) -> QStringList {
         let paths: Vec<String> = self.rust().current().map_or_else(Vec::new, |snapshot| {
             self.rust()
-                .selection
+                .pane
+                .selection()
                 .rows(snapshot)
                 .into_iter()
                 .map(|row| snapshot.entry_path(row).to_string_lossy().into_owned())
@@ -1889,7 +1811,8 @@ impl qobject::FolderModel {
     fn selected_uris(&self) -> QString {
         let paths: Vec<PathBuf> = self.rust().current().map_or_else(Vec::new, |snapshot| {
             self.rust()
-                .selection
+                .pane
+                .selection()
                 .rows(snapshot)
                 .into_iter()
                 .map(|row| snapshot.entry_path(row))
@@ -1934,7 +1857,7 @@ impl qobject::FolderModel {
             usize::try_from(row)
                 .ok()
                 .filter(|row| *row < snapshot.len())
-                .is_some_and(|row| self.rust().selection.contains(snapshot, row))
+                .is_some_and(|row| self.rust().pane.selection().contains(snapshot, row))
         })
     }
 }
@@ -1957,7 +1880,7 @@ impl qobject::FolderModel {
                 .filter_map(|path| path.file_name().map(|name| name.as_bytes().to_vec()))
                 .collect();
             if !names.is_empty() {
-                self.as_mut().rust_mut().select_all_when_seen = names;
+                self.as_mut().rust_mut().pane.select_all_when_seen(names);
             }
         }
         if self.rust().admin_changes != admin {
@@ -1973,7 +1896,8 @@ impl qobject::FolderModel {
             return Default::default();
         };
         self.rust()
-            .selection
+            .pane
+            .selection()
             .rows(snapshot)
             .into_iter()
             .map(|row| {
@@ -2025,7 +1949,7 @@ impl qobject::FolderModel {
         let Some(snapshot) = self.rust().current().cloned() else {
             return;
         };
-        let rows = self.rust().selection.rows(&snapshot);
+        let rows = self.rust().pane.selection().rows(&snapshot);
         if rows.is_empty() {
             return;
         }
@@ -2036,8 +1960,10 @@ impl qobject::FolderModel {
         let sources = rows.iter().map(|&row| snapshot.entry_path(row)).collect();
         // Hidden or filtered entries still take a name.
         let listed = snapshot.listed_names();
-        self.as_mut().rust_mut().select_all_when_seen =
-            duplicate_names(&names, |name| listed.contains(name));
+        self.as_mut()
+            .rust_mut()
+            .pane
+            .select_all_when_seen(duplicate_names(&names, |name| listed.contains(name)));
         crate::hub::start(rustphin_core::ops::Request::Duplicate { sources });
     }
 
@@ -2066,7 +1992,10 @@ impl qobject::FolderModel {
         let parent = snapshot.path().to_owned();
         let base = if folder { "New Folder" } else { "New File" };
         let name = free_name(base, |name| snapshot.row_of(name.as_bytes()).is_some());
-        self.as_mut().rust_mut().select_when_seen = Some((name.clone().into_bytes(), true));
+        self.as_mut()
+            .rust_mut()
+            .pane
+            .select_when_seen(name.clone().into_bytes(), true);
         let name = name.into();
         crate::hub::start(if folder {
             rustphin_core::ops::Request::CreateDir { parent, name }
@@ -2129,7 +2058,7 @@ impl qobject::FolderModel {
         let rust = self.rust();
         let snapshot = rust.current().filter(|_| on_selection);
         let rows = snapshot
-            .map(|snapshot| rust.selection.rows(snapshot))
+            .map(|snapshot| rust.pane.selection().rows(snapshot))
             .unwrap_or_default();
         let single_container =
             rows.len() == 1 && snapshot.is_some_and(|snapshot| snapshot.is_container(rows[0]));
@@ -2327,7 +2256,7 @@ impl qobject::FolderModel {
                             .collect()
                     })
                     .unwrap_or_default();
-                menu::trash_actions(!self.rust().selection.is_empty(), others)
+                menu::trash_actions(!self.rust().pane.selection().is_empty(), others)
             }
             which => menu::context_menu(&self.menu_facts(which == "selection")),
         };
@@ -2416,7 +2345,10 @@ impl qobject::FolderModel {
         let name = rustphin_platform::templates::free_file_name(&file.file_name, |name| {
             snapshot.row_of(name.as_bytes()).is_some()
         });
-        self.as_mut().rust_mut().select_when_seen = Some((name.clone().into_bytes(), true));
+        self.as_mut()
+            .rust_mut()
+            .pane
+            .select_when_seen(name.clone().into_bytes(), true);
         crate::hub::start(rustphin_core::ops::Request::CreateFromTemplate {
             parent: snapshot.path().to_owned(),
             name: name.into(),
@@ -2430,7 +2362,7 @@ impl qobject::FolderModel {
         let Some(snapshot) = self.rust().current().cloned() else {
             return;
         };
-        let rows = self.rust().selection.rows(&snapshot);
+        let rows = self.rust().pane.selection().rows(&snapshot);
         let archives: Vec<PathBuf> = rows
             .iter()
             .filter(|&&row| {
@@ -2470,7 +2402,7 @@ impl qobject::FolderModel {
         let Some(snapshot) = self.rust().current().cloned() else {
             return;
         };
-        let rows = self.rust().selection.rows(&snapshot);
+        let rows = self.rust().pane.selection().rows(&snapshot);
         if rows.is_empty() {
             return crate::hub::say("Select what to compress.".to_owned(), false);
         }
@@ -2516,7 +2448,7 @@ impl qobject::FolderModel {
         let Some(snapshot) = self.rust().current().cloned() else {
             return false;
         };
-        let rows = self.rust().selection.rows(&snapshot);
+        let rows = self.rust().pane.selection().rows(&snapshot);
         if rows.len() < 2 {
             return false;
         }
