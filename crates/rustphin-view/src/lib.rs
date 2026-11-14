@@ -30,6 +30,7 @@ pub mod preferences;
 pub mod properties;
 pub mod questions;
 pub mod remote;
+pub mod saved_file;
 pub mod selection_actions;
 pub mod session;
 pub mod settings;

@@ -14,7 +14,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-14 — W-139 Surviving platform mutants and the cheap test gaps
+- Latest validation entry: VALIDATION.md, 2026-11-14 — W-140 Bugs found by the view test audit: archives in the trash, kept settings and groups, malformed addresses
 
 ## Open loops
 - Task: W-079 design pass done 2026-11-08 (D-024, steps a–g) from the maintainer's HTML mockups; docs/DESIGN.md "Implementation status" lists what is left (list scrollbars, volume name, per-command palette icons, app icons, tab overflow, disabled toolbar colour, saved Devices fold). Glass look needs the real desktop.

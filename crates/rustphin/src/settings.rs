@@ -81,13 +81,9 @@ impl qobject::SettingsModel {
             .collect();
         self.as_mut()
             .set_pages(text(&serde_json::Value::Array(pages).to_string()));
-        let path = prefs::with(|store| store.path().map(|path| path.display().to_string()));
         let about = serde_json::json!({
             "version": env!("CARGO_PKG_VERSION"),
-            "settings": path.map_or_else(
-                || "Not saved: a newer Rustphin wrote the settings file.".to_owned(),
-                |path| format!("{path} (made when you first change a setting)"),
-            ),
+            "settings": prefs::with(|store| store.saving()),
         });
         self.as_mut().set_about(text(&about.to_string()));
         self.as_mut().refresh();

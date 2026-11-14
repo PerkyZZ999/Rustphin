@@ -26,6 +26,7 @@ use cxx_qt_lib::{
 use rustphin_platform::{remote::RemoteAddress, uri::path_from_uri};
 use rustphin_view::{
     location::Location,
+    preferences::Store,
     session::{self, Session, SessionSaves},
     settings::Start,
     workspace::{Closing, PaneStart, TabStart, Transfer, Workspace},
@@ -290,9 +291,16 @@ impl qobject::TabsModel {
             let saved =
                 session_path().map_or(Ok(None), |path| rustphin_platform::config::read(&path));
             let restored = session::restore(saved, &starts);
+            // The settings file, read before any window, is kept when it
+            // could not be used (W-140); the first window says so.
+            let mut notices: Vec<String> =
+                crate::prefs::with(Store::take_notice).into_iter().collect();
             if let Some(issue) = &restored.issue {
                 tracing::warn!(%issue, "saved session is protected for this run");
-                hub::say(issue.notice().to_owned(), true);
+                notices.push(issue.notice().to_owned());
+            }
+            if !notices.is_empty() {
+                hub::say(notices.join(" "), true);
             }
             let can_save = restored.can_save();
             self.as_mut().set_saves(can_save);

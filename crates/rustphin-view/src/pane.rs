@@ -10,6 +10,7 @@ use std::{
 };
 
 use rustphin_core::{LoadError, Selection, Snapshot, display_name};
+use rustphin_platform::remote::RemoteAddress;
 
 use crate::{
     format::{self, count, plural},
@@ -334,15 +335,55 @@ pub fn names_trash(typed: &str) -> bool {
         .is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("trash"))
 }
 
-/// Turns typed text into an absolute path: expands a leading `~` and resolves
-/// relative paths against `base`. `None` for empty input.
-pub fn expand_path(typed: &str, base: Option<&Path>) -> Option<PathBuf> {
+/// What text typed into the location bar opens (W-140).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Typed {
+    /// Nothing was typed.
+    Nothing,
+    /// The trash, which Rustphin opens itself.
+    Trash,
+    /// A local folder.
+    Folder(PathBuf),
+    /// A remote address, mounted through kio-fuse first (W-080).
+    Remote(RemoteAddress),
+    /// Text written as an address (`scheme://…`) that is not one Rustphin
+    /// can open.
+    NotAnAddress,
+}
+
+/// Reads typed text, trimmed, in this order: a trash address, a local file
+/// URI, a remote address, then a path, `~` standing for `home` and a
+/// relative path starting at `base`.
+pub fn interpret_typed(typed: &str, base: &Path, home: Option<&Path>) -> Typed {
+    let typed = typed.trim();
+    if names_trash(typed) {
+        return Typed::Trash;
+    }
+    if let Some(path) = rustphin_platform::uri::path_from_uri(typed.as_bytes()) {
+        return Typed::Folder(path);
+    }
+    if typed.contains("://") {
+        return RemoteAddress::parse(typed).map_or(Typed::NotAnAddress, Typed::Remote);
+    }
+    expand_path(typed, Some(base), home).map_or(Typed::Nothing, Typed::Folder)
+}
+
+/// What the location bar says of text that is not an address.
+pub fn not_an_address(typed: &str) -> String {
+    format!(
+        "\u{201c}{}\u{201d} is not an address Rustphin can open.",
+        typed.trim()
+    )
+}
+
+/// Turns typed text into an absolute path: expands a leading `~` to `home`
+/// and resolves relative paths against `base`. `None` for empty input.
+pub fn expand_path(typed: &str, base: Option<&Path>, home: Option<&Path>) -> Option<PathBuf> {
     if typed.is_empty() {
         return None;
     }
-    let home = std::env::var_os("HOME").map(PathBuf::from);
     let path = match (typed.strip_prefix('~'), home) {
-        (Some(""), Some(home)) => home,
+        (Some(""), Some(home)) => home.to_owned(),
         (Some(rest), Some(home)) if rest.starts_with('/') => {
             home.join(rest.trim_start_matches('/'))
         }
@@ -814,14 +855,74 @@ mod tests {
         assert_eq!(frame_report(&[]), "no frames");
     }
 
+    const BASE: &str = "/srv/data";
+    const HOME: &str = "/home/me";
+
+    fn typed(text: &str) -> Typed {
+        interpret_typed(text, Path::new(BASE), Some(Path::new(HOME)))
+    }
+
     #[test]
     fn typed_paths_are_made_absolute() {
-        let base = Path::new("/srv/data");
-        assert_eq!(expand_path("", Some(base)), None);
-        assert_eq!(expand_path("/etc", Some(base)), Some(PathBuf::from("/etc")));
+        let base = Path::new(BASE);
+        let home = Some(Path::new(HOME));
+        assert_eq!(expand_path("", Some(base), home), None);
         assert_eq!(
-            expand_path("sub/dir", Some(base)),
+            expand_path("/etc", Some(base), home),
+            Some(PathBuf::from("/etc"))
+        );
+        assert_eq!(
+            expand_path("sub/dir", Some(base), home),
             Some(PathBuf::from("/srv/data/sub/dir"))
+        );
+    }
+
+    #[test]
+    fn a_tilde_stands_for_the_home_folder() {
+        let base = Some(Path::new(BASE));
+        let home = Some(Path::new(HOME));
+        assert_eq!(expand_path("~", base, home), Some(PathBuf::from(HOME)));
+        assert_eq!(
+            expand_path("~/Music", base, home),
+            Some(PathBuf::from("/home/me/Music"))
+        );
+        // Another user's home is not expanded: it is a relative name.
+        assert_eq!(
+            expand_path("~bob", base, home),
+            Some(PathBuf::from("/srv/data/~bob"))
+        );
+        // Without a home, `~` is an ordinary name.
+        assert_eq!(
+            expand_path("~", base, None),
+            Some(PathBuf::from("/srv/data/~"))
+        );
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn typed_text_is_read_as_trash_then_file_uri_then_remote_then_path() {
+        assert_eq!(typed("  trash:/  "), Typed::Trash);
+        assert_eq!(
+            typed("file:///tmp/a%20b"),
+            Typed::Folder(PathBuf::from("/tmp/a b"))
+        );
+        assert_eq!(
+            typed("sftp://me@host/srv"),
+            Typed::Remote(RemoteAddress::parse("sftp://me@host/srv").unwrap())
+        );
+        assert_eq!(typed("~/x"), Typed::Folder(PathBuf::from("/home/me/x")));
+        assert_eq!(typed("sub"), Typed::Folder(PathBuf::from("/srv/data/sub")));
+        assert_eq!(typed("   "), Typed::Nothing);
+    }
+
+    #[test]
+    fn a_malformed_address_is_not_taken_for_a_relative_path() {
+        // A scheme must start with a letter: this was opened as the
+        // folder "/srv/data/1sftp:/host" before W-140.
+        assert_eq!(typed("1sftp://host/srv"), Typed::NotAnAddress);
+        assert_eq!(
+            not_an_address(" 1sftp://host "),
+            "\u{201c}1sftp://host\u{201d} is not an address Rustphin can open."
         );
     }
 }

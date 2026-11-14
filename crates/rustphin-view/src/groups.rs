@@ -3,12 +3,15 @@
 //! Groups live in Rustphin's own file and refer to places by the identifier
 //! KDE gives each bookmark; the shared places file knows nothing of them
 //! (decision D-008). A place belongs to at most one group. Reading never
-//! fails: a missing or damaged file yields no groups.
+//! fails: a missing or damaged file yields no groups, and a damaged, newer
+//! or unreadable file is kept rather than replaced ([`GroupsFile`]).
 
-use std::collections::HashSet;
+use std::{collections::HashSet, io};
 
 use rustphin_platform::places::Place;
 use serde::{Deserialize, Serialize};
+
+use crate::saved_file::{self, FileIssue};
 
 /// The format version this build writes.
 const VERSION: u32 = 1;
@@ -38,6 +41,46 @@ pub struct Groups {
     pub groups: Vec<Group>,
 }
 
+/// Whether the groups file may be written (W-140): not before it has been
+/// read, so a change made meanwhile cannot replace it, and not when it
+/// could not be read, is damaged or was written by a newer Rustphin, so it
+/// is kept for the user as the saved tabs are.
+#[derive(Debug, Default)]
+pub struct GroupsFile {
+    state: FileState,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum FileState {
+    #[default]
+    Unread,
+    Writable,
+    Kept,
+}
+
+impl GroupsFile {
+    /// Takes what reading the file gave (`None` when there is no file):
+    /// the groups to show, if it held any that can be used, and why the
+    /// file is kept, to tell the user.
+    pub fn loaded(
+        &mut self,
+        saved: io::Result<Option<String>>,
+    ) -> (Option<Groups>, Option<FileIssue>) {
+        let decoded = saved_file::decode::<Groups>(saved, VERSION);
+        self.state = if decoded.issue.is_some() {
+            FileState::Kept
+        } else {
+            FileState::Writable
+        };
+        (decoded.value.map(Groups::tidied), decoded.issue)
+    }
+
+    /// Whether a change may be written now.
+    pub fn may_save(&self) -> bool {
+        self.state == FileState::Writable
+    }
+}
+
 /// The places panel's content: the places outside any group, then each group
 /// with its places.
 #[derive(Debug, PartialEq, Eq)]
@@ -51,13 +94,16 @@ pub struct Layout<'a> {
 impl Groups {
     /// Reads the groups file's text.
     pub fn parse(text: &str) -> Self {
-        let mut groups: Self = toml::from_str(text).unwrap_or_default();
-        // A place listed twice keeps its first group.
+        toml::from_str::<Self>(text).unwrap_or_default().tidied()
+    }
+
+    /// A place listed twice keeps its first group.
+    fn tidied(mut self) -> Self {
         let mut seen = HashSet::new();
-        for group in &mut groups.groups {
+        for group in &mut self.groups {
             group.places.retain(|id| seen.insert(id.clone()));
         }
-        groups
+        self
     }
 
     /// The text to store.
@@ -322,6 +368,60 @@ mod tests {
     fn a_missing_or_damaged_file_means_no_groups() {
         assert_eq!(Groups::parse(""), Groups::default());
         assert_eq!(Groups::parse("groups = 3 [["), Groups::default());
+    }
+
+    #[test]
+    fn the_file_is_not_written_before_it_has_been_read() {
+        assert!(!GroupsFile::default().may_save());
+    }
+
+    #[test]
+    fn a_missing_or_readable_file_may_be_replaced() {
+        let mut missing = GroupsFile::default();
+        let (groups, issue) = missing.loaded(Ok(None));
+        assert!(groups.is_none() && issue.is_none());
+        assert!(missing.may_save());
+
+        let mut readable = GroupsFile::default();
+        let text = "version = 1\n[[groups]]\nname = \"A\"\nplaces = [\"x\"]\n";
+        let (groups, issue) = readable.loaded(Ok(Some(text.to_owned())));
+        assert_eq!(
+            groups.map(|groups| shape(&groups)),
+            Some(expected(&[("A", &["x"])]))
+        );
+        assert!(issue.is_none());
+        assert!(readable.may_save());
+    }
+
+    #[test]
+    fn a_damaged_file_is_kept_and_shows_no_groups() {
+        let mut file = GroupsFile::default();
+        let (groups, issue) = file.loaded(Ok(Some("groups = 3 [[".to_owned())));
+        assert!(groups.is_none());
+        assert!(matches!(issue, Some(FileIssue::Damaged(_))));
+        assert!(!file.may_save());
+    }
+
+    #[test]
+    fn a_newer_file_is_shown_as_far_as_understood_and_kept() {
+        let mut file = GroupsFile::default();
+        let text = "version = 99\n[[groups]]\nname = \"A\"\nplaces = [\"x\", \"x\"]\n";
+        let (groups, issue) = file.loaded(Ok(Some(text.to_owned())));
+        assert_eq!(
+            groups.map(|groups| shape(&groups)),
+            Some(expected(&[("A", &["x"])]))
+        );
+        assert!(matches!(issue, Some(FileIssue::NewerVersion(99))));
+        assert!(!file.may_save());
+    }
+
+    #[test]
+    fn an_unreadable_file_is_kept() {
+        let mut file = GroupsFile::default();
+        let (groups, issue) = file.loaded(Err(io::ErrorKind::PermissionDenied.into()));
+        assert!(groups.is_none());
+        assert!(matches!(issue, Some(FileIssue::Read(_))));
+        assert!(!file.may_save());
     }
 
     #[test]

@@ -48,7 +48,7 @@ use rustphin_view::{
     layout::{Flow, Grid, Rect, Step, ViewMode, ZOOM_LEVELS, step_zoom},
     location::Location,
     operations::{Listed, stem_len},
-    pane::{self, Failure, StatusFacts, TypeAhead, Way},
+    pane::{self, Failure, StatusFacts, TypeAhead, Typed, Way},
     pane_state::PaneState,
     selection_actions::{self, Dialog, Facts, Plan, Select, Selected, SelectionAction},
     toolbar_items::Item,
@@ -1066,34 +1066,32 @@ impl qobject::FolderModel {
 
     fn open_typed(mut self: Pin<&mut Self>, typed: &QString) -> bool {
         let typed = typed.to_string();
-        let typed = typed.trim();
-        if pane::names_trash(typed) {
-            self.open_trash();
-            return true;
-        }
-        if let Some(path) = rustphin_platform::uri::path_from_uri(typed.as_bytes()) {
-            self.go_to(path);
-            return true;
-        }
-        // A remote address is mounted through kio-fuse first (W-080).
-        if typed.contains("://")
-            && let Some(address) = rustphin_platform::remote::RemoteAddress::parse(typed)
-        {
-            let thread = self.qt_thread();
-            crate::remote::open(address, move |mounted| {
-                if let Some(path) = mounted {
-                    let _ = thread.queue(move |model| model.go_to(path));
-                }
-            });
-            return true;
-        }
         let base = self.rust().folder();
-        match pane::expand_path(typed, Some(&base)) {
-            Some(path) => {
+        let home = rustphin_platform::xdg::home();
+        match pane::interpret_typed(&typed, &base, home.as_deref()) {
+            Typed::Nothing => false,
+            Typed::Trash => {
+                self.open_trash();
+                true
+            }
+            Typed::Folder(path) => {
                 self.as_mut().go_to(path);
                 true
             }
-            None => false,
+            // A remote address is mounted through kio-fuse first (W-080).
+            Typed::Remote(address) => {
+                let thread = self.qt_thread();
+                crate::remote::open(address, move |mounted| {
+                    if let Some(path) = mounted {
+                        let _ = thread.queue(move |model| model.go_to(path));
+                    }
+                });
+                true
+            }
+            Typed::NotAnAddress => {
+                crate::hub::say(pane::not_an_address(&typed), true);
+                false
+            }
         }
     }
 

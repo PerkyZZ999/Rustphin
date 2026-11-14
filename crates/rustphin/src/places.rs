@@ -34,10 +34,11 @@ use rustphin_platform::{
 };
 use rustphin_view::{
     commands::{self, Action},
-    groups::Groups,
+    groups::GroupsFile,
     places_panel::{
         Effect, Opening, PlacesEdit, PlacesPanel, Row, device_name, icon_for, is_shown,
     },
+    saved_file::SavedFile,
     settings::PlacesChoice,
 };
 
@@ -124,6 +125,7 @@ pub struct PlacesModelRust {
     started: bool,
     places_path: Option<PathBuf>,
     groups_path: Option<PathBuf>,
+    groups_file: GroupsFile,
     places_load: u64,
     places_notice: Option<String>,
     panel: PlacesPanel,
@@ -151,6 +153,7 @@ impl Default for PlacesModelRust {
                 .next()
                 .map(|dir| dir.join("user-places.xbel")),
             groups_path: config::config_dir().map(|dir| dir.join("place-groups.toml")),
+            groups_file: GroupsFile::default(),
             places_load: 0,
             places_notice: None,
             panel: PlacesPanel::new(choice, xdg::home()),
@@ -392,20 +395,27 @@ impl qobject::PlacesModel {
         };
         let thread = self.qt_thread();
         std::thread::spawn(move || {
-            if let Ok(Some(text)) = config::read(&path) {
-                let _ = thread.queue(move |mut model| {
-                    let groups = Groups::parse(&text);
-                    if groups.is_from_newer_version() {
-                        model.as_mut().rust_mut().groups_path = None;
-                    }
+            let read = config::read(&path);
+            let _ = thread.queue(move |mut model| {
+                // Changes are not written until the file has been read, nor
+                // over a file that could not be used (W-140).
+                let (groups, issue) = model.as_mut().rust_mut().groups_file.loaded(read);
+                if let Some(issue) = issue {
+                    tracing::warn!(%issue, "the place groups file is kept for this run");
+                    hub::say(issue.notice(SavedFile::Groups), true);
+                }
+                if let Some(groups) = groups {
                     let effects = model.as_mut().rust_mut().panel.set_groups(groups);
                     model.apply(effects);
-                });
-            }
+                }
+            });
         });
     }
 
     fn save_groups(&self) {
+        if !self.rust().groups_file.may_save() {
+            return;
+        }
         let Some(path) = self.rust().groups_path.clone() else {
             return;
         };

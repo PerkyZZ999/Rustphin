@@ -2,7 +2,8 @@
 //! with the desktop, and the view folders open in.
 //!
 //! Reading never fails: a missing, damaged or partly unknown file yields the
-//! defaults for whatever could not be understood.
+//! defaults for whatever could not be understood, and [`Settings::read`]
+//! says when the file must be kept rather than replaced.
 
 use rustphin_core::{SortKey, ViewOptions};
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     format::{Dates, Units},
     layout::{self, ViewMode},
+    saved_file::{self, FileIssue},
 };
 
 /// The format version this build writes. Version 2 has seven zoom levels
@@ -747,6 +749,14 @@ impl Settings {
             tracing::warn!(%error, "ignoring unreadable settings");
             Self::default()
         })
+    }
+
+    /// Reads the saved file, `None` when there is none, as far as it can
+    /// be: the defaults stand in for a file that cannot be used, and the
+    /// issue says why the file must be kept as it is (W-140).
+    pub fn read(saved: std::io::Result<Option<String>>) -> (Self, Option<FileIssue>) {
+        let decoded = saved_file::decode(saved, VERSION);
+        (decoded.value.unwrap_or_default(), decoded.issue)
     }
 
     /// The settings as TOML text.

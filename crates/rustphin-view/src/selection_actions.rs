@@ -177,6 +177,13 @@ pub enum Plan {
     Open(Dialog),
 }
 
+/// What Extract and Compress say in the trash.
+pub const IN_TRASH: &str =
+    "Archives cannot be extracted or made in the trash. Restore the files first.";
+
+/// What Extract and Compress say as administrator.
+pub const AS_ADMINISTRATOR: &str = "Archives cannot be extracted or made as administrator.";
+
 /// What `action` does with the facts.
 pub fn plan<L: Listing + ?Sized>(action: SelectionAction, facts: &Facts<'_, L>) -> Plan {
     match action {
@@ -184,6 +191,15 @@ pub fn plan<L: Listing + ?Sized>(action: SelectionAction, facts: &Facts<'_, L>) 
         SelectionAction::Duplicate => duplicate(facts),
         SelectionAction::NewFolder | SelectionAction::NewFile => {
             create(action == SelectionAction::NewFolder, facts)
+        }
+        // As the context menu, and as Dolphin, which offers no archive
+        // actions in the trash: an archive made there would have no trash
+        // record. KDE's administrator helper reads and writes no archives.
+        SelectionAction::Extract(_) | SelectionAction::Compress(_) if facts.in_trash => {
+            Plan::Say(IN_TRASH.to_owned())
+        }
+        SelectionAction::Extract(_) | SelectionAction::Compress(_) if facts.as_administrator => {
+            Plan::Say(AS_ADMINISTRATOR.to_owned())
         }
         SelectionAction::Extract(how) => extract(how, facts),
         SelectionAction::Compress(how) => compress(how, facts),
@@ -555,6 +571,62 @@ mod tests {
             &facts(vec![file("notes.txt")], listing),
         );
         assert!(matches!(none, Plan::Say(words) if words == "Select an archive to extract."));
+    }
+
+    #[test]
+    fn nothing_is_extracted_or_compressed_in_the_trash() {
+        // The palette offers these wherever the menu hides them; an archive
+        // written into the trash's files would have no trash record.
+        let listing: &[&[u8]] = &[b"a.zip"];
+        let in_trash = || Facts {
+            in_trash: true,
+            ..facts(vec![archive("a.zip")], listing)
+        };
+        let extract = plan(SelectionAction::Extract(ExtractHow::Here), &in_trash());
+        assert!(
+            matches!(extract, Plan::Say(ref words) if words == IN_TRASH),
+            "{extract:?}"
+        );
+        let extract_to = plan(SelectionAction::Extract(ExtractHow::To), &in_trash());
+        assert!(
+            matches!(extract_to, Plan::Say(ref words) if words == IN_TRASH),
+            "{extract_to:?}"
+        );
+        let compress = plan(SelectionAction::Compress(CompressHow::Zip), &in_trash());
+        assert!(
+            matches!(compress, Plan::Say(ref words) if words == IN_TRASH),
+            "{compress:?}"
+        );
+        let choose = plan(SelectionAction::Compress(CompressHow::Choose), &in_trash());
+        assert!(
+            matches!(choose, Plan::Say(ref words) if words == IN_TRASH),
+            "{choose:?}"
+        );
+    }
+
+    #[test]
+    fn nothing_is_extracted_or_compressed_as_administrator() {
+        let listing: &[&[u8]] = &[b"a.zip"];
+        let as_administrator = || Facts {
+            as_administrator: true,
+            ..facts(vec![archive("a.zip")], listing)
+        };
+        let extract = plan(
+            SelectionAction::Extract(ExtractHow::AndTrash),
+            &as_administrator(),
+        );
+        assert!(
+            matches!(extract, Plan::Say(ref words) if words == AS_ADMINISTRATOR),
+            "{extract:?}"
+        );
+        let compress = plan(
+            SelectionAction::Compress(CompressHow::TarGz),
+            &as_administrator(),
+        );
+        assert!(
+            matches!(compress, Plan::Say(ref words) if words == AS_ADMINISTRATOR),
+            "{compress:?}"
+        );
     }
 
     #[test]
