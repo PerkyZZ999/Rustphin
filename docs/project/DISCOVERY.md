@@ -120,7 +120,7 @@ fallback and privacy/build checks can continue while that decision is pending.
 The maintainer approved testing the W-076e correction in an isolated toolkit/application
 build as a bounded D-001/D-010 exception. Production dependency pins must remain
 unchanged, and adopting a patch still requires review. The experiment lives in
-ignored target/rust-toolchain/w076e-experiment: a Git archive of 6b3ae44, a copied
+ignored target/rust-toolchain/w076e-experiment: a Git archive of 3468898, a copied
 gpui-pre 0.3.9, separate build output and explicit provenance hashes. Registry
 sources are unchanged. Its application lockfile differs only by replacing that
 registry package with the same-version local path package.

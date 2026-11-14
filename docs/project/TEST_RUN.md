@@ -1,6 +1,6 @@
 # Test run: findings
 
-Rustphin build `b0285e7`, installed 2026-11-09 at `~/.local/bin/rustphin`.
+Rustphin build `fdd9361`, installed 2026-11-09 at `~/.local/bin/rustphin`.
 Start it from the desktop icon or the application menu (Rustphin, under System).
 Dolphin stays your default for folders; nothing here changes that.
 

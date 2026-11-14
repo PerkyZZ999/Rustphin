@@ -5,7 +5,7 @@
 Rustphin is a file manager for KDE Plasma on Wayland, written in Rust. It is a re-architecture of KDE's Dolphin (not a line-by-line port) with a dark frosted-glass UI, place groups, a command palette and advanced batch rename.
 
 - Language: Rust, edition 2024, minimum version 1.100 (D-035).
-- UI: Qt 6 Quick and QML through cxx-qt 0.10 (D-034), with KDE Frameworks' `KWindowEffects` for blur. GPUI was replaced at W-114i (2026-11-14); the last GPUI version is commit `c062d63`.
+- UI: Qt 6 Quick and QML through cxx-qt 0.10 (D-034), with KDE Frameworks' `KWindowEffects` for blur. GPUI was replaced at W-114i (2026-11-14); the last GPUI version is commit `72ccb06`.
 - Platform: Linux on Wayland only. No X11, macOS or Windows code.
 - Licence: GPL-3.0-or-later. Every dependency must be GPLv3-compatible.
 - Repository: branch `main`, pushed to GitHub at `https://github.com/PerkyZZ999/Rustphin.git` (remote `origin`, D-037). There is no hosted CI: `rust-tc doctor` run locally is the gate. Push only when the maintainer asks, and only commits that passed doctor.
