@@ -99,10 +99,10 @@ pub mod qobject {
         #[cxx_name = "roleNames"]
         fn role_names(self: &TabsModel) -> QHash_i32_QByteArray;
 
-        /// Opens the window's first tabs: `folders` each in a tab (the names
-        /// in `select` selected in the first), or with none, the saved
-        /// session when this is the start window and Settings restores it,
-        /// else `home`.
+        /// Opens the window's first tabs: `folders` (`file:` URIs) each in a
+        /// tab (the percent-encoded names in `select` selected in the
+        /// first), or with none, the saved session when this is the start
+        /// window and Settings restores it, else `home` (a `file:` URI).
         #[qinvokable]
         fn restore(
             self: Pin<&mut TabsModel>,
@@ -111,8 +111,9 @@ pub mod qobject {
             start: bool,
             home: &QString,
         );
-        /// Opens a tab on `location` after the active one; `activate`
-        /// makes it the active tab. Names in `select` are selected.
+        /// Opens a tab on `location` (a `file:` URI, a remote address or
+        /// typed text) after the active one; `activate` makes it the active
+        /// tab. The percent-encoded names in `select` are selected.
         #[qinvokable]
         fn open(
             self: Pin<&mut TabsModel>,
@@ -171,9 +172,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "paletteJson"]
         fn palette_json(self: &TabsModel) -> QString;
-        /// Copies (or moves) the active view's selection to the other view.
+        /// Copies (or moves) the active view's selection, a `text/uri-list`,
+        /// to the other view.
         #[qinvokable]
         #[cxx_name = "transfer"]
-        fn transfer(self: Pin<&mut TabsModel>, selected: &QStringList, moving: bool);
+        fn transfer(self: Pin<&mut TabsModel>, selected: &QString, moving: bool);
     }
 }

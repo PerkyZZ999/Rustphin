@@ -266,7 +266,8 @@ impl WorkspaceTab {
         &self.panes[self.active_pane]
     }
 
-    /// Names to select when its first pane arrives.
+    /// Names to select when its first pane arrives, as the window hands
+    /// them over (percent-encoded bytes); kept as they are.
     pub fn select(&self) -> &[String] {
         &self.select
     }

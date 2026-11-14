@@ -66,9 +66,8 @@ fn text(words: &str) -> QString {
 
 impl qobject::SettingsModel {
     fn start(mut self: Pin<&mut Self>, shown: &QString) {
-        let shown = shown.to_string();
         self.as_mut().rust_mut().facts.shown_folder =
-            (!shown.is_empty()).then(|| Location::Folder(shown.into()).to_saved());
+            crate::qml_path::from_qml(shown).map(|shown| Location::Folder(shown).to_saved());
         let pages: Vec<serde_json::Value> = Page::ALL
             .iter()
             .map(|page| {

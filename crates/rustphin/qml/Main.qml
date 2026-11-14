@@ -13,12 +13,15 @@ import Rustphin
 Window {
     id: root
 
-    // The folders this window opens in tabs; none for a plain window.
+    // The folders this window opens in tabs, as `file:` URIs; none for a
+    // plain window.
     required property list<string> startFolders
-    // Names selected in the first of them (another application asked).
+    // Names selected in the first of them, percent-encoded (another
+    // application asked).
     property list<string> startSelect: []
     // The window a launch opened first: it restores and saves the session.
     required property bool startWindow
+    // The home folder's `file:` URI.
     required property string home
     readonly property bool maximised: visibility === Window.Maximized || visibility === Window.FullScreen
     readonly property TabPage page: pages.count > tabList.active ? pages.itemAt(tabList.active) as TabPage : null
@@ -30,14 +33,16 @@ Window {
     readonly property PlacesModel placesModel: places.model
     property bool closeAsked: false
 
-    // Opens `folders` in new tabs; the last becomes active (another launch).
+    // Opens `folders` (`file:` URIs) in new tabs; the last becomes active
+    // (another launch).
     function openTabs(folders: list<string>) {
         for (const folder of folders)
             tabList.open(folder, true, [])
         requestActivate()
     }
 
-    // Another application asked to show `folder` with `names` selected.
+    // Another application asked to show `folder` (a `file:` URI) with
+    // `names` (percent-encoded) selected.
     function reveal(folder: string, names: list<string>) {
         tabList.open(folder, true, names)
         requestActivate()
@@ -162,10 +167,10 @@ Window {
             command("filter", null)
             break
         case "copy-to-other-view":
-            tabList.transfer(folder.selectedPaths(), false)
+            tabList.transfer(folder.selectedUris(), false)
             break
         case "move-to-other-view":
-            tabList.transfer(folder.selectedPaths(), true)
+            tabList.transfer(folder.selectedUris(), true)
             break
         case "undo":
             Operations.undo()
@@ -226,7 +231,7 @@ Window {
                 focusActive()
             break
         case "add-place":
-            places.model.addFolder(folder.location)
+            places.model.addFolder(folder.locationUri)
             break
         case "open-palette":
             openPalette()
@@ -392,13 +397,13 @@ Window {
                 visible: root.placesShown
                 Layout.fillHeight: true
                 Layout.preferredWidth: places.model.width
-                current: root.folder ? root.folder.location : ""
+                current: root.folder ? root.folder.locationUri : ""
                 onOtherPane: root.otherPane()
-                onOpenFolder: (path, newTab) => {
+                onOpenFolder: (uri, newTab) => {
                     if (newTab)
-                        tabList.open(path, false, [])
+                        tabList.open(uri, false, [])
                     else
-                        root.folder.open(path)
+                        root.folder.open(uri)
                 }
                 onOpenTrash: root.folder.openTrash()
                 onDone: root.focusActive()
@@ -433,8 +438,8 @@ Window {
                         delegate: TabPage {
                             tabs: root.tabsModel
                             places: root.placesModel
-                            onFileActivated: path => Shell.activate(path)
-                            onOpenInNewTab: path => tabList.open(path, false, [])
+                            onFileActivated: uri => Shell.activate(uri)
+                            onOpenInNewTab: uri => tabList.open(uri, false, [])
                             onMenuRequested: (pane, row, x, y) => root.paneMenu(pane, row, x, y)
                             onCopyText: words => textClip.put(words)
                             onDialogRequested: (kind, data) => root.openDialog(kind, data)
@@ -484,7 +489,7 @@ Window {
             else if (target.kind === "tab")
                 tabList.activate(target.index)
             else if (target.kind === "folder")
-                root.folder.openTyped(target.path)
+                root.folder.openTyped(target.location)
             Qt.callLater(root.focusAfterPalette)
         }
         onClosed: Qt.callLater(root.focusAfterPalette)
@@ -503,7 +508,7 @@ Window {
 
         active: false
         sourceComponent: SettingsDialog {
-            shownFolder: root.folder ? root.folder.location : ""
+            shownFolder: root.folder ? root.folder.locationUri : ""
             places: root.placesModel
             onClosed: {
                 settingsLoader.active = false

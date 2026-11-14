@@ -54,7 +54,7 @@ use rustphin_view::{
     toolbar_items::Item,
 };
 
-use crate::prefs;
+use crate::{prefs, qml_path};
 
 /// The roles QML reads, after Qt's own (`Qt::UserRole` is 0x100).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -216,7 +216,7 @@ pub struct FolderModelRust {
     empty_title: QString,
     empty_text: QString,
     crumb_labels: QStringList,
-    crumb_paths: QStringList,
+    crumb_uris: QStringList,
     one_click: bool,
 
     /// The pane's folder, listing, selection and what waits for entries;
@@ -321,7 +321,7 @@ impl Default for FolderModelRust {
             empty_title: QString::default(),
             empty_text: QString::default(),
             crumb_labels: QStringList::default(),
-            crumb_paths: QStringList::default(),
+            crumb_uris: QStringList::default(),
             one_click: prefs::with(|store| store.opens_with_one_click()),
             pane: PaneState::default(),
             model: None,
@@ -810,7 +810,7 @@ impl qobject::FolderModel {
         }
         if arrival.visited {
             crate::history::visit(snapshot.path());
-            self.as_mut().visited(path_text(snapshot.path()));
+            self.as_mut().visited(qml_path::to_qml(snapshot.path()));
         }
         self.as_mut().update_navigation();
         self.as_mut().selection_changed();
@@ -972,18 +972,17 @@ impl qobject::FolderModel {
         }
     }
 
-    fn open(self: Pin<&mut Self>, path: &QString) {
-        self.go_to(PathBuf::from(path.to_string()));
+    fn open(self: Pin<&mut Self>, uri: &QString) {
+        if let Some(path) = qml_path::from_qml(uri) {
+            self.go_to(path);
+        }
     }
 
-    fn reveal(mut self: Pin<&mut Self>, path: &QString, names: &QStringList) {
-        let path = path.to_string();
-        let folder = rustphin_platform::uri::path_from_uri(path.as_bytes())
-            .unwrap_or_else(|| PathBuf::from(path));
-        let names: Vec<Vec<u8>> = QList::<QString>::from(names)
-            .iter()
-            .map(|name| name.to_string().into_bytes())
-            .collect();
+    fn reveal(mut self: Pin<&mut Self>, uri: &QString, names: &QStringList) {
+        let Some(folder) = qml_path::from_qml(uri) else {
+            return;
+        };
+        let names = qml_path::names_from_qml(names);
         let ready = self
             .rust()
             .current()
@@ -1188,7 +1187,7 @@ impl qobject::FolderModel {
         if snapshot.is_container(row) {
             self.go_to(path);
         } else {
-            self.as_mut().file_activated(path_text(&path));
+            self.as_mut().file_activated(qml_path::to_qml(&path));
         }
     }
 
@@ -1204,7 +1203,7 @@ impl qobject::FolderModel {
         for row in rows {
             if !snapshot.is_container(row) {
                 self.as_mut()
-                    .file_activated(path_text(&snapshot.entry_path(row)));
+                    .file_activated(qml_path::to_qml(&snapshot.entry_path(row)));
             }
         }
     }
@@ -1217,7 +1216,7 @@ impl qobject::FolderModel {
             snapshot.is_container(row).then(|| snapshot.entry_path(row))
         });
         if let Some(path) = target {
-            self.as_mut().open_in_new_tab(path_text(&path));
+            self.as_mut().open_in_new_tab(qml_path::to_qml(&path));
         }
     }
 
@@ -1266,12 +1265,8 @@ impl qobject::FolderModel {
         );
         self.as_mut()
             .set_crumb_labels(string_list(trail.iter().map(|(_, label)| label.as_str())));
-        let paths: Vec<String> = trail
-            .iter()
-            .map(|(path, _)| path.to_string_lossy().into_owned())
-            .collect();
-        self.as_mut()
-            .set_crumb_paths(string_list(paths.iter().map(String::as_str)));
+        let uris: Vec<PathBuf> = trail.iter().map(|(path, _)| path.clone()).collect();
+        self.as_mut().set_crumb_uris(qml_path::list_to_qml(&uris));
         let title = path.file_name().map_or_else(
             || "/".to_owned(),
             |name| display_name(name.as_bytes()).into_owned(),
@@ -1744,31 +1739,6 @@ impl qobject::FolderModel {
         }
     }
 
-    fn selected_paths(&self) -> QStringList {
-        let paths: Vec<String> = self.rust().current().map_or_else(Vec::new, |snapshot| {
-            self.rust()
-                .pane
-                .selection()
-                .rows(snapshot)
-                .into_iter()
-                .map(|row| snapshot.entry_path(row).to_string_lossy().into_owned())
-                .collect()
-        });
-        string_list(paths.iter().map(String::as_str))
-    }
-
-    fn path_at(&self, row: i32) -> QString {
-        self.rust()
-            .current()
-            .and_then(|snapshot| {
-                let row = usize::try_from(row)
-                    .ok()
-                    .filter(|row| *row < snapshot.len())?;
-                Some(path_text(&snapshot.entry_path(row)))
-            })
-            .unwrap_or_default()
-    }
-
     fn icon_at(&self, row: i32) -> QString {
         let rust = self.rust();
         let Some(snapshot) = rust.current() else {
@@ -2081,8 +2051,8 @@ impl qobject::FolderModel {
             PaneCommand::ClearSelection => self.clear_selection(),
             PaneCommand::Properties => {
                 let (paths, _) = self.listed_selection();
-                let list: QList<QString> = paths.iter().map(|path| path_text(path)).collect();
-                self.as_mut().properties_requested(QStringList::from(&list));
+                self.as_mut()
+                    .properties_requested(qml_path::list_to_qml(&paths));
             }
             PaneCommand::Move { step, extend } => self.move_focus(step, extend, lanes),
         }

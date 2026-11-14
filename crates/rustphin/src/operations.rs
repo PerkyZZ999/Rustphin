@@ -9,7 +9,7 @@ mod bridge;
 
 pub use bridge::qobject;
 
-use std::{path::PathBuf, pin::Pin, time::Instant};
+use std::{pin::Pin, time::Instant};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
@@ -152,11 +152,10 @@ impl qobject::Operations {
     }
 
     fn drop_files(self: Pin<&mut Self>, uris: &QString, into: &QString, action: i32) {
+        let Some(into) = crate::qml_path::from_qml(into) else {
+            return;
+        };
         let sources = rustphin_platform::uri::paths_from_uri_list(uris.to_string().as_bytes());
-        hub::drop_files(
-            sources,
-            PathBuf::from(into.to_string()),
-            crate::folder::drop_action(action),
-        );
+        hub::drop_files(sources, into, crate::folder::drop_action(action));
     }
 }

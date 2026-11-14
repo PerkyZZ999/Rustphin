@@ -510,11 +510,11 @@ impl qobject::TabsModel {
         text(&serde_json::Value::Array(tabs).to_string())
     }
 
-    fn transfer(self: Pin<&mut Self>, selected: &QStringList, moving: bool) {
+    fn transfer(self: Pin<&mut Self>, selected: &QString, moving: bool) {
         let Some(workspace) = self.rust().workspace.as_ref() else {
             return;
         };
-        let selected: Vec<PathBuf> = strings(selected).into_iter().map(PathBuf::from).collect();
+        let selected = rustphin_platform::uri::paths_from_uri_list(selected.to_string().as_bytes());
         let how = if moving {
             Transfer::Move
         } else {

@@ -71,10 +71,11 @@ pub mod qobject {
         #[cxx_name = "roleNames"]
         fn role_names(self: &PlacesModel) -> QHash_i32_QByteArray;
 
-        /// Show this folder in the active pane, or in a new tab.
+        /// Show this folder, by its `file://` URI, in the active pane, or
+        /// in a new tab.
         #[qsignal]
         #[cxx_name = "openFolder"]
-        fn open_folder(self: Pin<&mut PlacesModel>, path: QString, new_tab: bool);
+        fn open_folder(self: Pin<&mut PlacesModel>, uri: QString, new_tab: bool);
         /// Show the trash in the active pane.
         #[qsignal]
         #[cxx_name = "openTrash"]
@@ -83,10 +84,11 @@ pub mod qobject {
         /// Starts reading the places, groups and volumes; once.
         #[qinvokable]
         fn start(self: Pin<&mut PlacesModel>);
-        /// The folder the active pane shows, to mark its place.
+        /// The folder the active pane shows, by its `file:` URI (empty for
+        /// none), to mark its place.
         #[qinvokable]
         #[cxx_name = "setCurrent"]
-        fn set_current(self: Pin<&mut PlacesModel>, folder: &QString);
+        fn set_current(self: Pin<&mut PlacesModel>, uri: &QString);
         /// Opens the row: a place, a volume (mounting it), or folds a heading.
         #[qinvokable]
         fn activate(self: Pin<&mut PlacesModel>, row: i32, new_tab: bool);
@@ -117,10 +119,11 @@ pub mod qobject {
         /// Unmounts or powers off the volume at `row`.
         #[qinvokable]
         fn eject(self: Pin<&mut PlacesModel>, row: i32);
-        /// Adds `folder` to the places (Ctrl+Shift+D).
+        /// Adds the folder at the `file:` URI `uri` to the places
+        /// (Ctrl+Shift+D).
         #[qinvokable]
         #[cxx_name = "addFolder"]
-        fn add_folder(self: Pin<&mut PlacesModel>, folder: &QString);
+        fn add_folder(self: Pin<&mut PlacesModel>, uri: &QString);
         /// Drops the place at row `from` onto row `to` (reordering, grouping).
         #[qinvokable]
         #[cxx_name = "dropRow"]
@@ -129,14 +132,16 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "dropFolders"]
         fn drop_folders(self: Pin<&mut PlacesModel>, uris: &QString, to: i32);
-        /// The places offered by the palette, as JSON: title, path, icon.
+        /// The places offered by the palette, as JSON: title, `file://`
+        /// URI, icon.
         #[qinvokable]
         #[cxx_name = "paletteJson"]
         fn palette_json(self: &PlacesModel) -> QString;
-        /// The Lucide icon of the place that is exactly `folder`, if any.
+        /// The Lucide icon of the place that is exactly the folder at the
+        /// `file:` URI `uri`, if any.
         #[qinvokable]
         #[cxx_name = "iconFor"]
-        fn icon_for(self: &PlacesModel, folder: &QString) -> QString;
+        fn icon_for(self: &PlacesModel, uri: &QString) -> QString;
         /// The groups as JSON (name and count), for Settings.
         #[qinvokable]
         #[cxx_name = "groupsJson"]

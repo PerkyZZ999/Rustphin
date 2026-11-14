@@ -11,6 +11,7 @@ import Rustphin
 Popup {
     id: dialog
 
+    // The `file:` URI of the entry shown.
     required property string path
     // Facts are label and value pairs; permissions come as JSON from Rust
     // (`rustphin_view::properties`), read once per change into typed parts.

@@ -41,7 +41,7 @@ use rustphin_view::{
     settings::PlacesChoice,
 };
 
-use crate::{hub, prefs};
+use crate::{hub, prefs, qml_path};
 
 /// How long a burst of changes to the places file or the volumes settles.
 const RELOAD_DELAY: Duration = Duration::from_millis(300);
@@ -174,8 +174,20 @@ fn text(words: &str) -> QString {
     QString::from(words)
 }
 
-fn folder_text(path: &Path) -> QString {
-    QString::from(path.to_string_lossy().as_ref())
+/// The places the palette offers, as JSON: each shown folder's title,
+/// `file://` URI (which keeps every byte) and icon.
+pub fn palette_entries(places: &[Place]) -> serde_json::Value {
+    places
+        .iter()
+        .filter(|place| is_shown(place, false))
+        .filter_map(|place| {
+            Some(serde_json::json!({
+                "title": place.title,
+                "uri": rustphin_platform::uri::file_uri(place.path.as_ref()?),
+                "icon": icon_for(place),
+            }))
+        })
+        .collect()
 }
 
 /// A row number from QML; none when negative.
@@ -556,9 +568,8 @@ impl qobject::PlacesModel {
         self.reload_devices();
     }
 
-    fn set_current(mut self: Pin<&mut Self>, folder: &QString) {
-        let folder =
-            Some(PathBuf::from(folder.to_string())).filter(|path| !path.as_os_str().is_empty());
+    fn set_current(mut self: Pin<&mut Self>, uri: &QString) {
+        let folder = qml_path::from_qml(uri);
         if self.as_mut().rust_mut().panel.set_current(folder) {
             self.redraw_role(Some(Role::Current));
         }
@@ -605,7 +616,7 @@ impl qobject::PlacesModel {
 
     fn open(self: Pin<&mut Self>, opening: Opening, new_tab: bool) {
         match opening {
-            Opening::Folder(path) => self.open_folder(folder_text(&path), new_tab),
+            Opening::Folder(path) => self.open_folder(qml_path::to_qml(&path), new_tab),
             Opening::Trash => self.open_trash(),
             Opening::Remote(address) => self.open_remote(address, new_tab),
             Opening::NetworkFolder(name) => {
@@ -632,7 +643,9 @@ impl qobject::PlacesModel {
                     let mounted = service.mount(&device);
                     let _ = thread.queue(move |mut model| {
                         match mounted {
-                            Ok(path) => model.as_mut().open_folder(folder_text(&path), new_tab),
+                            Ok(path) => {
+                                model.as_mut().open_folder(qml_path::to_qml(&path), new_tab)
+                            }
                             Err(error) => hub::say(
                                 format!("\u{201c}{name}\u{201d} could not be mounted: {error}."),
                                 true,
@@ -654,7 +667,7 @@ impl qobject::PlacesModel {
         crate::remote::open(address, move |mounted| {
             if let Some(path) = mounted {
                 let _ = thread.queue(move |model| {
-                    model.open_folder(folder_text(&path), new_tab);
+                    model.open_folder(qml_path::to_qml(&path), new_tab);
                 });
             }
         });
@@ -737,9 +750,8 @@ impl qobject::PlacesModel {
         self.apply(effects);
     }
 
-    fn add_folder(mut self: Pin<&mut Self>, folder: &QString) {
-        let folder = PathBuf::from(folder.to_string());
-        if !folder.as_os_str().is_empty() {
+    fn add_folder(mut self: Pin<&mut Self>, uri: &QString) {
+        if let Some(folder) = qml_path::from_qml(uri) {
             let effects = self.as_mut().rust_mut().panel.add_folder(folder, None);
             self.apply(effects);
         }
@@ -763,25 +775,13 @@ impl qobject::PlacesModel {
     }
 
     fn palette_json(&self) -> QString {
-        let places: Vec<serde_json::Value> = self
-            .rust()
-            .panel
-            .places()
-            .iter()
-            .filter(|place| is_shown(place, false))
-            .filter_map(|place| {
-                Some(serde_json::json!({
-                    "title": place.title,
-                    "path": place.path.as_ref()?.to_string_lossy(),
-                    "icon": icon_for(place),
-                }))
-            })
-            .collect();
-        text(&serde_json::Value::Array(places).to_string())
+        text(&palette_entries(self.rust().panel.places()).to_string())
     }
 
-    fn icon_for(&self, folder: &QString) -> QString {
-        let folder = PathBuf::from(folder.to_string());
+    fn icon_for(&self, uri: &QString) -> QString {
+        let Some(folder) = qml_path::from_qml(uri) else {
+            return QString::default();
+        };
         text(
             self.rust()
                 .panel

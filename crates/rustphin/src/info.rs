@@ -80,8 +80,10 @@ impl Default for PropertiesModelRust {
 }
 
 impl qobject::PropertiesModel {
-    fn open(mut self: Pin<&mut Self>, path: &QString) {
-        let path = PathBuf::from(path.to_string());
+    fn open(mut self: Pin<&mut Self>, uri: &QString) {
+        let Some(path) = crate::qml_path::from_qml(uri) else {
+            return;
+        };
         let title = path
             .file_name()
             .map(|name| display_name(name.as_encoded_bytes()).into_owned())

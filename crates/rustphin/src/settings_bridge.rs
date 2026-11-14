@@ -27,7 +27,7 @@ pub mod qobject {
 
     unsafe extern "RustQt" {
         /// Reads the desktop's facts and shows the first page; `shown` is
-        /// the folder the window shows.
+        /// the `file:` URI of the folder the window shows, or empty.
         #[qinvokable]
         fn start(self: Pin<&mut SettingsModel>, shown: &QString);
         /// Shows page `page`.

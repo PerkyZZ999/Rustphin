@@ -83,7 +83,7 @@ pub mod qobject {
         #[qproperty(QString, empty_title, cxx_name = "emptyTitle")]
         #[qproperty(QString, empty_text, cxx_name = "emptyText")]
         #[qproperty(QStringList, crumb_labels, cxx_name = "crumbLabels")]
-        #[qproperty(QStringList, crumb_paths, cxx_name = "crumbPaths")]
+        #[qproperty(QStringList, crumb_uris, cxx_name = "crumbUris")]
         #[qproperty(bool, one_click, cxx_name = "oneClick")]
         #[qproperty(bool, frame_log, cxx_name = "frameLog")]
         #[qproperty(QString, menu)]
@@ -118,29 +118,32 @@ pub mod qobject {
         #[cxx_name = "roleNames"]
         fn role_names(self: &FolderModel) -> QHash_i32_QByteArray;
 
-        /// A file was activated: the window opens it (or asks first).
+        /// A file, by its `file://` URI, was activated: the window opens
+        /// it (or asks first).
         #[qsignal]
         #[cxx_name = "fileActivated"]
-        fn file_activated(self: Pin<&mut FolderModel>, path: QString);
-        /// A folder asks to be opened in a new tab (a middle click).
+        fn file_activated(self: Pin<&mut FolderModel>, uri: QString);
+        /// A folder, by its `file://` URI, asks to be opened in a new tab
+        /// (a middle click).
         #[qsignal]
         #[cxx_name = "openInNewTab"]
-        fn open_in_new_tab(self: Pin<&mut FolderModel>, path: QString);
+        fn open_in_new_tab(self: Pin<&mut FolderModel>, uri: QString);
         /// The focused entry should be scrolled into view.
         #[qsignal]
         #[cxx_name = "revealRow"]
         fn reveal_row(self: Pin<&mut FolderModel>, row: i32);
-        /// A folder was listed, rather than merely requested.
+        /// A folder, by its `file://` URI, was listed, rather than merely
+        /// requested.
         #[qsignal]
-        fn visited(self: Pin<&mut FolderModel>, path: QString);
+        fn visited(self: Pin<&mut FolderModel>, uri: QString);
 
-        /// Shows the folder at `path`.
+        /// Shows the folder at the `file:` URI `uri`.
         #[qinvokable]
-        fn open(self: Pin<&mut FolderModel>, path: &QString);
-        /// Shows the folder at `path` (or its `file:` URI) with the
-        /// entries `names` selected.
+        fn open(self: Pin<&mut FolderModel>, uri: &QString);
+        /// Shows the folder at the `file:` URI `uri` with the entries
+        /// `names` (percent-encoded bytes) selected.
         #[qinvokable]
-        fn reveal(self: Pin<&mut FolderModel>, path: &QString, names: &QStringList);
+        fn reveal(self: Pin<&mut FolderModel>, uri: &QString, names: &QStringList);
         /// Opens a typed location; false when there was nothing to open.
         #[qinvokable]
         #[cxx_name = "openTyped"]
@@ -263,14 +266,6 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setHidden"]
         fn set_hidden(self: Pin<&mut FolderModel>, show: bool);
-        /// The selected entries' paths, in list order.
-        #[qinvokable]
-        #[cxx_name = "selectedPaths"]
-        fn selected_paths(self: &FolderModel) -> QStringList;
-        /// The path of the entry at `row`.
-        #[qinvokable]
-        #[cxx_name = "pathAt"]
-        fn path_at(self: &FolderModel, row: i32) -> QString;
         /// Whether `row` is selected.
         #[qinvokable]
         #[cxx_name = "isSelected"]
@@ -280,7 +275,8 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "iconAt"]
         fn icon_at(self: &FolderModel, row: i32) -> QString;
-        /// The selected entries as a `text/uri-list`, for a drag out.
+        /// The selected entries as a `text/uri-list`, for a drag out and
+        /// for copying or moving them to the other view.
         #[qinvokable]
         #[cxx_name = "selectedUris"]
         fn selected_uris(self: &FolderModel) -> QString;
@@ -346,10 +342,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "runMenu"]
         fn run_menu(self: Pin<&mut FolderModel>, path: &QString);
-        /// Asks the window to show these entries' properties.
+        /// Asks the window to show these entries' properties (`file://`
+        /// URIs).
         #[qsignal]
         #[cxx_name = "propertiesRequested"]
-        fn properties_requested(self: Pin<&mut FolderModel>, paths: QStringList);
+        fn properties_requested(self: Pin<&mut FolderModel>, uris: QStringList);
         /// Asks the window for Compress's dialog (W-111d); `CompressModel`
         /// takes what it acts on from the hub by `ticket` (W-126).
         #[qsignal]

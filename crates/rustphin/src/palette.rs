@@ -10,11 +10,12 @@ mod bridge;
 
 pub use bridge::qobject;
 
-use std::{path::PathBuf, pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 use rustphin_core::{SearchQuery, display_name};
+use rustphin_platform::uri::{file_uri, path_from_uri};
 use rustphin_view::{
     commands::COMMANDS,
     location::Location,
@@ -61,23 +62,23 @@ impl Role {
     }
 }
 
-/// The candidates for these tabs and places (JSON lists of `{title, path}`)
-/// and recent folders.
+/// The candidates for these tabs (a JSON list of `{title, path}`, the path
+/// shown only), places (a JSON list of `{title, uri}`) and recent folders.
 fn candidates(tabs: &str, places: &str, recent: &[Location]) -> Vec<Candidate> {
-    let listed = |json: &str| -> Vec<(String, String)> {
+    let listed = |json: &str, key: &str| -> Vec<(String, String)> {
         serde_json::from_str::<Vec<serde_json::Value>>(json)
             .unwrap_or_default()
             .iter()
             .filter_map(|item| {
                 Some((
                     item.get("title")?.as_str()?.to_owned(),
-                    item.get("path")?.as_str()?.to_owned(),
+                    item.get(key)?.as_str()?.to_owned(),
                 ))
             })
             .collect()
     };
     let mut candidates: Vec<Candidate> = command_candidates();
-    for (index, (title, path)) in listed(tabs).into_iter().enumerate() {
+    for (index, (title, path)) in listed(tabs, "path").into_iter().enumerate() {
         if !path.is_empty() {
             candidates.push(Candidate::new(
                 format!("Tab: {title}"),
@@ -87,12 +88,16 @@ fn candidates(tabs: &str, places: &str, recent: &[Location]) -> Vec<Candidate> {
             ));
         }
     }
-    for (title, path) in listed(places) {
+    for (title, uri) in listed(places, "uri") {
+        // The URI keeps every byte of the folder's name (W-132).
+        let Some(path) = path_from_uri(uri.as_bytes()) else {
+            continue;
+        };
         candidates.push(Candidate::new(
             format!("Place: {title}"),
-            path.clone(),
+            display_name(path.as_os_str().as_encoded_bytes()).into_owned(),
             String::new(),
-            Target::Folder(PathBuf::from(path)),
+            Target::Folder(path),
         ));
     }
     for location in recent {
@@ -123,7 +128,9 @@ fn candidates(tabs: &str, places: &str, recent: &[Location]) -> Vec<Candidate> {
     candidates
 }
 
-/// What choosing `target` does, for QML.
+/// What choosing `target` does, for QML. A folder goes as its `file://`
+/// URI, which keeps every byte, or as a remote address; QML hands it to
+/// `FolderModel.openTyped`.
 fn target_json(target: &Target) -> serde_json::Value {
     match target {
         Target::Command(index) => serde_json::json!({
@@ -132,10 +139,10 @@ fn target_json(target: &Target) -> serde_json::Value {
         }),
         Target::Tab(index) => serde_json::json!({ "kind": "tab", "index": index }),
         Target::Folder(path) => {
-            serde_json::json!({ "kind": "folder", "path": path.to_string_lossy() })
+            serde_json::json!({ "kind": "folder", "location": file_uri(path) })
         }
         Target::Remote(address) => {
-            serde_json::json!({ "kind": "folder", "path": address.to_string() })
+            serde_json::json!({ "kind": "folder", "location": address.to_string() })
         }
         Target::ClearHistory => serde_json::json!({ "kind": "clear" }),
     }
@@ -278,12 +285,16 @@ impl qobject::PaletteModel {
 
 #[cfg(test)]
 mod tests {
+    use std::{ffi::OsStr, os::unix::ffi::OsStrExt, path::PathBuf};
+
+    use rustphin_platform::places::Place;
+
     use super::*;
 
     #[test]
     fn tabs_and_places_join_the_commands_and_choosing_says_what_to_do() {
         let tabs = r#"[{"title": "Pictures", "path": "/home/u/Pictures"}]"#;
-        let places = r#"[{"title": "Home", "path": "/home/u"}]"#;
+        let places = r#"[{"title": "Home", "uri": "file:///home/u"}]"#;
         let all = candidates(tabs, places, &[Location::Folder("/srv/old".into())]);
         assert!(all.iter().any(|candidate| candidate.label == "Recent: old"));
         assert!(
@@ -297,6 +308,48 @@ mod tests {
         );
         assert_eq!(target_json(&Target::Command(0))["id"], "go-back");
         assert_eq!(target_json(&Target::Tab(2))["index"], 2);
-        assert_eq!(target_json(&Target::Folder("/srv".into()))["path"], "/srv");
+        assert_eq!(
+            target_json(&Target::Folder("/srv".into()))["location"],
+            "file:///srv"
+        );
+    }
+
+    /// What `FolderModel.openTyped` opens for the target QML is handed.
+    fn opened(target: &Target) -> Option<PathBuf> {
+        path_from_uri(target_json(target)["location"].as_str()?.as_bytes())
+    }
+
+    #[test]
+    fn a_place_outside_utf8_opens_from_the_palette_byte_for_byte() {
+        let folder = PathBuf::from(OsStr::from_bytes(b"/srv/caf\xe9"));
+        let place = Place {
+            id: String::new(),
+            title: "Caf".to_owned(),
+            href: file_uri(&folder),
+            path: Some(folder.clone()),
+            icon: None,
+            hidden: false,
+            system: false,
+            only_in_app: None,
+        };
+        let places = crate::places::palette_entries(&[place]).to_string();
+        let all = candidates("[]", &places, &[]);
+        let Some(chosen) = all.iter().find(|candidate| candidate.label == "Place: Caf") else {
+            panic!("the place is offered");
+        };
+        assert_eq!(opened(&chosen.target), Some(folder));
+    }
+
+    #[test]
+    fn a_recent_folder_outside_utf8_opens_from_the_palette_byte_for_byte() {
+        let folder = PathBuf::from(OsStr::from_bytes(b"/srv/caf\xe9"));
+        let all = candidates("[]", "[]", &[Location::Folder(folder.clone())]);
+        let Some(chosen) = all
+            .iter()
+            .find(|candidate| matches!(candidate.target, Target::Folder(_)))
+        else {
+            panic!("the recent folder is offered");
+        };
+        assert_eq!(opened(&chosen.target), Some(folder));
     }
 }

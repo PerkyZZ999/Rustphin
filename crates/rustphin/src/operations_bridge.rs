@@ -59,7 +59,8 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "dismissNotice"]
         fn dismiss_notice(self: Pin<&mut Operations>);
-        /// Copies or moves dropped `paths` into `into`: 0 asks, 1 copies, 2 moves.
+        /// Copies or moves the dropped `uris` (a `text/uri-list`) into the
+        /// folder at the `file:` URI `into`: 0 asks, 1 copies, 2 moves.
         #[qinvokable]
         #[cxx_name = "dropFiles"]
         fn drop_files(self: Pin<&mut Operations>, uris: &QString, into: &QString, action: i32);

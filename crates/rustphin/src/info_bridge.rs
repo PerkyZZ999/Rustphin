@@ -29,9 +29,9 @@ pub mod qobject {
     }
 
     unsafe extern "RustQt" {
-        /// Reads the entry at `path` in the background.
+        /// Reads the entry at the `file:` URI `uri` in the background.
         #[qinvokable]
-        fn open(self: Pin<&mut PropertiesModel>, path: &QString);
+        fn open(self: Pin<&mut PropertiesModel>, uri: &QString);
         /// Turns one permission on or off: `group` (the class) 0–2, `which` 0 read,
         /// 1 write, 2 execute.
         #[qinvokable]

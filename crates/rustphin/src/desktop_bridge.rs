@@ -22,10 +22,10 @@ pub mod qobject {
     }
 
     unsafe extern "RustQt" {
-        /// Opens a file: a document with its application; a program or
-        /// shortcut after asking.
+        /// Opens a file, by its `file:` URI: a document with its
+        /// application; a program or shortcut after asking.
         #[qinvokable]
-        fn activate(self: Pin<&mut Shell>, path: &QString);
+        fn activate(self: Pin<&mut Shell>, uri: &QString);
         /// Answers the run question (`questions::Answer` numbers).
         #[qinvokable]
         #[cxx_name = "answerLaunch"]

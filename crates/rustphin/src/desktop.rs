@@ -76,11 +76,13 @@ fn carry_out(path: PathBuf, program: bool, answer: Answer) {
 }
 
 impl qobject::Shell {
-    fn activate(self: Pin<&mut Self>, path: &QString) {
+    fn activate(self: Pin<&mut Self>, uri: &QString) {
         if self.rust().pending.is_some() {
             return;
         }
-        let path = PathBuf::from(path.to_string());
+        let Some(path) = crate::qml_path::from_qml(uri) else {
+            return;
+        };
         let thread = self.qt_thread();
         std::thread::spawn(move || match apps::launch_kind(&path) {
             LaunchKind::Document => {

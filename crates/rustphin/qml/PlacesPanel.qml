@@ -13,11 +13,12 @@ FocusScope {
     id: panel
 
     property alias model: places
-    // The folder the active pane shows.
+    // The `file:` URI of the folder the active pane shows.
     property string current: ""
     property int dragFrom: -1
 
-    signal openFolder(string path, bool newTab)
+    // A place's folder, by its `file:` URI, to show here or in a new tab.
+    signal openFolder(string uri, bool newTab)
     signal openTrash
     signal done
     // Tab: the keyboard goes back to the views.
@@ -38,7 +39,7 @@ FocusScope {
     PlacesModel {
         id: places
 
-        onOpenFolder: (path, newTab) => panel.openFolder(path, newTab)
+        onOpenFolder: (uri, newTab) => panel.openFolder(uri, newTab)
         onOpenTrash: panel.openTrash()
     }
 

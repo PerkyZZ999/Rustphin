@@ -20,6 +20,7 @@ mod places;
 mod post;
 mod preferences;
 mod prefs;
+mod qml_path;
 mod remote;
 mod settings;
 mod tabs;
@@ -58,11 +59,9 @@ fn quit_outcome(answer: &HandOver) -> (Option<String>, bool) {
     }
 }
 
+/// Folders for QML, as `file://` URIs that keep every byte (W-132).
 fn folder_list(folders: &[PathBuf]) -> QStringList {
-    folders
-        .iter()
-        .map(|folder| QString::from(folder.to_string_lossy().as_ref()))
-        .collect()
+    qml_path::list_to_qml(folders)
 }
 
 /// What another application asked through FileManager1, as the shell's
@@ -98,17 +97,11 @@ fn answer_file_manager(call: Call) {
     }
 }
 
-/// A shown folder and the names to select in it, as Qt text.
+/// A shown folder and the names to select in it, for QML: the folder's
+/// `file://` URI and the names percent-encoded, so no byte is lost (W-132).
 fn reveal_args(shown: &Shown) -> (QString, QStringList) {
-    let names: QStringList = shown
-        .select
-        .iter()
-        .map(|name| QString::from(name.to_string_lossy().as_ref()))
-        .collect();
-    (
-        QString::from(shown.folder.to_string_lossy().as_ref()),
-        names,
-    )
+    let names = qml_path::names_to_qml(shown.select.iter().map(|name| name.as_encoded_bytes()));
+    (qml_path::to_qml(&shown.folder), names)
 }
 
 /// A directory stays as it is. An existing file becomes the folder around
@@ -185,7 +178,7 @@ fn main() -> ExitCode {
     let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("/"), PathBuf::from);
     let keep = keeps_running(instance.is_some(), prefs::settings().keep_running());
     let mut app = QGuiApplication::new();
-    shell::qobject::rustphin_shell_start(keep, &QString::from(home.to_string_lossy().as_ref()));
+    shell::qobject::rustphin_shell_start(keep, &qml_path::to_qml(&home));
     if launch.command == Command::Open {
         shell::qobject::rustphin_shell_open(
             &folder_list(&launch.targets),
@@ -243,6 +236,8 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
+    use rustphin_view::{location::Location, workspace::PaneStart};
+
     use super::*;
 
     #[test]
@@ -277,27 +272,38 @@ mod tests {
     }
 
     #[test]
-    fn a_shown_file_reaches_qt_as_its_folder_and_name() {
+    fn a_shown_file_reaches_qml_as_its_folder_and_name_byte_for_byte() {
+        use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+        let folder = PathBuf::from(OsStr::from_bytes(b"/srv/caf\xe9"));
         let shown = Shown {
-            folder: PathBuf::from("/srv/data"),
-            select: vec!["report.pdf".into(), "notes.txt".into()],
+            folder: folder.clone(),
+            select: vec![OsStr::from_bytes(b"n\xe9.txt").into(), "notes.txt".into()],
         };
-        let (folder, select) = reveal_args(&shown);
-        let names: Vec<String> = cxx_qt_lib::QList::<QString>::from(&select)
-            .iter()
-            .map(ToString::to_string)
-            .collect();
-        assert_eq!(folder.to_string(), "/srv/data");
-        assert_eq!(names, ["report.pdf", "notes.txt"]);
+        let (uri, select) = reveal_args(&shown);
+        // What the pane reads back when it selects them (FolderModel.reveal).
+        assert_eq!(qml_path::from_qml(&uri), Some(folder));
+        assert_eq!(
+            qml_path::names_from_qml(&select),
+            [b"n\xe9.txt".to_vec(), b"notes.txt".to_vec()]
+        );
     }
 
     #[test]
-    fn folders_reach_qt_as_their_paths() {
-        let list = folder_list(&[PathBuf::from("/srv"), PathBuf::from("/home/someone")]);
-        let paths: Vec<String> = cxx_qt_lib::QList::<QString>::from(&list)
+    fn launch_folders_reach_qml_byte_for_byte() {
+        use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+        let odd = PathBuf::from(OsStr::from_bytes(b"/home/someone/caf\xe9"));
+        let list = folder_list(&[PathBuf::from("/srv"), odd.clone()]);
+        // What the tabs read back (PaneStart::parse) is the same folder.
+        let back: Vec<_> = cxx_qt_lib::QList::<QString>::from(&list)
             .iter()
-            .map(ToString::to_string)
+            .map(|text| PaneStart::parse(&text.to_string()))
             .collect();
-        assert_eq!(paths, ["/srv", "/home/someone"]);
+        assert_eq!(
+            back,
+            [
+                PaneStart::At(Location::Folder(PathBuf::from("/srv"))),
+                PaneStart::At(Location::Folder(odd)),
+            ]
+        );
     }
 }

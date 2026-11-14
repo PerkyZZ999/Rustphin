@@ -20,8 +20,8 @@ Item {
     required property PlacesModel places
     readonly property Pane activeItem: split && activePane === 1 && rightLoader.item ? rightLoader.item as Pane : leftPane
 
-    signal fileActivated(string path)
-    signal openInNewTab(string path)
+    signal fileActivated(string uri)
+    signal openInNewTab(string uri)
     signal menuRequested(Pane pane, int row, real x, real y)
     signal copyText(string words)
     signal dialogRequested(string kind, var data)
@@ -29,7 +29,7 @@ Item {
 
     function report(side: int, pane: Pane) {
         const folder = pane.listing
-        const icon = folder.trash ? "trash" : (page.places.iconFor(folder.location) || "folder")
+        const icon = folder.trash ? "trash" : (page.places.iconFor(folder.locationUri) || "folder")
         page.tabs.setPane(page.key, side, folder.locationUri, folder.title, icon)
     }
 
@@ -57,8 +57,8 @@ Item {
             split: page.split
             current: !page.split || page.activePane === 0
             onEntered: page.tabs.setActivePane(page.key, 0)
-            onFileActivated: path => page.fileActivated(path)
-            onOpenInNewTab: path => page.openInNewTab(path)
+            onFileActivated: uri => page.fileActivated(uri)
+            onOpenInNewTab: uri => page.openInNewTab(uri)
             onMenuRequested: (row, x, y) => page.menuRequested(leftPane, row, x, y)
             onReported: page.report(0, leftPane)
             onCopyText: words => page.copyText(words)
@@ -85,8 +85,8 @@ Item {
                 split: true
                 current: page.activePane === 1
                 onEntered: page.tabs.setActivePane(page.key, 1)
-                onFileActivated: path => page.fileActivated(path)
-                onOpenInNewTab: path => page.openInNewTab(path)
+                onFileActivated: uri => page.fileActivated(uri)
+                onOpenInNewTab: uri => page.openInNewTab(uri)
                 onMenuRequested: (row, x, y) => page.menuRequested(rightPane, row, x, y)
                 onReported: page.report(1, rightPane)
                 onCopyText: words => page.copyText(words)

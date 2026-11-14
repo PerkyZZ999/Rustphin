@@ -12,6 +12,7 @@ import Rustphin
 Popup {
     id: dialog
 
+    // The `file:` URI of the folder the window shows, or empty.
     required property string shownFolder
     required property PlacesModel places
     // Rust hands the pages over as JSON (`settings_form`): typed here.

@@ -141,7 +141,7 @@ Rectangle {
                         color: link.hovered ? Tokens.colors.hover : "transparent"
                     }
                     onClicked: {
-                        bar.folder.open(bar.folder.crumbPaths[crumb.at])
+                        bar.folder.open(bar.folder.crumbUris[crumb.at])
                         bar.pane.focusList()
                     }
                 }
@@ -168,7 +168,9 @@ Rectangle {
         Accessible.name: qsTr("Location")
         background: null
         function accept() {
-            bar.folder.openTyped(text)
+            // The shown text is lossy for a name outside UTF-8: left as it
+            // was, it means the folder itself, by its byte-exact URI.
+            bar.folder.openTyped(text === bar.folder.location ? bar.folder.locationUri : text)
             bar.editEnded()
             bar.pane.focusList()
         }

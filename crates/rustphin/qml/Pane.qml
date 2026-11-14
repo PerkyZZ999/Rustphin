@@ -28,10 +28,10 @@ FocusScope {
     property int hoverIndex: -1
     property bool filterOpen: false
 
-    // A file was activated; the window opens it.
-    signal fileActivated(string path)
-    // A folder asks for a new tab (middle click).
-    signal openInNewTab(string path)
+    // A file, by its `file:` URI, was activated; the window opens it.
+    signal fileActivated(string uri)
+    // A folder, by its `file:` URI, asks for a new tab (middle click).
+    signal openInNewTab(string uri)
     // The context menu: on `row` (-1 for the folder) at a point in the pane.
     // Where the view was before the model's last reset, and the folder
     // that reset showed.
@@ -145,8 +145,8 @@ FocusScope {
     FolderModel {
         id: folder
 
-        onFileActivated: path => pane.fileActivated(path)
-        onOpenInNewTab: path => pane.openInNewTab(path)
+        onFileActivated: uri => pane.fileActivated(uri)
+        onOpenInNewTab: uri => pane.openInNewTab(uri)
         onCopyText: words => pane.copyText(words)
         onPropertiesRequested: paths => pane.dialogRequested("properties", paths)
         onCompressRequested: ticket => pane.dialogRequested("compress", ticket)
@@ -170,8 +170,8 @@ FocusScope {
             }
         }
         onModelReset: {
-            const same = pane.shownLocation === folder.location
-            pane.shownLocation = folder.location
+            const same = pane.shownLocation === folder.locationUri
+            pane.shownLocation = folder.locationUri
             if (same)
                 Qt.callLater(pane.restoreScroll)
         }
