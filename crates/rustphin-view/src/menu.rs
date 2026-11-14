@@ -248,6 +248,73 @@ impl<C> MenuEntry<C> {
     }
 }
 
+/// A menu as QML draws it: each entry with its label, key, icon (a Lucide
+/// name or a picture's `file://` address), whether it can be chosen, and
+/// its path ("2" or "3.1") for [`command_at`].
+pub fn to_json<C: Command>(entries: &[MenuEntry<C>]) -> serde_json::Value {
+    fn walk<C: Command>(entries: &[MenuEntry<C>], prefix: &str) -> Vec<serde_json::Value> {
+        entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                let path = if prefix.is_empty() {
+                    index.to_string()
+                } else {
+                    format!("{prefix}.{index}")
+                };
+                match entry {
+                    MenuEntry::Item {
+                        label,
+                        command,
+                        enabled,
+                    } => serde_json::json!({
+                        "kind": "item",
+                        "label": label,
+                        "shortcut": command.shortcut().unwrap_or(""),
+                        "icon": icon_text(&command.row_icon()),
+                        "enabled": enabled,
+                        "path": path,
+                    }),
+                    MenuEntry::Submenu { label, items } => serde_json::json!({
+                        "kind": "submenu",
+                        "label": label,
+                        "enabled": entry.enabled_choice(),
+                        "path": path,
+                        "items": walk(items, &path),
+                    }),
+                    MenuEntry::Separator => {
+                        serde_json::json!({ "kind": "separator", "path": path })
+                    }
+                }
+            })
+            .collect()
+    }
+    serde_json::Value::Array(walk(entries, ""))
+}
+
+/// How a row's icon is named for QML.
+fn icon_text(icon: &RowIcon) -> String {
+    match icon {
+        RowIcon::Symbol(icon) => icon.lucide_name(),
+        RowIcon::Image(path) => rustphin_platform::uri::file_uri(path),
+    }
+}
+
+/// The command at `path` ("2", "3.1") of a menu, if it can be chosen.
+pub fn command_at<'a, C>(entries: &'a [MenuEntry<C>], path: &str) -> Option<&'a C> {
+    let mut entries = entries;
+    let mut steps = path.split('.').peekable();
+    while let Some(step) = steps.next() {
+        let entry = entries.get(step.parse::<usize>().ok()?)?;
+        match entry {
+            MenuEntry::Submenu { items, .. } if steps.peek().is_some() => entries = items,
+            _ if steps.peek().is_none() => return entry.command(),
+            _ => return None,
+        }
+    }
+    None
+}
+
 /// The facts the menu is built from.
 #[derive(Debug, Clone)]
 pub struct MenuFacts {
@@ -1071,5 +1138,42 @@ mod tests {
                 icon: None,
             }))
         );
+    }
+
+    #[test]
+    fn a_menu_reaches_qml_with_paths_that_find_its_commands() {
+        let entries = vec![
+            MenuEntry::Item {
+                label: "Open".into(),
+                command: MenuCommand::Open,
+                enabled: true,
+            },
+            MenuEntry::Separator,
+            MenuEntry::Submenu {
+                label: "More".into(),
+                items: vec![
+                    MenuEntry::Item {
+                        label: "Copy".into(),
+                        command: MenuCommand::Copy,
+                        enabled: true,
+                    },
+                    MenuEntry::Item {
+                        label: "Paste".into(),
+                        command: MenuCommand::Paste,
+                        enabled: false,
+                    },
+                ],
+            },
+        ];
+        let json = to_json(&entries);
+        assert_eq!(json[0]["shortcut"], "Enter");
+        assert_eq!(json[2]["items"][1]["path"], "2.1");
+        assert_eq!(command_at(&entries, "0"), Some(&MenuCommand::Open));
+        assert_eq!(command_at(&entries, "2.0"), Some(&MenuCommand::Copy));
+        // Disabled entries, separators and submenus themselves run nothing.
+        assert_eq!(command_at(&entries, "2.1"), None);
+        assert_eq!(command_at(&entries, "1"), None);
+        assert_eq!(command_at(&entries, "2"), None);
+        assert_eq!(command_at(&entries, "9"), None);
     }
 }

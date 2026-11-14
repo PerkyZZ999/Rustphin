@@ -115,18 +115,51 @@ QQmlApplicationEngine* engine()
     return shell().engine;
 }
 
-void openWindow(const QString& folder, const QString& activation)
+// The window last given the keyboard, for tabs other launches open.
+QWindow* lastActive()
 {
+    if (shell().engine == nullptr) {
+        return nullptr;
+    }
+    QWindow* focused = QGuiApplication::focusWindow();
+    QWindow* found = nullptr;
+    for (QObject* root : shell().engine->rootObjects()) {
+        auto* window = qobject_cast<QWindow*>(root);
+        if (window == nullptr || !window->isVisible()) {
+            continue;
+        }
+        if (window == focused) {
+            return window;
+        }
+        found = window;
+    }
+    return found;
+}
+
+void activate(QWindow* window, const QString& activation)
+{
+    // Qt's Wayland support hands this token to KWin with the request.
+    if (!activation.isEmpty()) {
+        qputenv("XDG_ACTIVATION_TOKEN", activation.toUtf8());
+    }
+    window->requestActivate();
+}
+
+// A window with a tab on each folder; with none, the start window (it
+// restores the session) when no window is open, else one at home.
+void openWindow(const QStringList& folders, const QString& activation)
+{
+    const bool start = folders.isEmpty() && lastActive() == nullptr;
     QQmlApplicationEngine* windows = engine();
-    windows->setInitialProperties({ { QStringLiteral("startFolder"), folder.isEmpty() ? shell().home : folder } });
+    windows->setInitialProperties({
+        { QStringLiteral("startFolders"), folders },
+        { QStringLiteral("startWindow"), start },
+        { QStringLiteral("home"), shell().home },
+    });
     windows->load(QUrl(QStringLiteral("qrc:/qt/qml/Rustphin/qml/Main.qml")));
     const QList<QObject*> roots = windows->rootObjects();
     if (auto* window = roots.isEmpty() ? nullptr : qobject_cast<QWindow*>(roots.last())) {
-        // Qt's Wayland support hands this token to KWin with the request.
-        if (!activation.isEmpty()) {
-            qputenv("XDG_ACTIVATION_TOKEN", activation.toUtf8());
-        }
-        window->requestActivate();
+        activate(window, activation);
     }
 }
 
@@ -180,16 +213,18 @@ void rustphin_shell_start(bool keep_running, const QString& home)
 void rustphin_shell_open(const QStringList& folders, const QString& activation)
 {
     QMetaObject::invokeMethod(
-        qGuiApp,
-        [folders, activation] {
-            if (folders.isEmpty()) {
-                openWindow(QString(), activation);
-            }
-            for (const QString& folder : folders) {
-                openWindow(folder, activation);
-            }
-        },
-        Qt::QueuedConnection);
+        qGuiApp, [folders, activation] { openWindow(folders, activation); }, Qt::QueuedConnection);
+}
+
+void rustphin_shell_show(const QStringList& folders, const QString& activation, bool in_tabs)
+{
+    QWindow* window = in_tabs && !folders.isEmpty() ? lastActive() : nullptr;
+    if (window == nullptr) {
+        openWindow(folders, activation);
+        return;
+    }
+    QMetaObject::invokeMethod(window, "openTabs", Q_ARG(QVariant, QVariant(folders)));
+    activate(window, activation);
 }
 
 void rustphin_shell_quit()

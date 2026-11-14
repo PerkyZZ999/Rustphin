@@ -7,14 +7,22 @@
 //! it and exit. Until the switch (W-114i) it owns its own bus name, so the
 //! GPUI Rustphin in use never receives its launches.
 
+mod admin;
 mod desktop;
 mod folder;
+mod history;
 mod hub;
 mod operations;
+mod palette;
+mod places;
 mod post;
+mod preferences;
 mod prefs;
+mod remote;
+mod tabs;
 mod tokens;
 mod toolbar;
+mod types;
 
 // cxx-qt generates the unsafe FFI glue for the shell's calls; the bridge
 // file holds declarations only (AGENTS.md, D-034).
@@ -119,10 +127,17 @@ fn main() -> ExitCode {
                     Request::Open {
                         folders,
                         activation,
-                    } => shell::qobject::rustphin_shell_open(
-                        &folder_list(&folders),
-                        &QString::from(activation.as_deref().unwrap_or_default()),
-                    ),
+                    } => post::on_qt(move || {
+                        // General: other applications' folders open as tabs
+                        // of the open window, or in a window of their own.
+                        let in_tabs = prefs::settings().shown_folders()
+                            == rustphin_view::settings::ShownIn::Tab;
+                        shell::qobject::rustphin_shell_show(
+                            &folder_list(&folders),
+                            &QString::from(activation.as_deref().unwrap_or_default()),
+                            in_tabs,
+                        );
+                    }),
                     Request::Quit => shell::qobject::rustphin_shell_quit(),
                 }
             }

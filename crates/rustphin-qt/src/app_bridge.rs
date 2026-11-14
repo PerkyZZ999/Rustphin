@@ -16,6 +16,9 @@ pub mod qobject {
         fn rustphin_shell_start(keep_running: bool, home: &QString);
         /// Opens a window on each folder (one at home for none). Any thread.
         fn rustphin_shell_open(folders: &QStringList, activation: &QString);
+        /// Shows another launch's folders: as tabs of the window last used
+        /// when `in_tabs` and there is one, else in a new window. Qt thread.
+        fn rustphin_shell_show(folders: &QStringList, activation: &QString, in_tabs: bool);
         /// Closes every window and ends the process. Any thread.
         fn rustphin_shell_quit();
         /// Runs `run` on the GUI thread, from its event loop. Any thread.

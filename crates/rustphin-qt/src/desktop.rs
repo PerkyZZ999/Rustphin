@@ -131,6 +131,15 @@ impl qobject::Shell {
         crate::shell::qobject::rustphin_shell_open(&QStringList::from(&list), &QString::default());
     }
 
+    fn ask_before_closing_tabs(&self) -> bool {
+        prefs::settings().confirmations().close_tabs
+    }
+
+    fn close_question(&self, count: i32) -> QString {
+        let shown = questions::close_window(usize::try_from(count).unwrap_or(0));
+        QString::from(&serde_json::to_string(&shown).unwrap_or_default())
+    }
+
     fn quit(self: Pin<&mut Self>) {
         crate::shell::qobject::rustphin_shell_quit();
     }

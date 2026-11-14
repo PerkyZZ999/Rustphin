@@ -83,6 +83,7 @@ pub mod qobject {
         #[qproperty(QStringList, crumb_paths, cxx_name = "crumbPaths")]
         #[qproperty(bool, one_click, cxx_name = "oneClick")]
         #[qproperty(bool, frame_log, cxx_name = "frameLog")]
+        #[qproperty(QString, menu)]
         #[qproperty(bool, scroll_bench, cxx_name = "scrollBench")]
         type FolderModel = super::FolderModelRust;
     }
@@ -321,6 +322,42 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "emptyTrash"]
         fn empty_trash(self: Pin<&mut FolderModel>);
+        /// Runs the palette command `id` (`rustphin_view::commands`) that
+        /// acts on this pane, `lanes` entries to a line; false when it is
+        /// not a pane command.
+        #[qinvokable]
+        fn command(self: Pin<&mut FolderModel>, id: &QString, lanes: i32) -> bool;
+        /// Builds the context menu into `menu`: for the selection when
+        /// `on_selection`, else for the folder; "new" for the New button's
+        /// menu, "trash" for the trash's actions. False when empty.
+        #[qinvokable]
+        #[cxx_name = "openMenu"]
+        fn open_menu(self: Pin<&mut FolderModel>, which: &QString) -> bool;
+        /// Runs the menu entry at `path`; an empty path closes the menu.
+        #[qinvokable]
+        #[cxx_name = "runMenu"]
+        fn run_menu(self: Pin<&mut FolderModel>, path: &QString);
+        /// Asks the window to show these entries' properties.
+        #[qsignal]
+        #[cxx_name = "propertiesRequested"]
+        fn properties_requested(self: Pin<&mut FolderModel>, paths: QStringList);
+        /// Asks the window for Compress's dialog (W-111d): the entries, the
+        /// folder, the name offered and the names taken, as JSON.
+        #[qsignal]
+        #[cxx_name = "compressRequested"]
+        fn compress_requested(self: Pin<&mut FolderModel>, json: QString);
+        /// Asks the window for batch rename (several selected, F2), as JSON.
+        #[qsignal]
+        #[cxx_name = "batchRenameRequested"]
+        fn batch_rename_requested(self: Pin<&mut FolderModel>, json: QString);
+        /// Asks the window to choose a folder to extract into (W-113).
+        #[qsignal]
+        #[cxx_name = "extractToRequested"]
+        fn extract_to_requested(self: Pin<&mut FolderModel>, json: QString);
+        /// Asks the window to put text on the clipboard.
+        #[qsignal]
+        #[cxx_name = "copyText"]
+        fn copy_text(self: Pin<&mut FolderModel>, text: QString);
         /// Makes an empty folder (or file) with a free name and renames it.
         #[qinvokable]
         #[cxx_name = "createEntry"]

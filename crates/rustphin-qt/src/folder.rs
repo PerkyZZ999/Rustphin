@@ -35,7 +35,6 @@ use rustphin_core::{
     SortKey, ViewOptions, display_name,
 };
 use rustphin_platform::{
-    mime::MimeDb,
     thumbnails::{ThumbSize, ThumbnailCache, Thumbnailer},
     trash::FreedesktopTrash,
     xdg,
@@ -236,7 +235,7 @@ pub struct FolderModelRust {
     renaming: Option<Vec<u8>>,
     type_ahead: TypeAhead,
     /// The file types, once loaded in the background.
-    types: Option<Arc<MimeDb>>,
+    types: Option<Arc<crate::types::Types>>,
     /// Type descriptions already looked up, by MIME type.
     descriptions: RefCell<HashMap<String, String>>,
     thumbs: RefCell<Thumbs>,
@@ -254,6 +253,7 @@ pub struct FolderModelRust {
     /// The folder, total and free bytes of its volume.
     usage: Option<(PathBuf, u64, u64)>,
     frame_log: bool,
+    menu: QString,
     scroll_bench: bool,
     /// When the folder or order now awaited was asked for, what it was, and
     /// its generation, until a frame shows it (W-073g).
@@ -262,6 +262,10 @@ pub struct FolderModelRust {
     shown: bool,
     /// Frame times of the scroll benchmark.
     frames: Vec<Instant>,
+    /// The New menu's files.
+    new_files: Vec<rustphin_platform::templates::NewFile>,
+    /// The open menu and what it acts on.
+    menu_entries: Vec<rustphin_view::menu::MenuEntry>,
     /// The hub's counters last taken up.
     clip_serial: u64,
     created_serial: u64,
@@ -352,12 +356,15 @@ impl Default for FolderModelRust {
             width: 1000.,
             visited: None,
             usage: None,
+            menu: QString::default(),
             frame_log: std::env::var_os("RUSTPHIN_FRAME_LOG").is_some()
                 || std::env::var_os("RUSTPHIN_SCROLL_BENCH").is_some(),
             scroll_bench: std::env::var_os("RUSTPHIN_SCROLL_BENCH").is_some(),
             asked: None,
             shown: false,
             frames: Vec::new(),
+            new_files: rustphin_platform::templates::built_in(),
+            menu_entries: Vec::new(),
             clip_serial: 0,
             created_serial: crate::hub::with(|hub| hub.created.0),
             admin_changes: 0,
@@ -394,7 +401,7 @@ impl FolderModelRust {
         self.descriptions
             .borrow_mut()
             .entry(mime.to_owned())
-            .or_insert_with(|| types.description(mime))
+            .or_insert_with(|| types.mimes.description(mime))
             .clone()
     }
 
@@ -407,7 +414,7 @@ impl FolderModelRust {
             return None;
         }
         let name = snapshot.link_target_name(row).unwrap_or(snapshot.name(row));
-        if !has_thumbnail(self.types.as_ref()?.mime_type(name, false)) {
+        if !has_thumbnail(self.types.as_ref()?.mimes.mime_type(name, false)) {
             return None;
         }
         let size = ThumbSize::for_edge(edge as u32);
@@ -548,7 +555,7 @@ impl qobject::FolderModel {
                     return words("");
                 };
                 let name = snapshot.link_target_name(row).unwrap_or(snapshot.name(row));
-                words(&rust.description(types.mime_type(name, snapshot.is_container(row))))
+                words(&rust.description(types.mimes.mime_type(name, snapshot.is_container(row))))
             }
             Role::Folder => QVariant::from(&snapshot.is_container(row)),
             Role::Hidden => QVariant::from(&snapshot.is_hidden(row)),
@@ -557,7 +564,9 @@ impl qobject::FolderModel {
                 // A link looks like what it points to, as in Dolphin.
                 let name = snapshot.link_target_name(row).unwrap_or(snapshot.name(row));
                 let names = rust.types.as_ref().map_or_else(Vec::new, |types| {
-                    types.icon_names(types.mime_type(name, is_folder))
+                    types
+                        .mimes
+                        .icon_names(types.mimes.mime_type(name, is_folder))
                 });
                 words(&icon_id(&names, is_folder))
             }
@@ -631,9 +640,17 @@ impl qobject::FolderModel {
             }
         });
         let thread = self.qt_thread();
-        std::thread::spawn(move || {
-            let types = Arc::new(MimeDb::load(&xdg::data_dirs()));
+        crate::types::when_ready(move |types| {
             let _ = thread.queue(move |model| model.set_types(types));
+        });
+        // The New menu's templates, from the user's and the system's folders.
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            use rustphin_platform::templates;
+            let folder = xdg::home()
+                .and_then(|home| templates::templates_dir(&home, xdg::config_home().as_deref()));
+            let files = templates::load(folder.as_deref(), &xdg::data_dirs());
+            let _ = thread.queue(move |mut model| model.as_mut().rust_mut().new_files = files);
         });
         if let Some(cache) = ThumbnailCache::for_user() {
             let (thumbnailer, results) = Thumbnailer::start(cache, THUMB_WORKERS);
@@ -818,6 +835,7 @@ impl qobject::FolderModel {
         }
         if !snapshot.is_loading() && self.rust().visited.as_deref() != Some(snapshot.path()) {
             self.as_mut().rust_mut().visited = Some(snapshot.path().to_owned());
+            crate::history::visit(snapshot.path());
             self.as_mut().visited(path_text(snapshot.path()));
         }
         self.as_mut().update_navigation();
@@ -953,7 +971,7 @@ impl qobject::FolderModel {
     }
 
     /// Takes the loaded file types and redraws the icons.
-    fn set_types(mut self: Pin<&mut Self>, types: Arc<MimeDb>) {
+    fn set_types(mut self: Pin<&mut Self>, types: Arc<crate::types::Types>) {
         self.as_mut().rust_mut().types = Some(types);
         self.rows_changed(&[Role::Icon, Role::Kind, Role::Thumbnail]);
     }
@@ -1083,9 +1101,20 @@ impl qobject::FolderModel {
             self.open_trash();
             return true;
         }
-        // A remote address is mounted by the window (W-114f).
         if let Some(path) = rustphin_platform::uri::path_from_uri(typed.as_bytes()) {
             self.go_to(path);
+            return true;
+        }
+        // A remote address is mounted through kio-fuse first (W-080).
+        if typed.contains("://")
+            && let Some(address) = rustphin_platform::remote::RemoteAddress::parse(typed)
+        {
+            let thread = self.qt_thread();
+            crate::remote::open(address, move |mounted| {
+                if let Some(path) = mounted {
+                    let _ = thread.queue(move |model| model.go_to(path));
+                }
+            });
             return true;
         }
         let base = PathBuf::from(self.location().to_string());
@@ -1273,7 +1302,13 @@ impl qobject::FolderModel {
         if !self.notice().is_empty() {
             self.as_mut().set_notice(QString::default());
         }
-        let trail = pane::crumb_trail(path, None);
+        let remote = crate::remote::root_of(path);
+        let trail = pane::crumb_trail(
+            path,
+            remote
+                .as_ref()
+                .map(|(root, address)| (root.as_path(), address.as_str())),
+        );
         self.as_mut()
             .set_crumb_labels(string_list(trail.iter().map(|(_, label)| label.as_str())));
         let paths: Vec<String> = trail
@@ -1674,7 +1709,7 @@ impl qobject::FolderModel {
     }
 
     fn begin_rename(mut self: Pin<&mut Self>) {
-        if self.rust().trash_dir.is_some() {
+        if self.rust().trash_dir.is_some() || self.as_mut().offer_batch_rename() {
             return;
         }
         let name = self.rust().current().and_then(|snapshot| {
@@ -1914,6 +1949,508 @@ impl qobject::FolderModel {
         } else {
             rustphin_core::ops::Request::CreateFile { parent, name }
         });
+    }
+}
+
+/// Entries handed to the window's dialogs (Compress, batch rename,
+/// Extract to): QML gets a ticket, the paths stay here as bytes.
+#[expect(dead_code, reason = "the dialogs that take these arrive with W-114f")]
+pub mod handed {
+    use std::{cell::RefCell, ffi::OsString, path::PathBuf};
+
+    /// What a dialog acts on.
+    #[derive(Debug, Clone, Default)]
+    pub struct Handed {
+        /// The folder.
+        pub folder: PathBuf,
+        /// The entries' paths.
+        pub sources: Vec<PathBuf>,
+        /// Names in the folder that are not among them (batch rename).
+        pub staying: Vec<OsString>,
+        /// Every name in the folder, as bytes (Compress avoids them).
+        pub taken: Vec<Vec<u8>>,
+        /// For Extract to: each archive and whether Rustphin opens it.
+        pub archives: Vec<(PathBuf, bool)>,
+        /// Extract to: trash the archives afterwards.
+        pub trash: bool,
+    }
+
+    thread_local! {
+        static HANDED: RefCell<Option<Handed>> = const { RefCell::new(None) };
+    }
+
+    /// Keeps `handed` for the dialog about to open.
+    pub fn keep(handed: Handed) {
+        HANDED.with(|slot| *slot.borrow_mut() = Some(handed));
+    }
+
+    /// What the open dialog acts on; it is handed over once.
+    pub fn take() -> Option<Handed> {
+        HANDED.with(|slot| slot.borrow_mut().take())
+    }
+}
+
+impl qobject::FolderModel {
+    /// The facts the context menu is built from.
+    fn menu_facts(&self, on_selection: bool) -> rustphin_view::menu::MenuFacts {
+        let rust = self.rust();
+        let snapshot = rust.current().filter(|_| on_selection);
+        let rows = snapshot
+            .map(|snapshot| rust.selection.rows(snapshot))
+            .unwrap_or_default();
+        let single_container =
+            rows.len() == 1 && snapshot.is_some_and(|snapshot| snapshot.is_container(rows[0]));
+        let applications = match (rows.as_slice(), snapshot, rust.types.as_ref()) {
+            ([row], Some(snapshot), Some(types)) if !single_container => types
+                .applications(types.mimes.mime_type(snapshot.name(*row), false))
+                .into_iter()
+                .map(|app| rustphin_view::menu::AppChoice {
+                    icon: types.app_icon(&app.id),
+                    id: app.id,
+                    name: app.name,
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        let can_paste = crate::hub::with(|hub| hub.has_clip());
+        let (all_archives, extract_folder, compress_names) = match snapshot {
+            Some(snapshot) if !rows.is_empty() => {
+                let all_archives = rows.iter().all(|&row| {
+                    !snapshot.is_container(row) && self.archive_opener(snapshot, row).is_some()
+                });
+                let extract_folder = (rows.len() == 1)
+                    .then(|| rustphin_view::archives::folder_for(snapshot.name(rows[0])));
+                let entries: Vec<(&[u8], bool)> = rows
+                    .iter()
+                    .map(|&row| (snapshot.name(row), snapshot.is_container(row)))
+                    .collect();
+                let listed = snapshot.listed_names();
+                (
+                    all_archives,
+                    extract_folder,
+                    rustphin_view::archives::quick_names(&entries, |name| listed.contains(name)),
+                )
+            }
+            _ => (false, None, Default::default()),
+        };
+        rustphin_view::menu::MenuFacts {
+            on_selection,
+            count: rows.len(),
+            single_container,
+            in_trash: rust.trash_dir.is_some(),
+            as_administrator: crate::admin::active(),
+            can_paste,
+            applications,
+            types_ready: rust.types.is_some(),
+            all_archives,
+            extract_folder,
+            compress_names,
+        }
+    }
+
+    fn command(mut self: Pin<&mut Self>, id: &QString, lanes: i32) -> bool {
+        use rustphin_view::menu::{CompressHow, ExtractHow};
+        let id = id.to_string();
+        let step = |id: &str| -> Option<(i32, bool)> {
+            Some(match id {
+                "select-previous" => (0, false),
+                "select-next" => (1, false),
+                "select-left" => (2, false),
+                "select-right" => (3, false),
+                "page-up" => (4, false),
+                "page-down" => (5, false),
+                "select-first" => (6, false),
+                "select-last" => (7, false),
+                "extend-previous" => (0, true),
+                "extend-next" => (1, true),
+                "extend-left" => (2, true),
+                "extend-right" => (3, true),
+                "extend-page-up" => (4, true),
+                "extend-page-down" => (5, true),
+                "extend-first" => (6, true),
+                "extend-last" => (7, true),
+                _ => return None,
+            })
+        };
+        if let Some((step, extend)) = step(&id) {
+            self.move_focus(step, extend, lanes);
+            return true;
+        }
+        match id.as_str() {
+            "go-back" => self.back(),
+            "go-forward" => self.forward(),
+            "go-up" => self.up(),
+            "go-home" => self.home(),
+            "reload" => self.reload(),
+            "open-terminal" => self.run(&QString::from("terminal")),
+            "activate" => self.activate_selected(),
+            "show-icons" => self.choose_mode(0),
+            "show-compact" => self.choose_mode(1),
+            "show-details" => self.choose_mode(2),
+            "toggle-hidden" => self.run(&QString::from("hidden")),
+            "toggle-folders-first" => self.toggle_folders_first(),
+            "zoom-in" => self.zoom_by(1),
+            "zoom-out" => self.zoom_by(-1),
+            "zoom-reset" => {
+                self.choose_zoom(i32::try_from(rustphin_view::layout::DEFAULT_ZOOM).unwrap_or(2))
+            }
+            "sort-name" => self.sort_by(0),
+            "sort-size" => self.sort_by(1),
+            "sort-modified" => self.sort_by(2),
+            "sort-type" => self.sort_by(3),
+            "new-folder" => self.create_entry(true),
+            "new-file" => self.create_entry(false),
+            "rename" => self.begin_rename(),
+            "recover-renames" => {
+                if self.rust().trash_dir.is_none() && self.rust().current().is_some() {
+                    crate::hub::start(rustphin_core::ops::Request::RecoverRenameBatch {
+                        directory: PathBuf::from(self.location().to_string()),
+                    });
+                }
+            }
+            "copy" => self.copy_selected(false),
+            "cut" => self.copy_selected(true),
+            "paste" => self.paste(),
+            "copy-location" => self.copy_location(),
+            "duplicate" => self.duplicate_selected(),
+            "extract-here" => self.extract_selected(ExtractHow::Here),
+            "extract-into-folder" => self.extract_selected(ExtractHow::NewFolder),
+            "extract-and-trash" => self.extract_selected(ExtractHow::AndTrash),
+            "extract-to" => self.extract_selected(ExtractHow::To),
+            "compress-zip" => self.compress_selected(CompressHow::Zip),
+            "compress-tar-gz" => self.compress_selected(CompressHow::TarGz),
+            "compress-choose" => self.compress_selected(CompressHow::Choose),
+            "move-to-trash" => self.trash_selected(),
+            "delete-permanently" => self.delete_selected(),
+            "open-trash" => self.open_trash(),
+            "restore-trash" => self.restore_selected(),
+            "empty-trash" => self.empty_trash(),
+            "select-all" => self.select_all(),
+            "invert-selection" => self.invert_selection(),
+            "cancel-edit" => self.clear_selection(),
+            "show-properties" => {
+                let (paths, _) = self.listed_selection();
+                let list: QList<QString> = paths.iter().map(|path| path_text(path)).collect();
+                self.as_mut().properties_requested(QStringList::from(&list));
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// Which tool opens the archive at `row`, if any.
+    fn archive_opener(
+        &self,
+        snapshot: &Snapshot,
+        row: usize,
+    ) -> Option<rustphin_view::archives::Opener> {
+        let name = snapshot.name(row);
+        let mime = self
+            .rust()
+            .types
+            .as_ref()
+            .map(|types| types.mimes.mime_type(name, false));
+        rustphin_view::archives::opener(name, mime)
+    }
+
+    fn open_menu(mut self: Pin<&mut Self>, which: &QString) -> bool {
+        use rustphin_view::menu::{self, TemplateKind};
+        let entries = match which.to_string().as_str() {
+            "new" => {
+                if self.rust().trash_dir.is_some() || self.rust().current().is_none() {
+                    return false;
+                }
+                let templates: Vec<(String, TemplateKind)> = self
+                    .rust()
+                    .new_files
+                    .iter()
+                    .map(|file| {
+                        use rustphin_platform::templates::BuiltIn;
+                        let kind = match file.built_in {
+                            Some(BuiltIn::Text) => TemplateKind::Text,
+                            Some(BuiltIn::Empty) => TemplateKind::Empty,
+                            Some(BuiltIn::Html) => TemplateKind::Html,
+                            None => TemplateKind::Other,
+                        };
+                        (file.label.clone(), kind)
+                    })
+                    .collect();
+                menu::new_menu(&templates)
+            }
+            "trash" => {
+                let Some(dir) = self.rust().trash_dir.clone() else {
+                    return false;
+                };
+                let others: Vec<(String, PathBuf)> = self
+                    .rust()
+                    .trash_store
+                    .as_ref()
+                    .map(|trash| {
+                        trash
+                            .dirs()
+                            .into_iter()
+                            .filter(|other| *other != dir)
+                            .map(|other| (pane::trash_label(&other), other.join("files")))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                menu::trash_actions(!self.rust().selection.is_empty(), others)
+            }
+            which => menu::context_menu(&self.menu_facts(which == "selection")),
+        };
+        if entries.is_empty() {
+            return false;
+        }
+        let json = menu::to_json(&entries).to_string();
+        self.as_mut().rust_mut().menu_entries = entries;
+        self.as_mut().set_menu(QString::from(&json));
+        true
+    }
+
+    fn run_menu(mut self: Pin<&mut Self>, path: &QString) {
+        use rustphin_view::menu::{self, MenuCommand};
+        let command = menu::command_at(&self.rust().menu_entries, &path.to_string()).cloned();
+        self.as_mut().rust_mut().menu_entries.clear();
+        self.as_mut().set_menu(QString::default());
+        let Some(command) = command else {
+            return;
+        };
+        match command {
+            MenuCommand::Open => self.activate_selected(),
+            MenuCommand::OpenWith(app) => {
+                let (paths, _) = self.listed_selection();
+                if let [path] = paths.as_slice() {
+                    let (id, path) = (app.id, path.clone());
+                    std::thread::spawn(move || {
+                        if let Err(error) = rustphin_platform::apps::open_with(&id, &path) {
+                            crate::hub::say(error.to_string(), true);
+                        }
+                    });
+                }
+            }
+            MenuCommand::Cut => self.copy_selected(true),
+            MenuCommand::Copy => self.copy_selected(false),
+            MenuCommand::Paste => self.paste(),
+            MenuCommand::CopyLocation => self.copy_location(),
+            MenuCommand::Duplicate => self.duplicate_selected(),
+            MenuCommand::Rename => self.begin_rename(),
+            MenuCommand::MoveToTrash => self.trash_selected(),
+            MenuCommand::Delete => self.delete_selected(),
+            MenuCommand::Restore => self.restore_selected(),
+            MenuCommand::EmptyTrash => self.empty_trash(),
+            MenuCommand::OpenTrash(files) => self.go_to(files),
+            MenuCommand::NewFolder => self.create_entry(true),
+            MenuCommand::NewFile => self.create_entry(false),
+            MenuCommand::NewFromTemplate { index, .. } => self.create_from_template(index),
+            MenuCommand::Properties => {
+                let (paths, _) = self.listed_selection();
+                let list: QList<QString> = paths.iter().map(|path| path_text(path)).collect();
+                self.as_mut().properties_requested(QStringList::from(&list));
+            }
+            MenuCommand::Extract(how) => self.extract_selected(how),
+            MenuCommand::Compress(how) => self.compress_selected(how),
+        }
+    }
+
+    fn copy_location(mut self: Pin<&mut Self>) {
+        let (paths, _) = self.listed_selection();
+        let Some(path) = paths.into_iter().next() else {
+            return crate::hub::say("Select an item to copy its location.".to_owned(), false);
+        };
+        let text =
+            crate::remote::address_of(&path).unwrap_or_else(|| path.to_string_lossy().into_owned());
+        self.as_mut().copy_text(QString::from(&text));
+        let name = path
+            .file_name()
+            .map(|name| display_name(name.as_bytes()).into_owned())
+            .unwrap_or_default();
+        crate::hub::say(
+            format!("Copied the location of \u{201c}{name}\u{201d}."),
+            false,
+        );
+    }
+
+    fn create_from_template(mut self: Pin<&mut Self>, index: usize) {
+        if self.rust().trash_dir.is_some() {
+            return;
+        }
+        let Some(snapshot) = self.rust().current().cloned() else {
+            return;
+        };
+        let Some(file) = self.rust().new_files.get(index).cloned() else {
+            return;
+        };
+        let name = rustphin_platform::templates::free_file_name(&file.file_name, |name| {
+            snapshot.row_of(name.as_bytes()).is_some()
+        });
+        self.as_mut().rust_mut().select_when_seen = Some((name.clone().into_bytes(), true));
+        crate::hub::start(rustphin_core::ops::Request::CreateFromTemplate {
+            parent: snapshot.path().to_owned(),
+            name: name.into(),
+            template: file.template,
+        });
+    }
+
+    fn extract_selected(mut self: Pin<&mut Self>, how: rustphin_view::menu::ExtractHow) {
+        use rustphin_core::ops::Layout;
+        use rustphin_view::menu::ExtractHow;
+        let Some(snapshot) = self.rust().current().cloned() else {
+            return;
+        };
+        let rows = self.rust().selection.rows(&snapshot);
+        let archives: Vec<(PathBuf, bool)> = rows
+            .iter()
+            .filter(|&&row| !snapshot.is_container(row))
+            .filter_map(|&row| {
+                self.archive_opener(&snapshot, row).map(|opener| {
+                    (
+                        snapshot.entry_path(row),
+                        opener == rustphin_view::archives::Opener::Rustphin,
+                    )
+                })
+            })
+            .collect();
+        if archives.is_empty() {
+            return crate::hub::say("Select an archive to extract.".to_owned(), false);
+        }
+        let here = snapshot.path().to_owned();
+        let (layout, trash) = match how {
+            ExtractHow::Here | ExtractHow::To => (Layout::Here, false),
+            ExtractHow::NewFolder => (Layout::NewFolder, false),
+            ExtractHow::AndTrash => (Layout::Here, true),
+        };
+        if how == ExtractHow::To {
+            handed::keep(handed::Handed {
+                folder: here.clone(),
+                archives,
+                trash,
+                ..handed::Handed::default()
+            });
+            let json = serde_json::json!({ "folder": here.to_string_lossy() }).to_string();
+            return self.as_mut().extract_to_requested(QString::from(&json));
+        }
+        start_extracting(archives, here, layout, trash);
+    }
+
+    fn compress_selected(mut self: Pin<&mut Self>, how: rustphin_view::menu::CompressHow) {
+        use rustphin_core::archive::{Format, Level};
+        use rustphin_view::menu::CompressHow;
+        let Some(snapshot) = self.rust().current().cloned() else {
+            return;
+        };
+        let rows = self.rust().selection.rows(&snapshot);
+        if rows.is_empty() {
+            return crate::hub::say("Select what to compress.".to_owned(), false);
+        }
+        let folder = snapshot.path().to_owned();
+        let sources: Vec<PathBuf> = rows.iter().map(|&row| snapshot.entry_path(row)).collect();
+        let entries: Vec<(&[u8], bool)> = rows
+            .iter()
+            .map(|&row| (snapshot.name(row), snapshot.is_container(row)))
+            .collect();
+        let listed = snapshot.listed_names();
+        let [zip, tar_gz] =
+            rustphin_view::archives::quick_names(&entries, |name| listed.contains(name));
+        let (format, name) = match how {
+            CompressHow::Zip => (Format::Zip, zip),
+            CompressHow::TarGz => (Format::TarGz, tar_gz),
+            CompressHow::Choose => {
+                let base = rustphin_view::archives::compress_base(&entries);
+                handed::keep(handed::Handed {
+                    folder: folder.clone(),
+                    sources,
+                    taken: listed.iter().map(|name| name.to_vec()).collect(),
+                    ..handed::Handed::default()
+                });
+                let json = serde_json::json!({
+                    "folder": folder.to_string_lossy(),
+                    "base": base,
+                    "count": rows.len(),
+                })
+                .to_string();
+                return self.as_mut().compress_requested(QString::from(&json));
+            }
+        };
+        crate::hub::start(rustphin_core::ops::Request::Compress {
+            sources,
+            archive: folder.join(name),
+            format,
+            level: Level::Normal,
+        });
+    }
+
+    /// Several selected: F2 renames them together in the batch dialog.
+    fn offer_batch_rename(mut self: Pin<&mut Self>) -> bool {
+        let Some(snapshot) = self.rust().current().cloned() else {
+            return false;
+        };
+        let rows = self.rust().selection.rows(&snapshot);
+        if rows.len() < 2 {
+            return false;
+        }
+        let chosen: std::collections::HashSet<&[u8]> =
+            rows.iter().map(|&row| snapshot.name(row)).collect();
+        let staying = (0..snapshot.len())
+            .filter(|row| !chosen.contains(snapshot.name(*row)))
+            .map(|row| OsStr::from_bytes(snapshot.name(row)).to_owned())
+            .collect();
+        handed::keep(handed::Handed {
+            folder: snapshot.path().to_owned(),
+            sources: rows.iter().map(|&row| snapshot.entry_path(row)).collect(),
+            staying,
+            ..handed::Handed::default()
+        });
+        let json = serde_json::json!({
+            "folder": snapshot.path().to_string_lossy(),
+            "count": rows.len(),
+        })
+        .to_string();
+        self.as_mut().batch_rename_requested(QString::from(&json));
+        true
+    }
+}
+
+/// Extracts each archive into `into`: Rustphin's own formats through the
+/// operation engine, others with the desktop's tool (W-111).
+pub fn start_extracting(
+    archives: Vec<(PathBuf, bool)>,
+    into: PathBuf,
+    layout: rustphin_core::ops::Layout,
+    trash: bool,
+) {
+    for (archive, ours) in archives {
+        if ours {
+            crate::hub::start(rustphin_core::ops::Request::Extract {
+                archive,
+                into: into.clone(),
+                layout,
+                trash_archive: trash,
+            });
+        } else {
+            let into = into.clone();
+            std::thread::spawn(move || {
+                let name = rustphin_view::operations::folder_name(&archive);
+                let folder = (layout == rustphin_core::ops::Layout::NewFolder).then(|| {
+                    let raw = archive.file_name().map(OsStr::as_bytes).unwrap_or_default();
+                    OsStr::from_bytes(rustphin_view::archives::folder_stem(raw)).to_owned()
+                });
+                match rustphin_platform::archive_tool::extract(&archive, &into, folder.as_deref()) {
+                    Ok(tool) => {
+                        crate::hub::say(format!("{tool} extracted {name}."), false);
+                        if trash {
+                            crate::post::on_qt(move || {
+                                crate::hub::start(rustphin_core::ops::Request::Trash {
+                                    paths: vec![archive],
+                                });
+                            });
+                        }
+                    }
+                    Err(error) => {
+                        crate::hub::say(format!("Could not extract {name}: {error}."), true)
+                    }
+                }
+            });
+        }
     }
 }
 

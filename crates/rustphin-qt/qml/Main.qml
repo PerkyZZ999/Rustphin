@@ -10,10 +10,39 @@ import Rustphin
 Window {
     id: root
 
-    required property string startFolder
+    // The folders this window opens in tabs; none for a plain window.
+    required property var startFolders
+    // The window a launch opened first: it restores and saves the session.
+    required property bool startWindow
+    required property string home
     readonly property bool maximised: visibility === Window.Maximized || visibility === Window.FullScreen
-    property var activePane: pane
+    readonly property var page: pages.count > tabs.active ? pages.itemAt(tabs.active) : null
+    readonly property var activePane: page ? page.activeItem : null
     readonly property FolderModel folder: activePane ? activePane.listing : null
+    property bool placesShown: true
+    // The window's tabs and places, under names delegates do not shadow.
+    readonly property TabsModel tabsModel: tabs
+    readonly property PlacesModel placesModel: places.model
+    property bool closeAsked: false
+
+    // Opens `folders` in new tabs; the last becomes active (another launch).
+    function openTabs(folders) {
+        for (const folder of folders)
+            tabs.open(folder, true, [])
+        requestActivate()
+    }
+
+    function focusActive() {
+        if (activePane)
+            activePane.focusList()
+    }
+
+    function closeTab(index: int) {
+        if (!tabs.close(index))
+            root.close()
+        else
+            Qt.callLater(focusActive)
+    }
 
     width: 1000
     height: 700
@@ -52,12 +81,124 @@ Window {
     Component.onCompleted: {
         Tokens.blurWindows()
         Operations.watch()
-        pane.focusList()
+        Preferences.watch()
+        tabs.restore(startFolders, startWindow, home)
+        Qt.callLater(focusActive)
+    }
+
+    // Several tabs close together only after asking, when Settings says so.
+    onClosing: close => {
+        if (tabs.count > 1 && Shell.askBeforeClosingTabs() && !closeAsked) {
+            close.accepted = false
+            closeQuestion.asking = true
+        }
+    }
+
+    TabsModel {
+        id: tabs
+
+        onActiveChanged: Qt.callLater(root.focusActive)
+    }
+
+    // The context menu of `pane`: on its selection, or for its folder.
+    function paneMenu(pane, row: int, x: real, y: real) {
+        menuPane = pane
+        if (pane.listing.openMenu(row >= 0 ? "selection" : "folder"))
+            paneMenuView.openAt(pane, x, y)
+    }
+
+    property var menuPane: null
+
+    // Runs a palette command (`rustphin_view::commands`) by its id: the
+    // pane's own, the places panel's, or the window's.
+    function runCommand(id: string) {
+        const placeKeys = {
+            "new-group": "Ctrl+Shift+G", "rename-row": "F2", "remove-row": "Delete",
+            "hide-row": "H", "toggle-hidden-places": "ToggleHiddenPlaces",
+            "move-row-up": "Alt+Up", "move-row-down": "Alt+Down", "collapse": "Left",
+            "expand": "Right", "next-group": "G", "focus-previous": "Up",
+            "focus-next": "Down", "open": "Enter", "eject": "E"
+        }
+        if (placeKeys[id] !== undefined) {
+            placesShown = true
+            places.model.key(placeKeys[id])
+            places.focusPanel()
+            return
+        }
+        if (activePane && folder.command(id, activePane.lanes()))
+            return
+        switch (id) {
+        case "edit-location": toolbar.editLocation(); break
+        case "show-filter": command("filter", null); break
+        case "copy-to-other-view": tabs.transfer(folder.selectedPaths(), false); break
+        case "move-to-other-view": tabs.transfer(folder.selectedPaths(), true); break
+        case "undo": Operations.undo(); break
+        case "stop-operations": Operations.cancel(); break
+        case "dismiss-notice": Operations.dismissNotice(); break
+        case "trash-actions": command("trash", toolbar); break
+        case "new-tab": tabs.open(folder ? folder.location : home, true, []); break
+        case "reopen-closed-tab": tabs.reopen(); break
+        case "focus-other-view":
+            if (page && page.split)
+                tabs.setActivePane(page.key, page.activePane === 1 ? 0 : 1)
+            break
+        case "focus-places":
+            placesShown = true
+            places.focusPanel()
+            break
+        case "quit": Shell.quit(); break
+        case "open-settings": openSettings(); break
+        case "close-tab": closeTab(tabs.active); break
+        case "next-tab": tabs.cycle(1); break
+        case "previous-tab": tabs.cycle(-1); break
+        case "move-tab-left": tabs.shiftActive(-1); break
+        case "move-tab-right": tabs.shiftActive(1); break
+        case "toggle-split": tabs.toggleSplit(); break
+        case "other-pane": otherPane(); break
+        case "toggle-sidebar": placesShown = !placesShown; break
+        case "add-place": places.model.addFolder(folder.location); break
+        case "open-palette": openPalette(); break
+        }
+    }
+
+    function openPalette() {
+        palette.show(tabs.paletteJson(), places.model.paletteJson())
+    }
+
+    // Tab: the next view, then the places panel, then back (W-076).
+    function otherPane() {
+        if (places.activeFocus) {
+            if (page)
+                tabs.setActivePane(page.key, 0)
+            focusActive()
+        } else if (page && page.split && page.activePane === 0) {
+            tabs.setActivePane(page.key, 1)
+            focusActive()
+        } else if (placesShown) {
+            places.focusPanel()
+        } else if (page && page.split) {
+            tabs.setActivePane(page.key, 0)
+            focusActive()
+        }
+    }
+
+    function openSettings() {
+        settingsLoader.active = true
     }
 
     // Runs a toolbar or menu command the pane cannot run itself.
     function command(id: string, source: Item) {
-        if (id === "view") {
+        if (id === "new" || id === "trash") {
+            menuPane = activePane
+            if (folder.openMenu(id))
+                paneMenuView.openAt(source, 0, source.height)
+        } else if (id === "split") {
+            tabs.toggleSplit()
+        } else if (id === "actions") {
+            openPalette()
+        } else if (id.indexOf("command:") === 0) {
+            runCommand(id.slice(8))
+        } else if (id === "view") {
             const p = source.mapToItem(root.contentItem, 0, source.height)
             viewMenu.x = p.x
             viewMenu.y = p.y
@@ -94,19 +235,115 @@ Window {
             pane: root.activePane
             onCommand: (id, source) => root.command(id, source)
         }
-        Pane {
-            id: pane
-
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            startFolder: root.startFolder
-            focus: true
-            onFileActivated: path => Shell.activate(path)
-            onOpenInNewTab: path => Shell.openWindow(path)
+            spacing: 0
+
+            PlacesPanel {
+                id: places
+
+                visible: root.placesShown
+                Layout.fillHeight: true
+                Layout.preferredWidth: places.model.width
+                current: root.folder ? root.folder.location : ""
+                onOpenFolder: (path, newTab) => {
+                    if (newTab)
+                        tabs.open(path, false, [])
+                    else
+                        root.folder.open(path)
+                }
+                onOpenTrash: root.folder.openTrash()
+                onDone: root.focusActive()
+            }
+            Rectangle {
+                visible: root.placesShown
+                Layout.fillHeight: true
+                Layout.preferredWidth: 1
+                color: Tokens.colors.border
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 0
+
+                TabStrip {
+                    Layout.fillWidth: true
+                    tabs: root.tabsModel
+                    onNewTab: tabs.open(root.folder ? root.folder.location : root.home, true, [])
+                    onCloseTab: index => root.closeTab(index)
+                }
+                StackLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    currentIndex: tabs.active
+
+                    Repeater {
+                        id: pages
+
+                        model: tabs
+
+                        delegate: TabPage {
+                            tabs: root.tabsModel
+                            places: root.placesModel
+                            onFileActivated: path => Shell.activate(path)
+                            onOpenInNewTab: path => tabs.open(path, false, [])
+                            onMenuRequested: (pane, row, x, y) => root.paneMenu(pane, row, x, y)
+                            onCopyText: words => textClip.put(words)
+                        }
+                    }
+                }
+            }
         }
         NoticeBar {
             Layout.fillWidth: true
         }
+    }
+
+    JsonMenu {
+        id: paneMenuView
+
+        json: root.menuPane ? root.menuPane.listing.menu : ""
+        onChosen: path => root.menuPane.listing.runMenu(path)
+        onClosed: Qt.callLater(() => {
+            if (root.menuPane && root.menuPane.listing.menu.length > 0)
+                root.menuPane.listing.runMenu("")
+            root.focusActive()
+        })
+    }
+
+    // Text for the clipboard (Copy location).
+    TextEdit {
+        id: textClip
+
+        visible: false
+
+        function put(words: string) {
+            text = words
+            selectAll()
+            copy()
+        }
+    }
+
+    Palette {
+        id: palette
+
+        onChosen: target => {
+            if (target.kind === "command")
+                root.runCommand(target.id)
+            else if (target.kind === "tab")
+                tabs.activate(target.index)
+            else if (target.kind === "folder")
+                root.folder.openTyped(target.path)
+            Qt.callLater(root.focusActive)
+        }
+    }
+
+    // Settings (W-106), opened on demand.
+    Loader {
+        id: settingsLoader
+
+        active: false
     }
 
     ViewMenu {
@@ -121,6 +358,22 @@ Window {
         onAnswered: (answer, all, password) => Operations.answer(answer, all, password)
         onClosed: root.activePane.focusList()
     }
+    // Before closing a window with several tabs.
+    QuestionDialog {
+        property bool asking: false
+
+        id: closeQuestion
+
+        json: asking ? Shell.closeQuestion(tabs.count) : ""
+        onAnswered: answer => {
+            asking = false
+            if (answer === 3) {
+                root.closeAsked = true
+                root.close()
+            }
+        }
+    }
+
     QuestionDialog {
         json: Operations.question.length === 0 ? Shell.launch : ""
         onAnswered: answer => Shell.answerLaunch(answer)
@@ -218,12 +471,91 @@ Window {
         onActivated: root.folder.chooseMode(2)
     }
     Key {
+        sequences: ["Ctrl+Shift+P"]
+        onActivated: root.openPalette()
+    }
+    Key {
+        sequences: ["Ctrl+Shift+,", "Ctrl+<"]
+        onActivated: root.openSettings()
+    }
+    Key {
         sequence: "Ctrl+Z"
         onActivated: Operations.undo()
     }
     Key {
         sequence: "Ctrl+Q"
         onActivated: Shell.quit()
+    }
+    Key {
+        sequence: "Ctrl+T"
+        onActivated: tabs.open(root.folder ? root.folder.location : root.home, true, [])
+    }
+    Key {
+        sequence: "Ctrl+W"
+        onActivated: root.closeTab(tabs.active)
+    }
+    Key {
+        sequence: "Ctrl+Shift+T"
+        onActivated: tabs.reopen()
+    }
+    Key {
+        sequences: ["Ctrl+Tab", "Ctrl+PgDown"]
+        onActivated: tabs.cycle(1)
+    }
+    Key {
+        sequences: ["Ctrl+Shift+Tab", "Ctrl+PgUp"]
+        onActivated: tabs.cycle(-1)
+    }
+    Key {
+        sequence: "Ctrl+Shift+PgUp"
+        onActivated: tabs.shiftActive(-1)
+    }
+    Key {
+        sequence: "Ctrl+Shift+PgDown"
+        onActivated: tabs.shiftActive(1)
+    }
+    Instantiator {
+        model: 10
+        delegate: Shortcut {
+            required property int index
+            context: Qt.WindowShortcut
+            sequence: "Alt+" + index
+            onActivated: tabs.activateNumber(index)
+        }
+    }
+    Key {
+        sequence: "F3"
+        onActivated: tabs.toggleSplit()
+    }
+    Key {
+        sequence: "Ctrl+F3"
+        onActivated: {
+            if (root.page && root.page.split)
+                tabs.setActivePane(root.page.key, root.page.activePane === 1 ? 0 : 1)
+        }
+    }
+    Key {
+        sequence: "F9"
+        onActivated: {
+            root.placesShown = !root.placesShown
+            if (!root.placesShown)
+                root.focusActive()
+        }
+    }
+    Key {
+        sequence: "Ctrl+P"
+        onActivated: {
+            root.placesShown = true
+            places.focusPanel()
+        }
+    }
+    Key {
+        sequence: "Ctrl+Shift+D"
+        onActivated: places.model.addFolder(root.folder.location)
+    }
+    Key {
+        sequence: "Ctrl+Shift+G"
+        onActivated: places.model.key("Ctrl+Shift+G")
     }
     Key {
         sequence: "Ctrl+Alt+N"
@@ -257,5 +589,13 @@ Window {
     ListKey {
         sequence: "Ctrl+D"
         onActivated: root.folder.duplicateSelected()
+    }
+    ListKey {
+        sequence: "Shift+F5"
+        onActivated: tabs.transfer(root.folder.selectedPaths(), false)
+    }
+    ListKey {
+        sequence: "Shift+F6"
+        onActivated: tabs.transfer(root.folder.selectedPaths(), true)
     }
 }

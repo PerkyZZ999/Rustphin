@@ -7,9 +7,11 @@
 
 pub mod archives;
 pub mod colors;
+pub mod commands;
 pub mod folder_views;
 pub mod format;
 pub mod groups;
+pub mod history;
 pub mod icons;
 pub mod launch;
 pub mod layout;
@@ -21,9 +23,12 @@ pub mod operations;
 pub mod palette;
 pub mod pane;
 pub mod place_menu;
+pub mod places_panel;
 pub mod preferences;
 pub mod questions;
+pub mod remote;
 pub mod session;
 pub mod settings;
 pub mod tabs;
 pub mod toolbar_items;
+pub mod workspace;

@@ -11,6 +11,8 @@ FocusScope {
     id: pane
 
     required property string startFolder
+    // Names to select once the start folder is listed.
+    property var startSelect: []
     // This pane receives the window's commands (the active one of a split).
     property bool current: true
     // Shown beside another pane: its location is drawn on its own bar.
@@ -28,6 +30,10 @@ FocusScope {
     signal menuRequested(int row, real x, real y)
     // The pane took the keyboard.
     signal entered()
+    // Text for the clipboard.
+    signal copyText(string words)
+    // The pane shows another folder, or its title or trash state changed.
+    signal reported()
 
     // Entries per line (icons) or per column (compact); one in details.
     function lanes(): int {
@@ -81,7 +87,15 @@ FocusScope {
     onWidthChanged: folder.setWidth(width)
     Component.onCompleted: {
         folder.setWidth(width)
-        folder.open(startFolder)
+        if (startSelect && startSelect.length > 0)
+            folder.reveal(startFolder, startSelect)
+        else
+            folder.openTyped(startFolder)
+    }
+    // The tab joined its views and this one goes on with the other's folder.
+    onStartFolderChanged: {
+        if (startFolder.length > 0 && startFolder !== folder.location)
+            folder.openTyped(startFolder)
     }
     onActiveFocusChanged: {
         if (activeFocus)
@@ -93,14 +107,25 @@ FocusScope {
 
         onFileActivated: path => pane.fileActivated(path)
         onOpenInNewTab: path => pane.openInNewTab(path)
+        onCopyText: words => pane.copyText(words)
         onRevealRow: row => {
             if (pane.view)
                 pane.view.positionViewAtIndex(row, ListView.Contain)
         }
+        onTitleChanged: pane.reported()
+        onTrashChanged: pane.reported()
         onLocationChanged: {
+            pane.reported()
             pane.hoverIndex = -1
             if (pane.filterOpen && folder.filterText.length === 0)
                 pane.filterOpen = false
+        }
+    }
+
+    Connections {
+        target: Preferences
+        function onRevisionChanged() {
+            folder.adoptSettings()
         }
     }
 
@@ -176,16 +201,16 @@ FocusScope {
                         text: folder.title
                     }
                     OutlinedButton {
-                        text: qsTr("Restore")
-                        iconName: "archive-restore"
-                        enabled: folder.selectedCount > 0
-                        onClicked: folder.restoreSelected()
-                    }
-                    OutlinedButton {
-                        text: qsTr("Empty the trash")
-                        iconName: "trash"
-                        enabled: !folder.empty
-                        onClicked: folder.emptyTrash()
+                        id: trashActions
+
+                        text: qsTr("Trash actions")
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 600
+                        ToolTip.text: qsTr("Restore, empty or browse another trash; also available in Actions")
+                        onClicked: {
+                            if (folder.openMenu("trash"))
+                                trashMenu.openAt(trashActions, 0, trashActions.height)
+                        }
                     }
                 }
                 Text {
@@ -708,6 +733,13 @@ FocusScope {
                 }
             }
         }
+    }
+
+    JsonMenu {
+        id: trashMenu
+
+        json: folder.menu
+        onChosen: path => folder.runMenu(path)
     }
 
     // The name field over an entry being renamed; Enter keeps the name,

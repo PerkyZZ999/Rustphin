@@ -24,7 +24,6 @@ pub fn settings() -> Settings {
     with(|store| store.settings().clone())
 }
 
-#[expect(dead_code, reason = "the Settings dialog arrives with W-114f")]
 /// Changes the settings and saves them.
 pub fn update(change: impl FnOnce(&mut Settings)) -> Changed {
     with(|store| store.update(change))

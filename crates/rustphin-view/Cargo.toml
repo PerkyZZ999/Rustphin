@@ -13,8 +13,10 @@ workspace = true
 [dependencies]
 rustphin-core.workspace = true
 rustphin-platform.workspace = true
+flume.workspace = true
 jiff.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 toml.workspace = true
 tracing.workspace = true
 

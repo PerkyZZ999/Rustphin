@@ -35,6 +35,23 @@ fn fonts(dir: &Path) -> Vec<QResourceFile> {
         .collect()
 }
 
+/// Every cxx-qt bridge: the `*_bridge.rs` files in `src/`.
+fn bridges() -> Vec<String> {
+    let mut files: Vec<String> = std::fs::read_dir("src")
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .filter_map(|entry| {
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    name.ends_with("_bridge.rs").then(|| format!("src/{name}"))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort();
+    files
+}
+
 /// Every `.qml` file in `qml/`.
 fn qml_files() -> Vec<String> {
     let mut files: Vec<String> = std::fs::read_dir("qml")
@@ -81,14 +98,7 @@ fn main() {
         .qt_module("Gui")
         .qt_module("Quick")
         .qt_module("Svg")
-        .files([
-            "src/app_bridge.rs",
-            "src/desktop_bridge.rs",
-            "src/folder_bridge.rs",
-            "src/operations_bridge.rs",
-            "src/tokens_bridge.rs",
-            "src/toolbar_bridge.rs",
-        ])
+        .files(bridges())
         .cpp_file("cpp/app.cpp")
         .cpp_file("cpp/window.cpp")
         .include_dir("cpp")
@@ -105,6 +115,7 @@ fn main() {
     println!("cargo::rerun-if-changed=cpp");
     println!("cargo::rerun-if-changed=icons");
     println!("cargo::rerun-if-changed=qml");
+    println!("cargo::rerun-if-changed=src");
     println!("cargo::rerun-if-changed={FONTS}");
     println!("cargo::rerun-if-changed={LOGO}");
 }

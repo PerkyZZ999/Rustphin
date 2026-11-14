@@ -503,6 +503,35 @@ pub fn show(question: &Question, verb: &str, zone: &TimeZone) -> Shown {
     }
 }
 
+/// Asks before closing a window with several tabs (Settings,
+/// Confirmations). Enter closes; Esc keeps it open.
+pub fn close_window(count: usize) -> Shown {
+    let sentence = format!(
+        "This window has {count} tabs. Closing it closes them all; they open again \
+         next time when Rustphin restores the last tabs."
+    );
+    Shown {
+        icon: "x",
+        title: "Close the window?".to_owned(),
+        description: format!("{sentence} Enter closes; Escape keeps it open."),
+        sentence,
+        facts: Vec::new(),
+        names: Vec::new(),
+        note: String::new(),
+        buttons: vec![
+            button(Answer::Cancel, "Cancel (Esc)", "", Style::Plain),
+            button(
+                Answer::Accept,
+                &format!("Close {count} tabs (Enter)"),
+                "x",
+                Style::Primary,
+            ),
+        ],
+        password: false,
+        apply_to_all: false,
+    }
+}
+
 /// The answer a key gives in a question's dialog (Dolphin's single
 /// letters), if its button is offered: the lookup QML makes over the
 /// buttons' keys. K keeps both names in a conflict, as Enter does.
@@ -646,6 +675,14 @@ mod tests {
         assert_eq!(answer_for_key(&shown, "r"), Some(Answer::Run));
         let shortcut = launch("Kate", "/srv", false);
         assert_eq!(answer_for_key(&shortcut, "o"), None);
+    }
+
+    #[test]
+    fn closing_several_tabs_says_how_many_and_enter_closes() {
+        let shown = close_window(3);
+        assert!(shown.sentence.starts_with("This window has 3 tabs."));
+        assert_eq!(answer_for_key(&shown, "enter"), Some(Answer::Accept));
+        assert_eq!(answer_for_key(&shown, "escape"), Some(Answer::Cancel));
     }
 
     #[test]

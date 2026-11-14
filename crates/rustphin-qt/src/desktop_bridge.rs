@@ -34,6 +34,14 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "openWindow"]
         fn open_window(self: Pin<&mut Shell>, path: &QString);
+        /// Whether closing a window with several tabs asks first (Settings).
+        #[qinvokable]
+        #[cxx_name = "askBeforeClosingTabs"]
+        fn ask_before_closing_tabs(self: &Shell) -> bool;
+        /// The question before closing a window with `count` tabs, as JSON.
+        #[qinvokable]
+        #[cxx_name = "closeQuestion"]
+        fn close_question(self: &Shell, count: i32) -> QString;
         /// Closes every window and ends Rustphin.
         #[qinvokable]
         fn quit(self: Pin<&mut Shell>);

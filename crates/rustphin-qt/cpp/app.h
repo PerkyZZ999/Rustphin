@@ -16,6 +16,10 @@ void rustphin_shell_start(bool keep_running, const QString& home);
 // Opens a window on each folder (one at home when the list is empty),
 // giving the launch's activation token to the window. Safe from any thread.
 void rustphin_shell_open(const QStringList& folders, const QString& activation);
+// Shows `folders` from another launch: as tabs of the window last used
+// when `in_tabs` and there is one, else in a window of their own. On the
+// GUI thread.
+void rustphin_shell_show(const QStringList& folders, const QString& activation, bool in_tabs);
 // Closes every window and ends the process. Safe from any thread.
 void rustphin_shell_quit();
 // Runs `run` on the GUI thread, from its event loop. Safe from any thread.

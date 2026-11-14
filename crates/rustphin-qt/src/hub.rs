@@ -714,3 +714,21 @@ pub fn dismiss_notice() {
         hub.problems = None;
     });
 }
+
+/// Shows `text`, which reports no error, until [`withdraw`] is called with
+/// the returned ticket or a later message replaces it.
+pub fn say_until_withdrawn(text: String) -> u64 {
+    change(|hub| {
+        hub.present(text, false, false, false);
+        hub.notice_serial
+    })
+}
+
+/// Removes the message shown under `ticket`, unless a later one replaced it.
+pub fn withdraw(ticket: u64) {
+    change(|hub| {
+        if hub.notice_serial == ticket {
+            hub.notice = None;
+        }
+    });
+}
