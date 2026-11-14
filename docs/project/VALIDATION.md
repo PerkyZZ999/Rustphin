@@ -1,5 +1,11 @@
 # Validation evidence
 
+### 2026-11-14 — D-035 Rust 1.100
+- **Change:** rustup's `stable` updated from 1.98.1 to 1.100.0 (0ef1bc386, 2026-11-09) and the `1.100.0` toolchain installed; `rust-version = "1.100"` in the workspace and both spikes; `rust-tc msrv` runs `cargo +1.100.0 check`; AGENTS.md, ARCHITECTURE.md, REQUIREMENTS.md (R-109) and D-005 → D-035 updated.
+- **Tests:** `rust-tc doctor` PASS on 1.100.0, 678 tests, clippy without findings; the minimum-version check ran on 1.100.0.
+- **Observed:** Cargo 1.100 warns "unused workspace dependency" for `tempfile`, `proptest` and `gpui-pre-wgpu`, 27 times, all inside the feature check: `cargo hack --no-dev-deps` removes dev-dependencies while it runs, and these three are only dev-dependencies. Not a failure; nothing to change.
+- **Waiver:** none
+
 ### 2026-11-14 — W-114c1 The Qt shell: `rustphin-qt` in the gate
 - **Code:** `crates/rustphin-qt` (binary): `tokens.rs` (the `Tokens` QML singleton), `folder.rs` (`FolderModel`, a `QAbstractListModel` over the core's snapshots), `main.rs` (start folder: the argument, else home, else `/`), `qml/Main.qml`, `cpp/window.cpp` (KWindowEffects). Each cxx-qt bridge lives in its own `*_bridge.rs` file of declarations, included with a narrow `#[allow(unsafe_code)]` because cxx-qt generates unsafe FFI glue; the build script's `cc_builder` (an include path for KF6 KWindowSystem) carries a SAFETY comment. `cxx` is listed for cargo-shear as used by generated code. `rustphin_view::colors` now holds the colour tokens and the four WCAG contrast tests (`theme.rs` converts them for GPUI); `format::size_column` is shared (GPUI's browser uses it too). Layer rules: no GPUI in `rustphin-qt`; no cxx-qt in core, platform or view.
 - **Tests:** `rust-tc doctor` PASS, 678 tests. New: the QML colour format (proved by swapping channels: failed "#0dcc1524"); `RUSTPHIN_OPAQUE` handling and the folder-size rule (both proved by breaking them); metric names unique; roles found by number; the summary line; column sort keys; the start folder.

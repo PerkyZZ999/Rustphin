@@ -269,7 +269,7 @@ Conventions:
 ### R-109 — Platform and build
 - **Priority:** must
 - **Acceptance:**
-  - [x] Builds with Rust 1.95 and current stable from a clean checkout with one documented command.
+  - [x] Builds with the minimum Rust (1.100 since D-035; 1.95 before) and current stable from a clean checkout with one documented command.
   - [x] Runs on Plasma 6 Wayland; missing optional services (UDisks2, data-control, blur) degrade the related feature with a visible notice rather than failing to start. (W-078: W-076g/h/i/j notices for UDisks2, blur and data-control in an isolated Plasma 6 KWin session; real-desktop blur review stays under R-105.)
   - [x] One local command runs formatting, lints, the test suite and the headless benchmarks (the repository is local only; there is no hosted CI).
 - **Validation:** test (local check command)

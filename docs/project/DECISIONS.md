@@ -68,7 +68,7 @@ Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **lock
 - **Alternatives:** Wayland plus degraded X11 (rejected by the user).
 - **Reopen criteria:** The project gains users or contributors who need another platform.
 - **Confirmed by / date:** The maintainer, 2026-10-12
-- **Supersedes / superseded by:** —
+- **Supersedes / superseded by:** superseded by D-035 (minimum 1.100), 2026-11-14
 
 ## D-007 — Visual direction: one dark frosted-glass theme
 - **Status:** superseded
@@ -314,3 +314,11 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Decision:** Rustphin's interface moves from GPUI-Kit to Qt 6 Quick and QML, bridged with cxx-qt (0.10, crates.io); QtBridge for Rust is not used (rows must be stored as Rust values, no access to C++ APIs, silent failures). The move follows the plan: W-114b (`rustphin-view`), the Qt interface built beside the GPUI one (W-114c–h), then the switch (W-114i). The GPUI app stays the shipped one until W-114i; `gpui-kit` stays pinned and maintained for fixes until then. When the last window closes, the Qt app releases its window and QML engine to meet R-020.
 - **Confirmed by / date:** The maintainer, 2026-11-13 ("run the spike … then proceed with the QT_MIGRATION_PLAN.md"), on the spike's results
 - **Supersedes / superseded by:** supersedes D-001 at W-114i; until then D-001 governs the shipped interface. D-010's GPUI-specific integrations (blur through GPUI's surface, data-control clipboard) are replaced by Qt and KDE APIs at W-114i
+
+## D-035 — Minimum Rust version 1.100
+- **Status:** decided
+- **Date:** 2026-11-14
+- **Context:** Rust 1.100.0 was released on 2026-11-09; the maintainer asked for the project to move to it.
+- **Decision:** `rust-version = "1.100"` for every crate (and the spikes); the minimum-version check (`rust-tc msrv`, part of doctor) runs on the `1.100.0` toolchain; development uses rustup's `stable`, now 1.100.0. Edition stays 2024.
+- **Confirmed by / date:** The maintainer, 2026-11-14 ("I would also like for our project to get update to Rust 1.100 (Stable)")
+- **Supersedes / superseded by:** supersedes D-005 (minimum 1.95)

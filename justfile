@@ -194,7 +194,7 @@ layers:
 
 # Minimum supported Rust version (requirement R-109).
 msrv:
-    cargo +1.95.0 check --workspace --all-targets --all-features
+    cargo +1.100.0 check --workspace --all-targets --all-features
 
 
 # Listing benchmark on 500,000 entries; fails when requirement R-101's
@@ -246,4 +246,4 @@ toolchain-help:
     @echo "  rust-tc bench-listing 500,000-entry listing benchmark (R-101)"
     @echo "  rust-tc bench-palette 10,000-location palette benchmark (R-015)"
     @echo "  rust-tc layers        Crate layering check (part of doctor)"
-    @echo "  rust-tc msrv          Compiler check on Rust 1.95 (part of doctor)"
+    @echo "  rust-tc msrv          Compiler check on Rust 1.100 (part of doctor)"

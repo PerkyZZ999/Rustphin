@@ -4,7 +4,7 @@
 
 Rustphin is a file manager for KDE Plasma on Wayland, written in Rust. It is a re-architecture of KDE's Dolphin (not a line-by-line port) with a dark frosted-glass UI, place groups, a command palette and advanced batch rename.
 
-- Language: Rust, edition 2024, minimum version 1.95.
+- Language: Rust, edition 2024, minimum version 1.100 (D-035).
 - UI: `gpui-kit` pinned to `=0.7.3` (GPUI snapshot `gpui-pre` `=0.3.9`).
 - Platform: Linux on Wayland only. No X11, macOS or Windows code.
 - Licence: GPL-3.0-or-later. Every dependency must be GPLv3-compatible.
@@ -84,7 +84,7 @@ The layering is enforced by `rust-tc layers` (part of `rust-tc doctor`) and by t
 
 ## Setup
 
-Requirements: Rust through rustup (stable, plus the `1.95.0` toolchain for the minimum-version check), a Wayland session, a working Vulkan driver, the Wayland, xkbcommon and fontconfig development packages, and the Rust-Toolchain tools: `rust-tc`, `just`, `cargo-deny`, `cargo-shear`, `cargo-nextest`, `cargo-hack` (`cargo-llvm-cov` for optional coverage). Install instructions are in `../Rust-Toolchain/RUST-TOOLCHAIN.md`.
+Requirements: Rust through rustup (stable, plus the `1.100.0` toolchain for the minimum-version check), a Wayland session, a working Vulkan driver, the Wayland, xkbcommon and fontconfig development packages, and the Rust-Toolchain tools: `rust-tc`, `just`, `cargo-deny`, `cargo-shear`, `cargo-nextest`, `cargo-hack` (`cargo-llvm-cov` for optional coverage). Install instructions are in `../Rust-Toolchain/RUST-TOOLCHAIN.md`.
 
 ```bash
 rust-tc run                # build and run, opening the home folder
