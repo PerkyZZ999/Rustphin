@@ -406,6 +406,7 @@ Window {
                         root.folder.open(uri)
                 }
                 onOpenTrash: root.folder.openTrash()
+                onCopyText: words => textClip.put(words)
                 onDone: root.focusActive()
             }
             Rectangle {

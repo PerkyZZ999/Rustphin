@@ -121,7 +121,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Plan:** [`QT_MIGRATION_PLAN.md`](QT_MIGRATION_PLAN.md). Gains are maturity and KDE integration (cold start, blur, file exchange with other applications, focus, text input, accessibility); speed targets are already met on GPUI. Recommended: a measured spike first (W-114a) with go/no-go criteria, cxx-qt as the bridge with QtBridge tried alongside, the Qt interface built beside the GPUI one until parity, then the switch (D-033, superseding D-001). Five decisions for the maintainer.
 - **Status:** A–D approved (D-033). Spike W-114a done 2026-11-13: cxx-qt passes 1–4 and 6–9 (startup 0.3–0.4 s against about 10 s); blur confirmed on the maintainer's desktop with the spike. Switch decided (D-034, cxx-qt) and made 2026-11-14 (W-114i): GPUI, GPUI-Kit and `rustphin-ui` removed. W-116 (Qt quality pass: `qmllint` with the BestPractices plugin and `qmlformat` in `rust-tc doctor`, the qt-qml-review findings, 36 scenarios replayed) done 2026-11-14. Then W-118–W-144: libarchive (D-036), interface logic moved into `rustphin-view` (commands, pane state, operation board, selection actions, places panel, workspace, menus), byte-safe paths to QML, test audits and the bugs they found, the GitHub repository (D-037).
 
-## Next — Slice S12: Charcoal colour scheme and UI completion (W-147, W-146, W-117)
+## Next — Slice S12: Charcoal colour scheme and UI completion (W-147, W-148, W-146, W-117)
 
 **Goal:** Rustphin's look moves from navy to dark charcoal, and everything the
 documents describe but the interface does not yet do is built. Asked for by the
@@ -141,6 +141,16 @@ maintainer on 2026-11-14.
   destructive buttons (now about 2:1). State is never shown by colour alone.
   The screens are compared with the mockups in an isolated session, and the
   glass look on the maintainer's desktop.
+
+**Drive cards (W-148, asked for by the maintainer on 2026-11-14):**
+- Each volume in the places panel is a card: drive icon and name, "used /
+  total", a full-width usage bar (royal blue, red from 90 % full), the
+  filesystem and its traits ("Btrfs · Encrypted") and "NN% used".
+- The eject button goes; a drive menu (right-click, Menu key, Shift+F10)
+  offers Open, Open in new tab, Mount or Unmount, Safely remove and Copy
+  location. E still ejects.
+- Checked on screen only against a stand-in UDisks2 service on a private
+  bus, never the machine's drives.
 
 **UI completion (W-146):** each is a defect against the documents.
 - Styling not yet built: the accent outline and glow on menus and dialogs;
@@ -181,7 +191,7 @@ are replayed on screen.
 
 ## What remains
 
-- **Next:** Slice S12 above (charcoal colour scheme, W-146, W-117).
+- **Next:** Slice S12 above (charcoal colour scheme, drive cards W-148, W-146, W-117).
 - **Also open:** W-115 (memory grows on each reload of a very large folder).
 - **S11 acceptance:** a keyboard-only pass of the Qt interface (R-004, R-107, R-019); the maintainer's real-desktop and hardware checks (R-013, R-105, R-020 focus, W-098e administrator mode).
 - **Then:** the two-week daily-driver trial (the MVP success signal), and phase 7 (release).

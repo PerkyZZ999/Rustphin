@@ -58,14 +58,17 @@ enum Role {
     Detail,
     Usage,
     Busy,
-    Ejectable,
     Focused,
     Renaming,
     Grouped,
+    Figures,
+    Percent,
+    NearlyFull,
+    Description,
 }
 
 impl Role {
-    const ALL: [Role; 13] = [
+    const ALL: [Role; 16] = [
         Role::Kind,
         Role::Title,
         Role::Icon,
@@ -75,10 +78,13 @@ impl Role {
         Role::Detail,
         Role::Usage,
         Role::Busy,
-        Role::Ejectable,
         Role::Focused,
         Role::Renaming,
         Role::Grouped,
+        Role::Figures,
+        Role::Percent,
+        Role::NearlyFull,
+        Role::Description,
     ];
 
     fn from_number(number: i32) -> Option<Role> {
@@ -96,10 +102,13 @@ impl Role {
             Role::Detail => "detail",
             Role::Usage => "usage",
             Role::Busy => "busy",
-            Role::Ejectable => "ejectable",
             Role::Focused => "focused",
             Role::Renaming => "renaming",
             Role::Grouped => "grouped",
+            Role::Figures => "figures",
+            Role::Percent => "percent",
+            Role::NearlyFull => "nearlyFull",
+            Role::Description => "description",
         }
     }
 }
@@ -222,10 +231,13 @@ impl qobject::PlacesModel {
             Role::Detail => words(&view.detail),
             Role::Usage => QVariant::from(&view.usage),
             Role::Busy => QVariant::from(&view.busy),
-            Role::Ejectable => QVariant::from(&view.ejectable),
             Role::Focused => QVariant::from(&view.focused),
             Role::Renaming => QVariant::from(&view.renaming),
             Role::Grouped => QVariant::from(&view.grouped),
+            Role::Figures => words(&view.figures),
+            Role::Percent => words(&view.percent),
+            Role::NearlyFull => QVariant::from(&view.nearly_full),
+            Role::Description => words(&view.description),
         }
     }
 
@@ -248,7 +260,14 @@ impl qobject::PlacesModel {
                 Effect::SaveGroups => self.save_groups(),
                 Effect::EditPlaces(edit) => self.as_mut().edit_places(edit),
                 Effect::Open { opening, new_tab } => self.as_mut().open(opening, new_tab),
-                Effect::Eject(device) => self.as_mut().eject_device(device),
+                Effect::Mount(device) => self.as_mut().mount_device(device, None),
+                Effect::Unmount(device) => self.as_mut().remove_device(device, false),
+                Effect::SafelyRemove(device) => self.as_mut().remove_device(device, true),
+                // Clipboard text: a path outside UTF-8 is shown with
+                // replacement characters, as the views' Copy location does.
+                Effect::CopyLocation(path) => self
+                    .as_mut()
+                    .copy_text(QString::from(path.to_string_lossy().as_ref())),
                 Effect::ShowHidden(show) => {
                     prefs::update(|settings| {
                         let choice = settings.places();
@@ -645,27 +664,34 @@ impl qobject::PlacesModel {
                     });
                 });
             }
-            Opening::Mount(device) => {
-                let service = self.rust().device_service.clone();
-                let thread = self.qt_thread();
-                std::thread::spawn(move || {
-                    let name = device_name(&device);
-                    let mounted = service.mount(&device);
-                    let _ = thread.queue(move |mut model| {
-                        match mounted {
-                            Ok(path) => {
-                                model.as_mut().open_folder(qml_path::to_qml(&path), new_tab)
-                            }
-                            Err(error) => hub::say(
-                                format!("\u{201c}{name}\u{201d} could not be mounted: {error}."),
-                                true,
-                            ),
-                        }
-                        model.not_busy();
-                    });
-                });
-            }
+            Opening::Mount(device) => self.mount_device(device, Some(new_tab)),
         }
+    }
+
+    /// Mounts the volume, then opens it here or in a new tab when `open`
+    /// says so, or says it was mounted.
+    fn mount_device(self: Pin<&mut Self>, device: Device, open: Option<bool>) {
+        let service = self.rust().device_service.clone();
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let name = device_name(&device);
+            let mounted = service.mount(&device);
+            let _ = thread.queue(move |mut model| {
+                match (mounted, open) {
+                    (Ok(path), Some(new_tab)) => {
+                        model.as_mut().open_folder(qml_path::to_qml(&path), new_tab)
+                    }
+                    (Ok(_), None) => {
+                        hub::say(format!("\u{201c}{name}\u{201d} was mounted."), false)
+                    }
+                    (Err(error), _) => hub::say(
+                        format!("\u{201c}{name}\u{201d} could not be mounted: {error}."),
+                        true,
+                    ),
+                }
+                model.not_busy();
+            });
+        });
     }
 
     fn open_remote(
@@ -683,16 +709,9 @@ impl qobject::PlacesModel {
         });
     }
 
-    fn eject(mut self: Pin<&mut Self>, row: i32) {
-        let Some(row) = at(row) else {
-            return;
-        };
-        let effects = self.as_mut().rust_mut().panel.eject(row);
-        self.apply(effects);
-    }
-
-    /// Unmounts the volume, and powers its drive off when it can be.
-    fn eject_device(self: Pin<&mut Self>, device: Device) {
+    /// Unmounts the volume when mounted; with `power_off`, then powers
+    /// its drive off when it can be, so it can be unplugged.
+    fn remove_device(self: Pin<&mut Self>, device: Device, power_off: bool) {
         let service = self.rust().device_service.clone();
         let thread = self.qt_thread();
         std::thread::spawn(move || {
@@ -701,7 +720,7 @@ impl qobject::PlacesModel {
                 if device.mount_point.is_some() {
                     service.unmount(&device)?;
                 }
-                if device.removable && device.can_power_off() {
+                if power_off && device.can_power_off() {
                     service.power_off(&device)?;
                     return Ok(true);
                 }
@@ -713,8 +732,12 @@ impl qobject::PlacesModel {
                     false,
                 ),
                 Ok(false) => (format!("\u{201c}{name}\u{201d} was unmounted."), false),
-                Err(error) => (
+                Err(error) if power_off => (
                     format!("\u{201c}{name}\u{201d} could not be removed: {error}."),
+                    true,
+                ),
+                Err(error) => (
+                    format!("\u{201c}{name}\u{201d} could not be unmounted: {error}."),
                     true,
                 ),
             };

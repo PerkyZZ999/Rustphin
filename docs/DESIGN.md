@@ -81,6 +81,11 @@ typography:
     fontSize: 11px
     fontWeight: 400
     lineHeight: 16px
+  body-md-strong:
+    fontFamily: Inter
+    fontSize: 12px
+    fontWeight: 600
+    lineHeight: 16px
   label-sm:
     fontFamily: Inter
     fontSize: 10px
@@ -222,15 +227,23 @@ components:
     textColor: "{colors.text-muted}"
     typography: "{typography.label-sm}"
     height: 28px
-  device-row:
+  device-card:
+    backgroundColor: "{colors.chrome-raised-solid}"
     textColor: "{colors.text}"
-    typography: "{typography.body-md}"
-    height: 48px
+    typography: "{typography.body-md-strong}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.sm}"
+    height: 56px
+  device-row:
+    height: 60px
   device-figures:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-sm}"
+  device-traits:
+    textColor: "{colors.text-muted}"
+    typography: "{typography.body-sm}"
   usage-bar:
-    backgroundColor: "{colors.text-muted}"
+    backgroundColor: "{colors.progress}"
     height: 4px
   usage-bar-full:
     backgroundColor: "{colors.error}"
@@ -621,7 +634,7 @@ boxes. Zooming out reaches 24-pixel rows.
     View menu, the palette and dialogs, and `glow` (royal blue at 20 %) the
     2 px halo just outside it.
   - `progress` (the same lightened blue) is the filled part of the activity
-    line's progress bar.
+    line's progress bar and of a drive card's usage bar (W-148).
   No text, interface icon, check mark or large fill is blue.
 - **Selection is neutral** (`selection`, `#3B3D42`, with `on-selection` text,
   10:1): it fills the selected entries, the current place in the places
@@ -635,8 +648,9 @@ boxes. Zooming out reaches 24-pixel rows.
   never told by a grey alone. `current` (`#2A2C30`) is the quiet fill of the
   focused entry when it is not selected.
 - **Hover** is white at 6 %, under the pointer on rows, buttons and tabs.
-- **Usage bars** of devices are `text-muted` on `track`; a volume more than
-  90 % full draws its bar in `error`. **Tertiary** (emerald) marks a
+- **Usage bars** of drive cards are `progress` on `track`; a volume 90 % full
+  or more draws its bar in `error`, and the card's "NN% used" says the same in
+  words, so the warning is never colour alone. **Tertiary** (emerald) marks a
   completed operation. Neither is decoration.
 - **Error** text and icons on `error-surface` (a dark red-grey) with an
   `error-border` outline and a warning icon; colour never carries the message
@@ -669,13 +683,14 @@ Space Grotesk 600) and registered by the C++ shell at start.
   character: `data-md` for sizes and dates, the location crumbs, the split
   pane's path bar, dialog facts, Settings values and the problem list's paths;
   `data-sm` for the status line, shortcuts in menus and the palette, palette
-  trails, activity figures, device figures and the toolbar's Actions hint.
+  trails, activity figures, a drive card's figures ("211.3 / 927.0 GiB",
+  "22% used") and the toolbar's Actions hint.
 - **Space Grotesk** for the few headings, all 15 px semibold: `headline-sm`
   for dialog titles ("Delete for good?", "<name> — Properties", "Compress
   …") and Settings page titles, `headline-md` for empty and error states in
   the pane.
-- The current crumb in the location field and the sorted column heading are
-  drawn semibold.
+- The current crumb in the location field, the sorted column heading and a
+  drive card's name (`body-md-strong`) are drawn semibold.
 - **Text size** (Settings, Appearance) multiplies every interface size by
   11/12 (Smaller) or 14/12 (Larger) (`metrics::text::set_scale`); names and
   data in the lists follow the zoom table below, scaled the same way.
@@ -757,7 +772,8 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   it. A 36 px title row: "PLACES" in `label-sm` `text-muted` and a 28 px
   "New group" icon button (`list-plus`, tooltip "New group (Ctrl+Shift+G)").
   Place rows and section headings 28 px, place icons 16 px, a 12 px inset
-  (24 px for a place inside a group); device rows 48 px with 20 px icons. The
+  (24 px for a place inside a group); drive cards 56 px tall with 4 px
+  between them (`size::DEVICE_CARD`, `DEVICE_ROW`), with 16 px icons. The
   panel scrolls on its own.
 - **Details view:** 28 px heading row (Name, Size, Modified, Type); columns
   name (fills), size (96 px, right-aligned), modified (168 px), type (160 px),
@@ -963,14 +979,30 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   KDE's built-in places). On a group heading: Collapse or Expand; Move up,
   Move down; Rename group (F2), Delete group (Delete; its places stay). On
   empty space: New group (Ctrl+Shift+G), Add to places (the folder shown);
-  Show or Hide hidden places. Volumes have no menu.
-- **Device rows:** 48 px: a 20 px `hard-drive` or `usb` icon, the name, the
-  figures ("1.8 of 3.6 TiB free", "Not mounted", "Working…" while mounting or
-  ejecting) in `data-sm` `text-muted`, and a 4 px usage bar (`text-muted` on
-  `track`, `error` past 90 %). Removable volumes (never the one holding the
-  home folder) have a 28 px eject icon button (`arrow-up-from-line`, tooltip
-  "Unmount or remove safely (E)"). Clicking an unmounted volume mounts and
-  opens it.
+  Show or Hide hidden places. On a drive (W-148): Open (Enter), Open in new
+  tab; Mount (`hard-drive`) when it is not mounted, or Unmount
+  (`arrow-up-from-line`) when it is; Safely remove (`power`, E) for a
+  removable or power-off capable drive; Copy location (`link`) when it is
+  mounted. The volumes the system and the home folder run from offer neither
+  Unmount nor Safely remove.
+- **Drive cards (W-148):** each volume under Devices is a card 56 px tall on
+  `chrome-raised`, 2 px corners, 8 px padding, 4 px apart. First line: a 16 px
+  `hard-drive` or `usb` icon and the name in `body-md-strong` `text` on the
+  left; on the right "used / total" in `data-sm` `text-muted`, one unit when
+  both share it ("211.3 / 927.0 GiB", else "512.0 MiB / 1.2 GiB", in the
+  units Settings, Views chose, as the status line). Then a full-width 4 px
+  usage bar (`progress` on `track`; `error` from 90 % used). Last line in
+  `text-muted`: the filesystem and its traits on the left in `body-sm`
+  ("Btrfs · Encrypted", "exFAT · Removable"; the type is UDisks2's `IdType`,
+  "Encrypted" when the volume is unlocked from an encrypted container), and
+  "NN% used" (whole percent, rounded down) on the right in `data-sm`. A drive
+  that is not mounted has no bar: its size on the right of the first line and
+  "Not mounted" below. While it is being mounted or removed the last line
+  says "Working…". Hover, the current place's fill and edge and the focus
+  outline are those of place rows. There is no eject button: the drive menu
+  holds Unmount and Safely remove, and E does what the eject button did
+  (Safely remove where offered, else Unmount). Clicking an unmounted drive
+  mounts and opens it. Its accessible description reads the card's words.
 - **Column headings:** `body-sm` `text-muted`, `hover` under the pointer; the
   sorted column in `text`, semibold, with a 12 px `arrow-up` or `arrow-down`,
   so direction is never colour alone. Clicking a heading sorts; clicking
@@ -1117,10 +1149,10 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   vertical in the details and icons views, horizontal in the compact view.
 - **Interface icons:** the bundled Lucide SVGs (`crates/rustphin/icons`),
   drawn through `image://lucide/<name>/<colour>` in a token colour, 16 px by
-  default, 12 px for chevrons and badges, 20 px in palette results and device
-  rows, 32 px in states. Fixed names for the less obvious ones: `menu`
-  (Actions as an icon), `arrow-up-from-line` (eject; Lucide has no eject
-  glyph), `loader` (connecting, loading), `circle-check` (done),
+  default, 12 px for chevrons and badges, 20 px in palette results, 32 px in
+  states. Fixed names for the less obvious ones: `menu`
+  (Actions as an icon), `arrow-up-from-line` (Unmount; Lucide has no eject
+  glyph), `power` (Safely remove), `loader` (connecting, loading), `circle-check` (done),
   `triangle-alert` (problems), `shield-alert` (administrator).
 
 ## Do's and Don'ts
@@ -1148,6 +1180,11 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   types.
 
 ## Changes from the earlier design
+
+W-148 (2026-11-14, the maintainer) turned device rows into drive cards:
+"used / total" figures, the filesystem and its traits, "NN% used", the usage
+bar in `progress` rather than `text-muted` (D-039), a semibold name, and a
+drive menu in place of the eject button.
 
 W-147 (2026-11-14, D-038) replaced the navy colours with charcoal: every
 surface lost its blue tint; selection, the current place, the selected

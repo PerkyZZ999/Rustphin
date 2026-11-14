@@ -1,6 +1,6 @@
 //! What a right-click offers in the places panel (W-102).
 //!
-//! Places, groups and the panel's empty space each get their own list,
+//! Places, groups, drives (W-148) and the panel's empty space each get their own list,
 //! decided here away from drawing so a missing choice fails a test. Every
 //! row has a key that does the same while the panel has the focus, and the
 //! row shows it.
@@ -49,6 +49,15 @@ pub enum PlaceCommand {
     AddShownFolder,
     /// Show or hide the hidden places.
     ToggleHiddenPlaces,
+    /// Mount the drive, without opening it.
+    Mount,
+    /// Unmount the drive.
+    Unmount,
+    /// Unmount the drive and power it off when it can be, so it can be
+    /// unplugged.
+    SafelyRemove,
+    /// Put the drive's mount point on the clipboard.
+    CopyLocation,
 }
 
 impl PlaceCommand {
@@ -68,7 +77,15 @@ impl PlaceCommand {
             Self::NewGroup => Action::Places(P::NewGroup),
             Self::ToggleHiddenPlaces => Action::Places(P::ToggleHiddenPlaces),
             Self::AddShownFolder => Action::Window(WindowCommand::AddPlace),
-            Self::OpenInNewTab | Self::MoveToGroup(_) | Self::NewGroupWith | Self::LeaveGroup => {
+            // E safely removes a drive the menu offers to remove (W-148).
+            Self::SafelyRemove => Action::Places(P::Eject),
+            Self::OpenInNewTab
+            | Self::MoveToGroup(_)
+            | Self::NewGroupWith
+            | Self::LeaveGroup
+            | Self::Mount
+            | Self::Unmount
+            | Self::CopyLocation => {
                 return None;
             }
         })
@@ -97,6 +114,11 @@ impl Command for PlaceCommand {
             Self::Expand => IconName::ChevronsUpDown,
             Self::DeleteGroup => IconName::CircleX,
             Self::AddShownFolder => IconName::BookmarkPlus,
+            Self::Mount => IconName::HardDrive,
+            // Lucide has no eject glyph; DESIGN.md names this one for it.
+            Self::Unmount => IconName::ArrowUpFromLine,
+            Self::SafelyRemove => IconName::Power,
+            Self::CopyLocation => IconName::Link,
         })
     }
 }
@@ -120,6 +142,17 @@ pub enum Target<'a> {
     Group {
         /// Its places are folded away.
         collapsed: bool,
+    },
+    /// A drive (W-148).
+    Device {
+        /// It is mounted.
+        mounted: bool,
+        /// It can be unmounted: mounted, and not a volume the system or the
+        /// home folder runs from.
+        can_unmount: bool,
+        /// It can be safely removed: removable or able to power off, and
+        /// not a volume the system or the home folder runs from.
+        can_remove: bool,
     },
     /// The panel's empty space or its title.
     Panel {
@@ -201,6 +234,34 @@ pub fn place_menu(target: Target<'_>) -> Vec<MenuEntry<PlaceCommand>> {
             item("Rename group", PlaceCommand::Rename, true),
             item("Delete group", PlaceCommand::DeleteGroup, true),
         ],
+        Target::Device {
+            mounted,
+            can_unmount,
+            can_remove,
+        } => {
+            let mut entries = vec![
+                item("Open", PlaceCommand::Open, true),
+                item("Open in new tab", PlaceCommand::OpenInNewTab, true),
+            ];
+            let mut removal = Vec::new();
+            if !mounted {
+                removal.push(item("Mount", PlaceCommand::Mount, true));
+            } else if can_unmount {
+                removal.push(item("Unmount", PlaceCommand::Unmount, true));
+            }
+            if can_remove {
+                removal.push(item("Safely remove", PlaceCommand::SafelyRemove, true));
+            }
+            if !removal.is_empty() {
+                entries.push(MenuEntry::Separator);
+                entries.extend(removal);
+            }
+            if mounted {
+                entries.push(MenuEntry::Separator);
+                entries.push(item("Copy location", PlaceCommand::CopyLocation, true));
+            }
+            entries
+        }
         Target::Panel {
             can_add_shown,
             showing_hidden,
@@ -325,6 +386,69 @@ mod tests {
             ["New group", "Add to places", "", "Hide hidden places"]
         );
         assert!(entries.contains(&item("Add to places", PlaceCommand::AddShownFolder, false)));
+    }
+
+    fn drive(mounted: bool, can_unmount: bool, can_remove: bool) -> Vec<MenuEntry<PlaceCommand>> {
+        place_menu(Target::Device {
+            mounted,
+            can_unmount,
+            can_remove,
+        })
+    }
+
+    #[test]
+    fn a_mounted_removable_drive_opens_unmounts_removes_and_copies_its_location() {
+        assert_eq!(
+            labels(&drive(true, true, true)),
+            [
+                "Open",
+                "Open in new tab",
+                "",
+                "Unmount",
+                "Safely remove",
+                "",
+                "Copy location"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unmounted_drive_offers_to_mount_and_has_no_location_to_copy() {
+        assert_eq!(
+            labels(&drive(false, false, true)),
+            ["Open", "Open in new tab", "", "Mount", "Safely remove"]
+        );
+        assert_eq!(
+            labels(&drive(false, false, false)),
+            ["Open", "Open in new tab", "", "Mount"]
+        );
+    }
+
+    #[test]
+    fn the_systems_own_volume_is_only_opened_or_its_location_copied() {
+        assert_eq!(
+            labels(&drive(true, false, false)),
+            ["Open", "Open in new tab", "", "Copy location"]
+        );
+        // A fixed data disk unmounts but is not removed.
+        assert_eq!(
+            labels(&drive(true, true, false)),
+            [
+                "Open",
+                "Open in new tab",
+                "",
+                "Unmount",
+                "",
+                "Copy location"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_drive_menu_shows_enter_on_open_and_e_on_safe_removal() {
+        assert_eq!(PlaceCommand::SafelyRemove.shortcut().as_deref(), Some("E"));
+        assert_eq!(PlaceCommand::Open.shortcut().as_deref(), Some("Enter"));
+        assert_eq!(PlaceCommand::Unmount.shortcut(), None);
     }
 
     #[test]

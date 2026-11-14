@@ -40,8 +40,9 @@ opens a tab or a window as Settings, General says.
       - Place groups (Rustphin's own, D-008), each foldable, with a count when
         folded; a group may hold network bookmarks (`sftp://`, `smb://`…)
       - Remote: network bookmarks outside any group, foldable
-      - Devices: mounted and unmounted volumes, with usage and eject,
-        foldable
+      - Devices: a card per mounted or unmounted volume (name, used and
+        total, usage bar, filesystem and traits, percent used), foldable
+        → *Drive menu*
       - Hidden places (only when listed)
       - → *Places menu*
     - **Tab strip** (`TabStrip.qml`, always shown): one tab per location,
@@ -65,7 +66,7 @@ opens a tab or a window as Settings, General says.
 - **Floating surfaces** (solid; the palette and dialogs over a dimmed window)
   - Actions palette (Ctrl+Shift+P)
   - Context menu (`JsonMenu.qml`) → Open with ›, Extract ›, Compress ›
-  - New menu, Trash actions menu, Places menu (→ Move to group ›)
+  - New menu, Trash actions menu, Places menu (→ Move to group ›), Drive menu
   - View menu (`ViewMenu.qml`): modes and size
   - Tooltips
   - Dialogs
@@ -148,6 +149,17 @@ Groups, separated by hairlines, in this order (Dolphin's order):
 
 On empty space: Paste, New folder, New file. The trash's own actions (Restore,
 Empty trash…, other volumes' trashes) are on the trash banner's menu.
+
+### Drive menu (W-148)
+
+On a drive card in the places panel (right-click, Menu key, Shift+F10), in
+groups separated by hairlines:
+
+1. Open, Open in new tab (an unmounted drive is mounted first)
+2. Mount (not mounted) or Unmount (mounted); Safely remove (removable or
+   power-off capable drives). Neither Unmount nor Safely remove for the
+   volumes the system and the home folder run from.
+3. Copy location (mounted)
 
 ### Properties dialog
 
@@ -239,8 +251,9 @@ Empty trash…, other volumes' trashes) are on the trash banner's menu.
 
 1. A drive appears under Devices when plugged in, with its usage.
 2. User clicks it: it mounts and opens.
-3. User clicks the eject button (or presses E on its row): it unmounts and the
-   row updates.
+3. User right-clicks it (or presses the Menu key or Shift+F10 on it) and
+   chooses Unmount or Safely remove, or presses E on its card: it unmounts
+   (and a removable drive powers off) and the card updates.
    - If it is busy → a notice names the problem.
 
 ### Find any command
@@ -267,8 +280,8 @@ Pick one word and use it everywhere: menu, palette, tooltip, notices.
 | Folder | folder | Never "directory" |
 | The panel on the left | Places | Dolphin's word; the title of the panel |
 | A user-made section in Places | group | "New group", "Move selected place to next group" |
-| A volume | device; the section is "Devices" | Its name, its free space |
-| Removing a device | Unmount, or Safely remove for removable drives | "Unmount or remove safely (E)" |
+| A volume | device or drive; the section is "Devices" | Its name, "used / total", "NN% used", its filesystem |
+| Removing a device | Unmount, or Safely remove for removable or power-off capable drives | Drive menu; E does Safely remove where offered, else Unmount |
 | Sending to the trash | Move to trash | Undoable |
 | Deleting without the trash | Delete… / "Delete for good?" | Always asks; cannot be undone |
 | The trash | Trash | Capital T only as a place name and title |
@@ -291,11 +304,11 @@ Pick one word and use it everywhere: menu, palette, tooltip, notices.
 | Solid floating surface (raised, `border-strong` outline) | Palette, context menu and its submenus, New, trash and places menus, View menu, all dialogs | Menus open at the pointer or under their button; the palette under the toolbar; dialogs centred over the scrim |
 | Selection look (neutral `selection` fill, light text, 2 px royal-blue edge) | Entry rows and cells, the current place, palette results, the current Settings page, dialog segments | The edge is on the leading side (segments: along the bottom); menus use the hover fill instead (D-038) |
 | Focus outline | Rows (1 px `primary-bright` outline, with the `current` fill when not selected), places rows (outline), fields and buttons (2 px ring) | |
-| Icon button | Title bar, toolbar, tab close and "+", New group, eject, dismiss, Stop, Settings steppers and lists | Toggles show the subtle fill when on |
+| Icon button | Title bar, toolbar, tab close and "+", New group, dismiss, Stop, Settings steppers and lists | Toggles show the subtle fill when on |
 | Outlined button | Actions, Trash actions, Undo, Details, state actions, Stop acting as administrator, dialog secondary buttons | |
 | Default button | Default action of a dialog (Apply, Rename, Compress, a question's default) | Destructive defaults use the error colours |
 | Window line (icon, sentence, actions, dismiss) | Activity line, notice line | A problem uses the error surface |
-| Progress or usage bar | Activity line, device rows | Activity: `progress` (lightened royal blue), 6 px; device: `text-muted` (error past 90 %), 4 px |
+| Progress or usage bar | Activity line, drive cards | Both `progress` (lightened royal blue) on `track`: activity 6 px; drive card 4 px, `error` from 90 % used (D-039) |
 | Scrolling dialog body | Every dialog | |
 | State block (icon, heading, reason, actions) | Empty, loading, hidden-only, filter-empty, unreadable folder | |
 | Text field | Location (editing), filter, palette search, rename field, batch-rename rules, Compress name, group names, Settings fields | The rename field sits inside a row |

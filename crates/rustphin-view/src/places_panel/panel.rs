@@ -5,7 +5,8 @@
 //! own groups (D-008), the volumes, which row has the keyboard, the name
 //! being edited and the menu shown. Every change returns a list of
 //! [`Effect`]s for the Qt adapter to carry out: save the groups, edit the
-//! shared places file, open a place, mount or eject a volume, and redraw
+//! shared places file, open a place, mount, unmount or remove a volume,
+//! copy its location, and redraw
 //! the rows or lay them out again. The adapter never decides anything.
 
 use std::{collections::HashMap, fmt, path::PathBuf};
@@ -18,8 +19,8 @@ use rustphin_platform::{
 };
 
 use super::{
-    DEVICES_UNAVAILABLE, Row, can_eject, device_name, icon_for, is_remote, is_shown,
-    network_address, rows,
+    DEVICES_UNAVAILABLE, Row, can_remove, can_unmount, device_card, device_name, icon_for,
+    is_remote, is_shown, network_address, rows,
 };
 use crate::{
     commands::PlacesCommand,
@@ -146,8 +147,15 @@ pub enum Effect {
         /// In a new tab.
         new_tab: bool,
     },
-    /// Unmount the volume, and power its drive off when it can be.
-    Eject(Device),
+    /// Mount the volume without opening it.
+    Mount(Device),
+    /// Unmount the volume.
+    Unmount(Device),
+    /// Unmount the volume when mounted, then power its drive off when it
+    /// can be, so it can be unplugged.
+    SafelyRemove(Device),
+    /// Put this location on the clipboard as text.
+    CopyLocation(PathBuf),
     /// Keep in Settings whether hidden places are shown.
     ShowHidden(bool),
     /// Tell the user something (not an error).
@@ -194,14 +202,21 @@ pub struct RowView {
     pub hidden: bool,
     /// A folded heading.
     pub collapsed: bool,
-    /// A group's count, or a volume's usage in words.
+    /// A group's count, or a drive card's last line: its filesystem and
+    /// traits, "Not mounted" or "Working…" (W-148).
     pub detail: String,
-    /// How full a volume is, 0 to 1; -1 when not known.
+    /// A drive card's figures right of its name: "used / total", or its size.
+    pub figures: String,
+    /// A drive card's "NN% used", or empty.
+    pub percent: String,
+    /// How full a volume is, 0 to 1; -1 when there is no bar.
     pub usage: f64,
-    /// A volume being mounted or ejected.
+    /// A volume at least 90 % full: its bar warns.
+    pub nearly_full: bool,
+    /// What a screen reader says after the name: a drive card's words.
+    pub description: String,
+    /// A volume being mounted, unmounted or removed.
     pub busy: bool,
-    /// A volume that offers to be ejected.
-    pub ejectable: bool,
     /// It has the keyboard.
     pub focused: bool,
     /// Its name is being edited.
@@ -312,9 +327,12 @@ impl PlacesPanel {
             hidden: false,
             collapsed: false,
             detail: String::new(),
+            figures: String::new(),
+            percent: String::new(),
             usage: -1.,
+            nearly_full: false,
+            description: String::new(),
             busy: false,
-            ejectable: false,
             focused: self.focused.as_ref() == Some(row),
             renaming: self.renaming.as_ref() == Some(row),
             grouped: false,
@@ -375,7 +393,8 @@ impl PlacesPanel {
             },
             Row::Device(id) => {
                 let device = self.device(id)?;
-                let usage = self.usage.get(id).copied();
+                let busy = self.busy.as_deref() == Some(id);
+                let card = device_card(device, self.usage.get(id).copied(), busy);
                 RowView {
                     kind: RowKind::Device,
                     title: device_name(device),
@@ -385,20 +404,13 @@ impl PlacesPanel {
                         "hard-drive"
                     },
                     current: self.current.is_some() && device.mount_point == self.current,
-                    detail: match usage {
-                        Some((total, free)) => super::usage_text(total, free),
-                        None if device.mount_point.is_some() => String::new(),
-                        None => "Not mounted".to_owned(),
-                    },
-                    usage: usage.map_or(-1., |(total, free)| {
-                        if total == 0 {
-                            0.
-                        } else {
-                            (total - free.min(total)) as f64 / total as f64
-                        }
-                    }),
-                    busy: self.busy.as_deref() == Some(id),
-                    ejectable: can_eject(device, self.home.as_deref()),
+                    detail: card.traits,
+                    figures: card.figures,
+                    percent: card.percent,
+                    usage: card.usage,
+                    nearly_full: card.nearly_full,
+                    description: card.description,
+                    busy,
                     ..blank
                 }
             }
@@ -444,7 +456,7 @@ impl PlacesPanel {
         self.changed(false)
     }
 
-    /// The volume being mounted or ejected, or none.
+    /// The volume being mounted, unmounted or removed, or none.
     pub fn set_busy(&mut self, id: Option<String>) -> Vec<Effect> {
         self.busy = id;
         self.changed(false)
@@ -571,7 +583,16 @@ impl PlacesPanel {
             Some(Row::Group(index)) => place_menu::place_menu(Target::Group {
                 collapsed: self.groups.groups.get(*index)?.collapsed,
             }),
-            Some(Row::Device(_) | Row::Devices | Row::Remote) => return None,
+            Some(Row::Device(id)) => {
+                let device = self.device(id)?;
+                let home = self.home.as_deref();
+                place_menu::place_menu(Target::Device {
+                    mounted: device.mount_point.is_some(),
+                    can_unmount: can_unmount(device, home),
+                    can_remove: can_remove(device, home),
+                })
+            }
+            Some(Row::Devices | Row::Remote) => return None,
             None => place_menu::place_menu(Target::Panel {
                 can_add_shown: self.current.is_some(),
                 showing_hidden: self.choice.show_hidden,
@@ -603,6 +624,10 @@ impl PlacesPanel {
         };
         let place = match &row {
             Some(Row::Place(id)) => Some(id.clone()),
+            _ => None,
+        };
+        let device = match &row {
+            Some(Row::Device(id)) => self.device(id).cloned(),
             _ => None,
         };
         effects.extend(match command {
@@ -648,6 +673,37 @@ impl PlacesPanel {
                 None => Vec::new(),
             },
             PlaceCommand::ToggleHiddenPlaces => self.set_show_hidden(!self.choice.show_hidden),
+            PlaceCommand::Mount => match device {
+                Some(device) if device.mount_point.is_none() => {
+                    self.busy_with(device, Effect::Mount)
+                }
+                _ => Vec::new(),
+            },
+            PlaceCommand::Unmount => match device {
+                Some(device) if can_unmount(&device, self.home.as_deref()) => {
+                    self.busy_with(device, Effect::Unmount)
+                }
+                _ => Vec::new(),
+            },
+            PlaceCommand::SafelyRemove => match device {
+                Some(device) if can_remove(&device, self.home.as_deref()) => {
+                    self.busy_with(device, Effect::SafelyRemove)
+                }
+                _ => Vec::new(),
+            },
+            PlaceCommand::CopyLocation => match device {
+                Some(device) => match device.mount_point.clone() {
+                    Some(path) => vec![
+                        Effect::CopyLocation(path),
+                        Effect::Say(format!(
+                            "Copied the location of \u{201c}{}\u{201d}.",
+                            device_name(&device)
+                        )),
+                    ],
+                    None => Vec::new(),
+                },
+                None => Vec::new(),
+            },
         });
         effects
     }
@@ -687,14 +743,6 @@ impl PlacesPanel {
         self.lay_out();
         effects.push(Effect::Relayout);
         effects
-    }
-
-    /// Unmounts or powers off the volume at row `at`.
-    pub fn eject(&mut self, at: usize) -> Vec<Effect> {
-        match self.rows.get(at).cloned() {
-            Some(Row::Device(id)) => self.eject_device(&id),
-            _ => Vec::new(),
-        }
     }
 
     /// Adds a place for `folder` (Ctrl+Shift+D, a drop), into `group`.
@@ -1054,15 +1102,27 @@ impl PlacesPanel {
         self.changed(true)
     }
 
+    /// E: what the eject button did before W-148. Safely remove where the
+    /// drive menu offers it, else Unmount; nothing for the volumes the
+    /// system and the home folder run from.
     fn eject_device(&mut self, id: &str) -> Vec<Effect> {
         let Some(device) = self.device(id).cloned() else {
             return Vec::new();
         };
-        if !can_eject(&device, self.home.as_deref()) {
-            return Vec::new();
+        let home = self.home.as_deref();
+        if can_remove(&device, home) {
+            self.busy_with(device, Effect::SafelyRemove)
+        } else if can_unmount(&device, home) {
+            self.busy_with(device, Effect::Unmount)
+        } else {
+            Vec::new()
         }
+    }
+
+    /// Marks `device` busy, then asks the adapter for `effect` on it.
+    fn busy_with(&mut self, device: Device, effect: fn(Device) -> Effect) -> Vec<Effect> {
         let mut effects = self.set_busy(Some(device.id.clone()));
-        effects.push(Effect::Eject(device));
+        effects.push(effect(device));
         effects
     }
 
@@ -1584,6 +1644,8 @@ mod tests {
             size: 1,
             removable: true,
             power_off: Some("/drive".into()),
+            filesystem: None,
+            encrypted: false,
         };
         let effects = world.panel.set_devices(vec![stick.clone()], HashMap::new());
         world.carry_out(effects);
@@ -1616,6 +1678,8 @@ mod tests {
             size: 1,
             removable,
             power_off: removable.then(|| "/drive".to_owned()),
+            filesystem: Some("ext4".to_owned()),
+            encrypted: false,
         }
     }
 
@@ -1647,7 +1711,7 @@ mod tests {
     }
 
     #[test]
-    fn a_volume_row_shows_its_name_kind_usage_and_whether_it_ejects() {
+    fn a_volume_row_shows_its_card() {
         let mut world = with_devices();
         assert!(world.panel.set_current(Some(PathBuf::from("/data"))));
         let data = world.panel.view(&d("data")).unwrap();
@@ -1655,30 +1719,47 @@ mod tests {
         assert_eq!(data.title, "DATA");
         assert_eq!(data.icon, "hard-drive");
         assert!(data.current);
-        assert_eq!(data.detail, super::super::usage_text(1000, 250));
+        let card = super::super::device_card(
+            &device("data", Some("/data"), false),
+            Some((1000, 250)),
+            false,
+        );
+        assert_eq!(
+            (data.detail, data.figures, data.percent, data.description),
+            (card.traits, card.figures, card.percent, card.description)
+        );
         assert!((data.usage - 0.75).abs() < 1e-9, "{}", data.usage);
-        assert!(data.ejectable && !data.busy);
+        assert!(!data.nearly_full && !data.busy);
 
         let stick = world.panel.view(&d("stick")).unwrap();
         assert_eq!(stick.icon, "usb");
         assert!(!stick.current, "not mounted, so not the folder shown");
         assert_eq!(stick.detail, "Not mounted");
         assert!((stick.usage + 1.).abs() < 1e-9, "unknown: {}", stick.usage);
-        assert!(stick.ejectable, "an unplugged stick can be powered off");
 
-        // Mounted, but its usage not known yet: nothing said.
-        assert_eq!(world.panel.view(&d("bare")).unwrap().detail, "");
         assert!(!world.panel.view(&d("bare")).unwrap().current);
         // A volume of no size is not full.
         assert!(world.panel.view(&d("empty")).unwrap().usage.abs() < 1e-9);
-        // The system's volume and home's are never ejected.
-        assert!(!world.panel.view(&d("root")).unwrap().ejectable);
-        assert!(!world.panel.view(&d("home")).unwrap().ejectable);
 
         let effects = world.panel.set_busy(Some("data".into()));
         world.carry_out(effects);
-        assert!(world.panel.view(&d("data")).unwrap().busy);
+        let data = world.panel.view(&d("data")).unwrap();
+        assert!(data.busy);
+        assert_eq!(data.detail, "Working\u{2026}");
         assert!(!world.panel.view(&d("stick")).unwrap().busy);
+    }
+
+    #[test]
+    fn a_nearly_full_volume_row_warns() {
+        let mut world = world();
+        let effects = world.panel.set_devices(
+            vec![device("full", Some("/full"), false)],
+            HashMap::from([("full".to_owned(), (1000, 40))]),
+        );
+        world.carry_out(effects);
+        let full = world.panel.view(&d("full")).unwrap();
+        assert!(full.nearly_full);
+        assert_eq!(full.percent, "96% used");
     }
 
     #[test]
@@ -1810,25 +1891,154 @@ mod tests {
     }
 
     #[test]
-    fn eject_acts_only_on_a_volume_that_can_be_ejected() {
+    fn e_safely_removes_a_removable_drive_unmounts_a_fixed_one_and_spares_the_system() {
         let mut world = with_devices();
-        let at = world.at(&d("data"));
-        let effects = world.panel.eject(at);
-        assert_eq!(
-            effects.last(),
-            Some(&Effect::Eject(device("data", Some("/data"), false)))
-        );
-        assert!(world.panel.view(&d("data")).unwrap().busy);
-        let at = world.at(&d("root"));
-        assert_eq!(world.panel.eject(at), []);
-        let at = world.at(&p("a"));
-        assert_eq!(world.panel.eject(at), []);
-        // The same from the keyboard.
         world.focus(d("stick"));
         let effects = world.panel.run(PlacesCommand::Eject).unwrap();
         assert_eq!(
             effects.last(),
-            Some(&Effect::Eject(device("stick", None, true)))
+            Some(&Effect::SafelyRemove(device("stick", None, true)))
+        );
+        assert!(world.panel.view(&d("stick")).unwrap().busy);
+
+        world.focus(d("data"));
+        let effects = world.panel.run(PlacesCommand::Eject).unwrap();
+        assert_eq!(
+            effects.last(),
+            Some(&Effect::Unmount(device("data", Some("/data"), false)))
+        );
+
+        // A mounted stick is removed, not only unmounted.
+        let mounted = device("usb", Some("/run/media/u/USB"), true);
+        let effects = world
+            .panel
+            .set_devices(vec![mounted.clone()], HashMap::new());
+        world.carry_out(effects);
+        world.focus(d("usb"));
+        let effects = world.panel.run(PlacesCommand::Eject).unwrap();
+        assert_eq!(effects.last(), Some(&Effect::SafelyRemove(mounted)));
+        let effects = world.panel.set_devices(
+            vec![
+                device("root", Some("/"), false),
+                device("home", Some("/home"), false),
+            ],
+            HashMap::new(),
+        );
+        world.carry_out(effects);
+
+        for spared in ["root", "home"] {
+            world.focus(d(spared));
+            assert_eq!(world.panel.run(PlacesCommand::Eject), Some(Vec::new()));
+        }
+        world.focus(p("a"));
+        assert_eq!(world.panel.run(PlacesCommand::Eject), Some(Vec::new()));
+    }
+
+    /// Opens the menu on `row` and chooses `label` in it.
+    fn choose(world: &mut World, row: &Row, label: &str) -> Vec<Effect> {
+        let at = world.at(row);
+        let opened = world.panel.open_menu(Some(at)).unwrap();
+        let Some(Effect::Menu(json)) = opened.first() else {
+            panic!("no menu in {opened:?}");
+        };
+        world.panel.run_menu(&path_of(json, label))
+    }
+
+    fn menu_labels(world: &mut World, row: &Row) -> Vec<String> {
+        let at = world.at(row);
+        let opened = world.panel.open_menu(Some(at)).unwrap();
+        let Some(Effect::Menu(json)) = opened.first() else {
+            panic!("no menu in {opened:?}");
+        };
+        let rows: serde_json::Value = serde_json::from_str(json).unwrap();
+        world.panel.run_menu("");
+        rows.as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["label"].as_str().unwrap_or_default().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn a_drive_has_its_own_menu_and_the_systems_offers_no_removal() {
+        let mut world = with_devices();
+        assert_eq!(
+            menu_labels(&mut world, &d("stick")),
+            ["Open", "Open in new tab", "", "Mount", "Safely remove"]
+        );
+        assert_eq!(
+            menu_labels(&mut world, &d("root")),
+            ["Open", "Open in new tab", "", "Copy location"]
+        );
+        assert_eq!(
+            menu_labels(&mut world, &d("data")),
+            [
+                "Open",
+                "Open in new tab",
+                "",
+                "Unmount",
+                "",
+                "Copy location"
+            ]
+        );
+        // The menu takes the keyboard to the drive it was opened on.
+        assert_eq!(world.panel.focused(), Some(&d("data")));
+    }
+
+    #[test]
+    fn the_drive_menu_mounts_unmounts_and_removes_the_drive_it_was_opened_on() {
+        let mut world = with_devices();
+        let effects = choose(&mut world, &d("stick"), "Mount");
+        assert_eq!(
+            effects.last(),
+            Some(&Effect::Mount(device("stick", None, true)))
+        );
+        assert!(world.panel.view(&d("stick")).unwrap().busy);
+        let effects = choose(&mut world, &d("stick"), "Safely remove");
+        assert_eq!(
+            effects.last(),
+            Some(&Effect::SafelyRemove(device("stick", None, true)))
+        );
+        let effects = choose(&mut world, &d("data"), "Unmount");
+        assert_eq!(effects[0], Effect::Menu(String::new()));
+        assert_eq!(
+            effects.last(),
+            Some(&Effect::Unmount(device("data", Some("/data"), false)))
+        );
+    }
+
+    #[test]
+    fn copy_location_puts_the_mount_point_on_the_clipboard_and_says_so() {
+        let mut world = with_devices();
+        let effects = choose(&mut world, &d("data"), "Copy location");
+        assert_eq!(
+            effects,
+            [
+                Effect::Menu(String::new()),
+                Effect::CopyLocation(PathBuf::from("/data")),
+                Effect::Say("Copied the location of \u{201c}DATA\u{201d}.".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_drive_opens_from_its_menu_mounting_it_first_when_needed() {
+        let mut world = with_devices();
+        let effects = choose(&mut world, &d("data"), "Open in new tab");
+        assert_eq!(
+            effects.last(),
+            Some(&Effect::Open {
+                opening: Opening::Folder("/data".into()),
+                new_tab: true
+            })
+        );
+        let effects = choose(&mut world, &d("stick"), "Open");
+        assert_eq!(
+            effects.last(),
+            Some(&Effect::Open {
+                opening: Opening::Mount(device("stick", None, true)),
+                new_tab: false
+            })
         );
     }
 

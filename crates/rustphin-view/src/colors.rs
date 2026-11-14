@@ -267,6 +267,9 @@ mod tests {
         let content = over(theme.content, window);
         let hover = over(theme.hover, content);
         let line = over(theme.chrome_raised, window);
+        // A drive card in the places panel (W-148), and under the pointer.
+        let card = over(theme.chrome_raised, chrome);
+        let card_hover = over(theme.hover, card);
         for (name, foreground, background) in [
             ("text on window", theme.text, window),
             ("text on content", theme.text, content),
@@ -302,6 +305,14 @@ mod tests {
                 theme.current,
             ),
             ("muted text under the pointer", theme.text_muted, hover),
+            ("a drive's name on its card", theme.text, card),
+            ("a drive's figures on its card", theme.text_muted, card),
+            ("a drive's name under the pointer", theme.text, card_hover),
+            (
+                "a drive's figures under the pointer",
+                theme.text_muted,
+                card_hover,
+            ),
             ("text on an error line", theme.danger, theme.danger_surface),
             ("text on selection", theme.on_selection, theme.selection),
             (
@@ -405,7 +416,13 @@ mod tests {
             ),
             ("progress on its track", theme.activity, theme.track),
             ("progress on the activity line", theme.activity, line),
-            ("usage on its track", theme.text_muted, theme.track),
+            ("usage on its track", theme.activity, theme.track),
+            ("focus outline on a drive card", theme.accent, card),
+            (
+                "focus outline on a drive card under the pointer",
+                theme.accent,
+                card_hover,
+            ),
             ("a nearly full volume's usage", theme.danger, theme.track),
             ("success on chrome", theme.success, chrome),
             ("success on the notice line", theme.success, line),

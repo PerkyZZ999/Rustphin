@@ -1,7 +1,7 @@
 // The places panel (W-102, W-105, W-114e): places outside groups, each
-// group with its places, the Remote section and the volumes; a menu on
-// each row, its keys while it has the keyboard, rename in place, dragging
-// to reorder and folders dropped from the views.
+// group with its places, the Remote section and the volumes as drive cards
+// (W-148); a menu on each row, its keys while it has the keyboard, rename
+// in place, dragging to reorder and folders dropped from the views.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -20,6 +20,8 @@ FocusScope {
     // A place's folder, by its `file:` URI, to show here or in a new tab.
     signal openFolder(string uri, bool newTab)
     signal openTrash
+    // A drive's Copy location: text for the clipboard.
+    signal copyText(string words)
     signal done
     // Tab: the keyboard goes back to the views.
     signal otherPane
@@ -41,6 +43,7 @@ FocusScope {
 
         onOpenFolder: (uri, newTab) => panel.openFolder(uri, newTab)
         onOpenTrash: panel.openTrash()
+        onCopyText: words => panel.copyText(words)
     }
 
     Connections {
@@ -157,12 +160,12 @@ FocusScope {
                     event.accepted = true
                     return
                 case Qt.Key_Menu:
-                    panel.menuAt(places.focusRow, list.currentItem ? list.currentItem : list, 0, Tokens.metrics.place_row)
+                    panel.menuAtFocus()
                     event.accepted = true
                     return
                 case Qt.Key_F10:
                     if (event.modifiers & Qt.ShiftModifier) {
-                        panel.menuAt(places.focusRow, list.currentItem ? list.currentItem : list, 0, Tokens.metrics.place_row)
+                        panel.menuAtFocus()
                         event.accepted = true
                     }
                     return
@@ -190,31 +193,46 @@ FocusScope {
                 required property bool collapsed
                 required property string detail
                 required property real usage
-                required property bool busy
-                required property bool ejectable
                 required property bool focused
                 required property bool renaming
                 required property bool grouped
+                required property string figures
+                required property string percent
+                required property bool nearlyFull
+                required property string description
 
                 readonly property bool heading: kind === "group" || kind === "heading"
+                readonly property bool device: kind === "device"
+                readonly property bool pointed: rowArea.containsMouse || drop.containsDrag
 
                 width: ListView.view.width
-                height: kind === "device" ? Tokens.metrics.device_row : Tokens.metrics.place_row
+                height: device ? Tokens.metrics.device_row : Tokens.metrics.place_row
                 Accessible.role: heading ? Accessible.Heading : Accessible.ListItem
                 Accessible.name: title
                 Accessible.selected: current
                 Accessible.focused: focused
-                Accessible.description: heading ? (collapsed ? qsTr("Collapsed section. Activate to expand.") : qsTr("Expanded section. Activate to collapse.")) : kind === "device" ? detail : ""
+                Accessible.description: heading ? (collapsed ? qsTr("Collapsed section. Activate to expand.") : qsTr("Expanded section. Activate to collapse.")) : device ? description : ""
 
                 Rectangle {
+                    id: rowFill
+
                     anchors.fill: parent
                     anchors.leftMargin: Tokens.metrics.space_xs
                     anchors.rightMargin: Tokens.metrics.space_xs
+                    // A drive card leaves a gap under it (W-148).
+                    anchors.bottomMargin: row.device ? Tokens.metrics.device_row - Tokens.metrics.device_card : 0
                     radius: Tokens.metrics.radius
-                    color: row.current ? Tokens.colors.selection : rowArea.containsMouse || drop.containsDrag ? Tokens.colors.hover : "transparent"
+                    color: row.current ? Tokens.colors.selection : row.device ? Tokens.colors.chrome_raised : row.pointed ? Tokens.colors.hover : "transparent"
                     border.width: row.focused && list.activeFocus ? 1 : 0
                     border.color: Tokens.colors.accent
 
+                    // The pointer over a drive card lightens it as it does a row.
+                    Rectangle {
+                        visible: row.device && row.pointed && !row.current
+                        anchors.fill: parent
+                        radius: parent.radius
+                        color: Tokens.colors.hover
+                    }
                     // The current place's royal-blue edge (D-038).
                     Rectangle {
                         visible: row.current
@@ -223,7 +241,99 @@ FocusScope {
                         color: Tokens.colors.accent
                     }
                 }
+                // A drive card (W-148): icon, name and figures; the usage
+                // bar; the filesystem and its traits, and how full it is.
+                ColumnLayout {
+                    visible: row.device
+                    anchors.fill: rowFill
+                    anchors.margins: Tokens.metrics.space_sm
+                    spacing: 0
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Tokens.metrics.line
+                        spacing: Tokens.metrics.space_sm
+
+                        Lucide {
+                            name: row.icon
+                            side: Tokens.metrics.place_icon
+                            colour: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Tokens.metrics.line
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                            color: row.current ? Tokens.colors.on_selection : Tokens.colors.text
+                            font.family: Tokens.metrics.family_body
+                            font.pixelSize: Tokens.metrics.body_text
+                            font.weight: Font.DemiBold
+                            text: row.title
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            visible: row.figures.length > 0
+                            Layout.preferredHeight: Tokens.metrics.line
+                            verticalAlignment: Text.AlignVCenter
+                            color: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
+                            font.family: Tokens.metrics.family_data
+                            font.pixelSize: Tokens.metrics.small_text
+                            text: row.figures
+                        }
+                    }
+                    // The bar's place is kept when there is no bar, so the
+                    // last line sits at the same height on every card.
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Tokens.metrics.space_xs
+                        Layout.preferredHeight: Tokens.metrics.usage
+
+                        Rectangle {
+                            visible: row.usage >= 0
+                            anchors.fill: parent
+                            radius: Tokens.metrics.radius
+                            color: Tokens.colors.track
+
+                            Rectangle {
+                                height: parent.height
+                                width: parent.width * Math.max(0, Math.min(1, row.usage))
+                                radius: parent.radius
+                                // From 90 % used; "NN% used" says it in words too.
+                                color: row.nearlyFull ? Tokens.colors.danger : Tokens.colors.activity
+                            }
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Tokens.metrics.line
+                        spacing: Tokens.metrics.space_sm
+
+                        Text {
+                            textFormat: Text.PlainText
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Tokens.metrics.line
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                            color: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
+                            font.family: Tokens.metrics.family_body
+                            font.pixelSize: Tokens.metrics.small_text
+                            text: row.detail
+                        }
+                        Text {
+                            textFormat: Text.PlainText
+                            visible: row.percent.length > 0
+                            Layout.preferredHeight: Tokens.metrics.line
+                            verticalAlignment: Text.AlignVCenter
+                            color: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
+                            font.family: Tokens.metrics.family_data
+                            font.pixelSize: Tokens.metrics.small_text
+                            text: row.percent
+                        }
+                    }
+                }
                 RowLayout {
+                    visible: !row.device
                     anchors.fill: parent
                     anchors.leftMargin: Tokens.metrics.space_md + (row.grouped ? Tokens.metrics.space_md : 0)
                     anchors.rightMargin: Tokens.metrics.space_sm
@@ -238,49 +348,20 @@ FocusScope {
                     Lucide {
                         visible: !row.heading
                         name: row.icon
-                        side: row.kind === "device" ? Tokens.metrics.icon_ui + 4 : Tokens.metrics.place_icon
+                        side: Tokens.metrics.place_icon
                         colour: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
                     }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
+                    Text {
+                        textFormat: Text.PlainText
                         visible: !row.renaming
-
-                        Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                            color: row.current ? Tokens.colors.on_selection : row.heading ? Tokens.colors.text_muted : Tokens.colors.text
-                            font.family: Tokens.metrics.family_body
-                            font.pixelSize: row.heading ? Tokens.metrics.label_text : Tokens.metrics.body_text
-                            font.capitalization: row.heading ? Font.AllUppercase : Font.MixedCase
-                            // A folded group says how many places it hides.
-                            text: row.kind === "group" && row.collapsed ? qsTr("%1 (%2)").arg(row.title).arg(row.detail) : row.title
-                        }
-                        Text {
-                            textFormat: Text.PlainText
-                            visible: row.kind === "device" && row.detail.length > 0
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                            color: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
-                            font.family: Tokens.metrics.family_data
-                            font.pixelSize: Tokens.metrics.small_text
-                            text: row.busy ? qsTr("Working…") : row.detail
-                        }
-                        Rectangle {
-                            visible: row.kind === "device" && row.usage >= 0
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Tokens.metrics.usage
-                            radius: Tokens.metrics.radius
-                            color: Tokens.colors.track
-
-                            Rectangle {
-                                height: parent.height
-                                width: parent.width * Math.max(0, row.usage)
-                                radius: parent.radius
-                                color: row.usage > 0.9 ? Tokens.colors.danger : Tokens.colors.text_muted
-                            }
-                        }
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        color: row.current ? Tokens.colors.on_selection : row.heading ? Tokens.colors.text_muted : Tokens.colors.text
+                        font.family: Tokens.metrics.family_body
+                        font.pixelSize: row.heading ? Tokens.metrics.label_text : Tokens.metrics.body_text
+                        font.capitalization: row.heading ? Font.AllUppercase : Font.MixedCase
+                        // A folded group says how many places it hides.
+                        text: row.kind === "group" && row.collapsed ? qsTr("%1 (%2)").arg(row.title).arg(row.detail) : row.title
                     }
                     Loader {
                         Layout.fillWidth: true
@@ -325,22 +406,12 @@ FocusScope {
                             }
                         }
                     }
-                    IconButton {
-                        visible: row.ejectable && row.kind === "device"
-                        iconName: "arrow-up-from-line"
-                        text: qsTr("Eject %1").arg(row.title)
-                        tip: qsTr("Unmount or remove safely (E)")
-                        side: Tokens.metrics.small_button
-                        enabled: !row.busy
-                        onClicked: places.eject(row.index)
-                    }
                 }
 
                 MouseArea {
                     id: rowArea
 
                     anchors.fill: parent
-                    anchors.rightMargin: row.ejectable && row.kind === "device" ? Tokens.metrics.small_button + Tokens.metrics.space_sm : 0
                     hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                     enabled: !row.renaming
@@ -482,6 +553,13 @@ FocusScope {
     function menuAt(row: int, owner: Item, x: real, y: real) {
         if (places.openMenu(row))
             menu.openAt(owner, x, y, y)
+    }
+
+    // The Menu key or Shift+F10: the menu of the row with the keyboard,
+    // under it.
+    function menuAtFocus() {
+        const item = list.currentItem
+        menuAt(places.focusRow, item ? item : list, 0, item ? item.height : Tokens.metrics.place_row)
     }
 
     JsonMenu {

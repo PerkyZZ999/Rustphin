@@ -32,7 +32,7 @@ Notes for the agent:
 - Drags need waypoints with pauses of about 100 ms and a short last move before the release. Holding a modifier during a drag (`keyboard_key_down`) is refused in this environment, so G2, G3 and the Ctrl/Shift drop shortcuts cannot be replayed here.
 - In the user's Dolphin Ctrl+V is an ambiguous shortcut; paste into Dolphin through its context menu.
 - Isolated sessions offer no blur, so Rustphin shows its opaque theme; whether glass is used is decided once, when the QML engine starts (`KWindowEffects::isEffectAvailable` and `RUSTPHIN_OPAQUE`; the engine starts again after the last window has closed). Colours may also shift between screenshots there; judge colour by the tokens and their contrast tests. Icons use the `breeze-dark` theme when the session names none.
-- The isolated session shares the machine's system bus: the Devices section lists the real drives and the trash menu lists their trashes. Never click a device row, its eject button or another volume's trash.
+- The isolated session shares the machine's system bus: the Devices section lists the real drives and the trash menu lists their trashes. Never click a device card, open its drive menu or press E on it, and never open another volume's trash, unless Rustphin was launched against the stand-in UDisks2 on a private system bus (DV1–DV6).
 - KDE adds its built-in places (Home, Trash, Network…) to `user-places.xbel` the first time one of its applications reads a file without them, so the file changes under Rustphin right after Dolphin starts in a fresh home.
 - Rustphin keeps running after its last window closes (W-110) and later launches hand over to it. Each isolated session has its own session bus, so a test Rustphin never hands over to the maintainer's.
 - Stop test instances by PID or exact path (`pkill -f target/debug/rustphin`), never `pkill -x rustphin`, which also ends the maintainer's own Rustphin. Stop the session when done. Before deleting the fixture run `chmod 755 <dir>/locked`.
@@ -141,7 +141,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | K17 | Generated Filt (Docs, Other, notes.txt, README.TXT, photo.png, report.pdf, archive.tar.gz, .hidden.txt, Été.txt). Ctrl+I, `txt`; Ctrl+A `r*.pdf`; Ctrl+A `zzz`; Escape; `/doc`, Enter, Down, Enter; Ctrl+I, `x`, Ctrl+I | notes.txt, README.TXT, Été.txt with "3 of 8 items match “txt”, 1 hidden"; only report.pdf; empty state "Nothing matches “zzz”" with "Change the filter, or clear it to see all 8 items." and Clear filter; Escape shows all 8 and closes the bar; / opens the bar with "doc", Enter returns to the list, Docs opens and the filter and bar are gone; Ctrl+I a second time closes the bar and clears it |
 | K18 | Generated Dup (Photos/ with a.png, archive.tar.gz, report.txt). Select report.txt, Ctrl+D; select report.txt, Ctrl+D; Ctrl+click Photos and archive.tar.gz, Ctrl+D; Ctrl+Z; right-click report.txt; Escape; Ctrl+Shift+D | "report copy.txt" appears and is selected; then "report copy (1).txt", selected; "Photos copy" (holding a.png) and "archive copy.tar.gz" appear, both selected; Ctrl+Z removes those two and nothing else; the menu has "Duplicate here" after "Copy location"; Ctrl+Shift+D adds Dup to Places |
 | K19 | In any folder: Ctrl+L; Ctrl+L; Ctrl+L, type a full path to another folder, Enter | The location field shows the current path wholly selected; the breadcrumbs come back and the list has the keyboard; the typed path replaces the old one and opens |
-| V5 | Look at the places panel's "Devices" section. Do not click its rows or buttons: they are the machine's real drives | Each mounted volume has a drive icon (`usb` for removable ones, `hard-drive` otherwise), its label ("System" for the root volume), a usage bar and a line like "211 of 927 GiB free"; volumes other than the system and home ones have an eject button; an unmounted one says "Not mounted" |
+| V5 | Look at the places panel's "Devices" section. Do not click its cards or open their menus: they are the machine's real drives (use DV1–DV6 for that) | Each volume is a card: drive icon (`usb` for removable ones, `hard-drive` otherwise) and its name in semibold ("System" for the root volume), "used / total" on the right, a usage bar in the progress blue, then the filesystem and traits and "NN% used"; no eject button; an unmounted one says "Not mounted" |
 | H1 | Make a folder with a wide PNG, a tall PNG, a square PNG, a file named `broken.png` that is not an image, a text file and a subfolder; open it; Ctrl+1 | The three pictures show their own content, each keeping its proportions inside the icon's square; `broken.png` keeps the image type icon; the text file and folder keep theirs. `<isolated home>/.cache/thumbnails/normal/` holds three PNGs and `fail/rustphin-<version>/` one |
 | L1 | Launch the release build on a 500,000-entry folder (`rust-tc bench-listing` creates `target/bench/listing-500k`); press End | Status "500,000 items"; the last entry is selected and visible within a second |
 
@@ -461,6 +461,41 @@ Isolated home with a places file holding Home (a system item) and three folders.
 | PM3 | Right-click another place, Move to group › the group | The second menu starts level with "Move to group"; the place joins the group, the group's own entry is greyed for its members |
 | PM4 | Right-click the group heading, Enter | Collapse (Expand when folded), Move up/down, Rename group, Delete group; Enter folds it to "NAME (2)" (headings are drawn in capitals) |
 | PM5 | Right-click empty space in the panel | New group (Ctrl+Shift+G), Add to places (Ctrl+Shift+D; unavailable when the pane does not show a local folder), Show hidden places (Hide hidden places while they are shown) |
+
+## Drive cards (W-148)
+
+Never against the machine's drives: the isolated session shares the real
+system bus. Give the test Rustphin a private system bus that only the
+stand-in UDisks2 serves, so its Mount, Unmount and Safely remove reach the
+stand-in and nothing else:
+
+1. Start a private bus: `dbus-daemon --session --nofork --print-address
+   --address=unix:path=<short dir>/sb` (a session configuration lets the
+   stand-in own `org.freedesktop.UDisks2`; a socket path longer than about
+   100 bytes is refused, so use a short directory such as `mktemp -d`).
+2. Optionally make a full filesystem for DV4: `mksquashfs <some generated
+   folder> <home>/full.squashfs`, then `squashfuse <home>/full.squashfs
+   <home>/drives/FULL` (a squashfs is always 100 % used).
+3. `DBUS_SYSTEM_BUS_ADDRESS=unix:path=<short dir>/sb
+   target/debug/examples/fake_udisks2 <home>/drives` (`cargo build -p
+   rustphin-platform --example fake_udisks2`). It refuses to start without
+   `DBUS_SYSTEM_BUS_ADDRESS`, serves five volumes and prints every request:
+   "System" (no label, mounted at `/`, fixed), "Data" (btrfs, encrypted,
+   fixed, mounted at `<home>/drives/Data`), "STICK" (exfat, removable, can
+   power off, mounted at `<home>/drives/STICK`), "BACKUP" (ext4, removable,
+   can power off, not mounted; Mount gives `<home>/drives/BACKUP`) and "FULL"
+   (squashfs, fixed, mounted at `<home>/drives/FULL`).
+4. Launch Rustphin with the same `DBUS_SYSTEM_BUS_ADDRESS` (kwin-mcp
+   `launch_app` with that environment variable only).
+
+| ID | Steps | Expected |
+|---|---|---|
+| DV1 | Look at Devices | Five cards. Data: `hard-drive`, "Data" semibold, "used / total" on the right, a blue bar, "Btrfs · Encrypted" and "NN% used". STICK: `usb`, "exFAT · Removable". BACKUP: its size on the right, no bar, "Not mounted". FULL: a red bar and "100% used". No eject buttons |
+| DV2 | Right-click Data; Escape. Right-click System; Escape | Data: Open (Enter), Open in new tab, then Unmount, then Copy location, each with an icon. System: Open, Open in new tab, then Copy location only (no Unmount, no Safely remove) |
+| DV3 | Right-click STICK, Safely remove | The menu has Open, Open in new tab, Unmount, Safely remove (E), Copy location; the stand-in prints Unmount then PowerOff for STICK; "“STICK” can be unplugged now."; the card says "Not mounted" |
+| DV4 | Focus BACKUP with the keyboard (Ctrl+P, Down…), Shift+F10, choose Mount | The menu has Open, Open in new tab, Mount, Safely remove (no Copy location); the stand-in prints Mount for BACKUP; "“BACKUP” was mounted."; the card shows its usage |
+| DV5 | On Data: Menu key, Copy location; paste into the location field (Ctrl+L, Ctrl+V) | "Copied the location of “Data”."; the field holds `<home>/drives/Data` |
+| DV6 | On Data: E; then right-click Data, Mount | The stand-in prints Unmount for Data (no PowerOff: it is fixed); then Mount |
 
 ## Button icons (W-097)
 

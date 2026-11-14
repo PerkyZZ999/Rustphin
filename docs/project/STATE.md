@@ -5,7 +5,7 @@
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 (hardening) in progress; the interface is Qt 6 and QML through cxx-qt since W-114i (D-033, D-034)
-- **Status:** active — W-114 (the switch from GPUI), W-116 (Qt quality pass) and W-118–W-144 (refactoring into `rustphin-view`, libarchive, byte-safe paths, test audits and their fixes, the GitHub repository) and W-147 (charcoal colours, S12) done 2026-11-14; open: W-117, W-115, the Qt keyboard pass, the blur notice, and the maintainer's real-desktop checks
+- **Status:** active — W-114 (the switch from GPUI), W-116 (Qt quality pass) and W-118–W-144 (refactoring into `rustphin-view`, libarchive, byte-safe paths, test audits and their fixes, the GitHub repository) W-147 (charcoal colours, S12) and W-148 (drive cards and the drive menu, S12) done 2026-11-14; open: W-117, W-115, the Qt keyboard pass, the blur notice, and the maintainer's real-desktop checks
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-11-14
 
@@ -15,7 +15,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-14 — W-147 Charcoal colour scheme (D-038)
+- Latest validation entry: VALIDATION.md, 2026-11-14 — W-148 Drive cards and the drive menu (D-039)
 - Acceptance: ACCEPTANCE.md lists every open criterion and who can close it (re-mapped 2026-11-14 for the Qt interface).
 
 ## Open loops
@@ -40,7 +40,7 @@
 - None for the agent. The real-desktop and hardware checks above wait on the maintainer.
 
 ## Next action
-- Slice S12 (ROADMAP.md): the charcoal colour scheme (W-147) is done (D-038); next the UI completion items (W-146) and the Qt leftovers (W-117). Change `docs/DESIGN.md` first, then the tokens in `crates/rustphin-view/src/colors.rs` and `metrics.rs`, with their contrast tests.
+- Slice S12 (ROADMAP.md): the charcoal colour scheme (W-147, D-038) and the drive cards (W-148, D-039) are done; next the UI completion items (W-146) and the Qt leftovers (W-117). Change `docs/DESIGN.md` first, then the tokens in `crates/rustphin-view/src/colors.rs` and `metrics.rs`, with their contrast tests.
 - Also open: W-115 (memory on reloading a very large folder) and the Qt keyboard pass (W-076).
 - For the maintainer on the real desktop: after installing a build, run `rustphin --quit` once so the new build answers launches; then the checks under "Manual" above.
 - Then: the two-week daily-driver trial, and phase 7 (release).

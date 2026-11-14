@@ -154,26 +154,154 @@ pub fn volume_at<'a>(devices: &'a [Device], mount: &Path) -> Option<&'a Device> 
         .find(|device| device.mount_point.as_deref() == Some(mount))
 }
 
-/// How full a volume is, in words short enough for the panel: "120.6 of
-/// 476.9 GiB free", or both units when they differ.
-pub fn usage_text(total: u64, free: u64) -> String {
-    let (free, total) = (format::size(free), format::size(total));
-    let unit = |size: &str| size.rsplit_once(' ').map(|(_, unit)| unit.to_owned());
-    match (free.rsplit_once(' '), unit(&total)) {
-        (Some((number, free_unit)), Some(total_unit)) if free_unit == total_unit => {
-            format!("{number} of {total} free")
+/// From this many percent used, a volume's usage bar warns (W-148).
+pub const NEARLY_FULL_PERCENT: u64 = 90;
+
+/// How much of a volume is used, in whole percent rounded down, so "90%"
+/// means at least 90 %: 0 for a volume of no size.
+pub fn percent_used(total: u64, free: u64) -> u64 {
+    if total == 0 {
+        return 0;
+    }
+    let used = u128::from(total - free.min(total));
+    // At most 100: used never exceeds total.
+    (used * 100 / u128::from(total)) as u64
+}
+
+/// A volume's "used / total" figures, short enough for its card: one unit
+/// when both share it ("211.3 / 927.0 GiB"), else both ("512.0 MiB / 1.2
+/// GiB"), in the units Settings chose, as the status line.
+pub fn used_of_total(total: u64, free: u64) -> String {
+    let (used, total) = (format::size(total - free.min(total)), format::size(total));
+    match (used.rsplit_once(' '), total.rsplit_once(' ')) {
+        (Some((number, used_unit)), Some((_, total_unit))) if used_unit == total_unit => {
+            format!("{number} / {total}")
         }
-        _ => format!("{free} of {total} free"),
+        _ => format!("{used} / {total}"),
     }
 }
 
-/// Whether the panel offers to unmount or remove `device`: anything mounted
-/// or unpluggable, except the volumes the system and the user's home run from.
-pub fn can_eject(device: &Device, home: Option<&Path>) -> bool {
-    match &device.mount_point {
-        Some(mount) => mount != Path::new("/") && home.is_none_or(|home| !home.starts_with(mount)),
-        None => device.removable && device.can_power_off(),
+/// How a filesystem type, as UDisks2 names it (`IdType`), is written.
+pub fn filesystem_name(id_type: &str) -> String {
+    match id_type {
+        "btrfs" => "Btrfs",
+        "vfat" | "fat" | "msdos" => "FAT",
+        "exfat" => "exFAT",
+        "ntfs" | "ntfs3" => "NTFS",
+        "xfs" => "XFS",
+        "f2fs" => "F2FS",
+        "iso9660" => "ISO 9660",
+        "udf" => "UDF",
+        "hfsplus" => "HFS+",
+        "apfs" => "APFS",
+        "squashfs" => "SquashFS",
+        "zfs_member" | "zfs" => "ZFS",
+        "bcachefs" => "Bcachefs",
+        // ext2, ext3, ext4 and anything else: as the system names it.
+        other => other,
     }
+    .to_owned()
+}
+
+/// What a volume's card shows (W-148), besides its name and icon.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeviceCard {
+    /// Right of the name: "used / total" when mounted, the size when not.
+    pub figures: String,
+    /// The last line's left: the filesystem and its traits ("Btrfs ·
+    /// Encrypted"), "Not mounted", or "Working…" while it is mounted or
+    /// removed.
+    pub traits: String,
+    /// The last line's right: "22% used", or empty.
+    pub percent: String,
+    /// How full it is, 0 to 1; -1 when there is no bar to draw.
+    pub usage: f64,
+    /// At least [`NEARLY_FULL_PERCENT`] used: the bar warns.
+    pub nearly_full: bool,
+    /// The card in one sentence, for screen readers.
+    pub description: String,
+}
+
+/// The card of `device`, with the `(total, free)` bytes of its filesystem
+/// when mounted and measured; `busy` while it is being mounted or removed.
+pub fn device_card(device: &Device, usage: Option<(u64, u64)>, busy: bool) -> DeviceCard {
+    let mounted = device.mount_point.is_some();
+    let mut traits: Vec<String> = device
+        .filesystem
+        .as_deref()
+        .map(filesystem_name)
+        .into_iter()
+        .collect();
+    if device.encrypted {
+        traits.push("Encrypted".to_owned());
+    }
+    if device.removable {
+        traits.push("Removable".to_owned());
+    }
+    let traits = traits.join(" \u{b7} ");
+    let measured = usage.filter(|_| mounted);
+    let (figures, percent) = match measured {
+        Some((total, free)) => (used_of_total(total, free), Some(percent_used(total, free))),
+        None if !mounted && device.size > 0 => (format::size(device.size), None),
+        None => (String::new(), None),
+    };
+    let line = if busy {
+        "Working\u{2026}".to_owned()
+    } else if mounted {
+        traits.clone()
+    } else {
+        "Not mounted".to_owned()
+    };
+    let description = match (measured, percent) {
+        (Some((total, free)), Some(percent)) => {
+            let used = format::size(total - free.min(total));
+            let total = format::size(total);
+            [format!("{used} of {total} used ({percent}%)"), traits]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+        _ => [line.clone(), figures.clone()]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(", "),
+    };
+    DeviceCard {
+        figures,
+        traits: line,
+        percent: percent.map_or_else(String::new, |percent| format!("{percent}% used")),
+        usage: measured.map_or(-1., |(total, free)| {
+            if total == 0 {
+                0.
+            } else {
+                (total - free.min(total)) as f64 / total as f64
+            }
+        }),
+        nearly_full: percent.is_some_and(|percent| percent >= NEARLY_FULL_PERCENT),
+        description,
+    }
+}
+
+/// Whether `device` holds the system or the user's home folder: those
+/// volumes are never offered for unmounting or removal.
+fn runs_the_system(device: &Device, home: Option<&Path>) -> bool {
+    device.mount_point.as_deref().is_some_and(|mount| {
+        mount == Path::new("/") || home.is_some_and(|home| home.starts_with(mount))
+    })
+}
+
+/// Whether the drive menu offers Unmount: a mounted volume the system and
+/// the home folder do not run from.
+pub fn can_unmount(device: &Device, home: Option<&Path>) -> bool {
+    device.mount_point.is_some() && !runs_the_system(device, home)
+}
+
+/// Whether the drive menu offers Safely remove: a removable or power-off
+/// capable drive the system and the home folder do not run from.
+pub fn can_remove(device: &Device, home: Option<&Path>) -> bool {
+    (device.removable || device.can_power_off()) && !runs_the_system(device, home)
 }
 
 #[cfg(test)]
@@ -331,6 +459,8 @@ mod tests {
             size: 64 * 1024 * 1024 * 1024,
             removable,
             power_off: power_off.then(|| "/drive".to_owned()),
+            filesystem: None,
+            encrypted: false,
         }
     }
 
@@ -347,34 +477,149 @@ mod tests {
     }
 
     #[test]
-    fn the_system_and_home_volumes_are_never_offered_for_unmounting() {
+    fn the_system_and_home_volumes_are_never_offered_for_unmounting_or_removal() {
         let home = Some(Path::new("/home/u"));
-        assert!(!can_eject(&device(Some("/"), false, false), home));
-        assert!(!can_eject(&device(Some("/home"), false, false), home));
-        assert!(!can_eject(&device(Some("/home/u"), false, false), home));
-        assert!(can_eject(&device(Some("/mnt/data"), false, false), home));
-        assert!(can_eject(&device(Some("/home/u/stick"), true, true), home));
-        // Not mounted: only a drive that can be powered off has anything to do.
-        assert!(can_eject(&device(None, true, true), home));
-        assert!(!can_eject(&device(None, true, false), home));
-        assert!(!can_eject(&device(None, false, false), home));
+        for runs_the_system in [
+            device(Some("/"), false, false),
+            device(Some("/home"), true, true),
+            device(Some("/home/u"), false, false),
+        ] {
+            assert!(!can_unmount(&runs_the_system, home), "{runs_the_system:?}");
+            assert!(!can_remove(&runs_the_system, home), "{runs_the_system:?}");
+        }
+        // A volume mounted inside home is not the one home runs from.
+        assert!(can_unmount(
+            &device(Some("/home/u/stick"), true, true),
+            home
+        ));
+        assert!(can_remove(&device(Some("/home/u/stick"), true, true), home));
     }
 
     #[test]
-    fn a_volume_without_a_label_is_named_by_its_size_and_usage_is_put_in_words() {
+    fn unmount_needs_a_mount_and_safe_removal_a_removable_or_power_off_capable_drive() {
+        let home = Some(Path::new("/home/u"));
+        let fixed = device(Some("/mnt/data"), false, false);
+        assert!(can_unmount(&fixed, home));
+        assert!(!can_remove(&fixed, home));
+        // Removable, or able to power off: either is enough.
+        assert!(can_remove(&device(Some("/mnt/card"), true, false), home));
+        assert!(can_remove(&device(Some("/mnt/disk"), false, true), home));
+        // Not mounted: nothing to unmount, but it can still be powered off.
+        let unplugged = device(None, true, true);
+        assert!(!can_unmount(&unplugged, home));
+        assert!(can_remove(&unplugged, home));
+    }
+
+    const GIB: u64 = 1024 * 1024 * 1024;
+
+    #[test]
+    fn a_volume_without_a_label_is_named_by_its_size() {
         let mut volume = device(None, true, true);
         assert_eq!(device_name(&volume), "64.0 GiB volume");
         volume.label = Some("STICK".into());
         assert_eq!(device_name(&volume), "STICK");
-        const GIB: u64 = 1024 * 1024 * 1024;
-        // One unit when both figures share it, so the line fits the panel.
-        assert_eq!(usage_text(64 * GIB, 16 * GIB), "16.0 of 64.0 GiB free");
-        // Both units when they differ.
-        assert_eq!(
-            usage_text(GIB + GIB / 5, 512 * 1024 * 1024),
-            "512.0 MiB of 1.2 GiB free"
-        );
         assert_eq!(device_name(&device(Some("/"), false, false)), "System");
+    }
+
+    #[test]
+    fn used_and_total_share_their_unit_when_they_can() {
+        assert_eq!(used_of_total(64 * GIB, 16 * GIB), "48.0 / 64.0 GiB");
+        assert_eq!(
+            used_of_total(GIB + GIB / 5, GIB + GIB / 5 - 512 * 1024 * 1024),
+            "512.0 MiB / 1.2 GiB"
+        );
+        // Free space the size of the volume, or more, is nothing used.
+        assert_eq!(used_of_total(4096, 8192), "0 B / 4.0 KiB");
+    }
+
+    #[test]
+    fn percent_used_is_rounded_down_so_ninety_means_at_least_ninety() {
+        assert_eq!(percent_used(1000, 101), 89);
+        assert_eq!(percent_used(1000, 100), 90);
+        assert_eq!(percent_used(1000, 0), 100);
+        assert_eq!(percent_used(0, 0), 0);
+        // No overflow on the largest sizes.
+        assert_eq!(percent_used(u64::MAX, u64::MAX / 2), 50);
+    }
+
+    #[test]
+    fn a_mounted_card_shows_used_and_total_its_filesystem_and_traits_and_percent() {
+        let mut data = device(Some("/mnt/data"), false, false);
+        data.filesystem = Some("btrfs".into());
+        data.encrypted = true;
+
+        let card = device_card(&data, Some((1000 * GIB, 780 * GIB)), false);
+
+        assert_eq!(card.figures, "220.0 / 1000.0 GiB");
+        assert_eq!(card.traits, "Btrfs \u{b7} Encrypted");
+        assert_eq!(card.percent, "22% used");
+        assert!((card.usage - 0.22).abs() < 1e-9, "{}", card.usage);
+        assert!(!card.nearly_full);
+        assert_eq!(
+            card.description,
+            "220.0 GiB of 1000.0 GiB used (22%), Btrfs \u{b7} Encrypted"
+        );
+    }
+
+    #[test]
+    fn a_removable_card_says_so_after_its_filesystem() {
+        let mut stick = device(Some("/run/media/u/STICK"), true, true);
+        stick.filesystem = Some("exfat".into());
+        let card = device_card(&stick, Some((64 * GIB, 32 * GIB)), false);
+        assert_eq!(card.traits, "exFAT \u{b7} Removable");
+        assert_eq!(card.percent, "50% used");
+    }
+
+    #[test]
+    fn a_volume_warns_from_ninety_percent_used() {
+        let data = device(Some("/mnt/data"), false, false);
+        let at = |free| device_card(&data, Some((1000, free)), false);
+        assert!(!at(101).nearly_full, "89 %");
+        assert!(at(100).nearly_full, "90 %");
+        assert!(at(0).nearly_full, "full");
+        // Its words say it too, so the warning is never colour alone.
+        assert_eq!(at(0).percent, "100% used");
+    }
+
+    #[test]
+    fn an_unmounted_card_shows_its_size_and_not_mounted_without_a_bar() {
+        let mut stick = device(None, true, true);
+        stick.filesystem = Some("ext4".into());
+        // A measure left over from before it was unmounted is not drawn.
+        let card = device_card(&stick, Some((100, 50)), false);
+        assert_eq!(card.figures, "64.0 GiB");
+        assert_eq!(card.traits, "Not mounted");
+        assert_eq!(card.percent, "");
+        assert!((card.usage + 1.).abs() < 1e-9, "no bar: {}", card.usage);
+        assert!(!card.nearly_full);
+        assert_eq!(card.description, "Not mounted, 64.0 GiB");
+    }
+
+    #[test]
+    fn a_card_being_mounted_or_removed_says_it_is_working() {
+        let stick = device(None, true, true);
+        assert_eq!(device_card(&stick, None, true).traits, "Working\u{2026}");
+        let data = device(Some("/mnt/data"), false, false);
+        let card = device_card(&data, Some((100, 50)), true);
+        assert_eq!(card.traits, "Working\u{2026}");
+        assert_eq!(card.percent, "50% used");
+    }
+
+    #[test]
+    fn a_mounted_card_not_yet_measured_draws_no_bar_and_no_figures() {
+        let card = device_card(&device(Some("/mnt/data"), false, false), None, false);
+        assert_eq!((card.figures.as_str(), card.percent.as_str()), ("", ""));
+        assert!((card.usage + 1.).abs() < 1e-9);
+    }
+
+    #[test]
+    fn filesystem_types_are_written_as_people_know_them() {
+        assert_eq!(filesystem_name("btrfs"), "Btrfs");
+        assert_eq!(filesystem_name("vfat"), "FAT");
+        assert_eq!(filesystem_name("exfat"), "exFAT");
+        assert_eq!(filesystem_name("ntfs3"), "NTFS");
+        assert_eq!(filesystem_name("ext4"), "ext4");
+        assert_eq!(filesystem_name("something"), "something");
     }
 
     #[test]

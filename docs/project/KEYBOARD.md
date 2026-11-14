@@ -95,8 +95,11 @@ key handler, so they never fire while a name is being typed.
 
 Up/Down move, Enter opens (or mounts a device), F2 renames, Delete removes,
 H hides or shows, Alt+Up/Down reorder, Left/Right fold and unfold a section,
-G moves the place to the next group, E unmounts or safely removes a device,
-the Menu key or Shift+F10 opens the places menu, Tab moves on to the view,
+G moves the place to the next group, E unmounts or safely removes a device
+(Safely remove where the drive menu offers it, else Unmount), the Menu key or
+Shift+F10 opens the places menu (on a drive card, the drive menu: Open, Open
+in new tab, Mount or Unmount, Safely remove, Copy location; W-148), Tab moves
+on to the view,
 Escape returns to the view. H, G and E act only without a modifier, and all
 these keys apply only while the panel has focus and no text field is being
 edited (K7, K8). The panel takes Alt+Up and Alt+Down ahead of the window's

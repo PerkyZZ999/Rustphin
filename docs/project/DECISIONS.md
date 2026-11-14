@@ -2,7 +2,7 @@
 
 Owner of every record: the maintainer. Evidence references point to VALIDATION.md and DISCOVERY.md.
 
-Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **locked** (confirmed by the maintainer); D-007 is superseded by D-017. On 2026-11-14 (W-114i) D-001 was superseded by D-034: the interface is Qt 6 and QML through cxx-qt; on the same day D-038 (locked) replaced D-017's navy colour values with charcoal. Changing one requires the change-impact loop. D-004, D-005 and D-012 to D-016 are **assumptions**: cheap to reverse, changeable without a change-impact loop.
+Status on 2026-10-12: D-001 to D-003, D-006, D-008 to D-011 and D-017 are **locked** (confirmed by the maintainer); D-007 is superseded by D-017. On 2026-11-14 (W-114i) D-001 was superseded by D-034: the interface is Qt 6 and QML through cxx-qt; on the same day D-038 (locked) replaced D-017's navy colour values with charcoal, and D-039 (locked, W-148) gave drive usage bars the progress colour. Changing one requires the change-impact loop. D-004, D-005 and D-012 to D-016 are **assumptions**: cheap to reverse, changeable without a change-impact loop.
 
 ---
 
@@ -352,4 +352,17 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Alternatives:** Option A, a dark royal-blue selection fill (not chosen); cyan or emerald progress (the maintainer chose royal blue).
 - **Reopen criteria:** The maintainer wants a different base or accent; a light theme is added.
 - **Confirmed by / date:** The maintainer, 2026-11-14 ("dark charcoal and black/gray tints as base color. With small accents/brands color of royal blue — only buttons and glows"; selection option B; progress in royal blue)
-- **Supersedes / superseded by:** supersedes D-017's navy colour values (W-079); D-017 stays locked for the accent, corners, fonts, one dark theme and glass
+- **Supersedes / superseded by:** supersedes D-017's navy colour values (W-079); D-017 stays locked for the accent, corners, fonts, one dark theme and glass; its "device usage bars … are neutral" is superseded by D-039 (W-148)
+
+## D-039 — Drive usage bars in royal blue
+- **Status:** locked
+- **Date:** 2026-11-14
+- **Context:** W-148 turns the places panel's device rows into drive cards after a reference the maintainer gave (a drive card with a coloured usage bar). D-038 had made device usage bars neutral (`text-muted`) and listed the progress bar as royal blue's only bar.
+- **Decision:** A drive card's usage bar is filled with `progress` (`#7B98F2`, the lightened royal blue the progress bar uses) on `track`, and with `error` from 90 % used. Everything else in D-038 stands.
+- **Rationale:** The maintainer asked for it in the W-148 request ("royal blue fill on `track`"); the bar is a thin line, which D-038 already gives the lightened blue, and it reaches 3:1 on `track` (the contrast test "usage on its track").
+- **Evidence:** `crates/rustphin-view/src/colors.rs` contrast tests; W-148 in VALIDATION.md.
+- **Consequences:** Royal blue now marks two bars, progress and usage; the 90 % warning is also said in words ("94% used"), so it is not colour alone.
+- **Alternatives:** Keep the neutral `text-muted` bar (D-038).
+- **Reopen criteria:** The maintainer wants the bars neutral again.
+- **Confirmed by / date:** The maintainer, 2026-11-14 (W-148 request)
+- **Supersedes / superseded by:** supersedes D-038's neutral device usage bars

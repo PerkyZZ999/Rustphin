@@ -80,6 +80,10 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "openTrash"]
         fn open_trash(self: Pin<&mut PlacesModel>);
+        /// Put `text` on the clipboard (a drive's Copy location, W-148).
+        #[qsignal]
+        #[cxx_name = "copyText"]
+        fn copy_text(self: Pin<&mut PlacesModel>, text: QString);
 
         /// Starts reading the places, groups and volumes; once.
         #[qinvokable]
@@ -116,9 +120,6 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "finishRename"]
         fn finish_rename(self: Pin<&mut PlacesModel>, text: &QString, apply: bool);
-        /// Unmounts or powers off the volume at `row`.
-        #[qinvokable]
-        fn eject(self: Pin<&mut PlacesModel>, row: i32);
         /// Adds the folder at the `file:` URI `uri` to the places
         /// (Ctrl+Shift+D).
         #[qinvokable]

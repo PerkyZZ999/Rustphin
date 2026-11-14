@@ -74,14 +74,17 @@ pub mod size {
     pub const WIDTH_FOR_TYPE: f32 = 820.;
     /// Icons in empty and error states.
     pub const ICON_LARGE: f32 = 32.;
-    /// Height of a volume's row in the places panel: a name, a usage bar
-    /// and a line of numbers.
-    pub const DEVICE_ROW: f32 = 48.;
+    /// Height of a drive card's row in the places panel: the card and the
+    /// 4 px gap below it (W-148).
+    pub const DEVICE_ROW: f32 = 60.;
+    /// Height of a drive card (`device-card`): 8 px padding, the name line
+    /// (16), 4, the usage bar (4), the last line (16), 8 px padding.
+    pub const DEVICE_CARD: f32 = 56.;
     /// Height of a place row and of a section heading in the places panel.
     pub const PLACE_ROW: f32 = 28.;
     /// Place and device icons in the places panel.
     pub const PLACE_ICON: f32 = 16.;
-    /// Small icon buttons: eject on a device row, close in a bar.
+    /// Small icon buttons: New group, close in a bar.
     pub const SMALL_BUTTON: f32 = 28.;
     /// Widest line of text under a state's heading.
     pub const STATE_TEXT_MAX: f32 = 440.;

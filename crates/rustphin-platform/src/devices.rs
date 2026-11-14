@@ -39,6 +39,11 @@ pub struct Device {
     pub removable: bool,
     /// The drive it sits on, when that drive can be powered off for safe removal.
     pub power_off: Option<String>,
+    /// The filesystem's type as the service names it (`btrfs`, `vfat`,
+    /// `exfat`), when known.
+    pub filesystem: Option<String>,
+    /// Whether the volume is unlocked from an encrypted container (LUKS).
+    pub encrypted: bool,
 }
 
 impl Device {
@@ -149,6 +154,17 @@ fn text(properties: &Properties, name: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// An object path property, unless it is empty or "/" (the service's "none").
+fn object_path(properties: &Properties, name: &str) -> Option<String> {
+    properties
+        .get(name)
+        .and_then(|value| match &**value {
+            Value::ObjectPath(path) => Some(path.to_string()),
+            _ => None,
+        })
+        .filter(|path| !path.is_empty() && path != "/")
+}
+
 fn flag(properties: &Properties, name: &str) -> bool {
     properties
         .get(name)
@@ -222,13 +238,7 @@ impl Devices for UDisks2 {
             if flag(block, "HintIgnore") {
                 continue;
             }
-            let drive_path = block
-                .get("Drive")
-                .and_then(|value| match &**value {
-                    Value::ObjectPath(path) => Some(path.to_string()),
-                    _ => None,
-                })
-                .filter(|path| path != "/");
+            let drive_path = object_path(block, "Drive");
             let drive = drive_path
                 .as_deref()
                 .and_then(|path| interface(path, DRIVE));
@@ -256,6 +266,10 @@ impl Devices for UDisks2 {
                     .is_some_and(|drive| flag(drive, "Removable") || flag(drive, "MediaRemovable")),
                 power_off: drive_path
                     .filter(|_| drive.is_some_and(|drive| flag(drive, "CanPowerOff"))),
+                filesystem: text(block, "IdType"),
+                // The cleartext volume of an unlocked LUKS container names
+                // the container it comes from.
+                encrypted: object_path(block, "CryptoBackingDevice").is_some(),
             });
         }
         devices.sort_by(|a, b| (a.removable, &a.label, &a.id).cmp(&(b.removable, &b.label, &b.id)));
@@ -356,6 +370,8 @@ mod tests {
         size: u64,
         drive: &'static str,
         ignore: bool,
+        id_type: &'static str,
+        crypto_backing: &'static str,
     }
 
     #[interface(name = "org.freedesktop.UDisks2.Block")]
@@ -379,6 +395,14 @@ mod tests {
         #[zbus(property)]
         fn hint_ignore(&self) -> bool {
             self.ignore
+        }
+        #[zbus(property)]
+        fn id_type(&self) -> String {
+            self.id_type.to_owned()
+        }
+        #[zbus(property)]
+        fn crypto_backing_device(&self) -> OwnedObjectPath {
+            ObjectPath::try_from(self.crypto_backing).unwrap().into()
         }
     }
 
@@ -486,6 +510,8 @@ mod tests {
             size: 64_000_000_000,
             drive,
             ignore,
+            id_type: "",
+            crypto_backing: "/",
         };
         let guid = zbus::Guid::generate();
         let builder = Builder::async_io_unix_stream(theirs)
@@ -496,17 +522,25 @@ mod tests {
             .unwrap()
             .serve_at(
                 format!("{ROOT}/block_devices/sdb1"),
-                block("STICK", "", "/org/freedesktop/UDisks2/drives/usb", false),
+                MockBlock {
+                    id_type: "exfat",
+                    ..block("STICK", "", "/org/freedesktop/UDisks2/drives/usb", false)
+                },
             )
             .unwrap()
             .serve_at(format!("{ROOT}/block_devices/sdb1"), fs(&stick))
             .unwrap()
+            // The cleartext side of an unlocked LUKS container on sda2.
             .serve_at(
-                format!("{ROOT}/block_devices/sda2"),
-                block("", "Data", "/org/freedesktop/UDisks2/drives/ssd", false),
+                format!("{ROOT}/block_devices/dm_2d0"),
+                MockBlock {
+                    id_type: "btrfs",
+                    crypto_backing: "/org/freedesktop/UDisks2/block_devices/sda2",
+                    ..block("", "Data", "/org/freedesktop/UDisks2/drives/ssd", false)
+                },
             )
             .unwrap()
-            .serve_at(format!("{ROOT}/block_devices/sda2"), fs(&internal))
+            .serve_at(format!("{ROOT}/block_devices/dm_2d0"), fs(&internal))
             .unwrap()
             .serve_at(
                 format!("{ROOT}/block_devices/sda1"),
@@ -625,6 +659,20 @@ mod tests {
     }
 
     #[test]
+    fn a_volume_tells_its_filesystem_and_whether_it_is_unlocked_from_an_encrypted_one() {
+        let mock = mock();
+
+        let devices = mock.client.list().unwrap();
+
+        let (data, stick) = (&devices[0], &devices[1]);
+        assert_eq!(data.filesystem.as_deref(), Some("btrfs"));
+        assert!(data.encrypted);
+        assert_eq!(stick.filesystem.as_deref(), Some("exfat"));
+        // "/" is the service's way of saying there is no encrypted container.
+        assert!(!stick.encrypted);
+    }
+
+    #[test]
     fn mounting_returns_the_mount_point_and_the_list_then_shows_it() {
         let mock = mock();
 
@@ -698,6 +746,8 @@ mod tests {
                     size: 1,
                     drive: "/",
                     ignore: false,
+                    id_type: "",
+                    crypto_backing: "/",
                 },
             )
             .unwrap();
