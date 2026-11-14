@@ -24,7 +24,9 @@ Menu {
                 const sub = submenuComponent.createObject(target, {
                     title: entry.label,
                     enabled: entry.enabled
-                })
+                }) as Menu
+                // The row Qt makes for the submenu draws the menu's icon.
+                sub.icon.name = entry.icon ?? ""
                 build(sub, entry.items)
                 target.addMenu(sub)
             } else {
@@ -127,6 +129,8 @@ Menu {
         property string shortcutText: ""
         property string iconSource: ""
         property string path: ""
+        // A submenu's row has no icon of its own: it shows its menu's.
+        readonly property string shownIcon: iconSource.length > 0 ? iconSource : subMenu ? subMenu.icon.name : ""
 
         implicitHeight: Tokens.metrics.menu_row
         implicitWidth: Tokens.metrics.menu - 2 * Tokens.metrics.space_xs
@@ -155,8 +159,8 @@ Menu {
                 anchors.verticalCenter: parent.verticalCenter
 
                 Lucide {
-                    visible: row.iconSource.length > 0 && row.iconSource.indexOf("file:") !== 0
-                    name: visible ? row.iconSource : ""
+                    visible: row.shownIcon.length > 0 && row.shownIcon.indexOf("file:") !== 0
+                    name: visible ? row.shownIcon : ""
                     colour: row.enabled ? Tokens.colors.text_muted : Tokens.colors.text_disabled
                 }
                 Image {

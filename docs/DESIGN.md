@@ -739,9 +739,9 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   there is no file: the path adds "(made when you first change a setting)"
   and the button is unavailable.
 - **Compress and extract (W-111, D-032, mockup 37):** the context menu
-  gains Extract › for archives (`package-open` Extract here,
+  gains `archive-restore` Extract › for archives (`package-open` Extract here,
   `folder-archive` Extract into "name/", `archive-x` Extract and trash
-  archive, `folder-input` Extract to…) and Compress › for anything else
+  archive, `folder-input` Extract to…) and `archive` Compress › for anything else
   (`file-archive` Compress to "name.zip" and "name.tar.gz", each the exact
   name it will make, `archive` Compress to…), just before Properties; neither
   in the trash nor as administrator. Compress to… is a 560 px dialog with the
@@ -891,7 +891,7 @@ stands unless he changes it. There are no pills and no circles.
   Move to trash (Del), Delete… (Shift+Del); Properties (Alt+Enter). The item
   under the pointer or keyboard takes the selection look: the `primary` fill
   and the 2 px `primary-bright` bar. Disabled items use `text-disabled` and are
-  skipped. Separators are `border` hairlines with 4 px above and below. "Open with ›" opens a second menu of applications with their icons.
+  skipped. Separators are `border` hairlines with 4 px above and below. A row opening a second menu has an icon like any other: `app-window` "Open with ›", which opens a second menu of applications with their icons.
 - **Actions palette:** 640 px, near the top of the window, over the scrim. A
   title row with "Actions" in `headline-sm` and "Ctrl+Shift+P" in `data-sm`. A
   search field with a search icon and the placeholder "Search actions, places,

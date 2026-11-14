@@ -159,6 +159,7 @@ pub fn place_menu(target: Target<'_>) -> Vec<MenuEntry<PlaceCommand>> {
                 MenuEntry::Separator,
                 MenuEntry::Submenu {
                     label: MOVE_TO_GROUP.to_owned(),
+                    icon: IconName::FolderInput,
                     items: sort,
                 },
                 item("Move up", PlaceCommand::MoveUp, true),
@@ -228,7 +229,7 @@ mod tests {
         entries
             .iter()
             .find_map(|entry| match entry {
-                MenuEntry::Submenu { label, items } if label == MOVE_TO_GROUP => {
+                MenuEntry::Submenu { label, items, .. } if label == MOVE_TO_GROUP => {
                     Some(items.as_slice())
                 }
                 _ => None,

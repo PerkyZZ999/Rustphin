@@ -150,6 +150,8 @@ pub enum MenuEntry<C = MenuCommand> {
     Submenu {
         /// The words on the row.
         label: String,
+        /// The icon before the words, as on every other row.
+        icon: crate::icons::Icon,
         /// The rows of the second menu.
         items: Vec<MenuEntry<C>>,
     },
@@ -275,9 +277,10 @@ pub fn to_json<C: Command>(entries: &[MenuEntry<C>]) -> serde_json::Value {
                         "enabled": enabled,
                         "path": path,
                     }),
-                    MenuEntry::Submenu { label, items } => serde_json::json!({
+                    MenuEntry::Submenu { label, icon, items } => serde_json::json!({
                         "kind": "submenu",
                         "label": label,
+                        "icon": icon.lucide_name(),
                         "enabled": entry.enabled_choice(),
                         "path": path,
                         "items": walk(items, &path),
@@ -458,6 +461,7 @@ fn archive_menus(facts: &MenuFacts) -> Vec<MenuEntry> {
         };
         menus.push(MenuEntry::Submenu {
             label: "Extract".to_owned(),
+            icon: crate::icons::Icon::ArchiveRestore,
             items: vec![
                 item("Extract here", MenuCommand::Extract(ExtractHow::Here), true),
                 item(&into, MenuCommand::Extract(ExtractHow::NewFolder), true),
@@ -483,6 +487,7 @@ fn archive_menus(facts: &MenuFacts) -> Vec<MenuEntry> {
         let [zip, tar_gz] = &facts.compress_names;
         menus.push(MenuEntry::Submenu {
             label: "Compress".to_owned(),
+            icon: crate::icons::Icon::Archive,
             items: vec![
                 item(
                     &format!("Compress to \u{201c}{zip}\u{201d}"),
@@ -514,6 +519,7 @@ fn open_with(facts: &MenuFacts) -> MenuEntry {
     }
     MenuEntry::Submenu {
         label: "Open with".to_owned(),
+        icon: crate::icons::Icon::AppWindow,
         items: facts
             .applications
             .iter()
@@ -762,7 +768,7 @@ mod tests {
     /// The labels inside the submenu called `name`.
     fn submenu<'a>(entries: &'a [MenuEntry], name: &str) -> Option<Vec<&'a str>> {
         entries.iter().find_map(|entry| match entry {
-            MenuEntry::Submenu { label, items } if label == name => Some(
+            MenuEntry::Submenu { label, items, .. } if label == name => Some(
                 items
                     .iter()
                     .map(|item| match item {
@@ -773,6 +779,48 @@ mod tests {
             ),
             _ => None,
         })
+    }
+
+    /// The icon each submenu row is sent to QML with, by its label.
+    fn submenu_icons(entries: &[MenuEntry]) -> Vec<(String, String)> {
+        let json = to_json(entries);
+        json.as_array()
+            .unwrap()
+            .iter()
+            .filter(|row| row["kind"] == "submenu")
+            .map(|row| {
+                (
+                    row["label"].as_str().unwrap().to_owned(),
+                    row["icon"].as_str().unwrap_or("").to_owned(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn submenu_rows_carry_an_icon_like_every_other_row() {
+        let archives = context_menu(&facts(|f| f.all_archives = true));
+        let files = context_menu(&facts(|f| {
+            f.applications.push(AppChoice {
+                id: "org.kde.okular.desktop".into(),
+                name: "Okular".into(),
+                icon: None,
+            });
+        }));
+        assert_eq!(
+            submenu_icons(&archives),
+            [
+                ("Open with".to_owned(), "app-window".to_owned()),
+                ("Extract".to_owned(), "archive-restore".to_owned())
+            ]
+        );
+        assert_eq!(
+            submenu_icons(&files),
+            [
+                ("Open with".to_owned(), "app-window".to_owned()),
+                ("Compress".to_owned(), "archive".to_owned())
+            ]
+        );
     }
 
     #[test]
@@ -1151,6 +1199,7 @@ mod tests {
             MenuEntry::Separator,
             MenuEntry::Submenu {
                 label: "More".into(),
+                icon: crate::icons::Icon::Menu,
                 items: vec![
                     MenuEntry::Item {
                         label: "Copy".into(),

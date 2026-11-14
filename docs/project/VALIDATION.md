@@ -1,5 +1,12 @@
 # Validation evidence
 
+### 2026-11-14 — W-118 Icons on submenu rows
+- **Change (the maintainer):** the rows that open a second menu had no icon. `MenuEntry::Submenu` now carries one and the menu JSON sends it; the row Qt makes for a submenu draws its menu's `icon.name`. Extract › `archive-restore`, Compress › `archive`, Open with › `app-window`, the places menu's Move to group › `folder-input` (DESIGN.md updated first).
+- **Test:** `submenu_rows_carry_an_icon_like_every_other_row` failed before the change (empty icons) and passes after.
+- **On screen (isolated session, debug build):** a .tar.gz's menu shows the icons on Open with and Extract; a text file's on Open with and Compress. Move to group not looked at on screen.
+- **Tests:** `rust-tc doctor` PASS, 658 tests.
+- **Waiver:** none
+
 ### 2026-11-14 — W-116b Replaying the scenarios W-114h left
 - **Replayed (isolated session, debug build, generated fixtures):** 36 scenarios. Passed: K4, K5, K9, K11, K12, K18, Q1–Q6, B3, B4, I1–I5, I7, I8, I9, I13, BR1–BR4. Failed or partly failed, then fixed and replayed: K7, K8, K13, K14, K16, K17, K19, I6. J5/J6 partly (below). Not run: J7.
 - **Fixed:** K7 a folded group now shows its count ("WORK (1)"); K8 Ctrl+L/F6/Alt+D in another text field (a place's rename, the filter) leaves that field alone; K19 Ctrl+L while the location field is open gives the breadcrumbs and the keyboard back to the list; K13 a menu that does not fit below its entry or button opens above it (seen: the last of 80 entries stays visible); K14 a change in the folder shown keeps the scroll position (each snapshot resets the model; the pane restores where it was unless the folder changed; seen: file-20's new size and 81 items, list where it was); K16 symbolic link names are italic (DESIGN.md); K17 the filter bar closes with the folder it was typed in; I6 Enter applies Properties from a focused permission box, which keeps the keyboard after a toggle (the boxes are no longer rebuilt) and shows a focus ring (seen: mode 244 on disk, Ctrl+Z back to 644); ViewMenu no longer reads a pane that is gone after a split tab closes (six TypeErrors in one replay; not reproduced after the guard).
