@@ -20,11 +20,18 @@ pub mod qobject {
         /// when `in_tabs` and there is one, else in a new window. Qt thread.
         fn rustphin_shell_show(folders: &QStringList, activation: &QString, in_tabs: bool);
         /// Shows `folder` with `select` selected, for another application:
-        /// a tab of the window last used when `in_tabs`, else a new window.
+        /// a tab of the window last used when `in_tabs`, else a new window,
+        /// which takes the focus with the caller's `activation` token.
         /// Qt thread.
-        fn rustphin_shell_reveal(folder: &QString, select: &QStringList, in_tabs: bool);
-        /// Opens Properties on `paths` in the window last used. Qt thread.
-        fn rustphin_shell_properties(paths: &QStringList);
+        fn rustphin_shell_reveal(
+            folder: &QString,
+            select: &QStringList,
+            in_tabs: bool,
+            activation: &QString,
+        );
+        /// Opens Properties on `paths` in the window last used, which takes
+        /// the focus with the caller's `activation` token. Qt thread.
+        fn rustphin_shell_properties(paths: &QStringList, activation: &QString);
         /// Closes every window and ends the process. Any thread.
         fn rustphin_shell_quit();
         /// The keyboard modifiers held now, as Qt's flags. Qt thread.

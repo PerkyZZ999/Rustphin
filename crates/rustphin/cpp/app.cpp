@@ -241,28 +241,30 @@ void rustphin_shell_show(const QStringList& folders, const QString& activation, 
     activate(window, activation);
 }
 
-void rustphin_shell_reveal(const QString& folder, const QStringList& select, bool in_tabs)
+void rustphin_shell_reveal(const QString& folder, const QStringList& select, bool in_tabs,
+    const QString& activation)
 {
     QWindow* window = in_tabs ? lastActive() : nullptr;
     if (window == nullptr) {
-        openWindow({ folder }, QString(), select);
+        openWindow({ folder }, activation, select);
         return;
     }
     QMetaObject::invokeMethod(window, "reveal", Q_ARG(QString, folder), Q_ARG(QStringList, select));
-    activate(window, QString());
+    activate(window, activation);
 }
 
-void rustphin_shell_properties(const QStringList& paths)
+void rustphin_shell_properties(const QStringList& paths, const QString& activation)
 {
     QWindow* window = lastActive();
     if (window == nullptr) {
-        window = openWindow({}, QString());
+        window = openWindow({}, activation);
+    } else {
+        activate(window, activation);
     }
     if (window != nullptr) {
         QMetaObject::invokeMethod(window, "openDialog",
             Q_ARG(QString, QStringLiteral("properties")),
             Q_ARG(QVariant, QVariant(paths)));
-        activate(window, QString());
     }
 }
 

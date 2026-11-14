@@ -69,18 +69,30 @@ fn folder_list(folders: &[PathBuf]) -> QStringList {
 /// calls: each folder with the names to select, or the properties of paths.
 fn answer_file_manager(call: Call) {
     match call {
-        Call::Show(shown) => {
+        Call::Show { shown, activation } => {
             let in_tabs =
                 prefs::settings().shown_folders() == rustphin_view::settings::ShownIn::Tab;
+            // The caller's token lets the window take the focus; it is good
+            // for one activation, so only the first folder uses it.
+            let mut token = QString::from(activation.as_str());
             for (index, shown) in shown.iter().enumerate() {
                 let (folder, select) = reveal_args(shown);
                 // Later folders join the window the first one opened.
-                shell::qobject::rustphin_shell_reveal(&folder, &select, in_tabs || index > 0);
+                shell::qobject::rustphin_shell_reveal(
+                    &folder,
+                    &select,
+                    in_tabs || index > 0,
+                    &token,
+                );
+                token = QString::default();
             }
         }
-        Call::Properties(paths) => {
+        Call::Properties { paths, activation } => {
             if !paths.is_empty() {
-                shell::qobject::rustphin_shell_properties(&folder_list(&paths));
+                shell::qobject::rustphin_shell_properties(
+                    &folder_list(&paths),
+                    &QString::from(activation.as_str()),
+                );
             }
         }
     }

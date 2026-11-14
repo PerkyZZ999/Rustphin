@@ -16,13 +16,25 @@ use crate::uri::path_from_uri;
 const NAME: &str = "org.freedesktop.FileManager1";
 const PATH: &str = "/org/freedesktop/FileManager1";
 
-/// What another application asked for.
+/// What another application asked for, with the activation token it
+/// sent as `startup_id`: on Wayland, what lets the window it shows take
+/// the focus (KWin keeps windows that ask without one behind).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Call {
     /// Open these folders, selecting the named items.
-    Show(Vec<Shown>),
+    Show {
+        /// The folders and names.
+        shown: Vec<Shown>,
+        /// The caller's activation token; empty when it sent none.
+        activation: String,
+    },
     /// Show properties for these paths.
-    Properties(Vec<PathBuf>),
+    Properties {
+        /// The paths.
+        paths: Vec<PathBuf>,
+        /// The caller's activation token; empty when it sent none.
+        activation: String,
+    },
 }
 
 /// A folder to show, and the names to select in it.
@@ -113,17 +125,26 @@ struct Service {
 
 #[interface(name = "org.freedesktop.FileManager1")]
 impl Service {
-    fn show_items(&self, uris: Vec<String>, _startup_id: String) {
-        let _ = self.requests.send(Call::Show(show_items(&uris)));
+    fn show_items(&self, uris: Vec<String>, startup_id: String) {
+        let _ = self.requests.send(Call::Show {
+            shown: show_items(&uris),
+            activation: startup_id,
+        });
     }
 
-    fn show_folders(&self, uris: Vec<String>, _startup_id: String) {
-        let _ = self.requests.send(Call::Show(show_folders(&uris)));
+    fn show_folders(&self, uris: Vec<String>, startup_id: String) {
+        let _ = self.requests.send(Call::Show {
+            shown: show_folders(&uris),
+            activation: startup_id,
+        });
     }
 
     /// Asks for the properties of each local path.
-    fn show_item_properties(&self, uris: Vec<String>, _startup_id: String) {
-        let _ = self.requests.send(Call::Properties(property_paths(&uris)));
+    fn show_item_properties(&self, uris: Vec<String>, startup_id: String) {
+        let _ = self.requests.send(Call::Properties {
+            paths: property_paths(&uris),
+            activation: startup_id,
+        });
     }
 }
 
@@ -253,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn show_items_on_a_private_bus_delivers_the_folder_and_the_name() {
+    fn show_items_on_a_private_bus_delivers_the_folder_the_name_and_the_token() {
         let dir = dir();
         let file = dir.path().join("picked.txt");
         std::fs::write(&file, b"x").unwrap();
@@ -278,13 +299,34 @@ mod tests {
 
         let proxy = Proxy::new(&client, NAME, PATH, NAME).unwrap();
         proxy
-            .call::<_, _, ()>("ShowItems", &(vec![file_uri(&file)], String::new()))
+            .call::<_, _, ()>(
+                "ShowItems",
+                &(vec![file_uri(&file)], "chrome-token-1".to_owned()),
+            )
             .unwrap();
-        let Call::Show(shown) = incoming.recv_timeout(Duration::from_secs(2)).unwrap() else {
+        proxy
+            .call::<_, _, ()>(
+                "ShowItemProperties",
+                &(vec![file_uri(&file)], "chrome-token-2".to_owned()),
+            )
+            .unwrap();
+        let Call::Show { shown, activation } =
+            incoming.recv_timeout(Duration::from_secs(2)).unwrap()
+        else {
             panic!("expected a show request");
+        };
+        let Call::Properties {
+            activation: properties_activation,
+            ..
+        } = incoming.recv_timeout(Duration::from_secs(2)).unwrap()
+        else {
+            panic!("expected a properties request");
         };
         drop(server);
         assert_eq!(shown[0].folder, dir.path());
         assert_eq!(shown[0].select, [OsString::from("picked.txt")]);
+        // The token the caller sent, for the window to take the focus.
+        assert_eq!(activation, "chrome-token-1");
+        assert_eq!(properties_activation, "chrome-token-2");
     }
 }

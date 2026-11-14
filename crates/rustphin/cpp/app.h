@@ -23,10 +23,11 @@ void rustphin_shell_show(const QStringList& folders, const QString& activation, 
 // Shows `folder` for another application (FileManager1), with the names
 // in `select` selected: in a tab of the window last used when `in_tabs`
 // and there is one, else in a window of its own. On the GUI thread.
-void rustphin_shell_reveal(const QString& folder, const QStringList& select, bool in_tabs);
+void rustphin_shell_reveal(const QString& folder, const QStringList& select, bool in_tabs,
+    const QString& activation);
 // Opens the Properties dialog on `paths` in the window last used, or in
 // a new one. On the GUI thread.
-void rustphin_shell_properties(const QStringList& paths);
+void rustphin_shell_properties(const QStringList& paths, const QString& activation);
 // Closes every window and ends the process. Safe from any thread.
 void rustphin_shell_quit();
 // The keyboard modifiers held now (Qt::KeyboardModifiers as an int). QML's
