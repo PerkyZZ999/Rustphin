@@ -36,6 +36,8 @@ pub mod qobject {
         #[qproperty(bool, can_go_back, cxx_name = "canGoBack", READ, NOTIFY)]
         #[qproperty(bool, can_go_forward, cxx_name = "canGoForward", READ, NOTIFY)]
         #[qproperty(bool, can_go_up, cxx_name = "canGoUp", READ, NOTIFY)]
+        #[qproperty(bool, show_hidden, cxx_name = "showHidden", READ, NOTIFY)]
+        #[qproperty(QString, notice, READ, NOTIFY)]
         type FolderModel = super::FolderModelRust;
     }
 
@@ -81,6 +83,9 @@ pub mod qobject {
         /// Opens the entry at `row` if it is a folder.
         #[qinvokable]
         fn activate(self: Pin<&mut FolderModel>, row: i32);
+        /// Does what the toolbar item `id` (as Settings names it) asks.
+        #[qinvokable]
+        fn run(self: Pin<&mut FolderModel>, id: &QString);
     }
 
     impl cxx_qt::Threading for FolderModel {}

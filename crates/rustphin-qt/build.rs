@@ -7,6 +7,9 @@ use std::path::Path;
 use cxx_qt_build::{CxxQtBuilder, QResource, QResources, QmlModule};
 use qt_build_utils::QResourceFile;
 
+/// The small logo the title bar shows (the GPUI title bar's too).
+const LOGO: &str = "../../assets/rustphin-small.svg";
+
 /// The fonts the GPUI interface bundles; the Qt one uses the same files.
 const FONTS: &str = "../rustphin-ui/assets/fonts";
 
@@ -55,7 +58,8 @@ fn icons() -> Vec<String> {
 fn main() {
     let resources = QResources::new()
         .resource(QResource::new().files(icons()))
-        .resource(QResource::new().files(fonts(Path::new(FONTS))));
+        .resource(QResource::new().files(fonts(Path::new(FONTS))))
+        .resource(QResource::new().file(QResourceFile::new(LOGO).alias("logo.svg")));
     let builder =
         CxxQtBuilder::new_qml_module(QmlModule::new("Rustphin").qml_files(["qml/Main.qml"]))
             .qt_module("Gui")
@@ -65,6 +69,7 @@ fn main() {
                 "src/app_bridge.rs",
                 "src/folder_bridge.rs",
                 "src/tokens_bridge.rs",
+                "src/toolbar_bridge.rs",
             ])
             .cpp_file("cpp/app.cpp")
             .cpp_file("cpp/window.cpp")
@@ -82,4 +87,5 @@ fn main() {
     println!("cargo::rerun-if-changed=cpp");
     println!("cargo::rerun-if-changed=icons");
     println!("cargo::rerun-if-changed={FONTS}");
+    println!("cargo::rerun-if-changed={LOGO}");
 }

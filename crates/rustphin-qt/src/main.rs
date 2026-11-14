@@ -4,6 +4,7 @@
 
 mod folder;
 mod tokens;
+mod toolbar;
 
 // cxx-qt generates the unsafe FFI glue for the set-up call; the bridge file
 // holds declarations only (AGENTS.md, D-034).

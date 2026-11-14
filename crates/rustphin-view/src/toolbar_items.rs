@@ -61,6 +61,28 @@ pub const BUILT_IN: [Item; 12] = [
 ];
 
 impl Item {
+    /// The icon the item shows on the toolbar and in Settings.
+    pub fn icon(&self) -> crate::icons::Icon {
+        use crate::icons::Icon;
+        match self {
+            Item::Admin => Icon::ShieldAlert,
+            Item::Back => Icon::ArrowLeft,
+            Item::Forward => Icon::ArrowRight,
+            Item::Up => Icon::ArrowUp,
+            Item::Reload => Icon::RefreshCw,
+            Item::Location => Icon::Folder,
+            Item::New => Icon::Plus,
+            Item::Terminal => Icon::SquareTerminal,
+            Item::View => Icon::List,
+            Item::Split => Icon::SquareSplitHorizontal,
+            Item::Hidden => Icon::Eye,
+            Item::Filter => Icon::Funnel,
+            Item::Actions => Icon::Menu,
+            Item::Separator => Icon::Minus,
+            Item::Command(label) => crate::palette::command_icon(label),
+        }
+    }
+
     /// How the settings file names it.
     pub fn id(&self) -> String {
         match self {
@@ -126,6 +148,22 @@ impl Item {
             Self::Actions => "Actions".to_owned(),
             Self::Separator => "Separator".to_owned(),
             Self::Command(label) => label.clone(),
+        }
+    }
+
+    /// The key that does the same, as its tooltip names it (KEYBOARD.md).
+    pub fn keys(&self) -> Option<&'static str> {
+        match self {
+            Self::Back => Some("Alt+Left"),
+            Self::Forward => Some("Alt+Right"),
+            Self::Up => Some("Alt+Up"),
+            Self::Reload => Some("F5"),
+            Self::Terminal => Some("Shift+F4"),
+            Self::Split => Some("F3"),
+            Self::Hidden => Some("Ctrl+H"),
+            Self::Filter => Some("Ctrl+I"),
+            Self::Actions => Some("Ctrl+Shift+P"),
+            _ => None,
         }
     }
 

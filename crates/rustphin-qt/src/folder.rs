@@ -23,7 +23,7 @@ use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QStri
 use jiff::tz::TimeZone;
 use rustphin_core::{DirectoryModel, ModelEvent, RealFs, Snapshot, SortKey, ViewOptions};
 use rustphin_platform::{mime::MimeDb, xdg};
-use rustphin_view::format;
+use rustphin_view::{format, toolbar_items::Item};
 
 /// The roles QML reads, after Qt's own (`Qt::UserRole` is 0x100).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +72,8 @@ pub struct FolderModelRust {
     can_go_back: bool,
     can_go_forward: bool,
     can_go_up: bool,
+    show_hidden: bool,
+    notice: QString,
     model: Option<DirectoryModel>,
     snapshot: Option<Arc<Snapshot>>,
     /// The file types, once loaded in the background.
@@ -91,6 +93,8 @@ impl Default for FolderModelRust {
             can_go_back: false,
             can_go_forward: false,
             can_go_up: false,
+            show_hidden: false,
+            notice: QString::default(),
             model: None,
             snapshot: None,
             types: None,
@@ -294,12 +298,56 @@ impl qobject::FolderModel {
         }
     }
 
+    fn run(mut self: Pin<&mut Self>, id: &QString) {
+        match Item::from_id(&id.to_string()) {
+            Some(Item::Back) => self.back(),
+            Some(Item::Forward) => self.forward(),
+            Some(Item::Up) => self.up(),
+            Some(Item::Reload) => self.reload(),
+            Some(Item::Hidden) => {
+                let show = !*self.show_hidden();
+                self.as_mut().rust_mut().show_hidden = show;
+                self.as_mut().show_hidden_changed();
+                let options = ViewOptions {
+                    show_hidden: show,
+                    ..self.rust().options
+                };
+                self.as_mut().rust_mut().options = options;
+                if let Some(model) = self.as_mut().rust_mut().model.as_mut() {
+                    model.set_options(options);
+                }
+            }
+            Some(Item::Terminal) => {
+                let folder = PathBuf::from(self.location().to_string());
+                let thread = self.qt_thread();
+                std::thread::spawn(move || {
+                    let result =
+                        rustphin_platform::terminal::open_in(&folder, None, xdg::config_home());
+                    if let Err(error) = result {
+                        let words = format!("The terminal could not be opened: {error}.");
+                        let _ = thread.queue(move |model| model.say(&words));
+                    }
+                });
+            }
+            _ => {}
+        }
+    }
+
+    /// Shows a message on the status line until the folder changes.
+    fn say(mut self: Pin<&mut Self>, words: &str) {
+        self.as_mut().rust_mut().notice = QString::from(words);
+        self.as_mut().notice_changed();
+    }
+
     /// Shows `path` as the location.
     fn set_location_text(mut self: Pin<&mut Self>, path: &Path) {
         let text = QString::from(path.to_string_lossy().as_ref());
         if *self.location() != text {
             self.as_mut().rust_mut().location = text;
             self.as_mut().location_changed();
+            if !self.notice().is_empty() {
+                self.as_mut().say("");
+            }
         }
     }
 

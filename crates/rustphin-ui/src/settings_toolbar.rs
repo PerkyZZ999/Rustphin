@@ -28,23 +28,7 @@ const LIST_HEIGHT: f32 = 256.;
 
 /// The icon an item shows in the lists and the preview.
 pub fn item_icon(item: &Item) -> IconName {
-    match item {
-        Item::Admin => IconName::ShieldAlert,
-        Item::Back => IconName::ArrowLeft,
-        Item::Forward => IconName::ArrowRight,
-        Item::Up => IconName::ArrowUp,
-        Item::Reload => IconName::RefreshCw,
-        Item::Location => IconName::Folder,
-        Item::New => IconName::Plus,
-        Item::Terminal => IconName::SquareTerminal,
-        Item::View => IconName::List,
-        Item::Split => IconName::SquareSplitHorizontal,
-        Item::Hidden => IconName::Eye,
-        Item::Filter => IconName::Funnel,
-        Item::Actions => IconName::Menu,
-        Item::Separator => IconName::Minus,
-        Item::Command(label) => crate::palette::command_icon(label),
-    }
+    crate::icon_map::gpui_icon(item.icon())
 }
 
 /// What "Available actions" offers: the built-in buttons and every palette
