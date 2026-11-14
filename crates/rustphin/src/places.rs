@@ -1,8 +1,10 @@
 //! The places panel as a QML list model (W-114e): KDE's shared places
 //! (`user-places.xbel`) with Rustphin's own groups (D-008, W-105), the
 //! Remote section, and the storage volumes from UDisks2 with their usage.
-//! Files are read and written on other threads; the rows and what they
-//! mean come from `rustphin_view::places_panel`.
+//! Files are read and written on other threads; the rows, what they show
+//! and what every key, menu entry, drop and rename does are decided by
+//! `rustphin_view::places_panel::PlacesPanel` (W-127), whose effects this
+//! adapter carries out.
 
 // cxx-qt generates the unsafe FFI glue for the model; the bridge file
 // holds declarations only (AGENTS.md, D-034).
@@ -22,22 +24,19 @@ use std::{
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
-use rustphin_core::{Fs as _, RealFs, WatchGuard, display_name};
+use rustphin_core::{Fs as _, RealFs, WatchGuard};
 use rustphin_platform::{
     config,
     devices::{self, Device, Devices, NoDevices, UDisks2},
-    places::{EMPTY, Place, Places, PlacesError},
-    remote::{network_folder_address, network_folder_name},
+    places::{EMPTY, Place, Places},
+    remote::network_folder_address,
     xdg,
 };
 use rustphin_view::{
-    commands::{self, Action, PlacesCommand},
+    commands::{self, Action},
     groups::Groups,
-    menu::{self, MenuEntry},
-    place_menu::{self, PlaceCommand, Target},
     places_panel::{
-        DEVICES_UNAVAILABLE, Row, can_eject, device_name, icon_for, is_remote, is_shown,
-        network_address, rows, usage_text,
+        Effect, Opening, PlacesEdit, PlacesPanel, Row, device_name, icon_for, is_shown,
     },
     settings::PlacesChoice,
 };
@@ -125,28 +124,18 @@ pub struct PlacesModelRust {
     started: bool,
     places_path: Option<PathBuf>,
     groups_path: Option<PathBuf>,
-    places: Vec<Place>,
     places_load: u64,
     places_notice: Option<String>,
-    groups: Groups,
-    choice: PlacesChoice,
-    rows: Vec<Row>,
-    focused: Option<Row>,
-    renaming: Option<Row>,
-    rename_requested: Option<Row>,
-    current: Option<PathBuf>,
-    devices: Vec<Device>,
-    devices_unavailable: bool,
-    usage: HashMap<String, (u64, u64)>,
+    panel: PlacesPanel,
+    /// The rows the view was last told of; the panel's rows once laid out.
+    shown: Vec<Row>,
     device_service: Arc<dyn Devices>,
-    device_busy: Option<String>,
-    menu_entries: Vec<MenuEntry<PlaceCommand>>,
-    menu_row: Option<Row>,
     _watch: Option<WatchGuard>,
 }
 
 impl Default for PlacesModelRust {
     fn default() -> Self {
+        let choice = prefs::settings().places();
         Self {
             count: 0,
             has_places: false,
@@ -155,71 +144,29 @@ impl Default for PlacesModelRust {
             rename_text: QString::default(),
             devices_note: QString::default(),
             menu: QString::default(),
-            width: i32::try_from(prefs::settings().places().width).unwrap_or(240),
+            width: i32::try_from(choice.width).unwrap_or(240),
             started: false,
             places_path: xdg::data_dirs()
                 .into_iter()
                 .next()
                 .map(|dir| dir.join("user-places.xbel")),
             groups_path: config::config_dir().map(|dir| dir.join("place-groups.toml")),
-            places: Vec::new(),
             places_load: 0,
             places_notice: None,
-            groups: Groups::default(),
-            choice: prefs::settings().places(),
-            rows: Vec::new(),
-            focused: None,
-            renaming: None,
-            rename_requested: None,
-            current: None,
-            devices: Vec::new(),
-            devices_unavailable: false,
-            usage: HashMap::new(),
+            panel: PlacesPanel::new(choice, xdg::home()),
+            shown: Vec::new(),
             device_service: Arc::new(NoDevices),
-            device_busy: None,
-            menu_entries: Vec::new(),
-            menu_row: None,
             _watch: None,
         }
     }
 }
 
 impl PlacesModelRust {
-    fn place(&self, id: &str) -> Option<&Place> {
-        self.places.iter().find(|place| place.id == id)
-    }
-
-    fn device(&self, id: &str) -> Option<&Device> {
-        self.devices.iter().find(|device| device.id == id)
-    }
-
-    /// The panel's rows, top to bottom.
-    fn compute_rows(&self) -> Vec<Row> {
-        let mut rows = rows(
-            &self.places,
-            &self.groups,
-            self.choice.show_hidden,
-            self.groups.remote_folded,
-            self.choice.remote,
-        );
-        if !self.choice.devices {
-            return rows;
-        }
-        if !self.devices.is_empty() || self.devices_unavailable {
-            rows.push(Row::Devices);
-        }
-        if !self.groups.devices_folded {
-            rows.extend(
-                self.devices
-                    .iter()
-                    .map(|device| Row::Device(device.id.clone())),
-            );
-        }
-        rows
-    }
-
-    fn row(&self, index: i32) -> Option<&Row> {
-        self.rows.get(usize::try_from(index).ok()?)
+    /// Where `row` is shown, or -1.
+    fn position(&self, row: Option<&Row>) -> i32 {
+        row.and_then(|row| self.shown.iter().position(|shown| shown == row))
+            .and_then(|at| i32::try_from(at).ok())
+            .unwrap_or(-1)
     }
 }
 
@@ -227,11 +174,13 @@ fn text(words: &str) -> QString {
     QString::from(words)
 }
 
-/// Whether any place or group is listed, so the panel says how to add
-/// one only when there is none (devices do not count).
-fn has_places(rows: &[Row]) -> bool {
-    rows.iter()
-        .any(|row| matches!(row, Row::Place(_) | Row::Group(_)))
+fn folder_text(path: &Path) -> QString {
+    QString::from(path.to_string_lossy().as_ref())
+}
+
+/// A row number from QML; none when negative.
+fn at(row: i32) -> Option<usize> {
+    usize::try_from(row).ok()
 }
 
 impl qobject::PlacesModel {
@@ -241,118 +190,27 @@ impl qobject::PlacesModel {
 
     fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
         let rust = self.rust();
-        let (Some(row), Some(role)) = (rust.row(index.row()), Role::from_number(role)) else {
+        let view = at(index.row())
+            .and_then(|at| rust.shown.get(at))
+            .and_then(|row| rust.panel.view(row));
+        let (Some(view), Some(role)) = (view, Role::from_number(role)) else {
             return QVariant::default();
         };
         let words = |words: &str| QVariant::from(&QString::from(words));
-        let focused = rust.focused.as_ref() == Some(row);
-        let renaming = rust.renaming.as_ref() == Some(row);
-        match (row, role) {
-            (_, Role::Focused) => QVariant::from(&focused),
-            (_, Role::Renaming) => QVariant::from(&renaming),
-            (Row::Place(_), Role::Kind) => words("place"),
-            (Row::Group(_), Role::Kind) => words("group"),
-            (Row::Device(_), Role::Kind) => words("device"),
-            (Row::Devices | Row::Remote, Role::Kind) => words("heading"),
-            (Row::Place(id), _) => {
-                let Some(place) = rust.place(id) else {
-                    return QVariant::default();
-                };
-                match role {
-                    Role::Title => words(&place.title),
-                    Role::Icon => words(icon_for(place)),
-                    Role::Current => QVariant::from(
-                        &(place.path.is_some() && place.path.as_deref() == rust.current.as_deref()),
-                    ),
-                    Role::Hidden => QVariant::from(&place.hidden),
-                    Role::Grouped => QVariant::from(&rust.groups.group_of(id).is_some()),
-                    _ => QVariant::default(),
-                }
-            }
-            (Row::Group(index), _) => {
-                let Some(group) = rust.groups.groups.get(*index) else {
-                    return QVariant::default();
-                };
-                match role {
-                    Role::Title => words(if group.name.is_empty() {
-                        "Group"
-                    } else {
-                        &group.name
-                    }),
-                    Role::Collapsed => QVariant::from(&group.collapsed),
-                    Role::Detail => words(&group.places.len().to_string()),
-                    _ => QVariant::default(),
-                }
-            }
-            (Row::Devices, _) => match role {
-                Role::Title => words(&if rust.groups.devices_folded {
-                    format!("Devices ({})", rust.devices.len())
-                } else {
-                    "Devices".to_owned()
-                }),
-                Role::Collapsed => QVariant::from(&rust.groups.devices_folded),
-                _ => QVariant::default(),
-            },
-            (Row::Remote, _) => match role {
-                Role::Title => words(&if rust.groups.remote_folded {
-                    let count = rust
-                        .places
-                        .iter()
-                        .filter(|place| {
-                            is_shown(place, rust.choice.show_hidden)
-                                && is_remote(place)
-                                && rust.groups.group_of(&place.id).is_none()
-                        })
-                        .count();
-                    format!("Remote ({count})")
-                } else {
-                    "Remote".to_owned()
-                }),
-                Role::Collapsed => QVariant::from(&rust.groups.remote_folded),
-                _ => QVariant::default(),
-            },
-            (Row::Device(id), _) => {
-                let Some(device) = rust.device(id) else {
-                    return QVariant::default();
-                };
-                let usage = rust.usage.get(id).copied();
-                match role {
-                    Role::Title => words(&device_name(device)),
-                    Role::Icon => words(if device.removable {
-                        "usb"
-                    } else {
-                        "hard-drive"
-                    }),
-                    Role::Current => {
-                        QVariant::from(&rust.current.as_deref().is_some_and(|folder| {
-                            device
-                                .mount_point
-                                .as_deref()
-                                .is_some_and(|mount| mount == folder)
-                        }))
-                    }
-                    Role::Detail => words(&usage.map_or_else(
-                        || {
-                            if device.mount_point.is_some() {
-                                String::new()
-                            } else {
-                                "Not mounted".to_owned()
-                            }
-                        },
-                        |(total, free)| usage_text(total, free),
-                    )),
-                    Role::Usage => QVariant::from(&usage.map_or(-1., |(total, free)| {
-                        if total == 0 {
-                            0.
-                        } else {
-                            (total - free.min(total)) as f64 / total as f64
-                        }
-                    })),
-                    Role::Busy => QVariant::from(&(rust.device_busy.as_deref() == Some(id))),
-                    Role::Ejectable => QVariant::from(&can_eject(device, xdg::home().as_deref())),
-                    _ => QVariant::default(),
-                }
-            }
+        match role {
+            Role::Kind => words(view.kind.name()),
+            Role::Title => words(&view.title),
+            Role::Icon => words(view.icon),
+            Role::Current => QVariant::from(&view.current),
+            Role::Hidden => QVariant::from(&view.hidden),
+            Role::Collapsed => QVariant::from(&view.collapsed),
+            Role::Detail => words(&view.detail),
+            Role::Usage => QVariant::from(&view.usage),
+            Role::Busy => QVariant::from(&view.busy),
+            Role::Ejectable => QVariant::from(&view.ejectable),
+            Role::Focused => QVariant::from(&view.focused),
+            Role::Renaming => QVariant::from(&view.renaming),
+            Role::Grouped => QVariant::from(&view.grouped),
         }
     }
 
@@ -364,13 +222,40 @@ impl qobject::PlacesModel {
         roles
     }
 
-    /// Lays the rows out again and redraws them.
-    fn refresh(mut self: Pin<&mut Self>) {
-        let rows = self.rust().compute_rows();
+    /// Carries out what the panel decided, in order.
+    fn apply(mut self: Pin<&mut Self>, effects: Vec<Effect>) {
+        for effect in effects {
+            match effect {
+                Effect::Relayout => self.as_mut().relayout(),
+                Effect::Focus => self.as_mut().focus_changed(),
+                Effect::Rename(name) => self.as_mut().rename_opened(&name),
+                Effect::Menu(json) => self.as_mut().set_menu(text(&json)),
+                Effect::SaveGroups => self.save_groups(),
+                Effect::EditPlaces(edit) => self.as_mut().edit_places(edit),
+                Effect::Open { opening, new_tab } => self.as_mut().open(opening, new_tab),
+                Effect::Eject(device) => self.as_mut().eject_device(device),
+                Effect::ShowHidden(show) => {
+                    prefs::update(|settings| {
+                        let choice = settings.places();
+                        settings.set_places(PlacesChoice {
+                            show_hidden: show,
+                            ..choice
+                        });
+                    });
+                    crate::preferences::changed();
+                }
+                Effect::Say(words) => hub::say(words, false),
+            }
+        }
+    }
+
+    /// Lays the rows out again, or redraws them where they are.
+    fn relayout(mut self: Pin<&mut Self>) {
+        let rows = self.rust().panel.rows().to_vec();
         // The same rows (a write of our own came back through the watch):
         // redraw them in place. A reset would rebuild the delegates and
         // end a rename in progress, as if its field had lost focus.
-        if rows == self.rust().rows {
+        if rows == self.rust().shown {
             self.as_mut().redraw_all();
             return self.after_layout();
         }
@@ -378,14 +263,7 @@ impl qobject::PlacesModel {
         {
             let mut rust = self.as_mut().rust_mut();
             rust.count = i32::try_from(rows.len()).unwrap_or(i32::MAX);
-            rust.rows = rows;
-            if rust
-                .focused
-                .as_ref()
-                .is_some_and(|focused| !rust.rows.contains(focused))
-            {
-                rust.focused = None;
-            }
+            rust.shown = rows;
         }
         self.as_mut().end_reset_model();
         self.as_mut().count_changed();
@@ -394,11 +272,16 @@ impl qobject::PlacesModel {
 
     /// Every row's data changed, its position did not.
     fn redraw_all(mut self: Pin<&mut Self>) {
+        self.as_mut().redraw_role(None);
+    }
+
+    /// One role of every row changed (all roles with `None`).
+    fn redraw_role(mut self: Pin<&mut Self>, role: Option<Role>) {
         let last = *self.count() - 1;
         if last >= 0 {
             let first = self.index(0, 0, &QModelIndex::default());
             let last = self.index(last, 0, &QModelIndex::default());
-            let roles: cxx_qt_lib::QList<i32> = cxx_qt_lib::QList::default();
+            let roles: cxx_qt_lib::QList<i32> = role.map(|role| role as i32).into_iter().collect();
             self.as_mut().data_changed(&first, &last, &roles);
         }
     }
@@ -406,27 +289,37 @@ impl qobject::PlacesModel {
     /// What follows laying the rows out: the focused and renamed rows, the
     /// notes, and a group just made opening its name field.
     fn after_layout(mut self: Pin<&mut Self>) {
-        let has_places = has_places(&self.rust().rows);
+        let rust = self.rust();
+        let has_places = rust.panel.has_places();
+        let focus = rust.position(rust.panel.focused());
+        let renaming = rust.position(rust.panel.renaming());
+        let note = rust.panel.devices_note();
         self.as_mut().set_has_places(has_places);
-        let position = |row: &Option<Row>, rows: &[Row]| {
-            row.as_ref()
-                .and_then(|row| rows.iter().position(|shown| shown == row))
-                .and_then(|at| i32::try_from(at).ok())
-                .unwrap_or(-1)
-        };
-        let focus = position(&self.rust().focused, &self.rust().rows);
-        let renaming = position(&self.rust().renaming, &self.rust().rows);
         self.as_mut().set_focus_row(focus);
         self.as_mut().set_renaming_row(renaming);
-        let note = if self.rust().devices_unavailable && self.rust().choice.devices {
-            DEVICES_UNAVAILABLE
-        } else {
-            ""
-        };
         self.as_mut().set_devices_note(text(note));
         // A group made a moment ago is named straight away.
-        if let Some(row) = self.as_mut().rust_mut().rename_requested.take() {
-            self.begin_rename(row);
+        let effects = self.as_mut().rust_mut().panel.laid_out();
+        self.apply(effects);
+    }
+
+    /// Redraws which row has the keyboard, without laying rows out again
+    /// (a reset would drop a press in progress).
+    fn focus_changed(mut self: Pin<&mut Self>) {
+        let at = self.rust().position(self.rust().panel.focused());
+        self.as_mut().set_focus_row(at);
+        self.redraw_role(Some(Role::Focused));
+    }
+
+    /// The name field opens on the panel's renamed row with `name` in it.
+    fn rename_opened(mut self: Pin<&mut Self>, name: &str) {
+        let at = self.rust().position(self.rust().panel.renaming());
+        self.as_mut().set_rename_text(text(name));
+        self.as_mut().set_renaming_row(at);
+        if at >= 0 && at < *self.count() {
+            let index = self.index(at, 0, &QModelIndex::default());
+            let roles: cxx_qt_lib::QList<i32> = std::iter::once(Role::Renaming as i32).collect();
+            self.as_mut().data_changed(&index, &index, &roles);
         }
     }
 
@@ -493,8 +386,8 @@ impl qobject::PlacesModel {
                     if groups.is_from_newer_version() {
                         model.as_mut().rust_mut().groups_path = None;
                     }
-                    model.as_mut().rust_mut().groups = groups;
-                    model.refresh();
+                    let effects = model.as_mut().rust_mut().panel.set_groups(groups);
+                    model.apply(effects);
                 });
             }
         });
@@ -504,7 +397,7 @@ impl qobject::PlacesModel {
         let Some(path) = self.rust().groups_path.clone() else {
             return;
         };
-        let text = self.rust().groups.to_toml();
+        let text = self.rust().panel.groups().to_toml();
         std::thread::spawn(move || {
             if let Err(error) = config::write_atomic(&path, text.as_bytes()) {
                 tracing::warn!(%error, path = %path.display(), "could not save the place groups");
@@ -534,18 +427,8 @@ impl qobject::PlacesModel {
                     Ok(places) => {
                         model.as_mut().rust_mut().places_notice = None;
                         let places: Vec<Place> = places.places().cloned().collect();
-                        if places != model.rust().places {
-                            let forgot = {
-                                let mut rust = model.as_mut().rust_mut();
-                                rust.places = places;
-                                let existing = rust.places.clone();
-                                rust.groups.forget_missing(&existing)
-                            };
-                            if forgot {
-                                model.save_groups();
-                            }
-                            model.refresh();
-                        }
+                        let effects = model.as_mut().rust_mut().panel.set_places(places);
+                        model.apply(effects);
                     }
                     Err(error) => {
                         let message = format!(
@@ -562,12 +445,9 @@ impl qobject::PlacesModel {
         });
     }
 
-    /// Changes the shared places file on another thread, then reads it again.
-    fn edit_places<T: Send + 'static>(
-        self: Pin<&mut Self>,
-        edit: impl FnOnce(&Places) -> Result<(String, T), PlacesError> + Send + 'static,
-        then: impl FnOnce(Pin<&mut Self>, T) + Send + 'static,
-    ) {
+    /// Changes the shared places file on another thread, tells the panel,
+    /// then reads the file again.
+    fn edit_places(self: Pin<&mut Self>, edit: PlacesEdit) {
         let Some(path) = self.rust().places_path.clone() else {
             return;
         };
@@ -578,16 +458,19 @@ impl qobject::PlacesModel {
                     .map_err(|error| error.to_string())?
                     .unwrap_or_else(|| EMPTY.to_owned());
                 let places = Places::parse(&text).map_err(|error| error.to_string())?;
-                let (new_text, value) = edit(&places).map_err(|error| error.to_string())?;
+                let (new_text, added) = edit
+                    .apply(&places, now())
+                    .map_err(|error| error.to_string())?;
                 if new_text != text {
                     config::write_atomic(&path, new_text.as_bytes())
                         .map_err(|error| error.to_string())?;
                 }
-                Ok::<_, String>(value)
+                Ok::<_, String>(added)
             })();
             let _ = thread.queue(move |mut model| match written {
-                Ok(value) => {
-                    then(model.as_mut(), value);
+                Ok(added) => {
+                    let effects = model.as_mut().rust_mut().panel.edited(&edit, added);
+                    model.as_mut().apply(effects);
                     model.reload();
                 }
                 Err(error) => hub::say(format!("The places could not be changed: {error}."), true),
@@ -650,11 +533,8 @@ impl qobject::PlacesModel {
             });
             let _ = thread.queue(move |mut model| match listed {
                 Ok((devices, usage)) => {
-                    let mut rust = model.as_mut().rust_mut();
-                    rust.devices = devices;
-                    rust.usage = usage;
-                    rust.devices_unavailable = false;
-                    model.refresh();
+                    let effects = model.as_mut().rust_mut().panel.set_devices(devices, usage);
+                    model.apply(effects);
                 }
                 Err(error) => {
                     tracing::warn!(%error, "the volumes could not be listed");
@@ -665,27 +545,22 @@ impl qobject::PlacesModel {
     }
 
     fn devices_failed(mut self: Pin<&mut Self>) {
-        {
-            let mut rust = self.as_mut().rust_mut();
-            rust.devices_unavailable = true;
-            rust.devices.clear();
-            rust.usage.clear();
-        }
-        self.refresh();
+        let effects = self.as_mut().rust_mut().panel.devices_failed();
+        self.apply(effects);
+    }
+
+    /// The volume is no longer being mounted or ejected.
+    fn not_busy(mut self: Pin<&mut Self>) {
+        let effects = self.as_mut().rust_mut().panel.set_busy(None);
+        self.as_mut().apply(effects);
+        self.reload_devices();
     }
 
     fn set_current(mut self: Pin<&mut Self>, folder: &QString) {
         let folder =
             Some(PathBuf::from(folder.to_string())).filter(|path| !path.as_os_str().is_empty());
-        if self.rust().current != folder {
-            self.as_mut().rust_mut().current = folder;
-            let last = *self.count() - 1;
-            if last >= 0 {
-                let first = self.index(0, 0, &QModelIndex::default());
-                let last = self.index(last, 0, &QModelIndex::default());
-                let roles: cxx_qt_lib::QList<i32> = std::iter::once(Role::Current as i32).collect();
-                self.as_mut().data_changed(&first, &last, &roles);
-            }
+        if self.as_mut().rust_mut().panel.set_current(folder) {
+            self.redraw_role(Some(Role::Current));
         }
     }
 
@@ -696,132 +571,76 @@ impl qobject::PlacesModel {
             settings.set_places(PlacesChoice { width, ..choice });
         });
         let choice = prefs::settings().places();
-        self.as_mut().rust_mut().choice = choice;
+        let effects = self.as_mut().rust_mut().panel.set_choice(choice);
         self.as_mut()
             .set_width(i32::try_from(choice.width).unwrap_or(240));
+        self.apply(effects);
     }
 
     fn adopt_settings(mut self: Pin<&mut Self>) {
         let choice = prefs::settings().places();
-        if self.rust().choice != choice {
-            self.as_mut().rust_mut().choice = choice;
-            self.as_mut()
-                .set_width(i32::try_from(choice.width).unwrap_or(240));
-            self.refresh();
-        }
+        let effects = self.as_mut().rust_mut().panel.set_choice(choice);
+        self.as_mut()
+            .set_width(i32::try_from(choice.width).unwrap_or(240));
+        self.apply(effects);
     }
 
     fn focus_on(mut self: Pin<&mut Self>, row: i32) {
-        let target = self.rust().row(row).cloned();
-        self.as_mut().rust_mut().focused = target;
-        self.focus_changed();
-    }
-
-    /// Redraws which row has the keyboard, without laying rows out again
-    /// (a reset would drop a press in progress).
-    fn focus_changed(mut self: Pin<&mut Self>) {
-        let at = self
-            .rust()
-            .focused
-            .as_ref()
-            .and_then(|focused| self.rust().rows.iter().position(|row| row == focused))
-            .and_then(|at| i32::try_from(at).ok())
-            .unwrap_or(-1);
-        self.as_mut().set_focus_row(at);
-        let last = *self.count() - 1;
-        if last >= 0 {
-            let first = self.index(0, 0, &QModelIndex::default());
-            let last = self.index(last, 0, &QModelIndex::default());
-            let roles: cxx_qt_lib::QList<i32> = std::iter::once(Role::Focused as i32).collect();
-            self.as_mut().data_changed(&first, &last, &roles);
-        }
+        let effects = self.as_mut().rust_mut().panel.focus_on(at(row));
+        self.apply(effects);
     }
 
     fn move_focus(mut self: Pin<&mut Self>, delta: i32) {
-        let rows = &self.rust().rows;
-        if rows.is_empty() {
-            return;
-        }
-        let at = self
-            .rust()
-            .focused
-            .as_ref()
-            .and_then(|focused| rows.iter().position(|row| row == focused));
-        let target = match at {
-            Some(at) => at.saturating_add_signed(delta as isize).min(rows.len() - 1),
-            None if delta < 0 => rows.len() - 1,
-            None => 0,
-        };
-        let row = rows[target].clone();
-        self.as_mut().rust_mut().focused = Some(row);
-        self.focus_changed();
+        let effects = self.as_mut().rust_mut().panel.move_focus(delta as isize);
+        self.apply(effects);
     }
 
     fn activate(mut self: Pin<&mut Self>, row: i32, new_tab: bool) {
-        let Some(row) = self.rust().row(row).cloned() else {
+        let Some(row) = at(row) else {
             return;
         };
-        self.as_mut().rust_mut().focused = Some(row.clone());
-        self.as_mut().focus_changed();
-        self.open_row(&row, new_tab);
+        let effects = self.as_mut().rust_mut().panel.activate(row, new_tab);
+        self.apply(effects);
     }
 
-    fn open_row(mut self: Pin<&mut Self>, row: &Row, new_tab: bool) {
-        match row {
-            Row::Place(id) => {
-                let Some(place) = self.rust().place(id).cloned() else {
-                    return;
-                };
-                if let Some(path) = place.path.clone() {
-                    self.as_mut()
-                        .open_folder(QString::from(path.to_string_lossy().as_ref()), new_tab);
-                } else if place.href.starts_with("trash:") {
-                    self.as_mut().open_trash();
-                } else if let Some(address) = network_address(&place) {
-                    self.open_remote(address, new_tab);
-                } else if let Some(name) = network_folder_name(&place.href) {
-                    let thread = self.qt_thread();
-                    std::thread::spawn(move || {
-                        let address =
-                            xdg::data_home().and_then(|home| network_folder_address(&home, &name));
-                        let _ = thread.queue(move |model| match address {
-                            Some(address) => model.open_remote(address, new_tab),
-                            None => hub::say(
-                                format!(
-                                    "The network folder \u{201c}{name}\u{201d} has no address Rustphin can open. Check it in Dolphin's Network view, or add its sftp:// or smb:// address to Places."
-                                ),
+    fn open(self: Pin<&mut Self>, opening: Opening, new_tab: bool) {
+        match opening {
+            Opening::Folder(path) => self.open_folder(folder_text(&path), new_tab),
+            Opening::Trash => self.open_trash(),
+            Opening::Remote(address) => self.open_remote(address, new_tab),
+            Opening::NetworkFolder(name) => {
+                let thread = self.qt_thread();
+                std::thread::spawn(move || {
+                    let address =
+                        xdg::data_home().and_then(|home| network_folder_address(&home, &name));
+                    let _ = thread.queue(move |model| match address {
+                        Some(address) => model.open_remote(address, new_tab),
+                        None => hub::say(
+                            format!(
+                                "The network folder \u{201c}{name}\u{201d} has no address Rustphin can open. Check it in Dolphin's Network view, or add its sftp:// or smb:// address to Places."
+                            ),
+                            true,
+                        ),
+                    });
+                });
+            }
+            Opening::Mount(device) => {
+                let service = self.rust().device_service.clone();
+                let thread = self.qt_thread();
+                std::thread::spawn(move || {
+                    let name = device_name(&device);
+                    let mounted = service.mount(&device);
+                    let _ = thread.queue(move |mut model| {
+                        match mounted {
+                            Ok(path) => model.as_mut().open_folder(folder_text(&path), new_tab),
+                            Err(error) => hub::say(
+                                format!("\u{201c}{name}\u{201d} could not be mounted: {error}."),
                                 true,
                             ),
-                        });
+                        }
+                        model.not_busy();
                     });
-                }
-            }
-            Row::Group(index) => {
-                let collapsed = self
-                    .rust()
-                    .groups
-                    .groups
-                    .get(*index)
-                    .is_some_and(|group| group.collapsed);
-                self.as_mut()
-                    .rust_mut()
-                    .groups
-                    .set_collapsed(*index, !collapsed);
-                self.save_groups();
-                self.refresh();
-            }
-            Row::Device(id) => self.open_device(id.clone(), new_tab),
-            Row::Devices => {
-                let folded = self.rust().groups.devices_folded;
-                self.as_mut().rust_mut().groups.devices_folded = !folded;
-                self.save_groups();
-                self.refresh();
-            }
-            Row::Remote => {
-                let folded = self.rust().groups.remote_folded;
-                self.as_mut().rust_mut().groups.remote_folded = !folded;
-                self.save_groups();
-                self.refresh();
+                });
             }
         }
     }
@@ -835,55 +654,23 @@ impl qobject::PlacesModel {
         crate::remote::open(address, move |mounted| {
             if let Some(path) = mounted {
                 let _ = thread.queue(move |model| {
-                    model.open_folder(QString::from(path.to_string_lossy().as_ref()), new_tab);
+                    model.open_folder(folder_text(&path), new_tab);
                 });
             }
         });
     }
 
-    fn open_device(mut self: Pin<&mut Self>, id: String, new_tab: bool) {
-        let Some(device) = self.rust().device(&id).cloned() else {
+    fn eject(mut self: Pin<&mut Self>, row: i32) {
+        let Some(row) = at(row) else {
             return;
         };
-        if let Some(path) = device.mount_point.clone() {
-            return self.open_folder(QString::from(path.to_string_lossy().as_ref()), new_tab);
-        }
-        let service = self.rust().device_service.clone();
-        self.as_mut().rust_mut().device_busy = Some(device.id.clone());
-        self.as_mut().refresh();
-        let thread = self.qt_thread();
-        std::thread::spawn(move || {
-            let name = device_name(&device);
-            let mounted = service.mount(&device);
-            let _ = thread.queue(move |mut model| {
-                model.as_mut().rust_mut().device_busy = None;
-                match mounted {
-                    Ok(path) => model
-                        .as_mut()
-                        .open_folder(QString::from(path.to_string_lossy().as_ref()), new_tab),
-                    Err(error) => hub::say(
-                        format!("\u{201c}{name}\u{201d} could not be mounted: {error}."),
-                        true,
-                    ),
-                }
-                model.reload_devices();
-            });
-        });
+        let effects = self.as_mut().rust_mut().panel.eject(row);
+        self.apply(effects);
     }
 
-    fn eject(mut self: Pin<&mut Self>, row: i32) {
-        let Some(Row::Device(id)) = self.rust().row(row).cloned() else {
-            return;
-        };
-        let Some(device) = self.rust().device(&id).cloned() else {
-            return;
-        };
-        if !can_eject(&device, xdg::home().as_deref()) {
-            return;
-        }
+    /// Unmounts the volume, and powers its drive off when it can be.
+    fn eject_device(self: Pin<&mut Self>, device: Device) {
         let service = self.rust().device_service.clone();
-        self.as_mut().rust_mut().device_busy = Some(device.id.clone());
-        self.as_mut().refresh();
         let thread = self.qt_thread();
         std::thread::spawn(move || {
             let name = device_name(&device);
@@ -909,507 +696,77 @@ impl qobject::PlacesModel {
                 ),
             };
             hub::say(words, is_error);
-            let _ = thread.queue(|mut model| {
-                model.as_mut().rust_mut().device_busy = None;
-                model.reload_devices();
-            });
+            let _ = thread.queue(|model| model.not_busy());
         });
-    }
-
-    fn begin_rename(mut self: Pin<&mut Self>, row: Row) {
-        let name = match &row {
-            Row::Place(id) => self.rust().place(id).map(|place| place.title.clone()),
-            Row::Group(index) => self
-                .rust()
-                .groups
-                .groups
-                .get(*index)
-                .map(|g| g.name.clone()),
-            Row::Device(_) | Row::Devices | Row::Remote => None,
-        };
-        let Some(name) = name else {
-            return;
-        };
-        let at = self
-            .rust()
-            .rows
-            .iter()
-            .position(|shown| *shown == row)
-            .and_then(|at| i32::try_from(at).ok())
-            .unwrap_or(-1);
-        self.as_mut().rust_mut().renaming = Some(row);
-        self.as_mut().set_rename_text(text(&name));
-        self.as_mut().set_renaming_row(at);
-        self.redraw_row(at);
-    }
-
-    /// One row's data changed (its rename field opened or closed).
-    fn redraw_row(mut self: Pin<&mut Self>, at: i32) {
-        if at >= 0 && at < *self.count() {
-            let index = self.index(at, 0, &QModelIndex::default());
-            let roles: cxx_qt_lib::QList<i32> = std::iter::once(Role::Renaming as i32).collect();
-            self.as_mut().data_changed(&index, &index, &roles);
-        }
     }
 
     fn finish_rename(mut self: Pin<&mut Self>, typed: &QString, apply: bool) {
-        let Some(row) = self.as_mut().rust_mut().renaming.take() else {
-            return;
+        let effects = self
+            .as_mut()
+            .rust_mut()
+            .panel
+            .finish_rename(&typed.to_string(), apply);
+        self.apply(effects);
+    }
+
+    fn command(mut self: Pin<&mut Self>, id: &QString) -> bool {
+        let Some(Action::Places(command)) = commands::parse(&id.to_string()) else {
+            return false;
         };
-        self.as_mut().set_renaming_row(-1);
-        let typed = typed.to_string().trim().to_owned();
-        if apply && !typed.is_empty() {
-            match row {
-                Row::Place(id) => {
-                    if self
-                        .rust()
-                        .place(&id)
-                        .is_some_and(|place| place.title != typed)
-                    {
-                        self.as_mut().edit_places(
-                            move |places| Ok((places.with_title(&id, &typed)?, ())),
-                            |_, ()| {},
-                        );
-                    }
-                }
-                Row::Group(index) => {
-                    self.as_mut().rust_mut().groups.rename(index, &typed);
-                    self.save_groups();
-                }
-                Row::Device(_) | Row::Devices | Row::Remote => {}
+        match self.as_mut().rust_mut().panel.run(command) {
+            Some(effects) => {
+                self.apply(effects);
+                true
             }
+            None => false,
         }
-        self.refresh();
-    }
-
-    fn set_hidden(self: Pin<&mut Self>, id: String, hidden: bool) {
-        self.edit_places(
-            move |places| Ok((places.with_hidden(&id, hidden)?, ())),
-            |_, ()| {},
-        );
-    }
-
-    fn remove_focused(mut self: Pin<&mut Self>) {
-        match self.rust().focused.clone() {
-            Some(Row::Place(id)) => {
-                let Some(place) = self.rust().place(&id).cloned() else {
-                    return;
-                };
-                if place.system {
-                    return self.set_hidden(id, true);
-                }
-                self.as_mut().move_focus(1);
-                self.edit_places(move |places| Ok((places.without(&id)?, ())), |_, ()| {});
-            }
-            Some(Row::Group(index)) => {
-                self.as_mut().rust_mut().groups.remove(index);
-                self.as_mut().rust_mut().focused = None;
-                self.save_groups();
-                self.refresh();
-            }
-            Some(Row::Device(_) | Row::Devices | Row::Remote) | None => {}
-        }
-    }
-
-    fn shift_focused(mut self: Pin<&mut Self>, down: bool) {
-        match self.rust().focused.clone() {
-            Some(Row::Group(index)) => {
-                let target = self
-                    .as_mut()
-                    .rust_mut()
-                    .groups
-                    .shift(index, if down { 1 } else { -1 });
-                self.as_mut().rust_mut().focused = Some(Row::Group(target));
-                self.save_groups();
-                self.refresh();
-            }
-            Some(Row::Place(id)) if self.rust().groups.group_of(&id).is_some() => {
-                if self.as_mut().rust_mut().groups.shift_place(&id, down) {
-                    self.save_groups();
-                    self.refresh();
-                }
-            }
-            Some(Row::Place(id)) => {
-                let show_hidden = self.rust().choice.show_hidden;
-                let shown: Vec<String> = {
-                    let rust = self.rust();
-                    let layout = rust.groups.layout(&rust.places);
-                    layout
-                        .ungrouped
-                        .iter()
-                        .filter(|place| is_shown(place, show_hidden) && !is_remote(place))
-                        .map(|place| place.id.clone())
-                        .collect()
-                };
-                let Some(at) = shown.iter().position(|shown| *shown == id) else {
-                    return;
-                };
-                let before = if down {
-                    match shown.get(at + 1) {
-                        Some(_) => shown.get(at + 2).cloned(),
-                        None => return,
-                    }
-                } else {
-                    match at.checked_sub(1) {
-                        Some(previous) => Some(shown[previous].clone()),
-                        None => return,
-                    }
-                };
-                self.edit_places(
-                    move |places| Ok((places.with_moved(&id, before.as_deref())?, ())),
-                    |_, ()| {},
-                );
-            }
-            Some(Row::Device(_) | Row::Devices | Row::Remote) | None => {}
-        }
-    }
-
-    fn move_to_group(
-        mut self: Pin<&mut Self>,
-        id: &str,
-        group: Option<usize>,
-        before: Option<&str>,
-    ) {
-        {
-            let mut rust = self.as_mut().rust_mut();
-            rust.groups.assign(id, group, before);
-            if let Some(index) = group {
-                rust.groups.set_collapsed(index, false);
-            }
-        }
-        self.save_groups();
-        self.refresh();
-    }
-
-    fn cycle_group(self: Pin<&mut Self>) {
-        let Some(Row::Place(id)) = self.rust().focused.clone() else {
-            return;
-        };
-        let groups = self.rust().groups.groups.len();
-        let next = match self.rust().groups.group_of(&id) {
-            None if groups == 0 => return,
-            None => Some(0),
-            Some(index) if index + 1 < groups => Some(index + 1),
-            Some(_) => None,
-        };
-        self.move_to_group(&id, next, None);
-    }
-
-    fn new_group(mut self: Pin<&mut Self>) -> usize {
-        let index = self.as_mut().rust_mut().groups.add("");
-        {
-            let mut rust = self.as_mut().rust_mut();
-            rust.focused = Some(Row::Group(index));
-            rust.rename_requested = Some(Row::Group(index));
-        }
-        self.save_groups();
-        self.refresh();
-        index
-    }
-
-    fn set_show_hidden(mut self: Pin<&mut Self>, show: bool) {
-        prefs::update(|settings| {
-            let choice = settings.places();
-            settings.set_places(PlacesChoice {
-                show_hidden: show,
-                ..choice
-            });
-        });
-        crate::preferences::changed();
-        self.as_mut().rust_mut().choice.show_hidden = show;
-        self.refresh();
-    }
-
-    fn command(self: Pin<&mut Self>, id: &QString) -> bool {
-        match commands::parse(&id.to_string()) {
-            Some(Action::Places(command)) => self.run_command(command),
-            _ => false,
-        }
-    }
-
-    /// Runs a places command on the focused row (`commands::PlacesCommand`),
-    /// from a key or the palette; false when it does not apply here.
-    fn run_command(mut self: Pin<&mut Self>, command: PlacesCommand) -> bool {
-        let focused = self.rust().focused.clone();
-        match command {
-            PlacesCommand::FocusPrevious => self.move_focus(-1),
-            PlacesCommand::FocusNext => self.move_focus(1),
-            PlacesCommand::Open => match focused {
-                Some(row) => self.open_row(&row, false),
-                None => return false,
-            },
-            PlacesCommand::Rename => match focused {
-                Some(row) => self.begin_rename(row),
-                None => return false,
-            },
-            PlacesCommand::Remove => self.remove_focused(),
-            PlacesCommand::ToggleHide => {
-                if let Some(Row::Place(id)) = focused
-                    && let Some(hidden) = self.rust().place(&id).map(|place| place.hidden)
-                {
-                    self.set_hidden(id, !hidden);
-                }
-            }
-            PlacesCommand::MoveUp => self.shift_focused(false),
-            PlacesCommand::MoveDown => self.shift_focused(true),
-            PlacesCommand::Collapse | PlacesCommand::Expand => {
-                let collapse = command == PlacesCommand::Collapse;
-                match focused {
-                    Some(Row::Group(index)) => {
-                        self.as_mut()
-                            .rust_mut()
-                            .groups
-                            .set_collapsed(index, collapse);
-                        self.save_groups();
-                        self.refresh();
-                    }
-                    Some(Row::Devices) => {
-                        self.as_mut().rust_mut().groups.devices_folded = collapse;
-                        self.save_groups();
-                        self.refresh();
-                    }
-                    Some(Row::Remote) => {
-                        self.as_mut().rust_mut().groups.remote_folded = collapse;
-                        self.save_groups();
-                        self.refresh();
-                    }
-                    _ => return false,
-                }
-            }
-            PlacesCommand::NextGroup => self.cycle_group(),
-            PlacesCommand::NewGroup => {
-                self.new_group();
-            }
-            PlacesCommand::Eject => {
-                let at = *self.focus_row();
-                self.eject(at);
-            }
-            PlacesCommand::ToggleHiddenPlaces => {
-                let show = !self.rust().choice.show_hidden;
-                self.set_show_hidden(show);
-            }
-        }
-        true
     }
 
     fn open_menu(mut self: Pin<&mut Self>, row: i32) -> bool {
-        if self.rust().renaming.is_some() {
-            return false;
-        }
-        let row = self.rust().row(row).cloned();
-        let entries = {
-            let rust = self.rust();
-            let names: Vec<String> = rust.groups.groups.iter().map(|g| g.name.clone()).collect();
-            match &row {
-                Some(Row::Place(id)) => rust.place(id).map(|place| {
-                    place_menu::place_menu(Target::Place {
-                        system: place.system,
-                        hidden: place.hidden,
-                        group: rust.groups.group_of(id),
-                        groups: &names,
-                    })
-                }),
-                Some(Row::Group(index)) => rust.groups.groups.get(*index).map(|group| {
-                    place_menu::place_menu(Target::Group {
-                        collapsed: group.collapsed,
-                    })
-                }),
-                Some(Row::Device(_) | Row::Devices | Row::Remote) => None,
-                None => Some(place_menu::place_menu(Target::Panel {
-                    can_add_shown: rust.current.is_some(),
-                    showing_hidden: rust.choice.show_hidden,
-                })),
+        match self.as_mut().rust_mut().panel.open_menu(at(row)) {
+            Some(effects) => {
+                self.apply(effects);
+                true
             }
-        };
-        let Some(entries) = entries.filter(|entries| !entries.is_empty()) else {
-            return false;
-        };
-        if row.is_some() {
-            self.as_mut().rust_mut().focused = row.clone();
+            None => false,
         }
-        let json = menu::to_json(&entries).to_string();
-        {
-            let mut rust = self.as_mut().rust_mut();
-            rust.menu_entries = entries;
-            rust.menu_row = row;
-        }
-        self.as_mut().set_menu(text(&json));
-        self.refresh();
-        true
     }
 
     fn run_menu(mut self: Pin<&mut Self>, path: &QString) {
-        let command = menu::command_at(&self.rust().menu_entries, &path.to_string()).cloned();
-        let row = self.as_mut().rust_mut().menu_row.take();
-        self.as_mut().rust_mut().menu_entries.clear();
-        self.as_mut().set_menu(QString::default());
-        let Some(command) = command else {
-            return;
-        };
-        let place = match &row {
-            Some(Row::Place(id)) => Some(id.clone()),
-            _ => None,
-        };
-        match command {
-            PlaceCommand::Open | PlaceCommand::OpenInNewTab => {
-                if let Some(row) = &row {
-                    self.open_row(row, command == PlaceCommand::OpenInNewTab);
-                }
-            }
-            PlaceCommand::MoveToGroup(index) => {
-                if let Some(id) = place {
-                    self.move_to_group(&id, Some(index), None);
-                }
-            }
-            PlaceCommand::NewGroupWith => {
-                if let Some(id) = place {
-                    let index = self.as_mut().new_group();
-                    self.as_mut()
-                        .rust_mut()
-                        .groups
-                        .assign(&id, Some(index), None);
-                    self.save_groups();
-                    self.refresh();
-                }
-            }
-            PlaceCommand::LeaveGroup => {
-                if let Some(id) = place {
-                    self.move_to_group(&id, None, None);
-                }
-            }
-            PlaceCommand::MoveUp | PlaceCommand::MoveDown => {
-                self.shift_focused(command == PlaceCommand::MoveDown);
-            }
-            PlaceCommand::Rename => {
-                if let Some(row) = row {
-                    self.begin_rename(row);
-                }
-            }
-            PlaceCommand::Hide | PlaceCommand::Show => {
-                if let Some(id) = place {
-                    self.set_hidden(id, command == PlaceCommand::Hide);
-                }
-            }
-            PlaceCommand::Remove | PlaceCommand::DeleteGroup => self.remove_focused(),
-            PlaceCommand::Collapse | PlaceCommand::Expand => {
-                if let Some(Row::Group(index)) = row {
-                    self.as_mut()
-                        .rust_mut()
-                        .groups
-                        .set_collapsed(index, command == PlaceCommand::Collapse);
-                    self.save_groups();
-                    self.refresh();
-                }
-            }
-            PlaceCommand::NewGroup => {
-                self.new_group();
-            }
-            PlaceCommand::AddShownFolder => {
-                if let Some(folder) = self.rust().current.clone() {
-                    self.add_place(folder, None);
-                }
-            }
-            PlaceCommand::ToggleHiddenPlaces => {
-                let show = !self.rust().choice.show_hidden;
-                self.set_show_hidden(show);
-            }
-        }
+        let effects = self.as_mut().rust_mut().panel.run_menu(&path.to_string());
+        self.apply(effects);
     }
 
-    fn add_folder(self: Pin<&mut Self>, folder: &QString) {
+    fn add_folder(mut self: Pin<&mut Self>, folder: &QString) {
         let folder = PathBuf::from(folder.to_string());
         if !folder.as_os_str().is_empty() {
-            self.add_place(folder, None);
+            let effects = self.as_mut().rust_mut().panel.add_folder(folder, None);
+            self.apply(effects);
         }
-    }
-
-    fn add_place(self: Pin<&mut Self>, folder: PathBuf, group: Option<usize>) {
-        if self
-            .rust()
-            .places
-            .iter()
-            .any(|place| place.path.as_deref() == Some(&folder))
-        {
-            return hub::say(
-                format!(
-                    "\u{201c}{}\u{201d} is already in the places.",
-                    folder.display()
-                ),
-                false,
-            );
-        }
-        let title = match folder.file_name() {
-            Some(name) => display_name(name.as_encoded_bytes()).into_owned(),
-            None => "/".to_owned(),
-        };
-        self.edit_places(
-            move |places| places.with_added(&title, &folder, "folder", now()),
-            move |mut model, id: String| {
-                if group.is_some() {
-                    model.as_mut().rust_mut().groups.assign(&id, group, None);
-                    model.save_groups();
-                }
-                model.as_mut().rust_mut().focused = Some(Row::Place(id));
-            },
-        );
     }
 
     fn drop_row(mut self: Pin<&mut Self>, from: i32, to: i32) {
-        let (Some(from), Some(target)) =
-            (self.rust().row(from).cloned(), self.rust().row(to).cloned())
-        else {
+        let (Some(from), Some(to)) = (at(from), at(to)) else {
             return;
         };
-        match from {
-            Row::Place(id) => match target {
-                Row::Group(index) => self.move_to_group(&id, Some(index), None),
-                Row::Device(_) | Row::Devices | Row::Remote => {}
-                Row::Place(other) if other == id => {}
-                Row::Place(other) => match self.rust().groups.group_of(&other) {
-                    Some(index) => self.move_to_group(&id, Some(index), Some(&other)),
-                    None => {
-                        self.as_mut().move_to_group(&id, None, None);
-                        self.edit_places(
-                            move |places| Ok((places.with_moved(&id, Some(&other))?, ())),
-                            |_, ()| {},
-                        );
-                    }
-                },
-            },
-            Row::Group(from) => {
-                let to = match &target {
-                    Row::Group(index) => Some(*index),
-                    Row::Place(id) => self.rust().groups.group_of(id),
-                    Row::Device(_) | Row::Devices | Row::Remote => None,
-                };
-                let Some(to) = to.filter(|to| *to != from) else {
-                    return;
-                };
-                let at = self.as_mut().rust_mut().groups.move_group(from, to);
-                self.as_mut().rust_mut().focused = Some(Row::Group(at));
-                self.save_groups();
-                self.refresh();
-            }
-            Row::Device(_) | Row::Devices | Row::Remote => {}
-        }
+        let effects = self.as_mut().rust_mut().panel.drop_row(from, to);
+        self.apply(effects);
     }
 
     fn drop_folders(mut self: Pin<&mut Self>, uris: &QString, to: i32) {
-        let group = match self.rust().row(to) {
-            Some(Row::Group(index)) => Some(*index),
-            Some(Row::Place(id)) => self.rust().groups.group_of(id),
-            _ => None,
-        };
-        let folders = rustphin_platform::uri::paths_from_uri_list(uris.to_string().as_bytes());
-        for folder in folders.into_iter().filter(|path| path.is_dir()) {
-            self.as_mut().add_place(folder, group);
-        }
+        let folders = rustphin_platform::uri::paths_from_uri_list(uris.to_string().as_bytes())
+            .into_iter()
+            .filter(|path| path.is_dir())
+            .collect();
+        let effects = self.as_mut().rust_mut().panel.drop_folders(folders, at(to));
+        self.apply(effects);
     }
 
     fn palette_json(&self) -> QString {
         let places: Vec<serde_json::Value> = self
             .rust()
-            .places
+            .panel
+            .places()
             .iter()
             .filter(|place| is_shown(place, false))
             .filter_map(|place| {
@@ -1427,7 +784,8 @@ impl qobject::PlacesModel {
         let folder = PathBuf::from(folder.to_string());
         text(
             self.rust()
-                .places
+                .panel
+                .places()
                 .iter()
                 .find(|place| place.path.as_deref() == Some(folder.as_path()))
                 .map_or("", icon_for),
@@ -1437,7 +795,8 @@ impl qobject::PlacesModel {
     fn groups_json(&self) -> QString {
         let groups: Vec<serde_json::Value> = self
             .rust()
-            .groups
+            .panel
+            .groups()
             .groups
             .iter()
             .map(|group| serde_json::json!({ "name": group.name, "count": group.places.len() }))
@@ -1446,45 +805,37 @@ impl qobject::PlacesModel {
     }
 
     fn shift_group(mut self: Pin<&mut Self>, index: i32, delta: i32) {
-        if let Ok(index) = usize::try_from(index) {
-            self.as_mut().rust_mut().groups.shift(index, delta as isize);
-            self.save_groups();
-            self.refresh();
+        if let Some(index) = at(index) {
+            let effects = self
+                .as_mut()
+                .rust_mut()
+                .panel
+                .shift_group(index, delta as isize);
+            self.apply(effects);
         }
     }
 
     fn delete_group(mut self: Pin<&mut Self>, index: i32) {
-        if let Ok(index) = usize::try_from(index) {
-            self.as_mut().rust_mut().groups.remove(index);
-            self.save_groups();
-            self.refresh();
+        if let Some(index) = at(index) {
+            let effects = self.as_mut().rust_mut().panel.delete_group(index);
+            self.apply(effects);
         }
     }
 
     fn rename_group(mut self: Pin<&mut Self>, index: i32, name: &QString) {
-        if let Ok(index) = usize::try_from(index) {
-            self.as_mut()
+        if let Some(index) = at(index) {
+            let effects = self
+                .as_mut()
                 .rust_mut()
-                .groups
-                .rename(index, &name.to_string());
-            self.save_groups();
-            self.refresh();
+                .panel
+                .rename_group(index, &name.to_string());
+            self.apply(effects);
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-
-    #[test]
-    fn the_hint_shows_until_a_place_or_group_is_listed_whatever_the_devices() {
-        let devices = [Row::Devices, Row::Device("sda1".into())];
-        assert!(!super::has_places(&devices));
-        assert!(super::has_places(&[Row::Devices, Row::Place("p1".into())]));
-        assert!(super::has_places(&[Row::Group(0)]));
-        assert!(!super::has_places(&[Row::Remote]));
-    }
-
     use super::*;
 
     #[test]

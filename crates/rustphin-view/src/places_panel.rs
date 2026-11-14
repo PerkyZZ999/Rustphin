@@ -1,6 +1,8 @@
 //! The places panel's rows and words, free of any toolkit (W-114e): which
 //! bookmarks show, in what order with the groups (W-105) and the Remote
-//! and Devices sections, their icons, and how volumes are named.
+//! and Devices sections, their icons, and how volumes are named; and
+//! [`PlacesPanel`], which holds the panel's state and decides what each
+//! key, menu entry, drop and rename does (W-127).
 
 use std::path::Path;
 
@@ -11,6 +13,10 @@ use rustphin_platform::{
 };
 
 use crate::{format, groups::Groups};
+
+mod panel;
+
+pub use panel::{Effect, Opening, PlacesEdit, PlacesPanel, RowKind, RowView};
 
 /// One line of the panel.
 #[derive(Debug, Clone, PartialEq, Eq)]
