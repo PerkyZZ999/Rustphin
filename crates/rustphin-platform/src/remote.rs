@@ -501,10 +501,7 @@ mod tests {
             network_folder_name("remote:/OVHCloud%20VPS").as_deref(),
             Some("OVHCloud VPS")
         );
-        assert_eq!(
-            network_folder_name("remote:/NAS/").as_deref(),
-            Some("NAS")
-        );
+        assert_eq!(network_folder_name("remote:/NAS/").as_deref(), Some("NAS"));
         for not_one in [
             "remote:/",
             "remote:",
