@@ -450,3 +450,49 @@ fn an_encrypted_zip_asks_for_its_password_and_refuses_a_wrong_one() {
     assert!(result.is_ok());
     assert_eq!(content, b"hidden");
 }
+
+#[test]
+fn only_the_formats_rustphin_writes_are_offered_for_compressing() {
+    for format in [
+        Format::Zip,
+        Format::TarGz,
+        Format::TarXz,
+        Format::TarZst,
+        Format::SevenZ,
+    ] {
+        assert!(format.writable(), "{format:?}");
+    }
+    for format in [Format::Tar, Format::TarBz2, Format::Foreign] {
+        assert!(!format.writable(), "{format:?}");
+    }
+}
+
+#[test]
+fn a_name_starting_with_its_only_dot_is_extracted_into_a_folder_of_that_name() {
+    assert_eq!(folder_stem(b".bashrc"), b".bashrc");
+    assert_eq!(folder_stem(b"disc.iso"), b"disc");
+    assert_eq!(folder_stem(b"notes.txt.gz"), b"notes.txt");
+}
+
+#[test]
+fn without_a_foreign_reader_a_foreign_archive_is_refused_unread() {
+    let mut visited = 0;
+    let result = read_entries(
+        Format::Foreign,
+        Path::new("film.rar"),
+        Box::new(Cursor::new(b"Rar!\x1a\x07\x00".to_vec())),
+        None,
+        &NoForeignReader,
+        &mut |_, _| ControlFlow::Continue(()),
+        &mut |_, _| {
+            visited += 1;
+            Ok(ControlFlow::Continue(()))
+        },
+    );
+    assert!(
+        matches!(&result, Err(ReadError::Damaged(message)) if message == "no reader for this format is available"),
+        "{result:?}"
+    );
+    assert_eq!(visited, 0);
+    assert!(!NoForeignReader.reads_any());
+}

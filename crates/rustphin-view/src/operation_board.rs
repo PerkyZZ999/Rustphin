@@ -787,6 +787,8 @@ mod tests {
     fn a_withdrawn_message_goes_unless_a_newer_one_replaced_it() {
         let mut board = OperationBoard::new();
         let ticket = board.say_until_withdrawn("Connecting…".to_owned());
+        assert_eq!(notice(&board).as_deref(), Some("Connecting…"));
+        assert!(!board.notice().unwrap().is_error);
         board.withdraw(ticket);
         assert_eq!(notice(&board), None);
 
@@ -1030,5 +1032,301 @@ mod tests {
         let _ = board.on_event(started(admin, copy("/root")), now);
         let _ = board.on_event(finished(admin, Vec::new(), &[]), now);
         assert_eq!(board.admin_changes(), 1);
+    }
+
+    fn failed(id: OpId) -> OpEvent {
+        OpEvent::Failed {
+            id,
+            path: "/a/report.pdf".into(),
+            message: "Permission denied".to_owned(),
+        }
+    }
+
+    fn password(id: OpId) -> OpEvent {
+        OpEvent::Password {
+            id,
+            archive: "/a/locked.zip".into(),
+            wrong: false,
+        }
+    }
+
+    fn started_request(reply: Option<Reply>) -> Option<Request> {
+        match reply {
+            Some(Reply::Start(launch)) => Some(launch.request),
+            _ => None,
+        }
+    }
+
+    fn recovery(reply: Option<Reply>) -> Option<(OpId, Recovery)> {
+        match reply {
+            Some(Reply::Recover(asker, recovery)) => Some((asker, recovery)),
+            _ => None,
+        }
+    }
+
+    fn asked_failure(board: &mut OperationBoard) {
+        let now = Instant::now();
+        let _ = board.on_event(started(id(4), copy("/b")), now);
+        let _ = board.on_event(failed(id(4)), now);
+    }
+
+    #[test]
+    fn a_failure_answered_accept_is_tried_again() {
+        let mut board = OperationBoard::new();
+        asked_failure(&mut board);
+        let reply = board.answer(Answer::Accept, false, None);
+        assert_eq!(recovery(reply), Some((id(4), Recovery::Retry)));
+    }
+
+    #[test]
+    fn a_failure_answered_skip_leaves_the_entry_out() {
+        let mut board = OperationBoard::new();
+        asked_failure(&mut board);
+        let reply = board.answer(Answer::Skip, false, None);
+        assert_eq!(recovery(reply), Some((id(4), Recovery::Skip)));
+    }
+
+    #[test]
+    fn a_failure_answered_anything_else_stops_the_operation() {
+        for answer in [Answer::Cancel, Answer::Replace, Answer::Copy] {
+            let mut board = OperationBoard::new();
+            asked_failure(&mut board);
+            let reply = board.answer(answer, false, None);
+            assert_eq!(
+                recovery(reply),
+                Some((id(4), Recovery::Cancel)),
+                "{answer:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_password_given_goes_to_its_operation() {
+        let mut board = OperationBoard::new();
+        let _ = board.on_event(password(id(6)), Instant::now());
+        let reply = board.answer(Answer::Accept, false, Some("secret".to_owned()));
+        assert!(
+            matches!(reply, Some(Reply::Password(asker, Some(ref given))) if asker == id(6) && given == "secret"),
+            "{reply:?}"
+        );
+    }
+
+    #[test]
+    fn a_declined_password_question_sends_none() {
+        let mut board = OperationBoard::new();
+        let _ = board.on_event(password(id(6)), Instant::now());
+        let reply = board.answer(Answer::Cancel, false, Some("typed".to_owned()));
+        assert!(
+            matches!(reply, Some(Reply::Password(asker, None)) if asker == id(6)),
+            "{reply:?}"
+        );
+    }
+
+    #[test]
+    fn deleting_always_asks_first_and_starts_only_on_accept() {
+        let mut board = OperationBoard::new();
+        board.delete(vec!["/a/old".into()], vec![Listed::default()]);
+        assert!(title(&board).is_some(), "asked");
+        assert_eq!(
+            started_request(board.answer(Answer::Accept, false, None)),
+            Some(Request::Delete {
+                paths: vec!["/a/old".into()]
+            })
+        );
+        board.delete(Vec::new(), Vec::new());
+        assert_eq!(title(&board), None, "nothing to delete, nothing asked");
+    }
+
+    #[test]
+    fn a_confirmation_answered_other_than_accept_starts_nothing() {
+        let paths = || vec![PathBuf::from("/a/old")];
+        let listed = || vec![Listed::default()];
+        for answer in [Answer::Cancel, Answer::Skip, Answer::Copy, Answer::Replace] {
+            let mut board = OperationBoard::new();
+            board.delete(paths(), listed());
+            assert!(
+                board.answer(answer, false, None).is_none(),
+                "delete {answer:?}"
+            );
+            assert!(board.trash(paths(), listed(), true, false).is_none());
+            assert!(
+                board.answer(answer, false, None).is_none(),
+                "trash {answer:?}"
+            );
+            assert!(matches!(
+                board.empty_trash(1, paths(), true),
+                TrashEmptying::Asked
+            ));
+            assert!(
+                board.answer(answer, false, None).is_none(),
+                "empty {answer:?}"
+            );
+            assert_eq!(title(&board), None, "each question was taken away");
+        }
+    }
+
+    #[test]
+    fn emptying_the_trash_starts_when_accepted() {
+        let mut board = OperationBoard::new();
+        let _ = board.empty_trash(1, vec!["/t/files/x".into()], true);
+        let Some(Reply::Start(launch)) = board.answer(Answer::Accept, false, None) else {
+            panic!("not started");
+        };
+        assert_eq!(
+            launch.request,
+            Request::Delete {
+                paths: vec!["/t/files/x".into()]
+            }
+        );
+        assert_eq!(launch.words.unwrap().label, "Emptying the trash");
+    }
+
+    #[test]
+    fn a_drop_answered_accept_moves_and_copy_copies() {
+        let sources = || vec![PathBuf::from("/a/report.pdf")];
+        let mut board = OperationBoard::new();
+        assert!(board.drop_files(sources(), "/b".into(), None).is_none());
+        assert_eq!(
+            started_request(board.answer(Answer::Accept, false, None)),
+            Some(Request::Move {
+                sources: sources(),
+                into: "/b".into()
+            })
+        );
+        assert!(board.drop_files(sources(), "/b".into(), None).is_none());
+        assert_eq!(
+            started_request(board.answer(Answer::Copy, false, None)),
+            Some(Request::Copy {
+                sources: sources(),
+                into: "/b".into()
+            })
+        );
+        assert!(board.drop_files(sources(), "/b".into(), None).is_none());
+        assert!(board.answer(Answer::Cancel, false, None).is_none());
+    }
+
+    #[test]
+    fn a_drop_with_a_known_choice_starts_at_once() {
+        let sources = || vec![PathBuf::from("/a/report.pdf")];
+        let mut board = OperationBoard::new();
+        let copied = board
+            .drop_files(sources(), "/b".into(), Some(true))
+            .unwrap();
+        assert_eq!(
+            copied.request,
+            Request::Copy {
+                sources: sources(),
+                into: "/b".into()
+            }
+        );
+        let moved = board
+            .drop_files(sources(), "/b".into(), Some(false))
+            .unwrap();
+        assert_eq!(
+            moved.request,
+            Request::Move {
+                sources: sources(),
+                into: "/b".into()
+            }
+        );
+        assert_eq!(title(&board), None);
+    }
+
+    #[test]
+    fn progress_goes_to_its_own_operation() {
+        let now = Instant::now();
+        let mut board = OperationBoard::new();
+        let _ = board.on_event(started(id(1), copy("/b")), now);
+        let _ = board.on_event(started(id(2), copy("/c")), now);
+        let _ = board.on_event(
+            OpEvent::Progress {
+                id: id(2),
+                progress: Progress {
+                    items_done: 3,
+                    items_total: 9,
+                    ..Progress::default()
+                },
+            },
+            now,
+        );
+        // The oldest is shown, and it has made no progress.
+        let line = board.progress(now + QUIET_PERIOD).unwrap();
+        assert_eq!(line.detail, "0 of 0");
+        assert_eq!(board.running_count(), 2);
+    }
+
+    #[test]
+    fn an_operation_that_left_nothing_out_shows_no_problems() {
+        let now = Instant::now();
+        let mut board = OperationBoard::new();
+        let _ = board.on_event(started(id(1), copy("/b")), now);
+        let _ = board.on_event(finished(id(1), Vec::new(), &[]), now);
+        assert!(board.notice().is_some());
+        assert!(board.problems().is_none());
+    }
+
+    #[test]
+    fn nothing_to_undo_is_said_and_goes() {
+        let mut board = OperationBoard::new();
+        let expiry = board.nothing_to_undo().unwrap();
+        assert_eq!(notice(&board).as_deref(), Some("There is nothing to undo."));
+        board.expire(expiry);
+        assert_eq!(notice(&board), None);
+    }
+
+    #[test]
+    fn each_administrator_run_numbers_its_operations_apart() {
+        let first = admin_first_id(0);
+        let second = admin_first_id(1);
+        assert!(is_admin(OpId::from_u64(first)));
+        assert_eq!(second - first, 1 << 40);
+    }
+
+    #[test]
+    fn reading_the_clipboard_says_whether_it_changed() {
+        let mut board = OperationBoard::new();
+        let clip = FileClip {
+            paths: vec!["/a/report.pdf".into()],
+            cut: true,
+        };
+        let serial = board.clip_serial();
+        assert!(!board.clip_read(None), "nothing, as before");
+        assert_eq!(board.clip_serial(), serial);
+        assert!(board.clip_read(Some(clip.clone())));
+        assert!(board.is_cut(Path::new("/a/report.pdf")));
+        assert!(!board.clip_read(Some(clip)), "the same clip again");
+        assert!(board.clip_read(None));
+        assert!(!board.can_paste());
+    }
+
+    #[test]
+    fn only_the_cut_entries_themselves_are_cut() {
+        let mut board = OperationBoard::new();
+        let _ = board.clip_read(Some(FileClip {
+            paths: vec!["/a/report.pdf".into()],
+            cut: true,
+        }));
+        assert!(board.is_cut(Path::new("/a/report.pdf")));
+        // Same folder, another name; same name, another folder.
+        assert!(!board.is_cut(Path::new("/a/other.pdf")));
+        assert!(!board.is_cut(Path::new("/b/report.pdf")));
+    }
+
+    #[test]
+    fn the_question_names_what_its_operation_does() {
+        let now = Instant::now();
+        let mut board = OperationBoard::new();
+        let moving = Request::Move {
+            sources: vec!["/a/report.pdf".into()],
+            into: "/b".into(),
+        };
+        let _ = board.on_event(started(id(1), copy("/c")), now);
+        let _ = board.on_event(started(id(2), moving), now);
+        let _ = board.on_event(failed(id(2)), now);
+        // The failing operation's own verb, not the oldest running one's.
+        assert_eq!(
+            title(&board).as_deref(),
+            Some("Couldn't move \u{201c}report.pdf\u{201d}")
+        );
     }
 }

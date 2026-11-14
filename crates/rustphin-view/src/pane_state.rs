@@ -634,6 +634,7 @@ mod tests {
         harness.pane.select_all_when_seen(names(&[b"x", b"y"]));
         let arrival = harness.open(Path::new("/b"));
         assert!(arrival.new_folder && arrival.visited);
+        assert!(!arrival.reread, "another folder is not a re-read");
         assert_eq!(arrival.rename, None);
         assert_eq!(harness.pane.renaming(), None);
         assert!(harness.selected().is_empty());
@@ -688,5 +689,55 @@ mod tests {
         let snapshot = harness.listed(generation);
         harness.pane.arrive(snapshot, None).unwrap();
         assert!(harness.selected().is_empty());
+    }
+
+    #[test]
+    fn ending_a_rename_gives_the_name_that_was_edited_once() {
+        let mut pane = PaneState::default();
+        pane.start_renaming(b"caf\xe9".to_vec());
+        assert_eq!(pane.take_renaming(), Some(b"caf\xe9".to_vec()));
+        assert_eq!(pane.renaming(), None);
+        assert_eq!(pane.take_renaming(), None);
+    }
+
+    #[test]
+    fn a_listing_of_another_folder_carries_no_selection() {
+        let mut harness = Harness::new();
+        harness.fs.put(Path::new("/a"), &[b"x"]);
+        harness.fs.put(Path::new("/b"), &[b"x", b"y"]);
+        harness.open(Path::new("/a"));
+        harness.select(&[b"x"]);
+        let generation = harness.model.open("/b");
+        let other = harness.listed(generation);
+        assert!(harness.pane.carry_to(&other).is_none());
+    }
+
+    #[test]
+    fn a_new_folder_takes_a_name_the_listing_does_not_hold() {
+        use crate::selection_actions::{Facts, Plan, SelectionAction, plan};
+
+        let mut harness = Harness::new();
+        harness
+            .fs
+            .put(Path::new("/a"), &[b"New Folder", b"New Folder 2"]);
+        harness.open(Path::new("/a"));
+        let snapshot = harness.pane.snapshot().unwrap().clone();
+        let facts = Facts {
+            folder: Path::new("/a"),
+            in_trash: false,
+            as_administrator: false,
+            selected: Vec::new(),
+            listing: &*snapshot,
+        };
+        let Plan::Start { requests, .. } = plan(SelectionAction::NewFolder, &facts) else {
+            panic!("not started");
+        };
+        assert_eq!(
+            requests,
+            vec![rustphin_core::ops::Request::CreateDir {
+                parent: "/a".into(),
+                name: "New Folder 3".into(),
+            }]
+        );
     }
 }

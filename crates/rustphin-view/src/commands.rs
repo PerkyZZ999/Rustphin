@@ -1296,6 +1296,16 @@ mod tests {
     }
 
     #[test]
+    fn the_palette_says_what_each_kind_of_command_acts_on() {
+        assert_eq!(Target::Pane.detail(), "Action \u{b7} active pane");
+        assert_eq!(
+            Target::Places.detail(),
+            "Action \u{b7} selected place or group"
+        );
+        assert_eq!(Target::Window.detail(), "Action \u{b7} window");
+    }
+
+    #[test]
     fn no_two_commands_share_a_key() {
         assert_eq!(clashes(), []);
     }
@@ -1335,6 +1345,14 @@ mod tests {
                 command("b", vec![places_first("Alt+Up")]),
             ]),
             0
+        );
+        // The panel's own keys meet each other, claimed first or not.
+        assert_eq!(
+            pairs(&[
+                command("a", vec![places("Ctrl+Up")]),
+                command("b", vec![places_first("Ctrl+Up")]),
+            ]),
+            1
         );
         // The pane and the panel never have the focus together.
         assert_eq!(

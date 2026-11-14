@@ -381,3 +381,28 @@ impl io::Seek for FailingRead {
         self.file.seek(to)
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+
+    use super::*;
+
+    #[test]
+    fn a_failing_read_gives_its_bytes_then_fails_and_seeks_like_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data");
+        std::fs::write(&path, vec![7u8; 4096]).unwrap();
+        let fs = FaultFs::new().failing_reads_after(1024);
+        let mut file = fs.open_read(&path).unwrap();
+
+        let mut start = vec![0; 1024];
+        file.read_exact(&mut start).unwrap();
+        let past = file.read(&mut [0; 16]).unwrap_err();
+        assert_eq!(past.to_string(), "injected read fault");
+        // Seeking back moves the limit with the file: 24 bytes are left.
+        assert_eq!(file.seek(SeekFrom::Start(1000)).unwrap(), 1000);
+        assert_eq!(file.read(&mut [0; 64]).unwrap(), 24);
+    }
+}

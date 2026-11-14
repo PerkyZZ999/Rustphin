@@ -887,4 +887,132 @@ mod tests {
         assert_eq!(folder_label(Path::new("/srv/data")), "data");
         assert_eq!(folder_label(Path::new("/")), "/");
     }
+
+    #[test]
+    fn a_pane_reports_its_icon() {
+        let mut tabs = workspace(&["/a"], 0);
+        assert_eq!(tabs.active().active().icon(), "");
+        report(&mut tabs, 0, 0, "/a/b");
+        assert_eq!(tabs.active().active().icon(), "folder");
+    }
+
+    #[test]
+    fn a_relative_start_the_pane_has_not_resolved_is_not_saved() {
+        let tabs = Workspace::new(
+            vec![TabStart {
+                panes: vec![folder("relative/dir"), folder("/abs")],
+                active_pane: 0,
+            }],
+            0,
+            folder("/home"),
+            Vec::new(),
+        );
+        let saved = tabs.session(no_remote);
+        assert_eq!(saved.tabs[0].panes, vec![Location::Folder("/abs".into())]);
+    }
+
+    #[test]
+    fn an_active_pane_out_of_range_becomes_the_last_pane() {
+        let tabs = Workspace::new(
+            vec![
+                TabStart {
+                    panes: vec![folder("/a")],
+                    active_pane: 5,
+                },
+                TabStart {
+                    panes: vec![folder("/b"), folder("/c")],
+                    active_pane: 9,
+                },
+            ],
+            0,
+            folder("/home"),
+            Vec::new(),
+        );
+        assert_eq!(shown(&tabs)[0].1, 0);
+        assert_eq!(shown(&tabs)[1].1, 1);
+    }
+
+    #[test]
+    fn giving_the_keyboard_to_a_pane_beyond_the_last_gives_it_to_the_last() {
+        let mut tabs = workspace(&["/a"], 0);
+        let key = tabs.active().key();
+        tabs.set_active_pane(key, 3);
+        assert_eq!(tabs.active().active_pane(), 0);
+        tabs.toggle_split();
+        tabs.set_active_pane(key, 0);
+        tabs.set_active_pane(key, 3);
+        assert_eq!(tabs.active().active_pane(), 1);
+    }
+
+    #[test]
+    fn tabs_are_counted_and_new_ones_go_after_the_active_one() {
+        let mut tabs = workspace(&["/a", "/b", "/c"], 1);
+        assert_eq!(tabs.len(), 3);
+        assert_eq!(tabs.insert_row(), 2);
+        tabs.open(folder("/x"), Vec::new(), false);
+        assert_eq!(tabs.len(), 4);
+        assert_eq!(shown(&tabs)[2].0, vec![folder("/x")]);
+    }
+
+    #[test]
+    fn a_closed_tab_can_be_reopened() {
+        let mut tabs = workspace(&["/a", "/b"], 0);
+        assert!(!tabs.can_reopen());
+        tabs.close(1);
+        assert!(tabs.can_reopen());
+        assert!(tabs.reopen());
+        assert!(!tabs.can_reopen());
+    }
+
+    #[test]
+    fn tabs_are_activated_by_row_number_and_in_turn() {
+        let mut tabs = workspace(&["/a", "/b", "/c"], 0);
+        tabs.activate(2);
+        assert_eq!(tabs.active_index(), 2);
+        assert!(tabs.activate_number(2));
+        assert_eq!(tabs.active_index(), 1);
+        assert!(!tabs.activate_number(7));
+        assert_eq!(tabs.active_index(), 1);
+        tabs.cycle(1);
+        assert_eq!(tabs.active_index(), 2);
+        tabs.cycle(1);
+        assert_eq!(tabs.active_index(), 0, "wraps to the first");
+        tabs.cycle(-1);
+        assert_eq!(tabs.active_index(), 2, "wraps to the last");
+    }
+
+    #[test]
+    fn a_tab_cannot_move_from_or_to_beyond_the_last() {
+        let tabs = workspace(&["/a", "/b", "/c"], 0);
+        assert!(tabs.can_move(2, 0));
+        assert!(!tabs.can_move(3, 0));
+        assert!(!tabs.can_move(0, 3));
+        assert!(!tabs.can_move(1, 1));
+    }
+
+    #[test]
+    fn the_selection_goes_to_the_other_pane_whichever_has_the_keyboard() {
+        let selected = || vec![PathBuf::from("/left/a")];
+        let mut tabs = workspace(&["/left"], 0);
+        tabs.toggle_split();
+        report(&mut tabs, 0, 0, "/left");
+        report(&mut tabs, 0, 1, "/right");
+        let key = tabs.active().key();
+        tabs.set_active_pane(key, 0);
+        assert_eq!(
+            tabs.transfer(Transfer::Copy, selected()),
+            Ok(Request::Copy {
+                sources: selected(),
+                into: "/right".into()
+            })
+        );
+        tabs.set_active_pane(key, 1);
+        assert_eq!(
+            tabs.transfer(Transfer::Move, selected()),
+            Ok(Request::Move {
+                sources: selected(),
+                into: "/left".into()
+            })
+        );
+    }
 }

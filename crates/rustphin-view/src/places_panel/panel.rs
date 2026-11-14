@@ -1607,4 +1607,434 @@ mod tests {
             })
         );
     }
+
+    fn device(id: &str, mount: Option<&str>, removable: bool) -> Device {
+        Device {
+            id: id.into(),
+            label: Some(id.to_uppercase()),
+            mount_point: mount.map(PathBuf::from),
+            size: 1,
+            removable,
+            power_off: removable.then(|| "/drive".to_owned()),
+        }
+    }
+
+    /// The world with four volumes: a data disk a quarter free, a stick
+    /// not mounted, the system's and home's volumes.
+    fn with_devices() -> World {
+        let mut world = world();
+        let usage = HashMap::from([
+            ("data".to_owned(), (1000, 250)),
+            ("empty".to_owned(), (0, 0)),
+        ]);
+        let effects = world.panel.set_devices(
+            vec![
+                device("data", Some("/data"), false),
+                device("stick", None, true),
+                device("root", Some("/"), false),
+                device("home", Some("/home"), false),
+                device("empty", Some("/empty"), false),
+                device("bare", Some("/bare"), false),
+            ],
+            usage,
+        );
+        world.carry_out(effects);
+        world
+    }
+
+    fn d(id: &str) -> Row {
+        Row::Device(id.to_owned())
+    }
+
+    #[test]
+    fn a_volume_row_shows_its_name_kind_usage_and_whether_it_ejects() {
+        let mut world = with_devices();
+        assert!(world.panel.set_current(Some(PathBuf::from("/data"))));
+        let data = world.panel.view(&d("data")).unwrap();
+        assert_eq!(data.kind, RowKind::Device);
+        assert_eq!(data.title, "DATA");
+        assert_eq!(data.icon, "hard-drive");
+        assert!(data.current);
+        assert_eq!(data.detail, super::super::usage_text(1000, 250));
+        assert!((data.usage - 0.75).abs() < 1e-9, "{}", data.usage);
+        assert!(data.ejectable && !data.busy);
+
+        let stick = world.panel.view(&d("stick")).unwrap();
+        assert_eq!(stick.icon, "usb");
+        assert!(!stick.current, "not mounted, so not the folder shown");
+        assert_eq!(stick.detail, "Not mounted");
+        assert!((stick.usage + 1.).abs() < 1e-9, "unknown: {}", stick.usage);
+        assert!(stick.ejectable, "an unplugged stick can be powered off");
+
+        // Mounted, but its usage not known yet: nothing said.
+        assert_eq!(world.panel.view(&d("bare")).unwrap().detail, "");
+        assert!(!world.panel.view(&d("bare")).unwrap().current);
+        // A volume of no size is not full.
+        assert!(world.panel.view(&d("empty")).unwrap().usage.abs() < 1e-9);
+        // The system's volume and home's are never ejected.
+        assert!(!world.panel.view(&d("root")).unwrap().ejectable);
+        assert!(!world.panel.view(&d("home")).unwrap().ejectable);
+
+        let effects = world.panel.set_busy(Some("data".into()));
+        world.carry_out(effects);
+        assert!(world.panel.view(&d("data")).unwrap().busy);
+        assert!(!world.panel.view(&d("stick")).unwrap().busy);
+    }
+
+    #[test]
+    fn with_nothing_shown_no_volume_is_the_current_one() {
+        let world = with_devices();
+        // Neither the stick (no mount) nor any other is current.
+        assert!(!world.panel.view(&d("stick")).unwrap().current);
+        assert!(!world.panel.view(&d("data")).unwrap().current);
+    }
+
+    #[test]
+    fn a_place_row_shows_its_kind_icon_and_whether_it_is_shown_or_grouped() {
+        let mut world = world();
+        let mut places = world.panel.places().to_vec();
+        places.push(Place {
+            id: "nas".into(),
+            title: "NAS".into(),
+            href: "smb://nas/share".into(),
+            path: None,
+            icon: None,
+            hidden: false,
+            system: false,
+            only_in_app: None,
+        });
+        let effects = world.panel.set_places(places);
+        world.carry_out(effects);
+        world.panel.set_current(Some(PathBuf::from("/a")));
+        let a = world.panel.view(&p("a")).unwrap();
+        assert_eq!(a.kind, RowKind::Place);
+        assert_eq!(a.icon, "folder");
+        assert!(a.current && !a.grouped);
+        assert!(!world.panel.view(&p("b")).unwrap().current);
+        assert!(world.panel.view(&p("x")).unwrap().grouped);
+        // A place without a folder is never the folder shown.
+        assert!(!world.panel.view(&p("nas")).unwrap().current);
+        world.panel.set_current(None);
+        assert!(!world.panel.view(&p("nas")).unwrap().current);
+    }
+
+    #[test]
+    fn heading_rows_show_their_kind_title_and_fold() {
+        let mut world = with_devices();
+        let mut unnamed = Groups::parse(&world.panel.groups().to_toml());
+        unnamed.groups[1].name = String::new();
+        unnamed.groups[1].collapsed = true;
+        unnamed.devices_folded = true;
+        unnamed.remote_folded = true;
+        let effects = world.panel.set_groups(unnamed);
+        world.carry_out(effects);
+        let group = world.panel.view(&Row::Group(1)).unwrap();
+        assert_eq!(group.kind, RowKind::Group);
+        assert_eq!(group.title, "Group");
+        assert!(group.collapsed);
+        let devices = world.panel.view(&Row::Devices).unwrap();
+        assert_eq!(devices.kind, RowKind::Heading);
+        assert_eq!(devices.title, "Devices (6)");
+        assert!(devices.collapsed);
+        assert!(world.panel.view(&Row::Remote).unwrap().collapsed);
+        assert_eq!(RowKind::Place.name(), "place");
+        assert_eq!(RowKind::Group.name(), "group");
+        assert_eq!(RowKind::Device.name(), "device");
+        assert_eq!(RowKind::Heading.name(), "heading");
+    }
+
+    #[test]
+    fn when_volumes_cannot_be_listed_the_panel_says_so_under_devices() {
+        let mut world = with_devices();
+        assert_eq!(world.panel.devices_note(), "");
+        let effects = world.panel.devices_failed();
+        assert_eq!(effects, [Effect::Relayout]);
+        world.carry_out(effects);
+        assert_eq!(world.panel.devices_note(), DEVICES_UNAVAILABLE);
+        assert_eq!(world.panel.rows().last(), Some(&Row::Devices));
+        assert!(!world.panel.rows().contains(&d("data")));
+        // With Devices turned off, nothing is said.
+        let effects = world.panel.set_choice(PlacesChoice {
+            devices: false,
+            remote: true,
+            show_hidden: false,
+            width: 240,
+        });
+        assert_eq!(effects, [Effect::Relayout]);
+        assert_eq!(world.panel.devices_note(), "");
+        assert!(!world.panel.rows().contains(&Row::Devices));
+    }
+
+    #[test]
+    fn only_a_change_of_sections_lays_the_rows_out_again() {
+        let mut world = world();
+        let choice = |width| PlacesChoice {
+            devices: true,
+            remote: true,
+            show_hidden: false,
+            width,
+        };
+        assert_eq!(world.panel.set_choice(choice(300)), []);
+        assert_eq!(
+            world.panel.set_choice(PlacesChoice {
+                show_hidden: true,
+                ..choice(300)
+            }),
+            [Effect::Relayout]
+        );
+    }
+
+    #[test]
+    fn the_folder_shown_is_told_once_per_change() {
+        let mut world = world();
+        assert!(world.panel.set_current(Some(PathBuf::from("/a"))));
+        assert!(!world.panel.set_current(Some(PathBuf::from("/a"))));
+        assert!(world.panel.set_current(None));
+    }
+
+    #[test]
+    fn the_keyboard_enters_the_panel_at_the_top_going_down_and_the_bottom_going_up() {
+        let mut world = world();
+        world.command(PlacesCommand::FocusPrevious);
+        assert_eq!(world.panel.focused(), world.panel.rows().last());
+        let effects = world.panel.focus_on(None);
+        world.carry_out(effects);
+        world.command(PlacesCommand::FocusNext);
+        assert_eq!(world.panel.focused(), Some(&p("home")));
+        // From a row, it moves one row.
+        world.focus(p("b"));
+        world.command(PlacesCommand::FocusNext);
+        assert_eq!(world.panel.focused(), Some(&p("c")));
+        world.command(PlacesCommand::FocusPrevious);
+        assert_eq!(world.panel.focused(), Some(&p("b")));
+    }
+
+    #[test]
+    fn eject_acts_only_on_a_volume_that_can_be_ejected() {
+        let mut world = with_devices();
+        let at = world.at(&d("data"));
+        let effects = world.panel.eject(at);
+        assert_eq!(
+            effects.last(),
+            Some(&Effect::Eject(device("data", Some("/data"), false)))
+        );
+        assert!(world.panel.view(&d("data")).unwrap().busy);
+        let at = world.at(&d("root"));
+        assert_eq!(world.panel.eject(at), []);
+        let at = world.at(&p("a"));
+        assert_eq!(world.panel.eject(at), []);
+        // The same from the keyboard.
+        world.focus(d("stick"));
+        let effects = world.panel.run(PlacesCommand::Eject).unwrap();
+        assert_eq!(
+            effects.last(),
+            Some(&Effect::Eject(device("stick", None, true)))
+        );
+    }
+
+    #[test]
+    fn the_menu_opens_in_this_tab_or_a_new_one_and_closes_once_chosen() {
+        let mut world = world();
+        for (label, new_tab) in [("Open", false), ("Open in new tab", true)] {
+            let at = world.at(&p("a"));
+            let opened = world.panel.open_menu(Some(at)).unwrap();
+            let Some(Effect::Menu(json)) = opened.first() else {
+                panic!("no menu");
+            };
+            let effects = world.panel.run_menu(&path_of(json, label));
+            assert_eq!(
+                effects,
+                [
+                    Effect::Menu(String::new()),
+                    Effect::Open {
+                        opening: Opening::Folder("/a".into()),
+                        new_tab
+                    }
+                ],
+                "{label}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_group_heading_folds_from_its_menu() {
+        let mut world = world();
+        let at = world.at(&Row::Group(0));
+        let opened = world.panel.open_menu(Some(at)).unwrap();
+        let Some(Effect::Menu(json)) = opened.first() else {
+            panic!("no menu");
+        };
+        let effects = world.panel.run_menu(&path_of(json, "Collapse"));
+        world.carry_out(effects);
+        assert!(world.saved.as_ref().unwrap().groups[0].collapsed);
+        let at = world.at(&Row::Group(0));
+        let opened = world.panel.open_menu(Some(at)).unwrap();
+        let Some(Effect::Menu(json)) = opened.first() else {
+            panic!("no menu");
+        };
+        let effects = world.panel.run_menu(&path_of(json, "Expand"));
+        world.carry_out(effects);
+        assert!(!world.saved.as_ref().unwrap().groups[0].collapsed);
+    }
+
+    #[test]
+    fn the_panel_menu_shows_hidden_places() {
+        let mut world = world();
+        let opened = world.panel.open_menu(None).unwrap();
+        let Some(Effect::Menu(json)) = opened.first() else {
+            panic!("no menu");
+        };
+        let effects = world.panel.run_menu(&path_of(json, "Show hidden places"));
+        assert!(effects.contains(&Effect::ShowHidden(true)), "{effects:?}");
+    }
+
+    #[test]
+    fn a_place_dropped_on_itself_or_a_group_on_itself_changes_nothing() {
+        let mut world = world();
+        let at = world.at(&p("a"));
+        assert_eq!(world.panel.drop_row(at, at), []);
+        let at = world.at(&Row::Group(0));
+        assert_eq!(world.panel.drop_row(at, at), []);
+        // A grouped place dropped on its own group's heading: the heading
+        // is its group.
+        let (from, to) = (world.at(&p("x")), world.at(&Row::Group(0)));
+        let effects = world.panel.drop_row(from, to);
+        world.carry_out(effects);
+        assert_eq!(world.saved_group(0), ["y", "x"]);
+    }
+
+    #[test]
+    fn a_heading_dropped_on_another_takes_its_place() {
+        let mut world = world();
+        let (from, to) = (world.at(&Row::Group(0)), world.at(&Row::Group(1)));
+        let effects = world.panel.drop_row(from, to);
+        world.carry_out(effects);
+        let names: Vec<String> = world
+            .saved
+            .as_ref()
+            .unwrap()
+            .groups
+            .iter()
+            .map(|group| group.name.clone())
+            .collect();
+        assert_eq!(names, ["Media", "Work"]);
+        assert_eq!(world.panel.focused(), Some(&Row::Group(1)));
+    }
+
+    #[test]
+    fn folders_dropped_on_a_heading_go_into_its_group() {
+        let mut world = world();
+        let to = world.at(&Row::Group(1));
+        let effects = world
+            .panel
+            .drop_folders(vec![PathBuf::from("/new/one")], Some(to));
+        world.carry_out(effects);
+        let added = world.panel.places().last().unwrap().id.clone();
+        assert_eq!(world.saved_group(1), [added]);
+    }
+
+    #[test]
+    fn settings_moves_renames_and_deletes_groups_and_saves_them() {
+        let mut world = world();
+        let effects = world.panel.shift_group(0, 1);
+        assert_eq!(effects, [Effect::SaveGroups, Effect::Relayout]);
+        world.carry_out(effects);
+        assert_eq!(world.saved.as_ref().unwrap().groups[1].name, "Work");
+        let effects = world.panel.rename_group(1, "Jobs");
+        assert_eq!(effects, [Effect::SaveGroups, Effect::Relayout]);
+        world.carry_out(effects);
+        assert_eq!(world.saved.as_ref().unwrap().groups[1].name, "Jobs");
+        let effects = world.panel.delete_group(0);
+        assert_eq!(effects, [Effect::SaveGroups, Effect::Relayout]);
+        world.carry_out(effects);
+        assert_eq!(world.saved.as_ref().unwrap().groups.len(), 1);
+    }
+
+    #[test]
+    fn the_devices_heading_folds_and_unfolds_when_clicked() {
+        let mut world = with_devices();
+        let at = world.at(&Row::Devices);
+        let effects = world.panel.activate(at, false);
+        world.carry_out(effects);
+        assert!(world.saved.as_ref().unwrap().devices_folded);
+        assert!(!world.panel.rows().contains(&d("data")));
+        let at = world.at(&Row::Devices);
+        let effects = world.panel.activate(at, false);
+        world.carry_out(effects);
+        assert!(!world.saved.as_ref().unwrap().devices_folded);
+    }
+
+    #[test]
+    fn alt_up_moves_a_heading_up() {
+        let mut world = world();
+        world.focus(Row::Group(1));
+        world.command(PlacesCommand::MoveUp);
+        assert_eq!(world.saved.as_ref().unwrap().groups[0].name, "Media");
+        assert_eq!(world.panel.focused(), Some(&Row::Group(0)));
+    }
+
+    #[test]
+    fn alt_up_passes_over_hidden_places() {
+        let mut world = World::new(
+            &[("a", "/a", false), ("h", "/h", false), ("b", "/b", false)],
+            Vec::new(),
+        );
+        world.focus(p("h"));
+        world.command(PlacesCommand::ToggleHide);
+        world.focus(p("b"));
+        world.command(PlacesCommand::MoveUp);
+        assert_eq!(world.ids_in_file(), ["b", "a", "h"]);
+    }
+
+    #[test]
+    fn g_does_nothing_without_groups() {
+        let mut world = World::new(&[("a", "/a", false)], Vec::new());
+        world.focus(p("a"));
+        assert_eq!(world.panel.run(PlacesCommand::NextGroup), Some(Vec::new()));
+    }
+
+    #[test]
+    fn an_address_hides_no_password_in_the_logs() {
+        let address = RemoteAddress::parse("sftp://me:hunter2@host/srv").unwrap();
+        let shown = format!(
+            "{:?} {:?} {:?} {:?}",
+            Opening::Remote(address),
+            Opening::Trash,
+            Opening::Folder("/a".into()),
+            Opening::NetworkFolder("nas".into())
+        );
+        assert_eq!(
+            shown,
+            "Remote(..) Trash Folder(\"/a\") NetworkFolder(\"nas\")"
+        );
+    }
+
+    #[test]
+    fn a_row_shows_whether_it_has_the_keyboard_or_its_name_is_edited() {
+        let mut world = world();
+        world.focus(p("a"));
+        world.command(PlacesCommand::Rename);
+        let a = world.panel.view(&p("a")).unwrap();
+        assert!(a.focused && a.renaming);
+        let b = world.panel.view(&p("b")).unwrap();
+        assert!(!b.focused && !b.renaming);
+        // Only volumes have a usage; every other row's is unknown.
+        assert!((a.usage + 1.).abs() < 1e-9, "{}", a.usage);
+        let heading = world.panel.view(&Row::Group(0)).unwrap();
+        assert!((heading.usage + 1.).abs() < 1e-9, "{}", heading.usage);
+    }
+
+    #[test]
+    fn a_click_on_a_group_heading_folds_and_unfolds_it() {
+        let mut world = world();
+        let at = world.at(&Row::Group(0));
+        let effects = world.panel.activate(at, false);
+        world.carry_out(effects);
+        assert!(world.saved.as_ref().unwrap().groups[0].collapsed);
+        assert!(!world.panel.rows().contains(&p("x")));
+        let effects = world.panel.activate(at, false);
+        world.carry_out(effects);
+        assert!(!world.saved.as_ref().unwrap().groups[0].collapsed);
+        assert!(world.panel.rows().contains(&p("x")));
+    }
 }

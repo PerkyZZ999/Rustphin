@@ -761,6 +761,33 @@ mod tests {
     }
 
     #[test]
+    fn only_extracting_reads_which_entries_are_archives() {
+        assert!(SelectionAction::Extract(ExtractHow::Here).reads_archives());
+        assert!(SelectionAction::Extract(ExtractHow::To).reads_archives());
+        assert!(!SelectionAction::Compress(CompressHow::Zip).reads_archives());
+        assert!(!SelectionAction::MoveToTrash.reads_archives());
+    }
+
+    #[test]
+    fn dialogs_waiting_together_are_each_taken_by_their_own_ticket() {
+        let mut hand_off = HandOff::default();
+        let extract = |n: usize| {
+            Dialog::ExtractTo(ExtractTo {
+                folder: PathBuf::from(HOME),
+                archives: vec![at(&format!("{n}.zip"))],
+                trash: false,
+            })
+        };
+        let tickets: Vec<i32> = (0..WAITING).map(|n| hand_off.keep(extract(n))).collect();
+        for (n, ticket) in tickets.into_iter().enumerate() {
+            assert!(
+                matches!(hand_off.take(ticket), Some(Dialog::ExtractTo(to)) if to.archives == [at(&format!("{n}.zip"))]),
+                "dialog {n}"
+            );
+        }
+    }
+
+    #[test]
     fn a_dialog_is_taken_once_by_its_ticket_and_old_ones_give_way() {
         let mut hand_off = HandOff::default();
         let extract = |n: usize| {

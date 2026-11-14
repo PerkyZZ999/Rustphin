@@ -706,4 +706,88 @@ mod tests {
         let made = duplicate_names(&[b"x.txt".to_vec(), b"x.txt".to_vec()], |_| false);
         assert_eq!(made, [b"x copy.txt".to_vec(), b"x copy (1).txt".to_vec()]);
     }
+
+    #[test]
+    fn what_was_left_out_reaches_the_details_dialog_entry_by_entry() {
+        let problems = Problems {
+            title: "Copying 2 items to \u{201c}b\u{201d}".to_owned(),
+            entries: vec![
+                Skipped {
+                    path: "/a/secret".into(),
+                    reason: "Permission denied".to_owned(),
+                },
+                Skipped {
+                    path: "/a/big".into(),
+                    reason: "No space left".to_owned(),
+                },
+            ],
+        };
+        let json: serde_json::Value = serde_json::from_str(&problems.json()).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "title": "Copying 2 items to \u{201c}b\u{201d}",
+                "entries": [
+                    { "path": "/a/secret", "reason": "Permission denied" },
+                    { "path": "/a/big", "reason": "No space left" },
+                ],
+            })
+        );
+    }
+
+    fn progress(items: (u64, u64), bytes: (u64, u64)) -> Progress {
+        Progress {
+            items_done: items.0,
+            items_total: items.1,
+            bytes_done: bytes.0,
+            bytes_total: bytes.1,
+            current: PathBuf::new(),
+        }
+    }
+
+    #[test]
+    fn how_far_along_counts_bytes_then_entries_then_is_unknown() {
+        assert_eq!(fraction(&progress((1, 4), (3, 4))), Some(0.75));
+        assert_eq!(fraction(&progress((1, 4), (0, 0))), Some(0.25));
+        assert_eq!(fraction(&progress((0, 0), (0, 0))), None);
+    }
+
+    #[test]
+    fn the_rate_is_shown_only_once_bytes_have_moved_for_half_a_second() {
+        let half = Duration::from_millis(500);
+        let moving = progress((1, 2), (1000, 2000));
+        assert!(!detail(&moving, half).contains("/s"), "not yet");
+        assert!(detail(&moving, half * 2).ends_with("/s"));
+        let still = progress((1, 2), (0, 2000));
+        assert!(!detail(&still, half * 4).contains("/s"), "nothing moved");
+        assert!(!detail(&progress((1, 2), (0, 0)), half * 4).contains(" · "));
+    }
+
+    #[test]
+    fn a_failed_undo_says_what_it_was_undoing_when_it_was_an_undo() {
+        let failed = Finished::UndoFailed("the file changed".to_owned());
+        assert_eq!(
+            result_notice("copied 1 item", true, &failed).unwrap().text,
+            "Could not undo (copied 1 item): the file changed."
+        );
+        assert_eq!(
+            result_notice("copied 1 item", false, &failed).unwrap().text,
+            "Could not undo: the file changed."
+        );
+    }
+
+    #[test]
+    fn restoring_names_where_the_entries_go_back_to() {
+        let request = Request::Restore {
+            items: vec![rustphin_core::ops::TrashedItem {
+                original: "/home/u/report.pdf".into(),
+                content: "/t/files/report.pdf".into(),
+                record: "/t/info/report.pdf.trashinfo".into(),
+            }],
+        };
+        assert_eq!(
+            activity(&request, false),
+            "Restoring \u{201c}report.pdf\u{201d}"
+        );
+    }
 }

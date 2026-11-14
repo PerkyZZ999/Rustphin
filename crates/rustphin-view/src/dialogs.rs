@@ -402,11 +402,12 @@ mod tests {
             "Archive".into(),
         );
         assert_eq!(compress.title(), "Compress 2 items");
-        assert!(
-            compress
-                .note()
-                .0
-                .starts_with("Makes \u{201c}Archive.zip\u{201d}")
+        assert_eq!(
+            compress.note(),
+            (
+                "Makes \u{201c}Archive.zip\u{201d} in \u{201c}srv\u{201d}. ZIP opens everywhere, including Windows and phones.".to_owned(),
+                true
+            )
         );
         compress.format = 2;
         compress.level = 2;
@@ -458,5 +459,67 @@ mod tests {
             Some("Names cannot contain /. Too long.")
         );
         assert_eq!(row_problems(Vec::<Vec<String>>::new()), None);
+    }
+
+    fn batch(selected: Vec<OsString>, staying: Vec<OsString>) -> BatchRename {
+        BatchRename::new("/srv".into(), selected, staying)
+    }
+
+    #[test]
+    fn a_new_name_taken_by_a_file_left_alone_is_refused() {
+        let mut batch = batch(vec!["a.jpg".into(), "b.jpg".into()], vec!["c.jpg".into()]);
+        batch.find = "a".into();
+        batch.replace = "c".into();
+        let view = batch.view();
+        assert!(!view.ready && !view.unchanged);
+        assert!(!view.rows[0].problems.is_empty(), "the clash is said");
+        assert_eq!(view.rows[1].problems, "");
+        assert_eq!(view.row_problems, view.rows[0].problems);
+        assert_eq!(batch.request(), None);
+    }
+
+    #[test]
+    fn names_that_are_not_utf8_are_renamed_byte_for_byte() {
+        use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _};
+        let latin1 = OsStr::from_bytes(b"caf\xe9.txt").to_owned();
+        let mut batch = batch(vec![latin1, "b.txt".into()], Vec::new());
+        batch.find = ".txt".into();
+        batch.replace = ".md".into();
+        assert_eq!(
+            batch.request(),
+            Some(Request::RenameBatch {
+                directory: "/srv".into(),
+                pairs: vec![
+                    (
+                        OsStr::from_bytes(b"caf\xe9.txt").to_owned(),
+                        OsStr::from_bytes(b"caf\xe9.md").to_owned()
+                    ),
+                    ("b.txt".into(), "b.md".into()),
+                ],
+            })
+        );
+    }
+
+    #[test]
+    fn the_preview_says_which_rows_change_and_whether_anything_would() {
+        let mut batch = batch(vec!["a.txt".into(), "b.jpg".into()], Vec::new());
+        batch.find = "zzz".into();
+        let view = batch.view();
+        assert!(view.unchanged && !view.ready);
+        assert!(view.rows.iter().all(|row| !row.changes));
+        assert_eq!(batch.request(), None);
+        batch.find = ".txt".into();
+        batch.replace = ".md".into();
+        let view = batch.view();
+        assert!(view.ready && !view.unchanged);
+        assert_eq!(
+            view.rows.iter().map(|row| row.changes).collect::<Vec<_>>(),
+            [true, false]
+        );
+    }
+
+    #[test]
+    fn a_dialog_names_its_folder() {
+        assert_eq!(place_of(Path::new("/srv/data")), "\u{201c}data\u{201d}");
     }
 }
