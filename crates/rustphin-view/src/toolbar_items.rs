@@ -2,12 +2,16 @@
 //!
 //! The toolbar is a list of items chosen in Settings, Toolbar, as in
 //! Dolphin's "Configure Toolbars…": built-in buttons, any palette command,
-//! and separators. The location field and Actions always stay: one is
-//! where the folder is shown, the other reaches every action. When the
-//! window is too narrow, Actions first loses its key hint and its words,
-//! then items leave from the right end inwards.
+//! and separators. The location field and the Command palette button always
+//! stay: one is where the folder is shown, the other reaches every action.
+//! The Settings button sits beside the palette's by default (W-154, which
+//! replaced the worded Actions button with these two icon buttons). When the
+//! window is too narrow, items leave from the right end inwards.
 
 use crate::metrics::{size, space};
+
+/// How settings saved before W-154 named the Actions button.
+const LEGACY_ACTIONS: &str = "actions";
 
 /// One thing on the toolbar.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -36,8 +40,11 @@ pub enum Item {
     Hidden,
     /// Filter by name.
     Filter,
-    /// Actions (the palette); always there.
-    Actions,
+    /// Settings (W-154).
+    Settings,
+    /// The command palette; always there. It replaced the Actions button
+    /// (W-154), whose saved id it still reads.
+    Palette,
     /// A thin line between groups.
     Separator,
     /// A palette command, by its id (`commands::COMMANDS`).
@@ -45,7 +52,7 @@ pub enum Item {
 }
 
 /// The built-in items in the order "Available actions" lists them.
-pub const BUILT_IN: [Item; 12] = [
+pub const BUILT_IN: [Item; 13] = [
     Item::Admin,
     Item::Back,
     Item::Forward,
@@ -57,6 +64,7 @@ pub const BUILT_IN: [Item; 12] = [
     Item::Split,
     Item::Hidden,
     Item::Filter,
+    Item::Settings,
     Item::Separator,
 ];
 
@@ -77,7 +85,8 @@ impl Item {
             Item::Split => Icon::SquareSplitHorizontal,
             Item::Hidden => Icon::Eye,
             Item::Filter => Icon::Funnel,
-            Item::Actions => Icon::Menu,
+            Item::Settings => Icon::Settings,
+            Item::Palette => Icon::Command,
             Item::Separator => Icon::Minus,
             Item::Command(id) => crate::palette::command_icon(&self.name_of_command(id)),
         }
@@ -98,7 +107,8 @@ impl Item {
             Self::Split => "split".to_owned(),
             Self::Hidden => "hidden".to_owned(),
             Self::Filter => "filter".to_owned(),
-            Self::Actions => "actions".to_owned(),
+            Self::Settings => "settings".to_owned(),
+            Self::Palette => "palette".to_owned(),
             Self::Separator => "separator".to_owned(),
             Self::Command(id) => format!("command:{id}"),
         }
@@ -120,7 +130,9 @@ impl Item {
             "split" => Self::Split,
             "hidden" => Self::Hidden,
             "filter" => Self::Filter,
-            "actions" => Self::Actions,
+            "settings" => Self::Settings,
+            // The Actions button of before W-154 opened the palette.
+            "palette" | LEGACY_ACTIONS => Self::Palette,
             "separator" => Self::Separator,
             other => {
                 let named = other
@@ -149,7 +161,8 @@ impl Item {
             Self::Split => "Split view".to_owned(),
             Self::Hidden => "Show hidden files".to_owned(),
             Self::Filter => "Filter by name".to_owned(),
-            Self::Actions => "Actions".to_owned(),
+            Self::Settings => "Settings".to_owned(),
+            Self::Palette => "Command palette".to_owned(),
             Self::Separator => "Separator".to_owned(),
             Self::Command(id) => self.name_of_command(id),
         }
@@ -171,7 +184,8 @@ impl Item {
             Self::Split => "toggle-split",
             Self::Hidden => "toggle-hidden",
             Self::Filter => "show-filter",
-            Self::Actions => "open-palette",
+            Self::Settings => "open-settings",
+            Self::Palette => "open-palette",
             Self::Command(id) => return crate::commands::find(id).map(|command| command.id),
             Self::Admin | Self::Location | Self::New | Self::View | Self::Separator => {
                 return None;
@@ -187,12 +201,12 @@ impl Item {
 
     /// Whether it must stay on the toolbar.
     pub fn is_fixed(&self) -> bool {
-        matches!(self, Self::Location | Self::Actions)
+        matches!(self, Self::Location | Self::Palette)
     }
 
     /// Whether it can show its words beside its icon.
     pub fn can_show_words(&self) -> bool {
-        !matches!(self, Self::Location | Self::Actions | Self::Separator)
+        !matches!(self, Self::Location | Self::Separator)
     }
 
     /// About how wide it is drawn, for deciding what fits.
@@ -241,7 +255,8 @@ impl Default for Toolbar {
             Item::Hidden,
             Item::Filter,
             Item::Separator,
-            Item::Actions,
+            Item::Settings,
+            Item::Palette,
         ];
         Self {
             items: items.into_iter().map(|item| (item, false)).collect(),
@@ -252,7 +267,9 @@ impl Default for Toolbar {
 impl Toolbar {
     /// Reads the saved lists: item ids in order, and those showing words.
     /// Unknown ids and repeated buttons are dropped; the location field
-    /// and Actions are put back if missing. An empty list is today's.
+    /// and the palette button are put back if missing. A list saved with
+    /// the Actions button, before W-154, gains Settings before the palette
+    /// as today's toolbar has it. An empty list is today's.
     pub fn from_ids(items: &[String], words: &[String]) -> Self {
         if items.is_empty() {
             return Self::default();
@@ -271,8 +288,16 @@ impl Toolbar {
             let at = list.len().min(1);
             list.insert(at, (Item::Location, false));
         }
-        if !list.iter().any(|(item, _)| *item == Item::Actions) {
-            list.push((Item::Actions, false));
+        let palette = match list.iter().position(|(item, _)| *item == Item::Palette) {
+            Some(at) => at,
+            None => {
+                list.push((Item::Palette, false));
+                list.len() - 1
+            }
+        };
+        let from_actions = items.iter().any(|id| id == LEGACY_ACTIONS);
+        if from_actions && !list.iter().any(|(item, _)| *item == Item::Settings) {
+            list.insert(palette, (Item::Settings, false));
         }
         Self { items: list }
     }
@@ -294,18 +319,19 @@ impl Toolbar {
         *item != Item::Separator && self.items.iter().any(|(on, _)| on == item)
     }
 
-    /// Adds `item` after position `after`, or at the end before Actions.
+    /// Adds `item` after position `after`, or at the end before the
+    /// palette button.
     /// Returns where it went; `None` when it is there already.
     pub fn add(&mut self, item: Item, after: Option<usize>) -> Option<usize> {
         if self.contains(&item) {
             return None;
         }
-        let actions = self
+        let palette = self
             .items
             .iter()
-            .position(|(on, _)| *on == Item::Actions)
+            .position(|(on, _)| *on == Item::Palette)
             .unwrap_or(self.items.len());
-        let at = after.map_or(actions, |after| (after + 1).min(self.items.len()));
+        let at = after.map_or(palette, |after| (after + 1).min(self.items.len()));
         self.items.insert(at, (item, false));
         Some(at)
     }
@@ -346,40 +372,16 @@ impl Toolbar {
     pub fn fit(&self, width: f32) -> Fitted {
         let available = width - 2. * space::SM;
         let mut shown: Vec<bool> = vec![true; self.items.len()];
-        let mut fitted = Fitted {
-            shown: Vec::new(),
-            actions_words: true,
-            actions_hint: true,
-        };
-        let total = |shown: &[bool], fitted: &Fitted| -> f32 {
-            let items: f32 = self
-                .items
+        let total = |shown: &[bool]| -> f32 {
+            self.items
                 .iter()
                 .zip(shown)
                 .filter(|(_, on)| **on)
-                .map(|((item, words), _)| match item {
-                    Item::Actions => {
-                        if !fitted.actions_words {
-                            size::TOOL_BUTTON
-                        } else if fitted.actions_hint {
-                            size::TOOLBAR_ACTIONS_HINTED
-                        } else {
-                            size::TOOLBAR_ACTIONS
-                        }
-                    }
-                    other => other.width(*words),
-                })
-                .sum();
-            items
+                .map(|((item, words), _)| item.width(*words))
+                .sum()
         };
-        if total(&shown, &fitted) > available {
-            fitted.actions_hint = false;
-        }
-        if total(&shown, &fitted) > available {
-            fitted.actions_words = false;
-        }
-        while total(&shown, &fitted) > available {
-            // The rightmost item that may leave, Actions aside.
+        while total(&shown) > available {
+            // The rightmost item that may leave, the palette aside.
             let Some(index) = self
                 .items
                 .iter()
@@ -412,40 +414,15 @@ impl Toolbar {
         {
             shown[last] = false;
         }
-        fitted.shown = shown;
-        fitted
+        Fitted { shown }
     }
 }
 
-/// How a pane draws its toolbar items this frame.
-#[derive(Debug, Clone)]
-pub struct Look {
-    /// The window's width.
-    pub width: f32,
-    /// Actions shows its words and chevron.
-    pub actions_words: bool,
-    /// Actions shows its key hint.
-    pub actions_hint: bool,
-    /// The items that show their words beside their icons.
-    pub words: Vec<Item>,
-}
-
-impl Look {
-    /// The words `item` shows beside its icon, if it shows them.
-    pub fn words_of(&self, item: &Item) -> Option<String> {
-        self.words.contains(item).then(|| item.name())
-    }
-}
-
-/// What fits: which items are drawn, and how Actions is drawn.
+/// What fits: which items are drawn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fitted {
     /// Per item, whether it is drawn.
     pub shown: Vec<bool>,
-    /// Actions shows its words and chevron.
-    pub actions_words: bool,
-    /// Actions shows its key hint.
-    pub actions_hint: bool,
 }
 
 /// What "Available actions" offers: the built-in buttons and every palette
@@ -492,7 +469,8 @@ mod tests {
         toolbar.set_words(2, true);
         let (items, words) = toolbar.to_ids();
         assert_eq!(Toolbar::from_ids(&items, &words), toolbar);
-        // Unknown ids and repeated buttons go; Location and Actions return.
+        // Unknown ids and repeated buttons go; Location and the palette
+        // return.
         let odd = Toolbar::from_ids(
             &ids(&["back", "wormhole", "back", "separator", "separator"]),
             &ids(&["back", "separator"]),
@@ -500,7 +478,7 @@ mod tests {
         let names: Vec<String> = odd.items.iter().map(|(item, _)| item.id()).collect();
         assert_eq!(
             names,
-            ["back", "location", "separator", "separator", "actions"]
+            ["back", "location", "separator", "separator", "palette"]
         );
         assert!(odd.items[0].1, "back shows its words");
         assert!(!odd.items[2].1, "a separator has none");
@@ -525,7 +503,41 @@ mod tests {
     }
 
     #[test]
-    fn location_and_actions_cannot_be_removed_and_buttons_appear_once() {
+    fn a_toolbar_saved_with_actions_gets_settings_and_the_palette_in_its_place() {
+        let names = |toolbar: &Toolbar| {
+            toolbar
+                .items
+                .iter()
+                .map(|(item, _)| item.id())
+                .collect::<Vec<_>>()
+        };
+        let old = Toolbar::from_ids(&ids(&["back", "location", "actions", "filter"]), &[]);
+        assert_eq!(
+            names(&old),
+            ["back", "location", "settings", "palette", "filter"]
+        );
+        // Saved again, it says so in today's words, and stays as it is.
+        let (items, words) = old.to_ids();
+        assert_eq!(Toolbar::from_ids(&items, &words), old);
+        // Settings taken off today stays off; the palette always returns.
+        let without = Toolbar::from_ids(&ids(&["location", "filter"]), &[]);
+        assert_eq!(names(&without), ["location", "filter", "palette"]);
+        // Both are icon buttons running their commands, with their keys.
+        assert_eq!(Item::Settings.keys().as_deref(), Some("Ctrl+Shift+,"));
+        assert_eq!(Item::Palette.keys().as_deref(), Some("Ctrl+Shift+P"));
+        assert_eq!(Item::Palette.icon(), crate::icons::Icon::Command);
+        assert_eq!(Item::Settings.icon(), crate::icons::Icon::Settings);
+        assert!(Item::Palette.is_fixed() && !Item::Settings.is_fixed());
+        let mut toolbar = Toolbar::default();
+        assert_eq!(toolbar.items.last(), Some(&(Item::Palette, false)));
+        let settings = toolbar.items.len() - 2;
+        assert_eq!(toolbar.items[settings].0, Item::Settings);
+        assert!(toolbar.remove(settings), "Settings can go");
+        assert!(available(&toolbar, "").contains(&Item::Settings));
+    }
+
+    #[test]
+    fn location_and_the_palette_cannot_be_removed_and_buttons_appear_once() {
         let mut toolbar = Toolbar::default();
         let location = toolbar
             .items
@@ -533,12 +545,16 @@ mod tests {
             .position(|(i, _)| *i == Item::Location)
             .unwrap();
         assert!(!toolbar.remove(location));
+        assert!(
+            !toolbar.remove(toolbar.items.len() - 1),
+            "the palette stays"
+        );
         assert_eq!(toolbar.add(Item::Back, None), None);
         let at = toolbar.add(Item::Separator, None).unwrap();
         assert_eq!(
             toolbar.items[at + 1].0,
-            Item::Actions,
-            "added before Actions"
+            Item::Palette,
+            "added before the palette"
         );
         assert!(toolbar.remove(0), "the shield can go");
         assert_eq!(toolbar.shift(0, -1), 0);
@@ -551,10 +567,9 @@ mod tests {
         let toolbar = Toolbar::default();
         let wide = toolbar.fit(1400.);
         assert!(wide.shown.iter().all(|on| *on));
-        assert!(wide.actions_words && wide.actions_hint);
         let narrow = drawn(&toolbar, 560.);
         assert!(narrow.contains(&"location".to_owned()));
-        assert!(narrow.contains(&"actions".to_owned()));
+        assert!(narrow.contains(&"palette".to_owned()));
         assert!(
             narrow.contains(&"back".to_owned()),
             "left items stay longest"
@@ -563,26 +578,24 @@ mod tests {
             !narrow.contains(&"filter".to_owned()),
             "right items leave first"
         );
-        let tiny = toolbar.fit(320.);
-        assert!(!tiny.actions_words && !tiny.actions_hint);
-        assert_eq!(drawn(&toolbar, 320.), ["location", "actions"]);
+        assert_eq!(drawn(&toolbar, 320.), ["location", "palette"]);
     }
 
     #[test]
     fn a_separator_left_alone_is_not_drawn() {
         let toolbar = Toolbar::from_ids(
-            &ids(&["location", "separator", "filter", "separator", "actions"]),
+            &ids(&["location", "separator", "filter", "separator", "palette"]),
             &[],
         );
         assert_eq!(
             drawn(&toolbar, 1400.),
-            ["location", "separator", "filter", "separator", "actions"]
+            ["location", "separator", "filter", "separator", "palette"]
         );
         let lonely = Toolbar::from_ids(
-            &ids(&["separator", "location", "separator", "separator", "actions"]),
+            &ids(&["separator", "location", "separator", "separator", "palette"]),
             &[],
         );
-        assert_eq!(drawn(&lonely, 1400.), ["location", "separator", "actions"]);
+        assert_eq!(drawn(&lonely, 1400.), ["location", "separator", "palette"]);
     }
 
     #[test]

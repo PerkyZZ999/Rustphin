@@ -75,7 +75,7 @@ Rectangle {
                 Layout.fillWidth: kind === "location"
                 Layout.minimumWidth: kind === "location" ? Tokens.metrics.toolbar_location_min : -1
                 Layout.alignment: Qt.AlignVCenter
-                sourceComponent: kind === "separator" ? separator : kind === "location" ? location : kind === "actions" ? actions : button
+                sourceComponent: kind === "separator" ? separator : kind === "location" ? location : button
 
                 Component {
                     id: separator
@@ -110,11 +110,14 @@ Rectangle {
                         worded: entry.words
                         extra: entry.kind === "menu" ? Tokens.metrics.tool_menu_button - Tokens.metrics.tool_button : 0
                         onClicked: {
-                            if (entry.kind === "menu" || ["filter", "split", "admin"].indexOf(entry.itemId) >= 0 || entry.itemId.indexOf("command:") === 0)
+                            if (entry.kind === "menu" || ["filter", "split", "admin", "settings", "palette"].indexOf(entry.itemId) >= 0 || entry.itemId.indexOf("command:") === 0)
                                 bar.command(entry.itemId, tool)
                             else
                                 bar.folder.run(entry.itemId)
-                            if (entry.kind !== "menu" && bar.pane)
+                            // Settings and the palette take the keyboard
+                            // themselves; giving it back to the list would
+                            // leave them deaf to Escape.
+                            if (entry.kind !== "menu" && entry.itemId !== "settings" && entry.itemId !== "palette" && bar.pane)
                                 bar.pane.focusList()
                         }
 
@@ -141,48 +144,6 @@ Rectangle {
                         editing: bar.editingLocation
                         onEditRequested: bar.editingLocation = true
                         onEditEnded: bar.editingLocation = false
-                    }
-                }
-
-                Component {
-                    id: actions
-
-                    OutlinedButton {
-                        id: actionsButton
-
-                        enabled: entry.available
-                        text: entry.name
-                        tip: entry.tip
-                        onClicked: bar.command("actions", actionsButton)
-
-                        contentItem: Row {
-                            spacing: Tokens.metrics.space_sm
-
-                            Lucide {
-                                visible: !toolbarItems.actionsWords
-                                anchors.verticalCenter: parent.verticalCenter
-                                name: "menu"
-                                colour: Tokens.colors.text_muted
-                            }
-                            Text {
-                                textFormat: Text.PlainText
-                                visible: toolbarItems.actionsWords
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: Tokens.colors.text_muted
-                                font.family: Tokens.metrics.family_body
-                                font.pixelSize: Tokens.metrics.body_text
-                                text: entry.name
-                            }
-                            Text {
-                                textFormat: Text.PlainText
-                                visible: toolbarItems.actionsWords && toolbarItems.actionsHint
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: Tokens.colors.text_disabled
-                                font.family: Tokens.metrics.family_data
-                                font.pixelSize: Tokens.metrics.small_text
-                                text: "Ctrl+Shift+P"
-                            }
-                        }
                     }
                 }
             }

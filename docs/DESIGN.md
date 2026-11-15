@@ -163,10 +163,6 @@ components:
     textColor: "{colors.text-disabled}"
   toolbar-location-min:
     width: 280px
-  toolbar-actions:
-    width: 96px
-  toolbar-actions-hinted:
-    width: 196px
   location-field:
     backgroundColor: "{colors.content-solid}"
     textColor: "{colors.text}"
@@ -183,12 +179,6 @@ components:
   path-bar-active:
     backgroundColor: "{colors.chrome-raised-solid}"
     textColor: "{colors.text}"
-  actions-button:
-    textColor: "{colors.text-muted}"
-    typography: "{typography.body-md}"
-    rounded: "{rounded.sm}"
-    height: 32px
-    padding: "{spacing.md}"
   admin-bar:
     backgroundColor: "{colors.error-surface}"
     textColor: "{colors.error}"
@@ -657,7 +647,7 @@ boxes. Zooming out reaches 24-pixel rows.
 - **Text:** `text` for names and primary content; `text-muted` for data
   columns, inactive tabs, headings, shortcuts and the status line;
   `text-disabled` only for disabled controls and the toolbar's quiet hints
-  (the Actions key, menu chevrons). `text` and `text-muted` meet 4.5:1 on every
+  (menu chevrons). `text` and `text-muted` meet 4.5:1 on every
   surface, including glass over a white window; `text-disabled` meets 3:1.
   The tests in `colors.rs` check every pair, glass over white and opaque.
 - **Royal blue** has exactly these uses and no others:
@@ -723,7 +713,7 @@ Grotesk 600; no token uses another weight) and registered by the C++ shell at st
   pane's path bar, dialog facts, Settings values and the problem list's paths;
   `data-sm` for the status line, shortcuts in menus and the palette, palette
   trails, activity figures, a drive card's figures ("211.3 / 927.0 GiB",
-  "22% used") and the toolbar's Actions hint.
+  "22% used").
 - **Space Grotesk** for the few headings, all 15 px semibold: `headline-sm`
   for dialog titles ("Delete for good?", "<name> — Properties", "Compress
   …") and Settings page titles, `headline-md` for empty and error states in
@@ -782,7 +772,9 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   `toolbar_items::Toolbar::default`: Act as administrator (`shield-alert`) ·
   Back, Forward, Up one folder, Reload · the location field (fills the middle,
   at least 280 px) · New (`plus`) and Open terminal here (`square-terminal`) ·
-  View (`list`), Split view, Show hidden files, Filter by name · Actions.
+  View (`list`), Split view, Show hidden files, Filter by name · Settings
+  (`settings`) and Command palette (`command`), two icon buttons (W-154,
+  which replaced the worded Actions button).
   New and View are 48 px menu buttons with a 12 px `chevron-down` in
   `text-disabled`. Show hidden files and Filter by name are toggles: on, they
   take `toolbar-toggle-on`. Each tooltip is the item's name and its key
@@ -791,10 +783,11 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   command can be added, shown by its palette icon. An item set to "Show its
   words" there draws its name in `body-md` after its icon, 8 px from it and
   from the button's end (a menu button's chevron stays last). When the window is too
-  narrow (`Toolbar::fit`), Actions first drops its key hint (196 → 96 px),
-  then its word (an icon button, `menu`), then items leave from the right end
-  inwards; the location field and Actions always stay. What leaves remains in
-  Actions and on its key.
+  narrow (`Toolbar::fit`), items leave from the right end inwards; the
+  location field and the Command palette button always stay. What leaves
+  remains in the palette and on its key. Settings can be taken off the
+  toolbar (Ctrl+Shift+, and the palette still open it); a toolbar saved with
+  the Actions button gets Settings and Command palette in its place.
 - **Location field:** 32 px, `content` with a `border-strong` outline. A
   16 px `folder` icon (`trash` in the trash), then the path as crumbs in
   `data-md` separated by 12 px `chevron-right`; the last crumb in `text` and
@@ -905,7 +898,7 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
     Size, Modified and Type columns; Dates; Sizes: Binary or Decimal);
     "Previews" (Show pictures' thumbnails; Largest picture previewed).
   - **Toolbar:** the toolbar's items ("On the toolbar", the location field and
-    Actions marked "always there") and the items that can be added
+    Command palette marked "always there") and the items that can be added
     ("Available actions", with a search field: the built-in buttons, a
     separator and every palette command); icon buttons to add, take off,
     move left and move right, and "Show its words" for the chosen item.
@@ -983,9 +976,11 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   draws a 2 px `on-primary` ring inside the fill. Every dialog button shows its
   key ("Close (Esc)", "Apply (Enter)", "Skip (S)"). A disabled default keeps
   its fill at half opacity with `text-disabled` words.
-- **Actions button:** an outlined button: "Actions" in `text-muted` and the
-  key "Ctrl+Shift+P" in `data-sm` `text-disabled`; opens the palette. Tooltip
-  "Actions (Ctrl+Shift+P)".
+- **Settings and Command palette buttons (W-154):** toolbar icon buttons
+  like the others, at its right end: `settings`, tooltip "Settings
+  (Ctrl+Shift+,)", opens Settings; `command`, tooltip "Command palette
+  (Ctrl+Shift+P)", opens the palette. Either can show its words (Settings,
+  Toolbar). The dialog each opens takes the keyboard, so Escape closes it.
 - **Administrator bar:** while acting as administrator, 36 px across the
   window on `error-surface` with an `error-border` outline: `shield-alert`,
   "Acting as administrator. Changes you make here can affect the whole
@@ -1296,8 +1291,8 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
 - **Interface icons:** the bundled Lucide SVGs (`crates/rustphin/icons`),
   drawn through `image://lucide/<name>/<colour>` in a token colour, 16 px by
   default, 12 px for chevrons and badges, 20 px in palette results, 32 px in
-  states. Fixed names for the less obvious ones: `menu`
-  (Actions as an icon), `arrow-up-from-line` (Unmount; Lucide has no eject
+  states. Fixed names for the less obvious ones: `command` (the Command
+  palette button), `settings` (Settings), `arrow-up-from-line` (Unmount; Lucide has no eject
   glyph), `power` (Safely remove), `loader` (connecting, loading), `circle-check` (done),
   `triangle-alert` (problems), `shield-alert` (administrator).
 
@@ -1362,7 +1357,7 @@ values in `colors.rs` and `metrics.rs`. Built as described: the title bar
 and resize bands, the toolbar with Settings' items and `Toolbar::fit`, the
 location crumbs, the tab strip, split view with path bars, the places panel
 with groups, separators (W-152), folded counts, Remote and Devices, its menu
-and drag and drop, a drive's Properties with its ring (W-153),
+and drag and drop, a drive's Properties with its ring (W-153), The toolbar ends with the Settings and Command palette icon buttons (W-154); the mockups in `docs/mockup/` still draw the worded Actions button they replaced.
 the three views with the zoom table, selection, rubber band, rename in place
 and thumbnails, the status line, the filter bar, the in-place states, the
 re-read and trash banners, the administrator bar, the context, New, trash

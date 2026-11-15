@@ -65,7 +65,6 @@ fn kind(item: &Item) -> &'static str {
     match item {
         Item::Separator => "separator",
         Item::Location => "location",
-        Item::Actions => "actions",
         Item::New | Item::View => "menu",
         _ => "button",
     }
@@ -99,8 +98,6 @@ fn saved_toolbar() -> Toolbar {
 
 /// The Rust side of `ToolbarModel`.
 pub struct ToolbarModelRust {
-    actions_words: bool,
-    actions_hint: bool,
     toolbar: Toolbar,
     shown: Vec<bool>,
 }
@@ -109,12 +106,7 @@ impl Default for ToolbarModelRust {
     fn default() -> Self {
         let toolbar = saved_toolbar();
         let shown = vec![true; toolbar.items.len()];
-        Self {
-            actions_words: true,
-            actions_hint: true,
-            toolbar,
-            shown,
-        }
+        Self { toolbar, shown }
     }
 }
 
@@ -175,14 +167,6 @@ impl qobject::ToolbarModel {
                 self.as_mut().data_changed(&first, &last);
             }
         }
-        if *self.actions_words() != fitted.actions_words {
-            self.as_mut().rust_mut().actions_words = fitted.actions_words;
-            self.as_mut().actions_words_changed();
-        }
-        if *self.actions_hint() != fitted.actions_hint {
-            self.as_mut().rust_mut().actions_hint = fitted.actions_hint;
-            self.as_mut().actions_hint_changed();
-        }
     }
 }
 
@@ -234,7 +218,9 @@ mod tests {
         assert_eq!(kind(&Item::View), "menu");
         assert_eq!(kind(&Item::Separator), "separator");
         assert_eq!(kind(&Item::Location), "location");
-        assert_eq!(kind(&Item::Actions), "actions");
+        // Settings and the palette are plain icon buttons (W-154).
+        assert_eq!(kind(&Item::Settings), "button");
+        assert_eq!(kind(&Item::Palette), "button");
         assert_eq!(kind(&Item::Reload), "button");
     }
 }

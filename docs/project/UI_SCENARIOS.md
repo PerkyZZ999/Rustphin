@@ -174,7 +174,7 @@ J7–J17 were written for the GPUI interface's minimum-size checks (W-076) and h
 
 | # | Steps | Expected |
 |---|---|---|
-| J1 | Open the fixture in one unsplit tab | Title bar, one toolbar across the window (as TB10) ending in a labelled "Actions" button, the places panel, the tab strip, the file view and the status line. Per-pane controls are only the path and the list; no trash buttons outside the trash |
+| J1 | Open the fixture in one unsplit tab | Title bar, one toolbar across the window (as TB10) ending in the Settings and Command palette icon buttons (W-154), the places panel, the tab strip, the file view and the status line. Per-pane controls are only the path and the list; no trash buttons outside the trash |
 | J2 | Click Actions, query `new folder`, Enter | Existing operation engine creates a folder and opens its inline rename field; F10 still does the same |
 | J3 | Actions, query `new group`, Enter; name it Work | Places panel receives focus, creates the group and opens its name field; group is saved in place-groups.toml |
 | J4 | Use Actions for view modes, zoom, hidden files, sorting, split view, new file, trash and place controls | Each is reached after opening Actions once (every command in `commands.rs` is in the palette); corresponding shortcuts still work; Extract and Compress say why not in the trash ("Archives cannot be extracted or made in the trash. Restore the files first.") |
@@ -684,7 +684,8 @@ Isolated home with `~/.config/rustphin/place-groups.toml` holding two empty grou
 
 | ID | Steps | Expected |
 |---|---|---|
-| TB10 | Start with no `[toolbar]` in the settings | The toolbar as before W-106f: shield, Back, Forward, Up, Reload, location, New, terminal, View, Split, hidden, Filter, "Actions" (with its key hint "Ctrl+Shift+P" when the window is wide enough; W-114c2b saw it with the hint) |
+| TB10 | Start with no `[toolbar]` in the settings | The toolbar as before W-106f: shield, Back, Forward, Up, Reload, location, New, terminal, View, Split, hidden, Filter, then the Settings (gear) and Command palette (⌘) icon buttons (W-154; before it a worded "Actions" button) |
+| TB11 | Hover the Command palette button, click it, Escape; click the Settings button, Escape. Then start with `[toolbar] items` saved by an older build, ending in `"actions"` (W-154) | Tooltips "Command palette (Ctrl+Shift+P)" and "Settings (Ctrl+Shift+,)"; each opens its dialog, which takes the keyboard so Escape closes it. The old list shows Settings and Command palette where Actions was; the file is not rewritten until the toolbar is changed |
 | TB11 | Settings, Toolbar | A preview of the items; "Available actions" (search, Separator, then the palette's commands; nothing already on the toolbar); "On the toolbar" in order, Location and Actions marked "always there"; Add and Remove between them |
 | TB12 | Search `copy location`, choose it, Add | "Files: Copy location" goes before Actions; the preview and the real toolbar show its icon; the search list says nothing else matches |
 | TB13 | Choose Back on the toolbar; Page Down; tick Show its words; Move right; choose Act as administrator, Remove; Escape | The toolbar reads Forward, "← Back", Up…; no shield, and the separator left first is not drawn; `[toolbar]` lists the items and `words = ["back"]` |

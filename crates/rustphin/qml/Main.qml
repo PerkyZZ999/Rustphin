@@ -357,8 +357,10 @@ Window {
             tabList.toggleSplit()
         } else if (id === "admin") {
             Operations.toggleAdmin(windowId)
-        } else if (id === "actions") {
+        } else if (id === "palette") {
             openPalette()
+        } else if (id === "settings") {
+            openSettings()
         } else if (id.indexOf("command:") === 0) {
             runCommand(id.slice(8))
         } else if (id === "view") {

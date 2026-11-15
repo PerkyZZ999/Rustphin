@@ -29,7 +29,8 @@ opens a tab or a window as Settings, General says.
     - New › *New menu* · Open terminal here
     - View › *View menu* · Split view · Show hidden files · Filter by name
     - any palette command added in Settings
-    - Actions (opens the palette)
+    - Settings (opens Settings) and Command palette (opens the palette),
+      two icon buttons (W-154)
   - **Administrator bar** (only while acting as administrator), with "Stop
     acting as administrator"
   - **Body**
@@ -285,7 +286,7 @@ groups separated by hairlines:
 
 ### Find any command
 
-1. User presses Ctrl+Shift+P or clicks Actions.
+1. User presses Ctrl+Shift+P or clicks the Command palette button.
 2. User types part of a name ("hidden", "split", "trash").
 3. The best result is selected; Enter runs it; the key is shown so the user
    learns it.
@@ -312,7 +313,7 @@ Pick one word and use it everywhere: menu, palette, tooltip, notices.
 | Sending to the trash | Move to trash | Undoable |
 | Deleting without the trash | Delete… / "Delete for good?" | Always asks; cannot be undone |
 | The trash | Trash | Capital T only as a place name and title |
-| The command palette | Actions | The toolbar button; the palette itself has no title row |
+| The command palette | Command palette | The toolbar button (W-154, before it "Actions"); the palette itself has no title row |
 | Searching names in the current folder | Filter | "Filter by name"; not "Search" (search is L-001) |
 | Files starting with a dot | hidden files | "Show hidden files" |
 | Two panes | split view | "Toggle split view" |
@@ -332,7 +333,7 @@ Pick one word and use it everywhere: menu, palette, tooltip, notices.
 | Selection look (neutral `selection` fill, light text, 2 px royal-blue edge) | Entry rows and cells, the current place, palette results, the current Settings page, dialog segments | The edge is on the leading side (segments: along the bottom); menus use the hover fill instead (D-038) |
 | Focus outline | Rows (1 px `primary-bright` outline, with the `current` fill when not selected), places rows (outline), fields and buttons (2 px ring) | |
 | Icon button | Title bar, toolbar, tab close and "+", New group, dismiss, Stop, Settings steppers and lists | Toggles show the subtle fill when on |
-| Outlined button | Actions, Trash actions, Undo, Details, state actions, Stop acting as administrator, dialog secondary buttons | |
+| Outlined button | Trash actions, Undo, Details, state actions, Stop acting as administrator, dialog secondary buttons | |
 | Default button | Default action of a dialog (Apply, Rename, Compress, a question's default) | Destructive defaults use the error colours |
 | Window line (icon, sentence, actions, dismiss) | Activity line, notice line | A problem uses the error surface |
 | Progress or usage bar | Activity line, transfer cards, drive cards | Both `progress` (lightened royal blue) on `track`: activity 6 px; drive card 4 px, `error` from 90 % used (D-039) |
@@ -384,9 +385,9 @@ Breakpoints are per pane or window width:
 
 - Columns leave in the order Type (below 820 px), Modified (600 px), Size
   (360 px); the name always stays.
-- The toolbar first drops Actions' key hint, then its word, then items from
-  the right end inwards; they stay in Actions and on their keys. The location
-  field and Actions always stay.
+- Items leave the toolbar from the right end inwards; they stay in the
+  palette and on their keys. The location field and the Command palette
+  button always stay.
 - The location shows at most four crumbs (fewer in narrower windows) and
   collapses the leading ones into "…".
 - Tabs shrink, then scroll; below 128 px only the active tab and the hovered

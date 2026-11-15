@@ -1483,7 +1483,7 @@ mod tests {
                 .find(|shortcut| shortcut.name == name)
                 .and_then(|shortcut| shortcut.keys.first().cloned())
         };
-        for item in BUILT_IN.iter().chain([&Item::Actions]) {
+        for item in BUILT_IN.iter().chain([&Item::Palette]) {
             if let Some(id) = item.command_id() {
                 assert_eq!(item.keys(), palette(id), "toolbar {item:?}");
                 assert_eq!(item.keys(), settings(id), "toolbar {item:?}");

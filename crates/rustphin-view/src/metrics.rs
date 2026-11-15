@@ -107,10 +107,6 @@ pub mod size {
     /// The narrowest the location field is drawn before toolbar items
     /// leave (W-106f).
     pub const TOOLBAR_LOCATION_MIN: f32 = 280.;
-    /// Actions with its words and chevron.
-    pub const TOOLBAR_ACTIONS: f32 = 96.;
-    /// Actions with its words, chevron and key hint.
-    pub const TOOLBAR_ACTIONS_HINTED: f32 = 196.;
     /// The narrowest the places panel can be made (Settings, Places).
     pub const SIDEBAR_MIN: f32 = 200.;
     /// The widest the places panel can be made.

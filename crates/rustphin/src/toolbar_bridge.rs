@@ -25,8 +25,6 @@ pub mod qobject {
         #[qobject]
         #[base = QAbstractListModel]
         #[qml_element]
-        #[qproperty(bool, actions_words, cxx_name = "actionsWords", READ, NOTIFY)]
-        #[qproperty(bool, actions_hint, cxx_name = "actionsHint", READ, NOTIFY)]
         type ToolbarModel = super::ToolbarModelRust;
     }
 
