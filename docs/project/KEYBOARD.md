@@ -113,7 +113,9 @@ is in the panel's menu and the palette.
 
 - Redo (Ctrl+Shift+Z): an undone operation cannot be redone. A candidate
   for later work; not part of R-001–R-016 as written.
-- Dolphin's search (Ctrl+F): search is L-001.
+- Dolphin's search (Ctrl+F): search is L-001. Inside the Settings dialog
+  only, Ctrl+F puts the keyboard in its search of the pages (W-155); it is
+  not a window shortcut and no command has it.
 - The columns view (Ctrl+4) and a new window (Ctrl+N): Rustphin has no
   columns view, and new windows open only for launches and other
   applications (Settings, General).

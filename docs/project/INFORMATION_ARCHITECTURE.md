@@ -72,8 +72,9 @@ opens a tab or a window as Settings, General says.
   - View menu (`ViewMenu.qml`): modes and size
   - Tooltips
   - Dialogs
-    - Settings (Ctrl+Shift+,): General, Appearance, Views, Toolbar, Places,
-      Confirmations, Shortcuts, About
+    - Settings (Ctrl+Shift+,), with a search of its pages (Ctrl+F): Rustphin
+      (General, Appearance), Browsing (Views, Toolbar, Places), Behaviour
+      (Confirmations, Shortcuts), and About apart at the foot
     - Properties (Alt+Enter)
     - Batch rename (F2 with two or more selected)
     - Compress to…

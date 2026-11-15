@@ -15,6 +15,7 @@ colors:
   content-solid: "#111213"
   # Menus, palette, dialogs: always solid.
   surface-raised: "#1D1E21"
+  surface-panel: "#232427"
   scrim: "rgba(0, 0, 0, 0.60)"
   # Text.
   text: "#ECECED"
@@ -441,23 +442,77 @@ components:
     backgroundColor: "{colors.surface-raised}"
     textColor: "{colors.text}"
     rounded: "{rounded.sm}"
-    width: 760px
-    height: 560px
+    width: 800px
+    height: 576px
   settings-page-list:
-    width: 200px
+    width: 216px
+  settings-search:
+    backgroundColor: "{colors.content-solid}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.sm}"
+    width: 240px
+    height: 28px
   settings-page-current:
     backgroundColor: "{colors.selection}"
     textColor: "{colors.on-selection}"
+  settings-section-title:
+    textColor: "{colors.text}"
+    typography: "{typography.body-md-strong}"
+  settings-panel:
+    backgroundColor: "{colors.surface-panel}"
+    rounded: "{rounded.sm}"
   setting-row:
     textColor: "{colors.text}"
     typography: "{typography.body-md}"
-    height: 32px
-  setting-label:
-    width: 184px
+    padding: "{spacing.lg}"
+    height: 48px
+  setting-hint:
+    textColor: "{colors.text-muted}"
+    typography: "{typography.body-sm}"
   setting-control:
     height: 28px
   setting-select:
-    width: 200px
+    backgroundColor: "{colors.content-solid}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+    width: 216px
+    height: 28px
+  setting-switch:
+    backgroundColor: "{colors.track}"
+    rounded: "{rounded.sm}"
+    width: 36px
+    height: 20px
+  setting-switch-on:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+  setting-segment-chosen:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.on-selection}"
+  setting-slider:
+    backgroundColor: "{colors.track}"
+    rounded: "{rounded.sm}"
+    width: 160px
+  setting-slider-value:
+    backgroundColor: "{colors.content-solid}"
+    textColor: "{colors.text}"
+    typography: "{typography.data-md}"
+    rounded: "{rounded.sm}"
+    width: 64px
+  setting-chip:
+    textColor: "{colors.text-muted}"
+    rounded: "{rounded.sm}"
+    height: 28px
+  setting-chip-on:
+    backgroundColor: "{colors.selection}"
+    textColor: "{colors.on-selection}"
+  look-tile:
+    rounded: "{rounded.sm}"
+    height: 64px
+  settings-list:
+    backgroundColor: "{colors.surface-panel}"
+    rounded: "{rounded.sm}"
+    height: 224px
   key-cap:
     textColor: "{colors.text}"
     typography: "{typography.data-sm}"
@@ -644,6 +699,10 @@ boxes. Zooming out reaches 24-pixel rows.
 - **Raised surface** (`surface-raised`) is for anything that floats inside the
   window: menus, the View menu, the palette, dialogs. Always solid; nothing is
   blurred inside the window.
+- **Panel** (`surface-panel`, `colors.rs` `panel`) is one step lighter than
+  the raised surface: the panels that hold a Settings page's sections, and
+  the lists of its Toolbar page (W-155). Solid, like every surface inside a
+  dialog.
 - **Text:** `text` for names and primary content; `text-muted` for data
   columns, inactive tabs, headings, shortcuts and the status line;
   `text-disabled` only for disabled controls and the toolbar's quiet hints
@@ -706,7 +765,7 @@ Grotesk 600; no token uses another weight) and registered by the C++ shell at st
   for column headings, the type column, the trash banner's sentence, problem
   reasons, notes in the places panel, the palette's status line and the drag
   chip; `label-sm` (10 px, written in capitals) for short labels: the places
-  panel's "PLACES" title and its section headings, Settings group titles,
+  panel's "PLACES" title and its section headings,
   OWNER, GROUP and OTHERS in Properties, and SIZE in the View menu.
 - **JetBrains Mono** for data compared down a column or read character by
   character: `data-md` for sizes and dates, the location crumbs, the split
@@ -718,8 +777,9 @@ Grotesk 600; no token uses another weight) and registered by the C++ shell at st
   for dialog titles ("Delete for good?", "<name> — Properties", "Compress
   …") and Settings page titles, `headline-md` for empty and error states in
   the pane.
-- The current crumb in the location field, the sorted column heading and a
-  drive card's name (`body-md-strong`) are drawn semibold.
+- The current crumb in the location field, the sorted column heading, a
+  drive card's name, Settings section titles and the current Settings page
+  (`body-md-strong`) are drawn semibold.
 - **Text size** (Settings, Appearance) multiplies every interface size by
   11/12 (Smaller) or 14/12 (Larger); names and data in the lists follow the
   zoom table below, scaled the same way. A change shows at once in every
@@ -858,27 +918,58 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   `chrome`, right-aligned. Widths: 480 px (questions, Properties, the
   problems list), 560 px (Compress to…), 640 px (batch rename), 760 × 560 px
   at most (Settings). A question with many buttons grows to fit them.
-- **Settings (W-106, D-029, mockup 36):** a dialog opened by Ctrl+Shift+, and
-  the palette's "Workspace: Settings…". A title row (`settings`, "Settings",
-  a Close icon button, "Close (Esc)"). On the left a 200 px list of pages,
-  32 px rows with a 16 px icon and the name: General (`settings`), Appearance
-  (`palette`), Views (`layout-grid`), Toolbar (`panel-top`), Places
-  (`panel-left`), Confirmations (`circle-check`), Shortcuts (`keyboard`),
-  About (`info`); the current page in `selection` with `on-selection` text
-  and a 2 px `primary-bright` edge on its left,
-  others `hover` under the pointer; Up and Down move through it. The list
-  is the first stop of Tab and Shift+Tab in the dialog and, while it has the
-  keyboard, the current page carries the 1 px `primary-bright` outline of a
-  focused place. A page: its
-  name in `headline-sm` and one sentence in `text-muted`, then groups under
-  `label-sm` capitals; each setting a 32 px row with its label in a 184 px
-  column and the control after it: a drop-down (`ComboBox`, at least 216 px)
-  for every choice, a checkbox for an on/off setting (with its words beside
-  it), a stepper (28 px `minus` and `plus` icon buttons around the value in
-  `data-md`) for numbers, a text field, or an outlined button; a hint under a
-  row in `text-muted`. The page scrolls on its own. Pages with settings end
-  with a `chrome` row: "Changes apply at once." and "Reset to defaults"
-  (outlined, `rotate-ccw`) for the page shown. Changes apply at once.
+- **Settings (W-106, D-029, W-155; the maintainer's refined mockup of
+  2026-11-15, kept to this document's 2 px corners, type scale and flat
+  depth):** a dialog opened by Ctrl+Shift+, and the palette's "Workspace:
+  Settings…", 800 × 576 px at most. A title row: `settings` in `text-muted`,
+  "Settings" in Space Grotesk, a 240 px search field (`search` icon inside,
+  "Search settings", a "Ctrl+F" key cap until something is typed) and a Close
+  icon button, "Close (Esc)". Ctrl+F anywhere in the dialog puts the keyboard
+  in the search; every word typed must be found in a page's name or its
+  keywords (`settings_form::Page::keywords`), the page list shows only the
+  pages found, a page the search hides gives way to the first one found, and
+  Enter takes the keyboard to the list. Nothing found: "No settings match
+  "…". Try another word."
+  On the left a 216 px list of pages under `body-sm` `text-muted` headings:
+  Rustphin (General `settings`, Appearance `palette`), Browsing (Views
+  `layout-grid`, Toolbar `panel-top`, Places `panel-left`), Behaviour
+  (Confirmations `circle-check`, Shortcuts `keyboard`); About (`info`) stands
+  apart at the foot, under a hairline, with the version in `data-md` at the
+  row's end. Rows are 32 px with a 16 px icon and the name; the current page
+  in `selection` with `on-selection` semibold words, its icon in
+  `primary-bright` and a 2 px `primary-bright` edge on its left; others
+  `hover` under the pointer. Up and Down move through the pages shown. The
+  list is the first stop of Tab and, while it has the keyboard, the current
+  page carries the 1 px `primary-bright` outline of a focused place.
+  A page: its name in `headline-sm` and one sentence in `text-muted`, then its
+  sections 24 px apart, each a `body-md-strong` title, an optional
+  `body-sm` line under it, and its settings in one `surface-panel` panel with
+  a 1 px `border` edge and hairlines between the rows. A setting is at least
+  48 px tall with 16 px sides: what it is in `body-md` and what it means under
+  it in `body-sm` `text-muted` (`error` for a warning) on the left, the control
+  on the right; a wide control goes under the words. The controls:
+  a **switch** for on or off (36 × 20 px, 2 px corners: `primary` with the
+  knob on the right in `on-primary` when on, `track` outlined in
+  `border-strong` with the knob on the left in `text-muted` when off, so the
+  position tells the state as well as the colour; half opacity when it cannot
+  be changed, with a `lock` after the words of a setting that is always on);
+  **segments** for two or three short options (28 px, `content` outlined in
+  `border-strong`, the chosen one in `selection` with `on-selection` words,
+  Left and Right choose); a **drop-down** for longer or more options (216 ×
+  28 px, `chevron-down`, its list on `surface-raised` with a `check` in
+  `primary-bright` before the chosen option); a **slider** for a number in
+  steps (160 px `track` filled in `primary` to a 16 px `text` handle, the
+  value in words beside it in a 64 px `data-md` box, told when the handle is
+  let go or at each arrow key); **chips** for several on/off settings in one
+  row (28 px, on: `selection` with a `check`; off: outlined in `border-strong`
+  with `text-muted` words); the **look tiles**, a drawing of the window in
+  each look (64 px tall, the chosen one with a 2 px `primary-bright` edge, the
+  `current` fill and a `check`); a text field, an outlined button, or a badge
+  (`circle-check` and its word in `tertiary`). After a change the page is
+  built again and the keyboard goes back to the control it was on.
+  Pages with settings end with a 48 px row under a hairline: a `check` in
+  `tertiary`, "Changes apply at once." and the worded icon button "Reset
+  <page> to defaults" (`rotate-ccw`). Changes apply at once.
   - **General:** "Starting" (When Rustphin starts: Restore the last tabs,
     Open the home folder, Open a chosen folder, with the chosen folder and
     "Use the folder shown"; Folders opened by other applications: In a new
@@ -897,30 +988,37 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
     to Z or Z to A, Folders first, Show hidden files); "Details view" (the
     Size, Modified and Type columns; Dates; Sizes: Binary or Decimal);
     "Previews" (Show pictures' thumbnails; Largest picture previewed).
-  - **Toolbar:** the toolbar's items ("On the toolbar", the location field and
-    Command palette marked "always there") and the items that can be added
-    ("Available actions", with a search field: the built-in buttons, a
-    separator and every palette command); icon buttons to add, take off,
-    move left and move right, and "Show its words" for the chosen item.
+  - **Toolbar:** "Preview", the toolbar drawn small as it will look (28 px
+    buttons, the location field as a box); picking a button picks it in the
+    list. Then "Available" (a search field and the built-in buttons, a
+    separator and every palette command) and "On the toolbar" (the location
+    field and Command palette marked "Always there"), 224 px lists on
+    `surface-panel`, with bordered icon buttons between them to add, take
+    off, move left and move right; a double click adds or takes off. Under
+    them "Buttons": the switch that shows the chosen button's words.
   - **Places:** "Sections" (Show Devices, Remote; Hidden places: Keep them
     hidden, Show them faded); "Groups" lists each group with its name as a
     field, "N places" and icon buttons Move up, Move down and Delete
     ("Deleting a group keeps its places.", or "No groups yet. Make one with
-    New group in the places panel."); "Panel" (Width, a stepper from 200 to
-    360 px, "or drag the panel's edge").
+    New group in the places panel."); "Panel" (Width, a slider from 200 to
+    360 px, "Or drag the panel's edge."). Group names are edited where they
+    stand, outlined only under the pointer or while edited.
   - **Confirmations:** "Ask before" (Moving to the trash, off; Deleting for
     good, always on and unavailable; Emptying the trash, on; Closing a window
     with several tabs, off); "Executable files" (Opening one: Ask each time,
     Open it, Run it).
   - **Shortcuts:** "The keys Rustphin understands. Changing them comes
-    later." A search field, then a group per command category of rows: the
-    command's name and its keys as 20 px key caps in `data-sm`. Only commands
+    later." A search field, then a panel per command category of rows: the
+    command's name and its keys as 20 px key caps in `data-sm`, "or" between
+    them. Only commands
     with a key are listed; no match says "No shortcut matches. Try another
     word."
-  - **About:** the 64 px logo, "Rustphin", "Version N", one line on what it
-    is; the licence and credits with "Show the licence" (the full text, with
-    "Back"); "No telemetry. Rustphin never uses the network."; where the
-    settings file is, with "Open the settings folder".
+  - **About:** the 64 px logo, "Rustphin" with the version as a key cap, one
+    line on what it is and "Show the licence" (`file-text`; the full text,
+    with "Back"); a panel "No telemetry. Rustphin never uses the network."
+    with a `shield` in `tertiary`; "Credits" (Licence, Behaviour, Built with,
+    Icons, Fonts); "Settings file" with its path in `data-md` and "Open the
+    settings folder".
 
 ## Elevation & Depth
 
@@ -1364,7 +1462,12 @@ re-read and trash banners, the administrator bar, the context, New, trash
 and View menus with submenu icons (W-118), the palette, the activity and
 notice lines, the transfer dialog (W-149), Properties, batch rename,
 Compress to…, the questions, the problems dialog and Settings with all eight
-pages.
+pages, restyled after the maintainer's refined mockup (W-155:
+`docs/mockup/SettingsDialog_Refined`, a React project kept out of the
+repository) with its search, page headings, section panels, switches,
+segments, sliders, chips and look tiles; the mockup's 6–8 px corners, larger
+type and drop shadow were not taken, by the maintainer's choice, so the
+dialog keeps this document's 2 px corners, type scale and flat depth.
 
 Where the build differs from this document today:
 
@@ -1395,6 +1498,6 @@ room below.
 Lint with `npx @google/design.md lint docs/DESIGN.md`. Contrast is checked by
 the tests in `colors.rs` (glass over white and opaque, and the hidden-entry
 opacities Settings offers). The linter's remaining warnings are `border`,
-`border-strong`, `border-accent`, `glow` and `error-border`, used as outline
+`border-accent`, `glow` and `error-border`, used as outline
 colours, which the format's component properties cannot express; the prose
 says where.

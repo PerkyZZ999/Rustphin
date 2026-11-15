@@ -79,6 +79,10 @@ pub struct Colors {
     /// Menus, the palette and dialogs, which float inside the window. Always
     /// solid (`surface-raised`).
     pub raised: Color,
+    /// The panels that hold a dialog's sections of settings (Settings,
+    /// W-155): one step lighter than [`Self::raised`]. Always solid
+    /// (`surface-panel`).
+    pub panel: Color,
     /// Dims the window behind a dialog.
     pub scrim: Color,
     /// Dividers between regions (`border`).
@@ -138,13 +142,14 @@ pub struct Colors {
 impl Colors {
     /// Every colour with its token name in code (`text_muted`), for
     /// interfaces that look colours up by name, such as QML.
-    pub fn named(&self) -> [(&'static str, Color); 30] {
+    pub fn named(&self) -> [(&'static str, Color); 31] {
         [
             ("window", self.window),
             ("chrome", self.chrome),
             ("chrome_raised", self.chrome_raised),
             ("content", self.content),
             ("raised", self.raised),
+            ("panel", self.panel),
             ("scrim", self.scrim),
             ("border", self.border),
             ("border_strong", self.border_strong),
@@ -189,6 +194,7 @@ impl Colors {
             chrome_raised: pick(0x2021248c, 0x202124),
             content: pick(0x1112139e, 0x111213),
             raised: Color::rgb(0x1d1e21),
+            panel: Color::rgb(0x232427),
             scrim: Color::rgba(0x00000099),
             border: Color::rgba(0xffffff12),
             border_strong: Color::rgba(0xffffff24),
@@ -353,6 +359,18 @@ mod tests {
                 over(theme.hover, theme.raised),
             ),
             ("muted text on a dialog", theme.text_muted, theme.raised),
+            ("text on a settings panel", theme.text, theme.panel),
+            (
+                "muted text on a settings panel",
+                theme.text_muted,
+                theme.panel,
+            ),
+            ("danger text on a settings panel", theme.danger, theme.panel),
+            (
+                "muted text under the pointer on a settings panel",
+                theme.text_muted,
+                over(theme.hover, theme.panel),
+            ),
             ("danger text on a dialog", theme.danger, theme.raised),
             (
                 "a hidden entry's name on content",
@@ -425,6 +443,13 @@ mod tests {
             ),
             ("a nearly full volume's usage", theme.danger, theme.track),
             ("success on chrome", theme.success, chrome),
+            ("success on a settings panel", theme.success, theme.panel),
+            ("focus ring on a settings panel", theme.accent, theme.panel),
+            (
+                "disabled text on a settings panel",
+                theme.text_disabled,
+                theme.panel,
+            ),
             ("success on the notice line", theme.success, line),
             ("disabled text on chrome", theme.text_disabled, chrome),
             ("disabled text on content", theme.text_disabled, content),
@@ -463,6 +488,7 @@ mod tests {
         );
         assert_eq!(glass.raised.a, 1., "floating surfaces must be opaque");
         assert_eq!(Colors::charcoal(false).raised, glass.raised);
+        assert_eq!(glass.panel.a, 1., "settings panels must be opaque");
     }
 
     #[test]

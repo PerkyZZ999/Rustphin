@@ -75,6 +75,7 @@ impl qobject::SettingsModel {
                     "title": page.title(),
                     "description": page.description(),
                     "icon": page.icon(),
+                    "section": page.section(),
                     "resettable": page.resettable(),
                 })
             })
@@ -114,6 +115,7 @@ impl qobject::SettingsModel {
             .iter()
             .map(|(item, words)| {
                 serde_json::json!({
+                    "id": item.id(),
                     "name": item.name(),
                     "icon": item.icon().lucide_name(),
                     "fixed": item.is_fixed(),
@@ -241,6 +243,13 @@ impl qobject::SettingsModel {
             .map(|(category, list)| serde_json::json!({ "category": category, "shortcuts": list }))
             .collect();
         text(&serde_json::Value::Array(groups).to_string())
+    }
+
+    fn matching(&self, query: &QString) -> QString {
+        text(
+            &serde_json::to_string(&settings_form::matching_pages(&query.to_string()))
+                .unwrap_or_default(),
+        )
     }
 
     fn available(&self, search: &QString) -> QString {

@@ -43,6 +43,10 @@ pub mod qobject {
         /// The Shortcuts page's groups matching `search`, as JSON.
         #[qinvokable]
         fn shortcuts(self: &SettingsModel, search: &QString) -> QString;
+        /// The numbers of the pages the dialog's search `query` finds, as
+        /// JSON.
+        #[qinvokable]
+        fn matching(self: &SettingsModel, query: &QString) -> QString;
         /// The Toolbar page's available actions matching `search`, as JSON.
         #[qinvokable]
         fn available(self: &SettingsModel, search: &QString) -> QString;

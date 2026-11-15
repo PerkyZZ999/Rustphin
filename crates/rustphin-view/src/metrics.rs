@@ -155,28 +155,41 @@ pub mod size {
     pub const BUTTON: f32 = 32.;
     /// Height of a dialog's title row.
     pub const DIALOG_TITLE: f32 = 48.;
-    /// The Settings dialog's width at its largest (W-106, mockup 36).
-    pub const SETTINGS_WIDTH: f32 = 760.;
+    /// The Settings dialog's width at its largest (W-106, W-155).
+    pub const SETTINGS_WIDTH: f32 = 800.;
     /// The Settings dialog's height at its largest.
-    pub const SETTINGS_HEIGHT: f32 = 560.;
+    pub const SETTINGS_HEIGHT: f32 = 576.;
     /// Its page list on the left.
-    pub const SETTINGS_NAV: f32 = 200.;
-    /// The label column of a setting.
-    pub const SETTINGS_LABEL: f32 = 184.;
+    pub const SETTINGS_NAV: f32 = 216.;
+    /// The search field in its title row.
+    pub const SETTINGS_SEARCH: f32 = 240.;
     /// Below this window width the page list becomes a row of tabs.
     pub const SETTINGS_NARROW: f32 = 720.;
-    /// A setting's row.
+    /// A row of the page list, and of the lists on the Toolbar page.
     pub const SETTING_ROW: f32 = 32.;
-    /// A control in a setting's row: segments, drop-downs, small buttons.
+    /// The least height of a setting in a section's panel.
+    pub const SETTING_LINE: f32 = 48.;
+    /// A control in a setting's row: segments, drop-downs, chips, small
+    /// buttons.
     pub const SETTING_CONTROL: f32 = 28.;
-    /// The narrowest a drop-down in Settings is drawn.
-    pub const SETTING_SELECT: f32 = 200.;
+    /// The width of a drop-down in Settings.
+    pub const SETTING_SELECT: f32 = 216.;
     /// A key cap on the Shortcuts page.
     pub const KEY_CAP: f32 = 20.;
-    /// The narrowest a short drop-down in Settings is drawn (Sort by).
-    pub const SETTING_SELECT_SHORT: f32 = 128.;
     /// The widest a text field in Settings is drawn.
     pub const SETTING_FIELD: f32 = 360.;
+    /// A switch's track: its width.
+    pub const SWITCH_WIDTH: f32 = 36.;
+    /// A switch's track: its height.
+    pub const SWITCH_HEIGHT: f32 = 20.;
+    /// A slider's track in Settings.
+    pub const SLIDER: f32 = 160.;
+    /// The box beside a slider that shows its value.
+    pub const SLIDER_VALUE: f32 = 64.;
+    /// The drawing of a window in each look on the Appearance page.
+    pub const LOOK_TILE: f32 = 64.;
+    /// The height of the lists of the Toolbar page.
+    pub const SETTINGS_LIST: f32 = 224.;
     /// The logo on the About page.
     pub const ABOUT_LOGO: f32 = 64.;
     /// Corner radius shared by controls, rows and panels.

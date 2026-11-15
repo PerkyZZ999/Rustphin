@@ -610,6 +610,22 @@ Isolated home; a fresh one has no `~/.config/rustphin/settings.toml`. In kwin-mc
 | ST7 | The ✕ in the title row, and Close (Esc) | Each closes Settings |
 | ST8 | Private home only (W-140). Before launch write `~/.config/rustphin/settings.toml` as text that is not TOML; launch, change a setting (Ctrl+=), quit, compare the file. Repeat with `version = 4` (a newer format), then with the file at mode 000 | Each time Rustphin starts on defaults (or what it understood of the newer file) and keeps a notice: "Settings are damaged. Saving settings is off; the file was kept. Quit, repair or move settings.toml aside, then restart.", "Settings use a newer file format. … Use a newer Rustphin or quit and move settings.toml aside." or "Settings could not be read. … Check settings.toml and its permissions, then restart." Settings, About shows "Not saved: " and the same words in place of the path. The file's bytes and mode are unchanged afterwards. Only one notice shows at a time, so a later one (place groups, a session) can replace this one. W-140 saw the damaged case in About with the file unchanged; the newer and unreadable cases **need replay** |
 
+### Refined look (W-155)
+
+Since W-155 on/off settings are switches (older rows below that say "tick" or "untick" mean switching on or off), numbers are sliders (the steps with Less and More mean moving the slider), short choices are segments and Views' columns are chips. Isolated home; `RUSTPHIN_OPAQUE=1` to compare colours with the tokens; the gear button opens Settings when a key sent right after launch is lost.
+
+| ID | Steps | Expected |
+|---|---|---|
+| RS1 | Open Settings | Title row with the search field and its Ctrl+F cap; the page list under Rustphin, Browsing and Behaviour, About with the version at the foot; General's sections in panels: Starting (a drop-down; New tab and New window segments with their hint), Desktop, Background (two switches); the foot row with a check, "Changes apply at once." and "Reset General to defaults" (seen 2026-11-15) |
+| RS2 | Views: click the switch of Remember the view for each folder; Space | The click turns it on (royal blue, knob on the right); Space turns it off again, so the keyboard stayed on the switch after the page was built again (seen 2026-11-15) |
+| RS3 | Views: scroll down with the page's scroll bar; click the Type chip | Type loses its check and fill; the page keeps its place (seen 2026-11-15) |
+| RS4 | Places: click near the right end of the Width slider; Reset Places to defaults | The value box says 324 px and the places panel behind widens; Reset brings 240 px back (seen 2026-11-15) |
+| RS5 | Confirmations: open Opening one; Escape | The list opens under the drop-down with a check before Ask each time; Escape closes only the list (seen 2026-11-15) |
+| RS6 | Ctrl+F, type `hidden`; then select all and type `zebra`; clear it | The list shows Appearance, Views and Places under their headings and Appearance opens; then "No settings match "zebra". Try another word."; clearing shows every page (seen 2026-11-15) |
+| RS7 | Toolbar: click Command palette in the preview | It is picked in the preview and in On the toolbar, which scrolls to it; Take off is unavailable ("Always there") (seen 2026-11-15) |
+| RS8 | Appearance, About, Shortcuts | The look tiles (Glass chosen, the desktop showing through its window), Title bar and Text size segments, the hidden-files slider; About's version cap, "No telemetry" panel, Credits and Settings file panels; Shortcuts in a panel per category with "or" between key caps (seen 2026-11-15) |
+| RS9 | A 700 px screen (the window fills it): Ctrl+Shift+,; Right six times | The page list is a row of tabs above the page, the search field narrower and without its key cap; Right moves along the tabs to Shortcuts and the row scrolls to keep it in view (seen 2026-11-15) |
+
 ### General page (W-106c1)
 
 Isolated home prepared before launch (start the session without an app, then `launch_app`): `~/.local/share/applications/rustphin.desktop` and a stand-in `fake-dolphin.desktop` for `inode/directory`, `~/.config/mimeapps.list` choosing the stand-in, `TerminalApplication=konsole` in `~/.config/kdeglobals`, a script `~/term.sh` that appends its working directory and arguments to `~/term.log`, folders `Work/Inner` and `Other`. Never the real mimeapps list or terminal.
@@ -647,7 +663,7 @@ Isolated home with `Box/.hidden-note`, `Box/.cache-dir` and `Box/visible.txt`, h
 |---|---|---|
 | AP1 | Settings, Down to Appearance | Window (Look Glass with its hint, Title bar Rustphin's own with "Applies to new windows."), Text and files (Text size Normal, hidden files at 60 %) |
 | AP2 | Larger | At once, every interface text grows: the dialog, the places panel, toolbar and status line; long device lines end in an ellipsis; nothing overlaps (seen in W-146b) |
-| AP3 | Click More beside "Hidden files are drawn at" until 100 %; Opaque; KDE's; Escape | "Hidden files are drawn at 100 %", and the hidden entries are no longer faded; the file holds `look = "opaque"`, `title_bar = "kde"`, `text_size = "larger"`, `hidden_opacity = 100`. The window turns solid at once (the log says "theme changed glass=false"; seen in W-146c) |
+| AP3 | Click the right end of the "Hidden files are drawn at" slider (100 %); the Opaque tile; KDE's; Escape | "Hidden files are drawn at 100 %", and the hidden entries are no longer faded; the file holds `look = "opaque"`, `title_bar = "kde"`, `text_size = "larger"`, `hidden_opacity = 100`. The window turns solid at once (the log says "theme changed glass=false"; seen in W-146c) |
 | AP4 | Close the window and start Rustphin again (or quit and start) | KWin draws the title bar and the window's edges; Rustphin's own bar, edge hairline and resize bands are left out; the text is still larger (seen in W-146c) |
 | AP5 | Settings, Appearance, Reset to defaults | Glass, Rustphin's own, Normal, 60 %; the text shrinks and the glass returns at once; the title bar changes with the next window |
 | AP6 | On a desktop without blur (KWin's Blur effect switched off), with Look Glass and no `RUSTPHIN_OPAQUE`: start Rustphin; dismiss the line; switch the effect on, come back to the window, switch it off and come back | A 32 px line over the notice lines: an info icon, "Background blur unavailable; using the opaque theme." and a dismiss button; dismissing hides it; with the effect on the window turns to glass when it becomes active, and with it off again the line returns. **Needs replay**: not possible in the agent's session (see VALIDATION.md W-146c) |
@@ -658,7 +674,7 @@ Isolated home with `Work/a.txt`, `Work/b.txt` and `Work/script.sh`, an executabl
 
 | ID | Steps | Expected |
 |---|---|---|
-| CF1 | Settings, Confirmations | Ask before: Moving to the trash (off), Deleting for good (ticked, unavailable, "Always asked: it cannot be undone."), Emptying the trash (on), Closing a window with several tabs (off); Executable files: Opening one, Ask each time |
+| CF1 | Settings, Confirmations | Ask before: Moving to the trash (off), Deleting for good (on, unavailable, a lock after the words, "Always asks: it cannot be undone."), Emptying the trash (on), Closing a window with several tabs (off); Executable files: Opening one, Ask each time |
 | CF2 | Tick Moving to the trash; select `a.txt`, Delete; Escape; Delete, Enter | "Move to the trash?" lists `a.txt` with its size; Escape leaves it; Enter moves it to `~/.local/share/Trash/files` |
 | CF3 | Opening one: Run it; double-click `script.sh` | It runs at once: `ran.log` gains a line, no question |
 | CF4 | Tick Closing a window…; Ctrl+T; Ctrl+Q; Escape; Alt+F4; Escape; the title bar's ✕; Enter | "Close the window?" with "Close 2 tabs (Enter)" each time; Escape keeps the window; Enter closes it |
@@ -671,10 +687,10 @@ Isolated home with `~/.config/rustphin/place-groups.toml` holding two empty grou
 
 | ID | Steps | Expected |
 |---|---|---|
-| PL1 | Settings, Places | Sections (Show: Devices and Remote ticked; Hidden places: Keep them hidden), Groups (Work and Media, "0 places", Move up/down, Rename, Delete; the first's Move up and the last's Move down unavailable; "Deleting a group keeps its places."), Panel (Width 240 px with Less and More, "or drag the panel's edge") |
+| PL1 | Settings, Places | Sections (Show: Devices and Remote ticked; Hidden places: Keep them hidden), Groups (Work and Media, "0 places", Move up/down, Rename, Delete; the first's Move up and the last's Move down unavailable; "Deleting a group keeps its places."), Panel (Width 240 px on a slider, "Or drag the panel's edge.") |
 | PL2 | Move Media up | Media first, here and in the panel behind |
 | PL3 | Rename Work, Ctrl+A, type `Projects`, Enter | The row and the panel say Projects |
-| PL4 | Untick Devices; click More beside Width until 360 px | The Devices section leaves the panel; the panel is 360 px wide and the panes narrower |
+| PL4 | Switch Devices off; click the right end of the Width slider (360 px) | The Devices section leaves the panel; the panel is 360 px wide and the panes narrower |
 | PL5 | Delete Media; Escape | `place-groups.toml` holds only Projects; `[places]` has devices false, width 360 |
 | PL6 | Drag the panel's right edge | The width follows the pointer within 200–360 px (not seen yet: the drag tool was refused) |
 | PL7 | Settings, Places, Reset to defaults | `[places]` back to devices and remote on, hidden kept hidden, 240; the groups stay |

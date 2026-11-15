@@ -1,8 +1,8 @@
-//! The Settings dialog's pages as data (W-106, W-114f), free of any
-//! toolkit: each page is groups of rows, each row a label and one control
-//! with its value; [`apply`] carries out a change by the row's key. The
-//! interface draws the rows and reports changes; the wording and the
-//! rules are the GPUI dialog's.
+//! The Settings dialog's pages as data (W-106, W-114f, W-155), free of
+//! any toolkit: each page is sections of rows, each row what the setting
+//! is, what it means and one control with its value; [`apply`] carries out
+//! a change by the row's key. The interface draws the rows and reports
+//! changes.
 
 use jiff::{Timestamp, tz::TimeZone};
 use rustphin_core::SortKey;
@@ -72,7 +72,7 @@ impl Page {
             Page::General => "How Rustphin starts and works with the rest of the desktop.",
             Page::Views => "How folders are shown when they open.",
             Page::Toolbar => "Which buttons the toolbar shows, and in which order.",
-            Page::Places => "What the places panel shows.",
+            Page::Places => "What the places panel shows, and how it is grouped.",
             Page::Confirmations => "Which actions ask before they act.",
             Page::Shortcuts => "The keys Rustphin understands. Changing them comes later.",
             Page::Appearance => {
@@ -96,6 +96,59 @@ impl Page {
         }
     }
 
+    /// The heading the page is listed under; About has none, being kept
+    /// apart at the foot of the list.
+    pub fn section(self) -> &'static str {
+        match self {
+            Page::General | Page::Appearance => "Rustphin",
+            Page::Views | Page::Toolbar | Page::Places => "Browsing",
+            Page::Confirmations | Page::Shortcuts => "Behaviour",
+            Page::About => "",
+        }
+    }
+
+    /// Words the dialog's search finds the page by, beyond its name: what
+    /// its settings are about.
+    pub fn keywords(self) -> &'static str {
+        match self {
+            Page::General => {
+                "start starting startup restore tabs home folder window default file manager \
+                 single double click open terminal command background keep running login memory quit"
+            }
+            Page::Appearance => {
+                "look glass opaque blur transparent title bar text size font larger smaller \
+                 hidden files faded opacity"
+            }
+            Page::Views => {
+                "view icons compact details size zoom remember each folder sort order direction \
+                 folders first hidden files columns modified type dates sizes units thumbnails \
+                 previews pictures"
+            }
+            Page::Toolbar => "buttons actions items separator order words labels palette",
+            Page::Places => {
+                "places panel sidebar devices drives remote network hidden places width groups \
+                 separators"
+            }
+            Page::Confirmations => {
+                "ask confirm trash delete empty close tabs window executable programs run"
+            }
+            Page::Shortcuts => "keys keyboard hotkeys shortcuts",
+            Page::About => {
+                "version licence license credits privacy telemetry network settings file fonts icons"
+            }
+        }
+    }
+
+    /// Whether the dialog's search finds the page: every word of `query`
+    /// is in its name or its keywords, whatever the case.
+    pub fn matches(self, query: &str) -> bool {
+        let haystack = format!("{} {}", self.title(), self.keywords()).to_lowercase();
+        query
+            .to_lowercase()
+            .split_whitespace()
+            .all(|word| haystack.contains(word))
+    }
+
     /// Whether it holds settings, and so a "Reset to defaults".
     pub fn resettable(self) -> bool {
         !matches!(self, Page::Shortcuts | Page::About)
@@ -107,6 +160,17 @@ impl Page {
             .ok()
             .and_then(|index| Page::ALL.get(index).copied())
     }
+}
+
+/// The numbers of the pages the dialog's search finds, in the dialog's
+/// order; every page while the search is empty.
+pub fn matching_pages(query: &str) -> Vec<usize> {
+    Page::ALL
+        .iter()
+        .enumerate()
+        .filter(|(_, page)| page.matches(query))
+        .map(|(number, _)| number)
+        .collect()
 }
 
 /// What the dialog knows of the desktop, read in the background.
@@ -134,26 +198,55 @@ pub struct Facts {
     pub editing_terminal: bool,
 }
 
+/// One option of a row of segments.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Segment {
+    /// What [`apply`] is told.
+    pub id: &'static str,
+    /// Its words.
+    pub words: String,
+    /// A Lucide icon before the words, or empty.
+    pub icon: &'static str,
+}
+
+/// One chip of a row of chips: a setting of its own, on or off.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Chip {
+    /// The row key [`apply`] is told, with "true" or "false".
+    pub key: &'static str,
+    /// Its words.
+    pub words: &'static str,
+    /// Whether it is on.
+    pub on: bool,
+}
+
 /// One control.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Control {
-    /// One of several, as a drop-down.
+    /// One of several, as a drop-down: for many options or long words.
     Choice {
         /// The current option's id.
         value: String,
         /// Each option's id and words.
         options: Vec<(String, String)>,
     },
-    /// On or off.
+    /// One of two or three short options, side by side.
+    Segmented {
+        /// The current option's id.
+        value: &'static str,
+        /// The options.
+        options: Vec<Segment>,
+    },
+    /// On or off, as a switch.
     Toggle {
         /// Whether it is on.
         on: bool,
         /// Whether it can be changed.
         enabled: bool,
     },
-    /// A number changed in steps, shown with its words.
-    Stepper {
+    /// A number in steps, as a slider with the value in words beside it.
+    Slider {
         /// The value.
         value: i64,
         /// The smallest value.
@@ -164,6 +257,19 @@ pub enum Control {
         step: i64,
         /// The value in words ("96 px").
         text: String,
+        /// Each step's value in words, from `min` up, shown while the
+        /// slider is dragged.
+        steps: Vec<String>,
+    },
+    /// The window's look, as a drawing of each: `glass` or `opaque`.
+    Looks {
+        /// The current look.
+        value: &'static str,
+    },
+    /// Several settings on or off, as a row of chips.
+    Chips {
+        /// The chips.
+        chips: Vec<Chip>,
     },
     /// A line of text, applied on Enter.
     Text {
@@ -177,31 +283,38 @@ pub enum Control {
         /// Its words.
         label: String,
     },
+    /// A state that is as it should be ("Default"), with a check mark.
+    Badge {
+        /// Its words.
+        label: &'static str,
+    },
     /// Words only.
     Note,
 }
 
-/// One row: a label, a control and the words under it.
+/// One row: what the setting is, what it means, and its control.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Row {
     /// What [`apply`] is told when it changes.
     pub key: &'static str,
-    /// The label on the left; empty to go on from the row above.
+    /// What the setting is.
     pub label: String,
     /// The control.
     pub control: Control,
-    /// Words under the control.
+    /// What it means, under the label; empty for none.
     pub hint: String,
-    /// The words are a warning.
+    /// The hint is a warning.
     pub warning: bool,
 }
 
-/// A titled group of rows.
+/// A titled section of rows, drawn as one panel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Group {
     /// Its title.
     pub title: &'static str,
+    /// A line under the title; empty for none.
+    pub note: &'static str,
     /// Its rows.
     pub rows: Vec<Row>,
 }
@@ -228,6 +341,14 @@ fn hinted(mut row: Row, hint: impl Into<String>) -> Row {
     row
 }
 
+fn group(title: &'static str, rows: Vec<Row>) -> Group {
+    Group {
+        title,
+        note: "",
+        rows,
+    }
+}
+
 fn choice(value: &str, options: &[(&str, &str)]) -> Control {
     Control::Choice {
         value: value.to_owned(),
@@ -235,6 +356,37 @@ fn choice(value: &str, options: &[(&str, &str)]) -> Control {
             .iter()
             .map(|(id, words)| ((*id).to_owned(), (*words).to_owned()))
             .collect(),
+    }
+}
+
+fn segmented(value: &'static str, options: &[(&'static str, &str, &'static str)]) -> Control {
+    Control::Segmented {
+        value,
+        options: options
+            .iter()
+            .map(|(id, words, icon)| Segment {
+                id,
+                words: (*words).to_owned(),
+                icon,
+            })
+            .collect(),
+    }
+}
+
+/// A slider from `min` to `max` by `step` at `value`, each value written
+/// by `words`.
+fn slider(value: i64, min: i64, max: i64, step: i64, words: impl Fn(i64) -> String) -> Control {
+    let steps = (min..=max)
+        .step_by(usize::try_from(step.max(1)).unwrap_or(1))
+        .map(&words)
+        .collect();
+    Control::Slider {
+        value,
+        min,
+        max,
+        step,
+        text: words(value),
+        steps,
     }
 }
 
@@ -259,7 +411,7 @@ fn sort_id(sort: SortKey) -> &'static str {
     }
 }
 
-/// The groups of `page` for these settings and facts. The Toolbar,
+/// The sections of `page` for these settings and facts. The Toolbar,
 /// Shortcuts and About pages are drawn by the interface from their own
 /// lists; they have no rows here.
 pub fn page(page: Page, settings: &Settings, facts: &Facts) -> Vec<Group> {
@@ -301,7 +453,7 @@ fn general(settings: &Settings, facts: &Facts) -> Vec<Group> {
         starting.push(hinted(
             row(
                 "start-folder-shown",
-                "",
+                "The chosen folder",
                 Control::Button {
                     label: "Use the folder shown".to_owned(),
                 },
@@ -309,45 +461,48 @@ fn general(settings: &Settings, facts: &Facts) -> Vec<Group> {
             shown.unwrap_or_else(|| "No folder chosen: Rustphin opens the home folder.".to_owned()),
         ));
     }
-    starting.push(row(
-        "shown-in",
-        "Folders opened by other applications",
-        choice(
-            match settings.shown_folders() {
-                ShownIn::Tab => "tab",
-                ShownIn::Window => "window",
-            },
-            &[("tab", "In a new tab"), ("window", "In a new window")],
+    starting.push(hinted(
+        row(
+            "shown-in",
+            "Folders opened by other applications",
+            segmented(
+                match settings.shown_folders() {
+                    ShownIn::Tab => "tab",
+                    ShownIn::Window => "window",
+                },
+                &[("tab", "New tab", ""), ("window", "New window", "")],
+            ),
         ),
+        "From a browser\u{2019}s downloads or a desktop link.",
     ));
     let memory = facts
         .memory
         .map(|bytes| format!(" Rustphin uses {} MB of memory now.", bytes / (1024 * 1024)))
         .unwrap_or_default();
+    let keep_running = settings.keep_running();
     let background = vec![
         hinted(
             row(
                 "keep-running",
-                "In the background",
-                Control::Toggle {
-                    on: settings.keep_running(),
-                    enabled: true,
-                },
+                "Keep running after the last window closes",
+                toggle(keep_running),
             ),
-            "Keep Rustphin running after its last window closes",
+            "New windows then open at once.",
         ),
         hinted(
             row(
                 "start-at-login",
-                "",
+                "Start when you log in",
                 Control::Toggle {
                     on: settings.start_at_login(),
-                    enabled: settings.keep_running(),
+                    enabled: keep_running,
                 },
             ),
-            format!(
-                "Also start it when you log in. New windows then open at once. Quit with Ctrl+Q.{memory}"
-            ),
+            if keep_running {
+                format!("Quit with Ctrl+Q.{memory}")
+            } else {
+                "Needs \u{201c}Keep running after the last window closes\u{201d} on.".to_owned()
+            },
         ),
     ];
     let default_manager = if !facts.read {
@@ -357,7 +512,11 @@ fn general(settings: &Settings, facts: &Facts) -> Vec<Group> {
         )
     } else if facts.is_default {
         hinted(
-            row("", "Default file manager", Control::Note),
+            row(
+                "",
+                "Default file manager",
+                Control::Badge { label: "Default" },
+            ),
             "Rustphin opens folders for this desktop.",
         )
     } else if !facts.installed {
@@ -399,31 +558,28 @@ fn general(settings: &Settings, facts: &Facts) -> Vec<Group> {
     let click = settings.click();
     let mut desktop = vec![
         default_manager,
-        hinted(
-            row(
-                "click",
-                "Open files and folders with",
-                choice(
-                    match click {
-                        None => "kde",
-                        Some(Click::Double) => "double",
-                        Some(Click::Single) => "single",
-                    },
-                    &[
-                        (
-                            "kde",
-                            if facts.kde_single_click {
-                                "As KDE is set (a single click)"
-                            } else {
-                                "As KDE is set (a double click)"
-                            },
-                        ),
-                        ("double", "A double click"),
-                        ("single", "A single click"),
-                    ],
-                ),
+        row(
+            "click",
+            "Open files and folders with",
+            choice(
+                match click {
+                    None => "kde",
+                    Some(Click::Double) => "double",
+                    Some(Click::Single) => "single",
+                },
+                &[
+                    (
+                        "kde",
+                        if facts.kde_single_click {
+                            "As KDE is set (a single click)"
+                        } else {
+                            "As KDE is set (a double click)"
+                        },
+                    ),
+                    ("double", "A double click"),
+                    ("single", "A single click"),
+                ],
             ),
-            "",
         ),
     ];
     let chosen = settings.terminal();
@@ -467,7 +623,7 @@ fn general(settings: &Settings, facts: &Facts) -> Vec<Group> {
         let mut field = hinted(
             row(
                 "terminal",
-                "",
+                "Terminal command",
                 Control::Text {
                     value: text.to_owned(),
                     placeholder: "konsole --separate".to_owned(),
@@ -483,38 +639,28 @@ fn general(settings: &Settings, facts: &Facts) -> Vec<Group> {
         desktop.push(field);
     }
     vec![
-        Group {
-            title: "Starting",
-            rows: starting,
-        },
-        Group {
-            title: "Desktop",
-            rows: desktop,
-        },
-        Group {
-            title: "Background",
-            rows: background,
-        },
+        group("Starting", starting),
+        group("Desktop", desktop),
+        group("Background", background),
     ]
 }
 
 fn appearance(settings: &Settings) -> Vec<Group> {
     let hidden = settings.hidden_opacity();
     vec![
-        Group {
-            title: "Window",
-            rows: vec![
+        group(
+            "Window",
+            vec![
                 hinted(
                     row(
                         "look",
                         "Look",
-                        choice(
-                            match settings.look() {
+                        Control::Looks {
+                            value: match settings.look() {
                                 Look::Glass => "glass",
                                 Look::Opaque => "opaque",
                             },
-                            &[("glass", "Glass"), ("opaque", "Opaque")],
-                        ),
+                        },
                     ),
                     "Blur shows only where the desktop offers it.",
                 ),
@@ -522,53 +668,56 @@ fn appearance(settings: &Settings) -> Vec<Group> {
                     row(
                         "title-bar",
                         "Title bar",
-                        choice(
+                        segmented(
                             match settings.title_bar() {
                                 TitleBar::Rustphin => "rustphin",
                                 TitleBar::Kde => "kde",
                             },
                             &[
-                                ("rustphin", "Rustphin\u{2019}s own"),
-                                ("kde", "KDE\u{2019}s"),
+                                ("rustphin", "Rustphin\u{2019}s own", ""),
+                                ("kde", "KDE\u{2019}s", ""),
                             ],
                         ),
                     ),
                     "Applies to new windows.",
                 ),
             ],
-        },
-        Group {
-            title: "Text and files",
-            rows: vec![
+        ),
+        group(
+            "Text and files",
+            vec![
                 row(
                     "text-size",
                     "Text size",
-                    choice(
+                    segmented(
                         match settings.text_size() {
                             TextSize::Smaller => "smaller",
                             TextSize::Normal => "normal",
                             TextSize::Larger => "larger",
                         },
                         &[
-                            ("smaller", "Smaller"),
-                            ("normal", "Normal"),
-                            ("larger", "Larger"),
+                            ("smaller", "Smaller", ""),
+                            ("normal", "Normal", ""),
+                            ("larger", "Larger", ""),
                         ],
                     ),
                 ),
-                row(
-                    "hidden-opacity",
-                    "Hidden files are drawn at",
-                    Control::Stepper {
-                        value: i64::from(hidden),
-                        min: i64::from(HIDDEN_OPACITY_MIN_PERCENT),
-                        max: 100,
-                        step: HIDDEN_STEP,
-                        text: format!("{hidden} %"),
-                    },
+                hinted(
+                    row(
+                        "hidden-opacity",
+                        "Hidden files are drawn at",
+                        slider(
+                            i64::from(hidden),
+                            i64::from(HIDDEN_OPACITY_MIN_PERCENT),
+                            100,
+                            HIDDEN_STEP,
+                            |percent| format!("{percent} %"),
+                        ),
+                    ),
+                    "Lower is fainter.",
                 ),
             ],
-        },
+        ),
     ]
 }
 
@@ -591,45 +740,48 @@ fn views(settings: &Settings) -> Vec<Group> {
         .map(|mb| (mb.to_string(), format!("up to {mb} MB a file")))
         .collect();
     vec![
-        Group {
-            title: "Default view",
-            rows: vec![
+        group(
+            "Default view",
+            vec![
                 row(
                     "view-mode",
                     "View",
-                    choice(
+                    segmented(
                         mode_id(mode),
                         &[
-                            ("icons", "Icons"),
-                            ("compact", "Compact"),
-                            ("details", "Details"),
+                            ("icons", "Icons", "layout-grid"),
+                            ("compact", "Compact", "columns-3"),
+                            ("details", "Details", "layout-list"),
                         ],
                     ),
                 ),
                 row(
                     "zoom",
-                    "Size",
-                    Control::Stepper {
-                        value: i64::try_from(zoom).unwrap_or(0),
-                        min: 0,
-                        max: i64::try_from(ZOOM_LEVELS - 1).unwrap_or(6),
-                        step: 1,
-                        text: format!("{} px", mode.layout(zoom).icon as u32),
-                    },
+                    "Icon size",
+                    slider(
+                        i64::try_from(zoom).unwrap_or(0),
+                        0,
+                        i64::try_from(ZOOM_LEVELS - 1).unwrap_or(6),
+                        1,
+                        |level| {
+                            let level = usize::try_from(level).unwrap_or(0);
+                            format!("{} px", mode.layout(level).icon as u32)
+                        },
+                    ),
                 ),
-                row(
-                    "per-folder",
-                    "Each folder",
-                    Control::Toggle {
-                        on: settings.per_folder(),
-                        enabled: true,
-                    },
+                hinted(
+                    row(
+                        "per-folder",
+                        "Remember the view for each folder",
+                        toggle(settings.per_folder()),
+                    ),
+                    "Otherwise every folder opens in the view above.",
                 ),
             ],
-        },
-        Group {
-            title: "Order",
-            rows: vec![
+        ),
+        group(
+            "Order",
+            vec![
                 row(
                     "sort",
                     "Sort by",
@@ -646,30 +798,49 @@ fn views(settings: &Settings) -> Vec<Group> {
                 row(
                     "direction",
                     "Direction",
-                    choice(
+                    segmented(
                         if options.descending { "down" } else { "up" },
-                        &[("up", "A to Z"), ("down", "Z to A")],
+                        &[("up", "A to Z", ""), ("down", "Z to A", "")],
                     ),
                 ),
-                hinted(
-                    row("folders-first", "", toggle(options.folders_first)),
+                row(
+                    "folders-first",
                     "Folders first",
+                    toggle(options.folders_first),
                 ),
                 hinted(
-                    row("hidden", "", toggle(options.show_hidden)),
-                    "Show hidden files",
+                    row("hidden", "Show hidden files", toggle(options.show_hidden)),
+                    "Ctrl+H switches this in any window.",
                 ),
             ],
-        },
+        ),
         Group {
             title: "Details view",
+            note: "The name is always shown.",
             rows: vec![
-                hinted(row("column-size", "Columns", toggle(columns.size)), "Size"),
-                hinted(
-                    row("column-modified", "", toggle(columns.modified)),
-                    "Modified",
+                row(
+                    "",
+                    "Columns",
+                    Control::Chips {
+                        chips: vec![
+                            Chip {
+                                key: "column-size",
+                                words: "Size",
+                                on: columns.size,
+                            },
+                            Chip {
+                                key: "column-modified",
+                                words: "Modified",
+                                on: columns.modified,
+                            },
+                            Chip {
+                                key: "column-type",
+                                words: "Type",
+                                on: columns.kind,
+                            },
+                        ],
+                    },
                 ),
-                hinted(row("column-type", "", toggle(columns.kind)), "Type"),
                 row(
                     "dates",
                     "Dates",
@@ -698,12 +869,13 @@ fn views(settings: &Settings) -> Vec<Group> {
                 ),
             ],
         },
-        Group {
-            title: "Previews",
-            rows: vec![
-                hinted(
-                    row("thumbnails", "Thumbnails", toggle(previews.shown)),
+        group(
+            "Previews",
+            vec![
+                row(
+                    "thumbnails",
                     "Show pictures\u{2019} thumbnails",
+                    toggle(previews.shown),
                 ),
                 row(
                     "thumbnail-limit",
@@ -714,23 +886,23 @@ fn views(settings: &Settings) -> Vec<Group> {
                     },
                 ),
             ],
-        },
+        ),
     ]
 }
 
 fn places(settings: &Settings) -> Vec<Group> {
     let choice_now = settings.places();
     vec![
-        Group {
-            title: "Sections",
-            rows: vec![
+        group(
+            "Sections",
+            vec![
                 hinted(
-                    row("places-devices", "Show", toggle(choice_now.devices)),
-                    "Devices",
+                    row("places-devices", "Devices", toggle(choice_now.devices)),
+                    "Drives that are plugged in.",
                 ),
                 hinted(
-                    row("places-remote", "", toggle(choice_now.remote)),
-                    "Remote",
+                    row("places-remote", "Remote", toggle(choice_now.remote)),
+                    "Network folders you have connected.",
                 ),
                 row(
                     "hidden-places",
@@ -745,61 +917,59 @@ fn places(settings: &Settings) -> Vec<Group> {
                     ),
                 ),
             ],
-        },
-        Group {
-            title: "Panel",
-            rows: vec![hinted(
+        ),
+        group(
+            "Panel",
+            vec![hinted(
                 row(
                     "places-width",
                     "Width",
-                    Control::Stepper {
-                        value: i64::from(choice_now.width),
-                        min: size::SIDEBAR_MIN as i64,
-                        max: size::SIDEBAR_MAX as i64,
-                        step: WIDTH_STEP,
-                        text: format!("{} px", choice_now.width),
-                    },
+                    slider(
+                        i64::from(choice_now.width),
+                        size::SIDEBAR_MIN as i64,
+                        size::SIDEBAR_MAX as i64,
+                        WIDTH_STEP,
+                        |width| format!("{width} px"),
+                    ),
                 ),
-                "or drag the panel\u{2019}s edge",
+                "Or drag the panel\u{2019}s edge.",
             )],
-        },
+        ),
     ]
 }
 
 fn confirmations(settings: &Settings) -> Vec<Group> {
     let asked = settings.confirmations();
     vec![
-        Group {
-            title: "Ask before",
-            rows: vec![
+        group(
+            "Ask before",
+            vec![
                 hinted(
-                    row("ask-trash", "", toggle(asked.trash)),
-                    "Moving to the trash",
+                    row("ask-trash", "Moving to the trash", toggle(asked.trash)),
+                    "It can be put back from the Trash.",
                 ),
                 hinted(
                     row(
                         "ask-delete",
-                        "",
+                        "Deleting for good",
                         Control::Toggle {
                             on: true,
                             enabled: false,
                         },
                     ),
-                    "Deleting for good. Always asked: it cannot be undone.",
+                    "Always asks: it cannot be undone.",
                 ),
-                hinted(
-                    row("ask-empty", "", toggle(asked.empty_trash)),
-                    "Emptying the trash",
-                ),
-                hinted(
-                    row("ask-close", "", toggle(asked.close_tabs)),
+                row("ask-empty", "Emptying the trash", toggle(asked.empty_trash)),
+                row(
+                    "ask-close",
                     "Closing a window with several tabs",
+                    toggle(asked.close_tabs),
                 ),
             ],
-        },
-        Group {
-            title: "Executable files",
-            rows: vec![hinted(
+        ),
+        group(
+            "Executable files",
+            vec![hinted(
                 row(
                     "programs",
                     "Opening one",
@@ -818,7 +988,7 @@ fn confirmations(settings: &Settings) -> Vec<Group> {
                 ),
                 "Open hands it to the application for its type. A shortcut still asks unless Run it.",
             )],
-        },
+        ),
     ]
 }
 
@@ -1109,7 +1279,11 @@ mod tests {
     fn keys(groups: &[Group]) -> Vec<&'static str> {
         groups
             .iter()
-            .flat_map(|group| group.rows.iter().map(|row| row.key))
+            .flat_map(|group| &group.rows)
+            .flat_map(|row| match &row.control {
+                Control::Chips { chips } => chips.iter().map(|chip| chip.key).collect(),
+                _ => vec![row.key],
+            })
             .collect()
     }
 
@@ -1203,6 +1377,167 @@ mod tests {
         apply(&mut settings, "hidden", "true", &facts);
         // The views page changes the default view, which panes follow.
         assert_eq!(reset(&mut settings, Page::Views), Applied::DefaultView);
+    }
+
+    #[test]
+    fn the_search_finds_pages_by_name_or_by_what_they_hold() {
+        assert_eq!(matching_pages(""), (0..Page::ALL.len()).collect::<Vec<_>>());
+        assert_eq!(matching_pages("  "), matching_pages(""));
+        assert_eq!(matching_pages("BLUR"), [1]);
+        assert_eq!(matching_pages("Shortcuts"), [6]);
+        assert_eq!(matching_pages("terminal"), [0]);
+        // Every word must be found, in any order.
+        assert_eq!(matching_pages("files hidden"), [1, 2]);
+        assert_eq!(matching_pages("hidden telemetry"), Vec::<usize>::new());
+        assert!(matching_pages("nothing like this").is_empty());
+    }
+
+    #[test]
+    fn pages_are_listed_under_their_headings_with_about_apart() {
+        let sections: Vec<&str> = Page::ALL.iter().map(|page| page.section()).collect();
+        assert_eq!(
+            sections,
+            [
+                "Rustphin",
+                "Rustphin",
+                "Browsing",
+                "Browsing",
+                "Browsing",
+                "Behaviour",
+                "Behaviour",
+                ""
+            ]
+        );
+    }
+
+    /// Every row of every page with settings, for a desktop in each state
+    /// the default file manager row knows.
+    fn every_row() -> Vec<Row> {
+        let mut settings = Settings::default();
+        settings.set_start(Start::Folder, None);
+        settings.set_terminal("konsole");
+        let states = [
+            Facts::default(),
+            Facts {
+                read: true,
+                is_default: true,
+                installed: true,
+                ..Facts::default()
+            },
+            Facts {
+                read: true,
+                installed: true,
+                ..Facts::default()
+            },
+            Facts {
+                read: true,
+                ..Facts::default()
+            },
+        ];
+        let mut rows = Vec::new();
+        for facts in &states {
+            for page_now in Page::ALL {
+                for group in page(page_now, &settings, facts) {
+                    rows.extend(group.rows);
+                }
+            }
+        }
+        rows
+    }
+
+    #[test]
+    fn every_row_says_what_its_setting_is() {
+        for row in every_row() {
+            assert!(!row.label.is_empty(), "{row:?}");
+        }
+    }
+
+    #[test]
+    fn every_segment_and_chip_applies_its_own_change() {
+        let facts = Facts::default();
+        for row in every_row() {
+            match &row.control {
+                Control::Segmented { value, options } => {
+                    for option in options.iter().filter(|option| option.id != *value) {
+                        let mut settings = Settings::default();
+                        apply(&mut settings, row.key, value, &facts);
+                        assert_ne!(
+                            apply(&mut settings, row.key, option.id, &facts),
+                            Applied::Nothing,
+                            "{} {}",
+                            row.key,
+                            option.id
+                        );
+                    }
+                }
+                Control::Chips { chips } => {
+                    for chip in chips {
+                        let mut settings = Settings::default();
+                        let flipped = if chip.on { "false" } else { "true" };
+                        assert_eq!(
+                            apply(&mut settings, chip.key, flipped, &facts),
+                            Applied::Changed,
+                            "{}",
+                            chip.key
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn the_default_file_manager_shows_a_badge_only_when_it_is_rustphin() {
+        let rows = every_row();
+        let manager: Vec<&Row> = rows
+            .iter()
+            .filter(|row| row.label == "Default file manager")
+            .collect();
+        let badges = manager
+            .iter()
+            .filter(|row| matches!(row.control, Control::Badge { .. }))
+            .count();
+        assert_eq!(manager.len(), 4);
+        assert_eq!(badges, 1);
+        assert!(manager.iter().any(|row| row.key == "make-default"));
+    }
+
+    #[test]
+    fn a_slider_words_each_of_its_steps_as_its_value_is_worded() {
+        let mut sliders = 0;
+        for row in every_row() {
+            if let Control::Slider {
+                value,
+                min,
+                max,
+                step,
+                text,
+                steps,
+            } = &row.control
+            {
+                sliders += 1;
+                assert_eq!(steps.len() as i64, (max - min) / step + 1, "{}", row.key);
+                let at = usize::try_from((value - min) / step).unwrap_or(usize::MAX);
+                assert_eq!(steps.get(at), Some(text), "{}", row.key);
+            }
+        }
+        assert!(sliders >= 3);
+    }
+
+    #[test]
+    fn starting_at_login_says_why_it_cannot_be_changed() {
+        let mut settings = Settings::default();
+        settings.set_keep_running(false);
+        let general = page(Page::General, &settings, &Facts::default());
+        let login = general
+            .iter()
+            .flat_map(|group| &group.rows)
+            .find(|row| row.key == "start-at-login");
+        assert!(login.is_some_and(|row| {
+            matches!(row.control, Control::Toggle { enabled: false, .. })
+                && row.hint.contains("Keep running")
+        }));
     }
 
     #[test]
