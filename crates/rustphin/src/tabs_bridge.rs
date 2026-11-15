@@ -173,9 +173,9 @@ pub mod qobject {
         #[cxx_name = "paletteJson"]
         fn palette_json(self: &TabsModel) -> QString;
         /// Copies (or moves) the active view's selection, a `text/uri-list`,
-        /// to the other view.
+        /// to the other view, with the rights of the window numbered `window`.
         #[qinvokable]
         #[cxx_name = "transfer"]
-        fn transfer(self: Pin<&mut TabsModel>, selected: &QString, moving: bool);
+        fn transfer(self: Pin<&mut TabsModel>, selected: &QString, moving: bool, window: i32);
     }
 }

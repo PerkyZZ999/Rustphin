@@ -12,6 +12,8 @@ import Rustphin
 FocusScope {
     id: pane
 
+    // The number of the window the pane is in (its rights, D-028).
+    required property int windowId
     required property string startFolder
     // Names to select once the start folder is listed.
     property list<string> startSelect: []
@@ -145,6 +147,7 @@ FocusScope {
     FolderModel {
         id: folder
 
+        window: pane.windowId
         onFileActivated: uri => pane.fileActivated(uri)
         onOpenInNewTab: uri => pane.openInNewTab(uri)
         onCopyText: words => pane.copyText(words)
@@ -238,6 +241,43 @@ FocusScope {
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.body_text
                     text: folder.banner
+                }
+            }
+        }
+
+        // As administrator, a folder that is not root's own says so.
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.max(Tokens.metrics.control, ownerText.implicitHeight + 2 * Tokens.metrics.space_sm)
+            visible: folder.ownerWarning.length > 0
+            color: Tokens.colors.danger_surface
+            border.color: Tokens.colors.danger_border
+            border.width: 1
+            Accessible.role: Accessible.AlertMessage
+            Accessible.name: folder.ownerWarning
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Tokens.metrics.space_md
+                anchors.rightMargin: Tokens.metrics.space_xs
+                spacing: Tokens.metrics.space_sm
+
+                Lucide {
+                    name: "triangle-alert"
+                    colour: Tokens.colors.danger
+                }
+                Text {
+                    id: ownerText
+
+                    textFormat: Text.PlainText
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    lineHeight: Tokens.metrics.text_line
+                    lineHeightMode: Text.FixedHeight
+                    color: Tokens.colors.text
+                    font.family: Tokens.metrics.family_body
+                    font.pixelSize: Tokens.metrics.body_text
+                    text: folder.ownerWarning
                 }
             }
         }

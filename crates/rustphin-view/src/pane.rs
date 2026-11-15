@@ -430,6 +430,19 @@ pub fn crumbs_for_width(width: f32) -> usize {
     }
 }
 
+/// What a pane says over a folder shown as administrator whose owner
+/// (`owner`, a user number, when it could be read) is not root: others can
+/// change what is in it under the administrator's hands (ADMIN_MODE.md,
+/// threat model). Nothing for root's own folders, or outside the mode.
+pub fn owner_warning(as_administrator: bool, owner: Option<u32>) -> Option<&'static str> {
+    match owner {
+        Some(owner) if as_administrator && owner != 0 => Some(
+            "This folder does not belong to root: its owner can change what is in it while you work here as administrator.",
+        ),
+        _ => None,
+    }
+}
+
 /// The trash folder's title: the home trash, or the volume it belongs to.
 pub fn trash_label(dir: &Path) -> String {
     let in_volume = dir
@@ -608,6 +621,15 @@ mod tests {
             error,
             moved,
         }
+    }
+
+    #[test]
+    fn only_a_folder_that_is_not_roots_is_warned_about_as_administrator() {
+        assert!(owner_warning(true, Some(1000)).is_some());
+        assert_eq!(owner_warning(true, Some(0)), None);
+        assert_eq!(owner_warning(false, Some(1000)), None);
+        // An owner that could not be read is not guessed at.
+        assert_eq!(owner_warning(true, None), None);
     }
 
     #[test]

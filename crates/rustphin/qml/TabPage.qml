@@ -16,6 +16,7 @@ Item {
     required property string rightStart
     required property list<string> select
     required property bool current
+    required property int windowId
     required property TabsModel tabs
     required property PlacesModel places
     readonly property Pane activeItem: split && activePane === 1 && rightLoader.item ? rightLoader.item as Pane : leftPane
@@ -50,6 +51,7 @@ Item {
         Pane {
             id: leftPane
 
+            windowId: page.windowId
             Layout.fillWidth: true
             Layout.fillHeight: true
             startFolder: page.leftStart
@@ -81,6 +83,7 @@ Item {
             sourceComponent: Pane {
                 id: rightPane
 
+                windowId: page.windowId
                 startFolder: page.rightStart
                 split: true
                 current: page.activePane === 1

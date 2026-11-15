@@ -184,6 +184,7 @@ pub struct FolderModelRust {
     problem_status: QString,
     way_label: QString,
     banner: QString,
+    owner_warning: QString,
     can_go_back: bool,
     can_go_forward: bool,
     can_go_up: bool,
@@ -254,6 +255,9 @@ pub struct FolderModelRust {
     frames: Vec<Instant>,
     /// The model lists through the administrator's helper.
     as_admin: bool,
+    /// The number of the window the pane is in (`Operations.newWindow`):
+    /// administrator mode belongs to a window (D-028).
+    window: i32,
     /// Counts models, so a replaced one's events are dropped.
     model_epoch: u64,
     /// The New menu's files.
@@ -289,6 +293,7 @@ impl Default for FolderModelRust {
             problem_status: QString::default(),
             way_label: QString::default(),
             banner: QString::default(),
+            owner_warning: QString::default(),
             can_go_back: false,
             can_go_forward: false,
             can_go_up: false,
@@ -350,6 +355,7 @@ impl Default for FolderModelRust {
             shown: false,
             frames: Vec::new(),
             as_admin: false,
+            window: 0,
             model_epoch: 0,
             new_files: rustphin_platform::templates::built_in(),
             open_menu: rustphin_view::menu::OpenMenu::default(),
@@ -605,9 +611,10 @@ impl qobject::FolderModel {
         if self.rust().model.is_some() {
             return true;
         }
+        let window = self.rust().window;
         let fs: Arc<dyn rustphin_core::Fs> =
-            crate::admin::filesystem().unwrap_or_else(|| Arc::new(RealFs));
-        self.as_mut().rust_mut().as_admin = crate::admin::active();
+            crate::admin::filesystem(window).unwrap_or_else(|| Arc::new(RealFs));
+        self.as_mut().rust_mut().as_admin = crate::admin::active(window);
         let (mut model, events) = match DirectoryModel::new(fs) {
             Ok(started) => started,
             Err(error) => {
@@ -675,12 +682,13 @@ impl qobject::FolderModel {
     /// Lists through the administrator's helper, or the user's own
     /// filesystem again, from the folder shown.
     fn switch_filesystem(mut self: Pin<&mut Self>) {
-        let admin = crate::admin::active();
+        let window = self.rust().window;
+        let admin = crate::admin::active(window);
         if self.rust().model.is_none() || self.rust().as_admin == admin {
             return;
         }
         let fs: Arc<dyn rustphin_core::Fs> =
-            crate::admin::filesystem().unwrap_or_else(|| Arc::new(RealFs));
+            crate::admin::filesystem(window).unwrap_or_else(|| Arc::new(RealFs));
         let location = self.rust().folder();
         let options = self.rust().options;
         let (mut model, events) = match DirectoryModel::new(fs) {
@@ -1270,6 +1278,29 @@ impl qobject::FolderModel {
             |name| display_name(name.as_bytes()).into_owned(),
         );
         self.as_mut().set_title(text(&title));
+        self.warn_about_owner(path);
+    }
+
+    /// As administrator, warns when the folder shown is not root's own;
+    /// its owner is read off the Qt thread.
+    fn warn_about_owner(mut self: Pin<&mut Self>, path: &Path) {
+        self.as_mut().set_owner_warning(QString::default());
+        if !self.rust().as_admin {
+            return;
+        }
+        let thread = self.qt_thread();
+        let path = path.to_owned();
+        std::thread::spawn(move || {
+            use std::os::unix::fs::MetadataExt as _;
+            let owner = std::fs::metadata(&path).ok().map(|facts| facts.uid());
+            let _ = thread.queue(move |mut model| {
+                if model.rust().pane.folder() != Some(path.as_path()) {
+                    return;
+                }
+                let words = pane::owner_warning(model.rust().as_admin, owner).unwrap_or_default();
+                model.as_mut().set_owner_warning(text(words));
+            });
+        });
     }
 
     /// Updates which navigation steps are possible.
@@ -1709,10 +1740,14 @@ impl qobject::FolderModel {
                 .rust_mut()
                 .pane
                 .select_when_seen(typed.clone().into_bytes(), false);
-            crate::hub::start(rustphin_core::ops::Request::Rename {
-                path,
-                new_name: typed.into(),
-            });
+            let admin = self.rust().as_admin;
+            crate::hub::start(
+                rustphin_core::ops::Request::Rename {
+                    path,
+                    new_name: typed.into(),
+                },
+                admin,
+            );
         }
         let row = *self.renaming_row();
         self.as_mut().set_renaming_row(-1);
@@ -1792,7 +1827,7 @@ impl qobject::FolderModel {
         };
         let Some(into) = into else { return };
         let sources = rustphin_platform::uri::paths_from_uri_list(uris.to_string().as_bytes());
-        crate::hub::drop_files(sources, into, drop_action(action));
+        crate::hub::drop_files(sources, into, drop_action(action), self.rust().as_admin);
     }
 
     fn is_selected(&self, row: i32) -> bool {
@@ -1861,7 +1896,7 @@ impl qobject::FolderModel {
 
     fn paste(self: Pin<&mut Self>) {
         if self.rust().trash_dir.is_none() && self.rust().current().is_some() {
-            crate::hub::paste(self.rust().folder());
+            crate::hub::paste(self.rust().folder(), self.rust().as_admin);
         }
     }
 
@@ -1950,7 +1985,7 @@ impl qobject::FolderModel {
             count: rows.len(),
             single_container,
             in_trash: rust.trash_dir.is_some(),
-            as_administrator: crate::admin::active(),
+            as_administrator: rust.as_admin,
             can_paste,
             applications,
             types_ready: rust.types.is_some(),
@@ -2017,9 +2052,12 @@ impl qobject::FolderModel {
             PaneCommand::Rename => self.begin_rename(),
             PaneCommand::RecoverRenames => {
                 if self.rust().trash_dir.is_none() && self.rust().current().is_some() {
-                    crate::hub::start(rustphin_core::ops::Request::RecoverRenameBatch {
-                        directory: self.rust().folder(),
-                    });
+                    crate::hub::start(
+                        rustphin_core::ops::Request::RecoverRenameBatch {
+                            directory: self.rust().folder(),
+                        },
+                        self.rust().as_admin,
+                    );
                 }
             }
             PaneCommand::Copy => self.copy_selected(false),
@@ -2198,11 +2236,15 @@ impl qobject::FolderModel {
             .rust_mut()
             .pane
             .select_when_seen(name.clone().into_bytes(), true);
-        crate::hub::start(rustphin_core::ops::Request::CreateFromTemplate {
-            parent: snapshot.path().to_owned(),
-            name: name.into(),
-            template: file.template,
-        });
+        let admin = self.rust().as_admin;
+        crate::hub::start(
+            rustphin_core::ops::Request::CreateFromTemplate {
+                parent: snapshot.path().to_owned(),
+                name: name.into(),
+                template: file.template,
+            },
+            admin,
+        );
     }
 
     /// Carries out `action` on the selection as the planner
@@ -2239,11 +2281,12 @@ impl qobject::FolderModel {
                 },
             )
         };
+        let admin = self.rust().as_admin;
         match plan {
             Plan::Nothing => return false,
             Plan::Say(words) => crate::hub::say(words, false),
-            Plan::Trash { paths, listed } => crate::hub::trash(paths, listed),
-            Plan::Delete { paths, listed } => crate::hub::delete(paths, listed),
+            Plan::Trash { paths, listed } => crate::hub::trash(paths, listed, admin),
+            Plan::Delete { paths, listed } => crate::hub::delete(paths, listed, admin),
             Plan::Start { requests, select } => {
                 let pane = &mut self.as_mut().rust_mut().pane;
                 match select {
@@ -2252,7 +2295,7 @@ impl qobject::FolderModel {
                     Select::AndRename(name) => pane.select_when_seen(name, true),
                 }
                 for request in requests {
-                    crate::hub::start(request);
+                    crate::hub::start(request, admin);
                 }
             }
             Plan::Open(dialog) => self.open_dialog(dialog),

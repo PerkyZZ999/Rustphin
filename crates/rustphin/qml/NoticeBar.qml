@@ -10,6 +10,9 @@ import Rustphin
 ColumnLayout {
     id: bar
 
+    // The window's number: Undo reverts what was done with its rights.
+    required property int windowId
+
     spacing: 0
     visible: Operations.progressVisible || Operations.notice.length > 0
 
@@ -111,7 +114,7 @@ ColumnLayout {
                 visible: Operations.noticeUndo
                 text: qsTr("Undo (Ctrl+Z)")
                 iconName: "undo-2"
-                onClicked: Operations.undo()
+                onClicked: Operations.undo(bar.windowId)
             }
             IconButton {
                 iconName: "x"

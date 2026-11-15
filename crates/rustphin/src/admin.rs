@@ -1,9 +1,11 @@
-//! Acting as administrator through KDE's kio-admin helper (W-098, W-114f):
-//! one state for the process; panes list and operations run through the
-//! helper's filesystem while it is on. Nothing asks for a password until
-//! the user turns it on; the helper's own dialog asks.
+//! Acting as administrator through KDE's kio-admin helper (W-098, W-114f).
+//! The mode belongs to a window (D-028): its panes list and its operations
+//! run through the helper's filesystem while it is on, and it ends with the
+//! window. The helper's connection is shared by the process. Nothing asks
+//! for a password until the user turns the mode on; the helper's own dialog
+//! asks.
 
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, collections::HashSet, sync::Arc};
 
 use rustphin_core::Fs;
 use rustphin_platform::admin::{AdminError, AdminFs, AdminHelper};
@@ -15,15 +17,31 @@ struct State {
     fs: Option<Arc<dyn Fs>>,
     helper: Option<Arc<AdminHelper>>,
     pending: bool,
+    /// The windows acting as administrator.
+    windows: HashSet<i32>,
+    /// The number the next window gets.
+    next_window: i32,
 }
 
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::default());
 }
 
-/// Whether the window acts as administrator.
-pub fn active() -> bool {
-    STATE.with(|state| state.borrow().fs.is_some())
+/// A number for a new window, never used before in this run.
+pub fn new_window() -> i32 {
+    STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.next_window += 1;
+        state.next_window
+    })
+}
+
+/// Whether `window` acts as administrator.
+pub fn active(window: i32) -> bool {
+    STATE.with(|state| {
+        let state = state.borrow();
+        state.fs.is_some() && state.windows.contains(&window)
+    })
 }
 
 /// Whether access is being asked for.
@@ -31,26 +49,31 @@ pub fn pending() -> bool {
     STATE.with(|state| state.borrow().pending)
 }
 
-/// The helper's filesystem while acting as administrator.
-pub fn filesystem() -> Option<Arc<dyn Fs>> {
-    STATE.with(|state| state.borrow().fs.clone())
+/// The helper's filesystem, while `window` acts as administrator.
+pub fn filesystem(window: i32) -> Option<Arc<dyn Fs>> {
+    active(window)
+        .then(|| STATE.with(|state| state.borrow().fs.clone()))
+        .flatten()
 }
 
-/// The helper, to describe entries as administrator.
-pub fn helper() -> Option<Arc<AdminHelper>> {
-    STATE.with(|state| {
-        state
-            .borrow()
-            .helper
-            .clone()
-            .filter(|_| state.borrow().fs.is_some())
-    })
+/// The helper, to describe entries while `window` acts as administrator.
+pub fn helper(window: i32) -> Option<Arc<AdminHelper>> {
+    active(window)
+        .then(|| STATE.with(|state| state.borrow().helper.clone()))
+        .flatten()
 }
 
-/// Starts acting as administrator (asking for access) or stops.
-pub fn toggle() {
-    if STATE.with(|state| state.borrow_mut().fs.take().is_some()) {
-        hub::set_admin(None);
+/// Ends the mode of `window`, which is closing, without a word.
+pub fn leave(window: i32) {
+    if STATE.with(|state| state.borrow_mut().windows.remove(&window)) {
+        hub::admin_changed();
+    }
+}
+
+/// Makes `window` act as administrator (asking for access) or stop.
+pub fn toggle(window: i32) {
+    if STATE.with(|state| state.borrow_mut().windows.remove(&window)) {
+        hub::admin_changed();
         hub::say("No longer acting as administrator.".into(), false);
         return;
     }
@@ -76,13 +99,23 @@ pub fn toggle() {
             hub::withdraw(ticket);
             match granted {
                 Ok(helper) => {
-                    let fs: Arc<dyn Fs> = Arc::new(AdminFs::new(Arc::clone(&helper)));
-                    STATE.with(|state| {
+                    // One helper connection and one runner serve every
+                    // window that acts as administrator.
+                    let made = STATE.with(|state| {
                         let mut state = state.borrow_mut();
+                        state.windows.insert(window);
+                        if state.fs.is_some() {
+                            return None;
+                        }
+                        let fs: Arc<dyn Fs> = Arc::new(AdminFs::new(Arc::clone(&helper)));
                         state.fs = Some(Arc::clone(&fs));
                         state.helper = Some(helper);
+                        Some(fs)
                     });
-                    hub::set_admin(Some(fs));
+                    match made {
+                        Some(fs) => hub::set_admin(fs),
+                        None => hub::admin_changed(),
+                    }
                 }
                 Err(error) => {
                     let words = match error {
@@ -94,10 +127,10 @@ pub fn toggle() {
                         other => format!("Could not act as administrator: {other}."),
                     };
                     hub::say(words, true);
-                    hub::set_admin(None);
+                    hub::admin_changed();
                 }
             }
         });
     });
-    hub::set_admin_pending();
+    hub::admin_changed();
 }

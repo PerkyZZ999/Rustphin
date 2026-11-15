@@ -91,7 +91,8 @@ impl qobject::CompressModel {
         let Some(request) = self.rust().state.as_ref().and_then(Compress::request) else {
             return false;
         };
-        hub::start(request);
+        // Never as administrator: a window acting as one offers no archives.
+        hub::start(request, false);
         self.as_mut().rust_mut().state = None;
         self.set_open(false);
         true
@@ -185,7 +186,8 @@ impl qobject::BatchModel {
         let Some(request) = self.rust().state.as_ref().and_then(BatchRename::request) else {
             return false;
         };
-        hub::start(request);
+        // Never as administrator: batch rename is refused there.
+        hub::start(request, false);
         self.as_mut().rust_mut().state = None;
         self.set_open(false);
         true

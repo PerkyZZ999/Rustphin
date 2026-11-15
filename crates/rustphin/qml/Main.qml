@@ -79,6 +79,16 @@ Window {
     minimumWidth: 480
     minimumHeight: 320
     visible: true
+    // The window's number in calls about its rights, and whether it acts
+    // as administrator: the mode belongs to the window (D-028) and ends
+    // when it closes.
+    readonly property int windowId: Operations.newWindow()
+    readonly property bool admin: adminNow(Operations.revision)
+
+    function adminNow(revision: int): bool {
+        return Operations.adminIn(windowId)
+    }
+
     // Rustphin's own title bar or the desktop's, as Settings said when the
     // window was made.
     readonly property bool ownTitleBar: Shell.ownTitleBar()
@@ -91,7 +101,7 @@ Window {
             Tokens.refresh()
     }
     color: Tokens.translucent ? "transparent" : Tokens.colors.window
-    title: qsTr("%1 — Rustphin").arg(folder ? folder.title : "")
+    title: admin ? qsTr("%1 (administrator) — Rustphin").arg(folder ? folder.title : "") : qsTr("%1 — Rustphin").arg(folder ? folder.title : "")
 
     // Frame timing for R-101 (RUSTPHIN_FRAME_LOG, RUSTPHIN_SCROLL_BENCH).
     onFrameSwapped: {
@@ -147,6 +157,8 @@ Window {
             close.accepted = false
             closeQuestion.asking = true
         }
+        if (close.accepted)
+            Operations.leaveAdmin(windowId)
     }
 
     TabsModel {
@@ -195,13 +207,13 @@ Window {
             command("filter", null)
             break
         case "copy-to-other-view":
-            tabList.transfer(folder.selectedUris(), false)
+            tabList.transfer(folder.selectedUris(), false, windowId)
             break
         case "move-to-other-view":
-            tabList.transfer(folder.selectedUris(), true)
+            tabList.transfer(folder.selectedUris(), true, windowId)
             break
         case "undo":
-            Operations.undo()
+            Operations.undo(windowId)
             break
         case "stop-operations":
             Operations.cancel()
@@ -335,7 +347,7 @@ Window {
         } else if (id === "split") {
             tabList.toggleSplit()
         } else if (id === "admin") {
-            Operations.toggleAdmin()
+            Operations.toggleAdmin(windowId)
         } else if (id === "actions") {
             openPalette()
         } else if (id.indexOf("command:") === 0) {
@@ -376,13 +388,14 @@ Window {
 
             Layout.fillWidth: true
             pane: root.activePane
+            admin: root.admin
             onCommand: (id, source) => root.command(id, source)
         }
         // Acting as administrator: said across the window, with the way back.
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: Tokens.metrics.admin_bar
-            visible: Operations.admin
+            visible: root.admin
             color: Tokens.colors.danger_surface
             border.color: Tokens.colors.danger_border
             Accessible.role: Accessible.AlertMessage
@@ -413,7 +426,7 @@ Window {
                     text: qsTr("Stop acting as administrator")
                     iconName: "shield-off"
                     implicitHeight: Tokens.metrics.small_button
-                    onClicked: Operations.toggleAdmin()
+                    onClicked: Operations.toggleAdmin(root.windowId)
                 }
             }
         }
@@ -469,6 +482,7 @@ Window {
                         model: tabList
 
                         delegate: TabPage {
+                            windowId: root.windowId
                             tabs: root.tabsModel
                             places: root.placesModel
                             onFileActivated: uri => Shell.activate(uri)
@@ -524,6 +538,7 @@ Window {
         NoticeBar {
             id: noticeBar
 
+            windowId: root.windowId
             Layout.fillWidth: true
             onDialogClosed: root.focusActive()
         }
@@ -598,6 +613,7 @@ Window {
 
         active: false
         sourceComponent: PropertiesDialog {
+            windowId: root.windowId
             path: propertiesLoader.path
             onClosed: {
                 propertiesLoader.active = false

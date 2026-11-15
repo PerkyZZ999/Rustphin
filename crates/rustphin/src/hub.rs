@@ -44,7 +44,6 @@ use crate::{
 pub struct Hub {
     ops: Operations,
     admin_ops: Option<Operations>,
-    admin_active: bool,
     admin_runs: u64,
     trash: Option<Arc<FreedesktopTrash>>,
     /// What the operations show, and what the clipboard holds.
@@ -80,10 +79,11 @@ fn change<R>(act: impl FnOnce(&mut Hub) -> R) -> R {
     result
 }
 
-/// Starts a file operation in the background.
-pub fn start(request: Request) {
+/// Starts a file operation in the background, as administrator when a
+/// window acting as one asks (`admin`).
+pub fn start(request: Request, admin: bool) {
     change(|hub| {
-        hub.active().start(request);
+        hub.runner(admin).start(request);
     });
 }
 
@@ -140,7 +140,6 @@ impl Hub {
         Self {
             ops,
             admin_ops: None,
-            admin_active: false,
             admin_runs: 0,
             trash,
             board: OperationBoard::new(),
@@ -161,9 +160,11 @@ impl Hub {
             .retain(|thread| thread.queue(|pane| pane.hub_changed()).is_ok());
     }
 
-    fn active(&self) -> &Operations {
+    /// The runner for what a window asks: the administrator's for a
+    /// window acting as one (`admin`), else the user's own.
+    fn runner(&self, admin: bool) -> &Operations {
         match &self.admin_ops {
-            Some(admin) if self.admin_active => admin,
+            Some(runner) if admin => runner,
             _ => &self.ops,
         }
     }
@@ -175,9 +176,9 @@ impl Hub {
         }
     }
 
-    /// Starts `launch` through the active runner, with its words.
+    /// Starts `launch` through its runner, with its words.
     fn launch(&mut self, launch: Launch) {
-        let id = self.active().start(launch.request);
+        let id = self.runner(launch.admin).start(launch.request);
         if let Some(words) = launch.words {
             self.board.describe(id, words);
         }
@@ -237,26 +238,23 @@ fn refresh_clip() {
     });
 }
 
-/// Sends new operations through `admin` (KDE's helper, W-098) or, with
-/// `None`, through the user's own filesystem.
-pub fn set_admin(admin: Option<Arc<dyn rustphin_core::Fs>>) {
-    change(|hub| match admin {
-        Some(fs) => {
-            hub.admin_runs += 1;
-            let first = admin_first_id(hub.admin_runs);
-            // No 7-Zip: it would read the archive with the user's own rights.
-            let foreign = Arc::new(ForeignArchives::as_administrator());
-            let (ops, events) = Operations::with_first_id(fs, Arc::new(NoTrash), foreign, first);
-            forward(events);
-            hub.admin_ops = Some(ops);
-            hub.admin_active = true;
-        }
-        None => hub.admin_active = false,
+/// Makes the runner that works through `fs`, KDE's helper (W-098), for
+/// the windows acting as administrator.
+pub fn set_admin(fs: Arc<dyn rustphin_core::Fs>) {
+    change(|hub| {
+        hub.admin_runs += 1;
+        let first = admin_first_id(hub.admin_runs);
+        // No 7-Zip: it would read the archive with the user's own rights.
+        let foreign = Arc::new(ForeignArchives::as_administrator());
+        let (ops, events) = Operations::with_first_id(fs, Arc::new(NoTrash), foreign, first);
+        forward(events);
+        hub.admin_ops = Some(ops);
     });
 }
 
-/// Tells the windows that administrator access is being asked for.
-pub fn set_admin_pending() {
+/// Tells the windows that a window started or stopped acting as
+/// administrator, or that access is being asked for.
+pub fn admin_changed() {
     change(|_| {});
 }
 
@@ -271,14 +269,17 @@ pub fn start_lasting(request: Request, label: String, done: String) {
                 done,
                 lasting: true,
             }),
+            admin: false,
         });
     });
 }
 
-/// Reverts the latest operation, or says that there is none.
-pub fn undo() {
+/// Reverts the latest operation of the user's own runner, or of the
+/// administrator's for a window acting as one (`admin`); or says that
+/// there is none.
+pub fn undo(admin: bool) {
     change(|hub| {
-        if hub.active().undo().is_none() {
+        if hub.runner(admin).undo().is_none() {
             schedule(hub.board.nothing_to_undo());
         }
     });
@@ -294,24 +295,24 @@ pub fn cancel(id: Option<OpId>) {
 }
 
 /// Moves `paths` to the trash, asking first when Settings says so; as
-/// administrator, or in the trash, deletes for good after asking.
-pub fn trash(paths: Vec<PathBuf>, listed: Vec<Listed>) {
+/// administrator (`admin`), or in the trash, deletes for good after asking.
+pub fn trash(paths: Vec<PathBuf>, listed: Vec<Listed>, admin: bool) {
     if paths.is_empty() {
         return;
     }
     let ask = prefs::settings().confirmations().trash;
     change(|hub| {
-        let admin = hub.admin_active;
         if let Some(launch) = hub.board.trash(paths, listed, ask, admin) {
             hub.launch(launch);
         }
     });
 }
 
-/// Asks for confirmation, then deletes `paths` for good.
-pub fn delete(paths: Vec<PathBuf>, listed: Vec<Listed>) {
+/// Asks for confirmation, then deletes `paths` for good, as administrator
+/// when a window acting as one asks (`admin`).
+pub fn delete(paths: Vec<PathBuf>, listed: Vec<Listed>, admin: bool) {
     if !paths.is_empty() {
-        change(|hub| hub.board.delete(paths, listed));
+        change(|hub| hub.board.delete(paths, listed, admin));
     }
 }
 
@@ -354,7 +355,8 @@ pub fn restore(dir: PathBuf, contents: Vec<PathBuf>) {
                         ));
                     }
                     if !items.is_empty() {
-                        hub.active().start(Request::Restore { items });
+                        // The trash is the user's own.
+                        hub.ops.start(Request::Restore { items });
                     }
                 }
                 Err(error) => {
@@ -397,15 +399,16 @@ pub fn empty_trash(dir: PathBuf) {
 }
 
 /// Copies or moves dropped `sources` into `into`; asks which when `action`
-/// is `None`.
-pub fn drop_files(sources: Vec<PathBuf>, into: PathBuf, action: Option<DropAction>) {
+/// is `None`. Dropped in a window acting as administrator (`admin`), it runs
+/// with those rights.
+pub fn drop_files(sources: Vec<PathBuf>, into: PathBuf, action: Option<DropAction>, admin: bool) {
     let sources = droppable(sources, &into);
     if sources.is_empty() {
         return;
     }
     let copy = action.map(|action| action == DropAction::Copy);
     change(|hub| {
-        if let Some(launch) = hub.board.drop_files(sources, into, copy) {
+        if let Some(launch) = hub.board.drop_files(sources, into, copy, admin) {
             hub.launch(launch);
         }
     });
@@ -436,8 +439,9 @@ pub fn pick_up(paths: Vec<PathBuf>, cut: bool) {
     });
 }
 
-/// Copies or moves the files on the clipboard into `into`.
-pub fn paste(into: PathBuf) {
+/// Copies or moves the files on the clipboard into `into`, as administrator
+/// when pasted in a window acting as one (`admin`).
+pub fn paste(into: PathBuf, admin: bool) {
     let clipboard = with(|hub| hub.clipboard.clone());
     std::thread::spawn(move || {
         let read = clipboard.read();
@@ -457,7 +461,7 @@ pub fn paste(into: PathBuf) {
         }
         post::on_qt(move || {
             change(|hub| {
-                let launch = hub.board.paste(clip, into);
+                let launch = hub.board.paste(clip, into, admin);
                 hub.launch(launch);
             });
         });

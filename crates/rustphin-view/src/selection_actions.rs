@@ -181,6 +181,8 @@ pub enum Plan {
 pub const IN_TRASH: &str =
     "Archives cannot be extracted or made in the trash. Restore the files first.";
 
+/// What renaming several entries at once says as administrator.
+pub const BATCH_AS_ADMINISTRATOR: &str = "Several entries cannot be renamed at once as administrator: KDE's helper cannot lock the folder. Rename them one by one.";
 /// What Extract and Compress say as administrator.
 pub const AS_ADMINISTRATOR: &str = "Archives cannot be extracted or made as administrator.";
 
@@ -352,6 +354,11 @@ fn compress<L: Listing + ?Sized>(how: CompressHow, facts: &Facts<'_, L>) -> Plan
 fn batch_rename<L: Listing + ?Sized>(facts: &Facts<'_, L>) -> Plan {
     if facts.in_trash || facts.selected.len() < 2 {
         return Plan::Nothing;
+    }
+    // The recovery journal needs a lock on the folder, which KDE's helper
+    // does not offer (ADMIN_MODE.md): refused, not tried and failed.
+    if facts.as_administrator {
+        return Plan::Say(BATCH_AS_ADMINISTRATOR.to_owned());
     }
     let chosen: HashSet<&[u8]> = facts.selected.iter().map(|entry| entry.name).collect();
     let staying = facts
@@ -602,6 +609,30 @@ mod tests {
             matches!(choose, Plan::Say(ref words) if words == IN_TRASH),
             "{choose:?}"
         );
+    }
+
+    #[test]
+    fn several_entries_are_not_renamed_at_once_as_administrator() {
+        let listing: &[&[u8]] = &[b"a.txt", b"b.txt"];
+        let as_administrator = |selected| Facts {
+            as_administrator: true,
+            ..facts(selected, listing)
+        };
+        match plan(
+            SelectionAction::BatchRename,
+            &as_administrator(vec![file("a.txt"), file("b.txt")]),
+        ) {
+            Plan::Say(words) => assert_eq!(words, BATCH_AS_ADMINISTRATOR),
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+        // One entry is renamed in place, which the helper can do.
+        assert!(matches!(
+            plan(
+                SelectionAction::BatchRename,
+                &as_administrator(vec![file("a.txt")])
+            ),
+            Plan::Nothing
+        ));
     }
 
     #[test]

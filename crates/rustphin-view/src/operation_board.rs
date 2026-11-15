@@ -101,13 +101,17 @@ pub struct Launch {
     pub request: Request,
     /// Its words, for [`OperationBoard::describe`] once it has an id.
     pub words: Option<Words>,
+    /// Asked for in a window acting as administrator: it runs through the
+    /// administrator's runner (D-028).
+    pub admin: bool,
 }
 
 impl Launch {
-    fn plain(request: Request) -> Self {
+    fn plain(request: Request, admin: bool) -> Self {
         Self {
             request,
             words: None,
+            admin,
         }
     }
 }
@@ -362,22 +366,29 @@ impl OperationBoard {
             return None;
         }
         if admin {
-            self.questions
-                .push_back(Question::ConfirmDelete { paths, listed });
+            self.questions.push_back(Question::ConfirmDelete {
+                paths,
+                listed,
+                admin,
+            });
         } else if ask {
             self.questions
                 .push_back(Question::ConfirmTrash { paths, listed });
         } else {
-            return Some(Launch::plain(Request::Trash { paths }));
+            return Some(Launch::plain(Request::Trash { paths }, false));
         }
         None
     }
 
-    /// Asks before deleting `paths` for good.
-    pub fn delete(&mut self, paths: Vec<PathBuf>, listed: Vec<Listed>) {
+    /// Asks before deleting `paths` for good, as administrator when asked
+    /// in a window acting as one (`admin`).
+    pub fn delete(&mut self, paths: Vec<PathBuf>, listed: Vec<Listed>, admin: bool) {
         if !paths.is_empty() {
-            self.questions
-                .push_back(Question::ConfirmDelete { paths, listed });
+            self.questions.push_back(Question::ConfirmDelete {
+                paths,
+                listed,
+                admin,
+            });
         }
     }
 
@@ -396,18 +407,24 @@ impl OperationBoard {
     }
 
     /// Copies or moves `sources` dropped on `into` as `copy` says, or asks
-    /// which when it is `None`.
+    /// which when it is `None`; as administrator when dropped in a window
+    /// acting as one (`admin`).
     pub fn drop_files(
         &mut self,
         sources: Vec<PathBuf>,
         into: PathBuf,
         copy: Option<bool>,
+        admin: bool,
     ) -> Option<Launch> {
         match copy {
-            Some(true) => Some(Launch::plain(Request::Copy { sources, into })),
-            Some(false) => Some(Launch::plain(Request::Move { sources, into })),
+            Some(true) => Some(Launch::plain(Request::Copy { sources, into }, admin)),
+            Some(false) => Some(Launch::plain(Request::Move { sources, into }, admin)),
             None => {
-                self.questions.push_back(Question::Drop { sources, into });
+                self.questions.push_back(Question::Drop {
+                    sources,
+                    into,
+                    admin,
+                });
                 None
             }
         }
@@ -449,19 +466,29 @@ impl OperationBoard {
             ),
             (Question::Password { id, .. }, Answer::Accept) => Reply::Password(id, password),
             (Question::Password { id, .. }, _) => Reply::Password(id, None),
-            (Question::ConfirmDelete { paths, .. }, Answer::Accept) => {
-                Reply::Start(Launch::plain(Request::Delete { paths }))
+            (Question::ConfirmDelete { paths, admin, .. }, Answer::Accept) => {
+                Reply::Start(Launch::plain(Request::Delete { paths }, admin))
             }
             (Question::ConfirmTrash { paths, .. }, Answer::Accept) => {
-                Reply::Start(Launch::plain(Request::Trash { paths }))
+                Reply::Start(Launch::plain(Request::Trash { paths }, false))
             }
             (Question::ConfirmEmpty { paths, .. }, Answer::Accept) => Reply::Start(emptying(paths)),
-            (Question::Drop { sources, into }, Answer::Accept) => {
-                Reply::Start(Launch::plain(Request::Move { sources, into }))
-            }
-            (Question::Drop { sources, into }, Answer::Copy) => {
-                Reply::Start(Launch::plain(Request::Copy { sources, into }))
-            }
+            (
+                Question::Drop {
+                    sources,
+                    into,
+                    admin,
+                },
+                Answer::Accept,
+            ) => Reply::Start(Launch::plain(Request::Move { sources, into }, admin)),
+            (
+                Question::Drop {
+                    sources,
+                    into,
+                    admin,
+                },
+                Answer::Copy,
+            ) => Reply::Start(Launch::plain(Request::Copy { sources, into }, admin)),
             _ => return None,
         })
     }
@@ -485,14 +512,15 @@ impl OperationBoard {
     }
 
     /// What pasting `clip` into `into` starts. A move happens once, so a
-    /// cut clip is gone afterwards, as in other file managers.
-    pub fn paste(&mut self, clip: FileClip, into: PathBuf) -> Launch {
+    /// cut clip is gone afterwards, as in other file managers. Pasted in a
+    /// window acting as administrator (`admin`), it runs with those rights.
+    pub fn paste(&mut self, clip: FileClip, into: PathBuf, admin: bool) -> Launch {
         let sources = clip.paths;
         if clip.cut {
             self.set_clip(None);
-            Launch::plain(Request::Move { sources, into })
+            Launch::plain(Request::Move { sources, into }, admin)
         } else {
-            Launch::plain(Request::Copy { sources, into })
+            Launch::plain(Request::Copy { sources, into }, admin)
         }
     }
 
@@ -621,6 +649,7 @@ fn emptying(paths: Vec<PathBuf>) -> Launch {
             done: "emptied the trash".to_owned(),
             lasting: false,
         }),
+        admin: false,
     }
 }
 
@@ -961,7 +990,7 @@ mod tests {
         assert!(board.can_paste());
         assert!(board.clip_serial() > serial);
 
-        let launch = board.paste(cut, "/b".into());
+        let launch = board.paste(cut, "/b".into(), false);
         assert!(
             matches!(launch.request, Request::Move { ref into, .. } if into == Path::new("/b"))
         );
@@ -979,7 +1008,7 @@ mod tests {
         let _ = board.picked_up(copied.clone(), true);
         assert!(!board.is_cut(Path::new("/a/report.pdf")));
 
-        let launch = board.paste(copied, "/b".into());
+        let launch = board.paste(copied, "/b".into(), false);
         assert!(matches!(launch.request, Request::Copy { .. }));
         assert!(board.can_paste());
     }
@@ -1169,6 +1198,61 @@ mod tests {
     }
 
     #[test]
+    fn what_a_window_acting_as_administrator_asks_for_runs_as_administrator() {
+        let mut board = OperationBoard::new();
+        let paths = || vec![PathBuf::from("/etc/old")];
+        let listed = || vec![Listed::default()];
+        let started = |reply| match reply {
+            Some(Reply::Start(launch)) => launch.admin,
+            other => panic!("expected a start, got {other:?}"),
+        };
+
+        // Delete, asked first: the answer keeps the window's rights.
+        assert!(board.trash(paths(), listed(), false, true).is_none());
+        assert!(started(board.answer(Answer::Accept, false, None)));
+        board.delete(paths(), listed(), true);
+        assert!(started(board.answer(Answer::Accept, false, None)));
+        board.delete(paths(), listed(), false);
+        assert!(!started(board.answer(Answer::Accept, false, None)));
+
+        // A drop, asked or not, and a paste.
+        assert!(board.drop_files(paths(), "/b".into(), None, true).is_none());
+        assert!(started(board.answer(Answer::Copy, false, None)));
+        assert!(board.drop_files(paths(), "/b".into(), None, true).is_none());
+        assert!(started(board.answer(Answer::Accept, false, None)));
+        assert!(
+            board
+                .drop_files(paths(), "/b".into(), None, false)
+                .is_none()
+        );
+        assert!(!started(board.answer(Answer::Accept, false, None)));
+        assert!(
+            board
+                .drop_files(paths(), "/b".into(), Some(true), true)
+                .unwrap()
+                .admin
+        );
+        assert!(
+            !board
+                .drop_files(paths(), "/b".into(), Some(false), false)
+                .unwrap()
+                .admin
+        );
+        let clip = || FileClip {
+            paths: paths(),
+            cut: false,
+        };
+        assert!(board.paste(clip(), "/b".into(), true).admin);
+        assert!(!board.paste(clip(), "/b".into(), false).admin);
+
+        // The trash is the user's own: moving there and emptying it never
+        // run as administrator.
+        assert!(!board.trash(paths(), listed(), false, false).unwrap().admin);
+        assert!(board.trash(paths(), listed(), true, false).is_none());
+        assert!(!started(board.answer(Answer::Accept, false, None)));
+    }
+
+    #[test]
     fn emptying_the_trash_is_described_as_such() {
         let now = Instant::now();
         let mut board = OperationBoard::new();
@@ -1300,7 +1384,7 @@ mod tests {
     #[test]
     fn deleting_always_asks_first_and_starts_only_on_accept() {
         let mut board = OperationBoard::new();
-        board.delete(vec!["/a/old".into()], vec![Listed::default()]);
+        board.delete(vec!["/a/old".into()], vec![Listed::default()], false);
         assert!(title(&board).is_some(), "asked");
         assert_eq!(
             started_request(board.answer(Answer::Accept, false, None)),
@@ -1308,7 +1392,7 @@ mod tests {
                 paths: vec!["/a/old".into()]
             })
         );
-        board.delete(Vec::new(), Vec::new());
+        board.delete(Vec::new(), Vec::new(), false);
         assert_eq!(title(&board), None, "nothing to delete, nothing asked");
     }
 
@@ -1318,7 +1402,7 @@ mod tests {
         let listed = || vec![Listed::default()];
         for answer in [Answer::Cancel, Answer::Skip, Answer::Copy, Answer::Replace] {
             let mut board = OperationBoard::new();
-            board.delete(paths(), listed());
+            board.delete(paths(), listed(), false);
             assert!(
                 board.answer(answer, false, None).is_none(),
                 "delete {answer:?}"
@@ -1360,7 +1444,11 @@ mod tests {
     fn a_drop_answered_accept_moves_and_copy_copies() {
         let sources = || vec![PathBuf::from("/a/report.pdf")];
         let mut board = OperationBoard::new();
-        assert!(board.drop_files(sources(), "/b".into(), None).is_none());
+        assert!(
+            board
+                .drop_files(sources(), "/b".into(), None, false)
+                .is_none()
+        );
         assert_eq!(
             started_request(board.answer(Answer::Accept, false, None)),
             Some(Request::Move {
@@ -1368,7 +1456,11 @@ mod tests {
                 into: "/b".into()
             })
         );
-        assert!(board.drop_files(sources(), "/b".into(), None).is_none());
+        assert!(
+            board
+                .drop_files(sources(), "/b".into(), None, false)
+                .is_none()
+        );
         assert_eq!(
             started_request(board.answer(Answer::Copy, false, None)),
             Some(Request::Copy {
@@ -1376,7 +1468,11 @@ mod tests {
                 into: "/b".into()
             })
         );
-        assert!(board.drop_files(sources(), "/b".into(), None).is_none());
+        assert!(
+            board
+                .drop_files(sources(), "/b".into(), None, false)
+                .is_none()
+        );
         assert!(board.answer(Answer::Cancel, false, None).is_none());
     }
 
@@ -1385,7 +1481,7 @@ mod tests {
         let sources = || vec![PathBuf::from("/a/report.pdf")];
         let mut board = OperationBoard::new();
         let copied = board
-            .drop_files(sources(), "/b".into(), Some(true))
+            .drop_files(sources(), "/b".into(), Some(true), false)
             .unwrap();
         assert_eq!(
             copied.request,
@@ -1395,7 +1491,7 @@ mod tests {
             }
         );
         let moved = board
-            .drop_files(sources(), "/b".into(), Some(false))
+            .drop_files(sources(), "/b".into(), Some(false), false)
             .unwrap();
         assert_eq!(
             moved.request,

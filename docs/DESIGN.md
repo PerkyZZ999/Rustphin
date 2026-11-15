@@ -976,7 +976,12 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   window on `error-surface` with an `error-border` outline: `shield-alert`,
   "Acting as administrator. Changes you make here can affect the whole
   system; be careful." in `error`, and an outlined 28 px "Stop acting as
-  administrator". The toolbar's shield turns `error` and its tooltip says how
+  administrator". The mode belongs to the window (D-028): its title reads
+  "<folder> (administrator) — Rustphin", other windows are not in it, and
+  closing the window ends it. A pane showing a folder that is not root's own
+  has a warning line over its list (`error-surface`, `triangle-alert`): "This
+  folder does not belong to root: its owner can change what is in it while
+  you work here as administrator." The toolbar's shield turns `error` and its tooltip says how
   to stop; without KDE's kio-admin it is unavailable and says so.
 - **Re-read banner:** a shown folder that fails to re-read keeps its listing
   under a banner across the pane: `error-surface`, `error-border` outline, a

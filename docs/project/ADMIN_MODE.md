@@ -167,23 +167,28 @@ for the password; the view is marked; the same button switches it off.
 
 ### Differences from the design
 
-- **One state for the whole process, not per window.** The Qt interface
-  keeps the mode in one place for the process: while it is on, every
-  window, tab and pane lists and works through the helper, and closing a
-  window does not switch it off (with background mode, R-020, the process
-  outlives its windows). The shield or Stop switches it off; the mode is
-  still never saved in the session. (Read from the code; not run with
-  several windows.)
-- **The title is not marked.** The design's "(administrator)" in the window
-  title is not built in the Qt interface; the red shield and the bar mark the
-  mode.
-- **No warning line for folders not owned by root.** Proposed in the threat
-  model; not built.
-- **Batch rename is not hidden.** The Qt interface still offers it; the
-  engine needs a directory lock, which `AdminFs` does not offer
-  (`lock_directory` is unsupported), so it ends with an error instead of
-  renaming. Inferred from the code; not run (administrator mode is never run
-  against the real helper by agents).
+None since W-146d (2026-11-15), which built the four that were open:
+
+- **Per window.** The mode belongs to a window (`admin.rs` keeps the set of
+  windows acting as administrator; each window has a number from
+  `Operations.newWindow`). Its panes list through the helper, and what it
+  asks for (operations, drops, pastes, Undo, Properties) runs through the
+  administrator's runner; every other window keeps the user's own rights.
+  Closing the window ends its mode; the mode is never saved. The helper's
+  connection and the runner are shared by the process, as polkit's
+  authorisation is.
+- **The title is marked:** "<folder> (administrator) — Rustphin".
+- **A warning line** over a folder that is not root's own: "This folder
+  does not belong to root: its owner can change what is in it while you
+  work here as administrator." (`pane::owner_warning`; the owner is read
+  off the Qt thread).
+- **Batch rename is refused** with "Several entries cannot be renamed at
+  once as administrator: KDE's helper cannot lock the folder. Rename them
+  one by one." (`selection_actions`).
+
+Still as before: the trash is the user's own, so restoring from it and
+emptying it never run as administrator. "Recover original names" needs the
+same folder lock and ends with the engine's error in the mode.
 
 ### Found while building (W-098a–c, 2026-11-10)
 

@@ -433,7 +433,7 @@ stand-in on the session's own bus, over a sandbox in the isolated home:
 
 | ID | Steps | Expected |
 |---|---|---|
-| AD1 | Open the sandbox's `etc`, click the shield | The helper is asked about `/` ("Asking for administrator access… Enter your password in KDE's dialog." meanwhile); then the shield is red, a red bar says "Acting as administrator. Changes you make here can affect the whole system; be careful." with "Stop acting as administrator", and the folder is listed again through the helper (`listDir` in its log). The GPUI build also ended the window title with "(administrator)"; the Qt title is "<folder> — Rustphin" only (**known gap**) |
+| AD1 | Open the sandbox's `etc`, click the shield | The helper is asked about `/` ("Asking for administrator access… Enter your password in KDE's dialog." meanwhile); then the shield is red, a red bar says "Acting as administrator. Changes you make here can affect the whole system; be careful." with "Stop acting as administrator", and the folder is listed again through the helper (`listDir` in its log). The window title reads "etc (administrator) — Rustphin". Over the list, since the sandbox is the user's: "This folder does not belong to root: its owner can change what is in it while you work here as administrator." (seen in W-146d) |
 | AD2 | Double-click a folder | It is listed through the helper |
 | AD3 | Click Stop | Bar and red shield gone, "No longer acting as administrator.", the same folder read as the user |
 | AD4 | With the refusing stand-in, click the shield | "Administrator access was not granted: the password was not given."; the mode stays off. Without any helper on the bus: "KDE's administrator helper could not be reached. Install the kio-admin package, then try again." |
@@ -441,7 +441,9 @@ stand-in on the session's own bus, over a sandbox in the isolated home:
 | AD6 | Select it, Delete | "Delete for good?" saying it does not use the trash (KDE's helper has no trash, so Delete asks as Shift+Delete does); Enter removes it through `del`; the row goes |
 | AD7 | Right-click a file | No "Move to trash", no Extract or Compress; "Delete…" is there. From the palette, Extract and Compress say "Archives cannot be extracted or made as administrator." (W-140) |
 | AD8 | Properties of a file, tick a permission, Apply; then Undo | Facts come from `stat`; `chmod` changes it; Undo restores it through `chmod` |
-| AD9 | Select two items, F2; select one file, Ctrl+D | The GPUI build refused batch rename here; the Qt planner (`selection_actions::plan`) has no such refusal and opens the batch rename dialog. **Needs replay**: what the dialog then does through the helper is unchecked. The copy goes through `copy` to a `.rustphin-part-` name, then `rename` |
+| AD9 | Select two items, F2; select one file, Ctrl+D | F2 says "Several entries cannot be renamed at once as administrator: KDE's helper cannot lock the folder. Rename them one by one." and opens nothing (seen in W-146d). The copy goes through `copy` to a `.rustphin-part-` name, then `rename` |
+| AD10 | With a window in the mode, start Rustphin again on another folder (`shown_folders = "window"` in the settings file) | The second window is not in the mode: plain shield, no bar, plain title; the helper's log shows no `listDir` for its folder; the first window stays in the mode (seen in W-146d) |
+| AD11 | Close the window that is in the mode; start Rustphin again on the same folder | The new window is not in the mode and the helper is not asked (seen in W-146d) |
 
 
 ## Hover (W-100)

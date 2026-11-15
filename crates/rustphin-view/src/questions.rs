@@ -51,6 +51,9 @@ pub enum Question {
         paths: Vec<PathBuf>,
         /// What the listing knew of each, in the same order.
         listed: Vec<Listed>,
+        /// Asked from a window acting as administrator: the deletion runs
+        /// with those rights.
+        admin: bool,
     },
     /// Entries were dropped without a key saying whether to copy or move.
     Drop {
@@ -58,6 +61,8 @@ pub enum Question {
         sources: Vec<PathBuf>,
         /// The folder they were dropped on.
         into: PathBuf,
+        /// Dropped in a window acting as administrator.
+        admin: bool,
     },
     /// Moving to the trash, when Settings asks to be asked (W-106e).
     ConfirmTrash {
@@ -413,7 +418,7 @@ pub fn show(question: &Question, verb: &str, zone: &TimeZone) -> Shown {
             password: true,
             ..blank
         },
-        Question::Drop { sources, into } => Shown {
+        Question::Drop { sources, into, .. } => Shown {
             icon: "arrow-left-right",
             title: "Move or copy?".to_owned(),
             sentence: format!(
@@ -438,7 +443,7 @@ pub fn show(question: &Question, verb: &str, zone: &TimeZone) -> Shown {
             ],
             ..blank
         },
-        Question::ConfirmDelete { paths, listed } => Shown {
+        Question::ConfirmDelete { paths, listed, .. } => Shown {
             icon: "circle-x",
             title: "Delete for good?".to_owned(),
             sentence: format!(
@@ -634,6 +639,7 @@ mod tests {
                         size: None,
                     },
                 ],
+                admin: false,
             },
             "",
             &TimeZone::UTC,

@@ -31,7 +31,6 @@ pub mod qobject {
         #[qproperty(QString, problems)]
         #[qproperty(bool, can_paste, cxx_name = "canPaste")]
         #[qproperty(i32, revision)]
-        #[qproperty(bool, admin)]
         #[qproperty(bool, admin_pending, cxx_name = "adminPending")]
         #[qproperty(bool, admin_installed, cxx_name = "adminInstalled")]
         type Operations = super::OperationsRust;
@@ -50,25 +49,46 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "cancelOperation"]
         fn cancel_operation(self: Pin<&mut Operations>, id: &QString);
-        /// Reverts the latest operation.
+        /// Reverts the latest operation made with the rights of the window
+        /// numbered `window`.
         #[qinvokable]
-        fn undo(self: Pin<&mut Operations>);
+        fn undo(self: Pin<&mut Operations>, window: i32);
+        /// A number for a new window, to name it in the calls here.
+        #[qinvokable]
+        #[cxx_name = "newWindow"]
+        fn new_window(self: &Operations) -> i32;
+        /// Whether the window numbered `window` acts as administrator.
+        /// Read it again when `revision` changes.
+        #[qinvokable]
+        #[cxx_name = "adminIn"]
+        fn admin_in(self: &Operations, window: i32) -> bool;
+        /// Ends the administrator mode of a window that is closing.
+        #[qinvokable]
+        #[cxx_name = "leaveAdmin"]
+        fn leave_admin(self: &Operations, window: i32);
         /// Answers the question shown (`questions::Answer` numbers).
         #[qinvokable]
         fn answer(self: Pin<&mut Operations>, answer: i32, apply_to_all: bool, password: &QString);
-        /// Starts or stops acting as administrator.
+        /// Makes the window numbered `window` act as administrator, or stop.
         #[qinvokable]
         #[cxx_name = "toggleAdmin"]
-        fn toggle_admin(self: Pin<&mut Operations>);
+        fn toggle_admin(self: Pin<&mut Operations>, window: i32);
         /// Dismisses the notice.
         #[qinvokable]
         #[cxx_name = "dismissNotice"]
         fn dismiss_notice(self: Pin<&mut Operations>);
         /// Copies or moves the dropped `uris` (a `text/uri-list`) into the
-        /// folder at the `file:` URI `into`: 0 asks, 1 copies, 2 moves.
+        /// folder at the `file:` URI `into`: 0 asks, 1 copies, 2 moves; with
+        /// the rights of the window numbered `window`.
         #[qinvokable]
         #[cxx_name = "dropFiles"]
-        fn drop_files(self: Pin<&mut Operations>, uris: &QString, into: &QString, action: i32);
+        fn drop_files(
+            self: Pin<&mut Operations>,
+            uris: &QString,
+            into: &QString,
+            action: i32,
+            window: i32,
+        );
     }
 
     impl cxx_qt::Threading for Operations {}

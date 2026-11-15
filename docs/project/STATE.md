@@ -7,7 +7,7 @@
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 (hardening) in progress; the interface is Qt 6 and QML through cxx-qt since W-114i (D-033, D-034)
 - **Status:** active — W-114 (the switch from GPUI), W-116 (Qt quality pass) and W-118–W-144 (refactoring into `rustphin-view`, libarchive, byte-safe paths, test audits and their fixes, the GitHub repository) W-147 (charcoal colours, S12), W-148 (drive cards and the drive menu, S12) and W-149 (transfer details, S12) done 2026-11-14; open: W-117, W-115, the Qt keyboard pass, the blur notice, and the maintainer's real-desktop checks
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
-- **Last updated:** 2026-11-14
+- **Last updated:** 2026-11-15
 
 ## Authority boundaries
 - Agent may decide: stack-local, reversible implementation details consistent with locked decisions; document structure; disposable spike code.
@@ -15,7 +15,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-14 — W-146c Blur status and the Appearance settings
+- Latest validation entry: VALIDATION.md, 2026-11-15 — W-146d Administrator mode per window
 - Acceptance: ACCEPTANCE.md lists every open criterion and who can close it (re-mapped 2026-11-14 for the Qt interface).
 
 ## Open loops
@@ -24,7 +24,6 @@
 - Task: keyboard-only pass of the Qt interface with Shift+Tab and visible focus on every surface, Settings controls included (R-004, R-107, R-019; W-076). The GPUI focus blocker W-076e no longer applies.
 - Task: the blur status line and the theme following blur (W-146c) were not seen on a compositor without blur: UI_SCENARIOS AP6 needs a desktop with KWin's Blur effect switched off (R-109 unticked on that).
 - Task: R-101 on Qt: first entries, re-sort and details-view scrolling re-measured (W-114d, W-114h); icons and compact scrolling, the closing-tab memory figure of R-102 and per-task times on the Qt thread were not; nothing measured on a physical display.
-- Task: administrator mode in the Qt interface is one state for the whole process (every window), the title is not marked, and batch rename is offered there although `AdminFs` has no directory lock (ADMIN_MODE.md "Differences from the design"); D-028 says per window.
 - Task: `rust-tc fuzz` could not run after W-129 and W-133: the installed nightly (1.97) is below the 1.100 minimum. The fuzz harness checks in `rust-tc doctor` pass.
 - Task: remote folders (W-080–W-080c) not tried against a real sftp or smb server, nor replayed on Qt (no kio-fuse mount in the test session).
 - Task: compact view on Qt not seen sideways-scrolling with many entries or with a real wheel; drops on a tab and onto a place from another application not seen.

@@ -156,7 +156,8 @@ impl qobject::Shell {
             return;
         };
         for request in extract.requests(&into) {
-            crate::hub::start(request);
+            // Never as administrator: a window acting as one extracts nothing.
+            crate::hub::start(request, false);
         }
     }
 

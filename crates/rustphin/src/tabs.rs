@@ -518,7 +518,7 @@ impl qobject::TabsModel {
         text(&serde_json::Value::Array(tabs).to_string())
     }
 
-    fn transfer(self: Pin<&mut Self>, selected: &QString, moving: bool) {
+    fn transfer(self: Pin<&mut Self>, selected: &QString, moving: bool, window: i32) {
         let Some(workspace) = self.rust().workspace.as_ref() else {
             return;
         };
@@ -529,7 +529,7 @@ impl qobject::TabsModel {
             Transfer::Copy
         };
         match workspace.transfer(how, selected) {
-            Ok(request) => hub::start(request),
+            Ok(request) => hub::start(request, crate::admin::active(window)),
             Err(reason) => hub::say(reason.to_owned(), false),
         }
     }

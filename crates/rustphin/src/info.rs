@@ -34,6 +34,9 @@ const TICK: Duration = Duration::from_millis(250);
 
 /// The Rust side of `PropertiesModel`.
 pub struct PropertiesModelRust {
+    /// The number of the window the dialog is in: it reads and changes
+    /// with that window's rights.
+    window: i32,
     title: QString,
     kind: QString,
     icon: QString,
@@ -57,6 +60,7 @@ pub struct PropertiesModelRust {
 impl Default for PropertiesModelRust {
     fn default() -> Self {
         Self {
+            window: 0,
             title: QString::default(),
             kind: QString::default(),
             icon: QString::from("file"),
@@ -91,7 +95,7 @@ impl qobject::PropertiesModel {
         self.as_mut().set_title(QString::from(&title));
         self.as_mut().rust_mut().path = path.clone();
         let thread = self.qt_thread();
-        let helper = crate::admin::helper();
+        let helper = crate::admin::helper(*self.window());
         std::thread::spawn(move || {
             let read = match helper {
                 Some(helper) => helper
@@ -240,10 +244,13 @@ impl qobject::PropertiesModel {
             return;
         }
         let mode = combine_mode(self.rust().mode, self.rust().original);
-        crate::hub::start(Request::SetMode {
-            path: self.rust().path.clone(),
-            mode,
-        });
+        crate::hub::start(
+            Request::SetMode {
+                path: self.rust().path.clone(),
+                mode,
+            },
+            crate::admin::active(*self.window()),
+        );
         self.as_mut().rust_mut().original = mode;
         self.show();
     }

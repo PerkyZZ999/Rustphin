@@ -36,7 +36,6 @@ pub struct OperationsRust {
     problems: QString,
     can_paste: bool,
     revision: i32,
-    admin: bool,
     admin_pending: bool,
     admin_installed: bool,
     zone: TimeZone,
@@ -60,7 +59,6 @@ impl Default for OperationsRust {
             problems: QString::default(),
             can_paste: false,
             revision: 0,
-            admin: false,
             admin_pending: false,
             admin_installed: rustphin_platform::admin::installed(),
             zone: TimeZone::system(),
@@ -127,7 +125,6 @@ impl qobject::Operations {
         self.as_mut()
             .set_problems(QString::from(&problems.unwrap_or_default()));
         self.as_mut().set_can_paste(can_paste);
-        self.as_mut().set_admin(crate::admin::active());
         self.as_mut().set_admin_pending(crate::admin::pending());
         let next = self.revision().wrapping_add(1);
         self.as_mut().set_revision(next);
@@ -143,8 +140,20 @@ impl qobject::Operations {
         }
     }
 
-    fn undo(self: Pin<&mut Self>) {
-        hub::undo();
+    fn undo(self: Pin<&mut Self>, window: i32) {
+        hub::undo(crate::admin::active(window));
+    }
+
+    fn new_window(&self) -> i32 {
+        crate::admin::new_window()
+    }
+
+    fn admin_in(&self, window: i32) -> bool {
+        crate::admin::active(window)
+    }
+
+    fn leave_admin(&self, window: i32) {
+        crate::admin::leave(window);
     }
 
     fn answer(self: Pin<&mut Self>, answer: i32, apply_to_all: bool, password: &QString) {
@@ -155,19 +164,24 @@ impl qobject::Operations {
         hub::answer(answer, apply_to_all, password);
     }
 
-    fn toggle_admin(self: Pin<&mut Self>) {
-        crate::admin::toggle();
+    fn toggle_admin(self: Pin<&mut Self>, window: i32) {
+        crate::admin::toggle(window);
     }
 
     fn dismiss_notice(self: Pin<&mut Self>) {
         hub::dismiss_notice();
     }
 
-    fn drop_files(self: Pin<&mut Self>, uris: &QString, into: &QString, action: i32) {
+    fn drop_files(self: Pin<&mut Self>, uris: &QString, into: &QString, action: i32, window: i32) {
         let Some(into) = crate::qml_path::from_qml(into) else {
             return;
         };
         let sources = rustphin_platform::uri::paths_from_uri_list(uris.to_string().as_bytes());
-        hub::drop_files(sources, into, crate::folder::drop_action(action));
+        hub::drop_files(
+            sources,
+            into,
+            crate::folder::drop_action(action),
+            crate::admin::active(window),
+        );
     }
 }

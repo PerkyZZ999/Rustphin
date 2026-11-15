@@ -15,6 +15,7 @@ pub mod qobject {
         /// One entry's properties and permissions (W-114f).
         #[qobject]
         #[qml_element]
+        #[qproperty(i32, window)]
         #[qproperty(QString, title)]
         #[qproperty(QString, kind)]
         #[qproperty(QString, icon)]
