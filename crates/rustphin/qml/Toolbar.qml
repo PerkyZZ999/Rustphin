@@ -38,6 +38,14 @@ Rectangle {
         id: toolbarItems
     }
 
+    // Settings, Toolbar applies at once.
+    Connections {
+        target: Preferences
+        function onRevisionChanged() {
+            toolbarItems.reload(bar.width)
+        }
+    }
+
     RowLayout {
         anchors {
             fill: parent
@@ -59,6 +67,7 @@ Rectangle {
                 required property string icon
                 required property bool shown
                 required property bool available
+                required property bool words
 
                 visible: shown
                 Layout.fillWidth: kind === "location"
@@ -96,7 +105,8 @@ Rectangle {
                         enabled: entry.available && bar.folder !== null && (entry.itemId === "admin" ? Operations.admin || (Operations.adminInstalled && !Operations.adminPending) : entry.itemId === "back" ? bar.folder.canGoBack : entry.itemId === "forward" ? bar.folder.canGoForward : entry.itemId === "up" ? bar.folder.canGoUp : true)
                         checkable: entry.itemId === "hidden" || entry.itemId === "filter"
                         checked: entry.itemId === "hidden" ? (bar.folder !== null && bar.folder.showHidden) : entry.itemId === "filter" ? (bar.pane !== null && bar.pane.filterOpen) : false
-                        implicitWidth: entry.kind === "menu" ? Tokens.metrics.tool_menu_button : Tokens.metrics.tool_button
+                        worded: entry.words
+                        extra: entry.kind === "menu" ? Tokens.metrics.tool_menu_button - Tokens.metrics.tool_button : 0
                         onClicked: {
                             if (entry.kind === "menu" || ["filter", "split", "admin"].indexOf(entry.itemId) >= 0 || entry.itemId.indexOf("command:") === 0)
                                 bar.command(entry.itemId, tool)

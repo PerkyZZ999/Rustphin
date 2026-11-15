@@ -716,8 +716,9 @@ Grotesk 600; no token uses another weight) and registered by the C++ shell at st
 - The current crumb in the location field, the sorted column heading and a
   drive card's name (`body-md-strong`) are drawn semibold.
 - **Text size** (Settings, Appearance) multiplies every interface size by
-  11/12 (Smaller) or 14/12 (Larger) (`metrics::text::set_scale`); names and
-  data in the lists follow the zoom table below, scaled the same way.
+  11/12 (Smaller) or 14/12 (Larger); names and data in the lists follow the
+  zoom table below, scaled the same way. A change shows at once in every
+  window (`Tokens.refresh`).
 
 Nothing is smaller than 10 px, and only capital labels are 10 px. Dates are
 `YYYY-MM-DD HH:MM` in the list by default (Settings offers "Today 14:32") and
@@ -772,7 +773,9 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   take `toolbar-toggle-on`. Each tooltip is the item's name and its key
   ("Back (Alt+Left)"). In split view the toolbar acts on the active pane.
   The items and their order are chosen in Settings, Toolbar; any palette
-  command can be added, shown by its palette icon. When the window is too
+  command can be added, shown by its palette icon. An item set to "Show its
+  words" there draws its name in `body-md` after its icon, 8 px from it and
+  from the button's end (a menu button's chevron stays last). When the window is too
   narrow (`Toolbar::fit`), Actions first drops its key hint (196 → 96 px),
   then its word (an icon button, `menu`), then items leave from the right end
   inwards; the location field and Actions always stay. What leaves remains in
@@ -1300,11 +1303,13 @@ Where the build differs from this document today:
 - **Settings that are stored but not applied:** Appearance's Look (Glass or
   Opaque) and Title bar (Rustphin's own or KDE's). The theme is chosen only
   by whether KWin offers blur and by `RUSTPHIN_OPAQUE`, and the window always
-  draws its own title bar. The toolbar's "Show its words" is saved but the
-  toolbar never draws words. The Settings page list does not turn into tabs
-  in a narrow window (`size::SETTINGS_NARROW` is not used).
+  draws its own title bar.
 - **Blur status:** no line says that blur is unavailable; the opaque theme
   is used silently (`size::BLUR_STATUS` is not used).
+- **Settings in a narrow window:** below 720 px (`size::SETTINGS_NARROW`)
+  the page list is a row of tabs over the page (icon and name, the chosen
+  one with the accent edge under it); Left and Right move between them and
+  the row scrolls to keep the chosen one in view.
 - **Line heights:** the `lineHeight` tokens (`text::LINE`, `HEADING_LINE`,
   `TITLE_LINE`) set the lines of text that wraps (sentences in dialogs,
   states, notes and tooltips). A single line is centred in its row and

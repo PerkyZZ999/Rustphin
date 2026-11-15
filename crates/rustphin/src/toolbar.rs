@@ -27,10 +27,11 @@ enum Role {
     Icon,
     Shown,
     Available,
+    Words,
 }
 
 impl Role {
-    const ALL: [Role; 7] = [
+    const ALL: [Role; 8] = [
         Role::Kind,
         Role::ItemId,
         Role::Name,
@@ -38,6 +39,7 @@ impl Role {
         Role::Icon,
         Role::Shown,
         Role::Available,
+        Role::Words,
     ];
 
     fn from_number(number: i32) -> Option<Role> {
@@ -53,6 +55,7 @@ impl Role {
             Role::Icon => "icon",
             Role::Shown => "shown",
             Role::Available => "available",
+            Role::Words => "words",
         }
     }
 }
@@ -125,7 +128,7 @@ impl qobject::ToolbarModel {
         let (Ok(row), Some(role)) = (usize::try_from(index.row()), Role::from_number(role)) else {
             return QVariant::default();
         };
-        let Some((item, _)) = rust.toolbar.items.get(row) else {
+        let Some((item, words)) = rust.toolbar.items.get(row) else {
             return QVariant::default();
         };
         let text = |words: &str| QVariant::from(&QString::from(words));
@@ -137,6 +140,7 @@ impl qobject::ToolbarModel {
             Role::Icon => text(&item.icon().lucide_name()),
             Role::Shown => QVariant::from(&rust.shown.get(row).copied().unwrap_or(true)),
             Role::Available => QVariant::from(&available(item)),
+            Role::Words => QVariant::from(&(*words && item.can_show_words())),
         }
     }
 
@@ -146,6 +150,18 @@ impl qobject::ToolbarModel {
             roles.insert(role as i32, QByteArray::from(role.name()));
         }
         roles
+    }
+
+    fn reload(mut self: Pin<&mut Self>, width: f64) {
+        let toolbar = saved_toolbar();
+        if toolbar == self.rust().toolbar {
+            return;
+        }
+        self.as_mut().begin_reset_model();
+        self.as_mut().rust_mut().shown = vec![true; toolbar.items.len()];
+        self.as_mut().rust_mut().toolbar = toolbar;
+        self.as_mut().end_reset_model();
+        self.fit(width);
     }
 
     fn fit(mut self: Pin<&mut Self>, width: f64) {
@@ -183,6 +199,14 @@ mod tests {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), Role::ALL.len());
+    }
+
+    #[test]
+    fn the_words_role_is_named_as_toolbar_qml_reads_it() {
+        assert_eq!(Role::Words.name(), "words");
+        let qml = include_str!("../qml/Toolbar.qml");
+        assert!(qml.contains("required property bool words"));
+        assert!(qml.contains("worded: entry.words"));
     }
 
     #[test]

@@ -24,7 +24,7 @@ pub mod qobject {
         #[qml_element]
         #[qml_singleton]
         #[qproperty(QMap_QString_QVariant, colors, READ, CONSTANT)]
-        #[qproperty(QMap_QString_QVariant, metrics, READ, CONSTANT)]
+        #[qproperty(QMap_QString_QVariant, metrics, READ, NOTIFY)]
         #[qproperty(bool, translucent, READ, CONSTANT)]
         type Tokens = super::TokensRust;
     }
@@ -35,5 +35,8 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "blurWindows"]
         fn blur_windows(self: &Tokens);
+        /// Takes up the text size Settings chose, when it changed.
+        #[qinvokable]
+        fn refresh(self: Pin<&mut Tokens>);
     }
 }

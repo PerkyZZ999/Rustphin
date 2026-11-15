@@ -16,6 +16,8 @@ Popup {
     required property string shownFolder
     required property PlacesModel places
     // Rust hands the pages over as JSON (`settings_form`): typed here.
+    // In a narrow window the page list is a row of tabs over the page.
+    readonly property bool narrow: parent !== null && parent.width < Tokens.metrics.settings_narrow
     readonly property list<var> pageList: settings.pages.length > 0 ? JSON.parse(settings.pages) : []
     readonly property list<var> groups: settings.groups.length > 0 ? JSON.parse(settings.groups) : []
     readonly property bool pageShown: pageList.length > settings.page
@@ -114,18 +116,26 @@ Popup {
             color: Tokens.colors.border
         }
 
-        RowLayout {
+        GridLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 0
+            columns: dialog.narrow ? 1 : 3
+            columnSpacing: 0
+            rowSpacing: 0
 
-            // The pages; Up and Down move between them.
+            // The pages: a list on the left, or a row of tabs in a narrow
+            // window; the arrows move between them.
             ListView {
                 id: pages
 
-                Layout.preferredWidth: Tokens.metrics.settings_nav
-                Layout.fillHeight: true
+                Layout.preferredWidth: dialog.narrow ? -1 : Tokens.metrics.settings_nav
+                Layout.fillWidth: dialog.narrow
+                Layout.preferredHeight: dialog.narrow ? Tokens.metrics.setting_row : -1
+                Layout.fillHeight: !dialog.narrow
                 Layout.topMargin: Tokens.metrics.space_sm
+                Layout.bottomMargin: dialog.narrow ? Tokens.metrics.space_sm : 0
+                orientation: dialog.narrow ? ListView.Horizontal : ListView.Vertical
+                clip: dialog.narrow
                 model: dialog.pageList
                 currentIndex: settings.page
                 keyNavigationEnabled: false
@@ -134,6 +144,9 @@ Popup {
                 Accessible.name: qsTr("Settings pages")
                 Keys.onUpPressed: settings.choosePage(Math.max(0, settings.page - 1))
                 Keys.onDownPressed: settings.choosePage(Math.min(dialog.pageList.length - 1, settings.page + 1))
+                Keys.onLeftPressed: settings.choosePage(Math.max(0, settings.page - 1))
+                Keys.onRightPressed: settings.choosePage(Math.min(dialog.pageList.length - 1, settings.page + 1))
+                onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
 
                 delegate: ItemDelegate {
                     id: pageRow
@@ -143,8 +156,10 @@ Popup {
                     readonly property string pageIcon: dialog.pageList[index]?.icon ?? ""
                     readonly property bool chosen: settings.page === index
 
-                    width: ListView.view.width - Tokens.metrics.space_sm
-                    x: Tokens.metrics.space_xs
+                    width: dialog.narrow ? implicitWidth : ListView.view.width - Tokens.metrics.space_sm
+                    x: dialog.narrow ? 0 : Tokens.metrics.space_xs
+                    leftPadding: Tokens.metrics.space_md
+                    rightPadding: Tokens.metrics.space_md
                     implicitHeight: Tokens.metrics.setting_row
                     Accessible.role: Accessible.ListItem
                     Accessible.name: pageTitle
@@ -153,10 +168,13 @@ Popup {
                         radius: Tokens.metrics.radius
                         color: pageRow.chosen ? Tokens.colors.selection : pageRow.hovered ? Tokens.colors.hover : "transparent"
 
+                        // The chosen page's edge: on the left of a row,
+                        // under a tab.
                         Rectangle {
                             visible: pageRow.chosen
-                            width: Tokens.metrics.selection_bar
-                            height: parent.height
+                            y: dialog.narrow ? parent.height - height : 0
+                            width: dialog.narrow ? parent.width : Tokens.metrics.selection_bar
+                            height: dialog.narrow ? Tokens.metrics.selection_bar : parent.height
                             color: Tokens.colors.accent
                         }
                     }
@@ -183,8 +201,10 @@ Popup {
                 }
             }
             Rectangle {
-                Layout.fillHeight: true
-                Layout.preferredWidth: 1
+                Layout.fillHeight: !dialog.narrow
+                Layout.fillWidth: dialog.narrow
+                Layout.preferredWidth: Tokens.metrics.hairline
+                Layout.preferredHeight: Tokens.metrics.hairline
                 color: Tokens.colors.border
             }
 

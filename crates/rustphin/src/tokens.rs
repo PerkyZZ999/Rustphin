@@ -11,11 +11,13 @@ mod bridge;
 
 pub use bridge::qobject;
 
+use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QString, QVariant};
 use rustphin_view::{
     colors::Colors,
     layout::{DEFAULT_ZOOM, ViewMode},
     metrics::{size, space, text},
+    settings::TextSize,
 };
 
 /// The Rust side of `Tokens`.
@@ -23,6 +25,8 @@ pub struct TokensRust {
     colors: QMap<QMapPair_QString_QVariant>,
     metrics: QMap<QMapPair_QString_QVariant>,
     translucent: bool,
+    /// The text size `metrics` was made for.
+    text_size: TextSize,
 }
 
 impl Default for TokensRust {
@@ -36,22 +40,39 @@ impl Default for TokensRust {
                 QVariant::from(&QString::from(color.qml().as_str())),
             );
         }
-        let mut metrics = QMap::default();
-        for (name, value) in metric_values() {
-            metrics.insert(QString::from(name), QVariant::from(&f64::from(value)));
-        }
-        for (name, family) in font_families() {
-            metrics.insert(QString::from(name), QVariant::from(&QString::from(family)));
-        }
+        let text_size = crate::prefs::settings().text_size();
         Self {
             colors,
-            metrics,
+            metrics: metrics_map(text_size),
             translucent,
+            text_size,
         }
     }
 }
 
+/// Every size and font family as QML reads them, at `text_size`.
+fn metrics_map(text_size: TextSize) -> QMap<QMapPair_QString_QVariant> {
+    let mut metrics = QMap::default();
+    for (name, value) in metric_values(text_size.scale()) {
+        metrics.insert(QString::from(name), QVariant::from(&f64::from(value)));
+    }
+    for (name, family) in font_families() {
+        metrics.insert(QString::from(name), QVariant::from(&QString::from(family)));
+    }
+    metrics
+}
+
 impl qobject::Tokens {
+    fn refresh(mut self: std::pin::Pin<&mut Self>) {
+        let text_size = crate::prefs::settings().text_size();
+        if text_size == self.text_size {
+            return;
+        }
+        self.as_mut().rust_mut().text_size = text_size;
+        self.as_mut().rust_mut().metrics = metrics_map(text_size);
+        self.metrics_changed();
+    }
+
     fn blur_windows(&self) {
         if *self.translucent() {
             qobject::rustphin_blur_windows();
@@ -66,10 +87,9 @@ fn glass_wanted(opaque: Option<&std::ffi::OsStr>) -> bool {
 }
 
 /// The sizes QML lays out with, by name: every size of docs/DESIGN.md,
-/// and the type scale at the text size Settings chose.
-fn metric_values() -> Vec<(&'static str, f32)> {
+/// and the type scale multiplied by `scale` (the text size Settings chose).
+fn metric_values(scale: f32) -> Vec<(&'static str, f32)> {
     let details = ViewMode::Details.layout(DEFAULT_ZOOM);
-    let scale = crate::prefs::settings().text_size().scale();
     vec![
         ("space_xs", space::XS),
         ("space_sm", space::SM),
@@ -197,7 +217,7 @@ mod tests {
 
     #[test]
     fn every_metric_qml_reads_has_a_distinct_name() {
-        let mut names: Vec<&str> = metric_values().iter().map(|(name, _)| *name).collect();
+        let mut names: Vec<&str> = metric_values(1.).iter().map(|(name, _)| *name).collect();
         names.extend(font_families().iter().map(|(name, _)| *name));
         let count = names.len();
         names.sort_unstable();
@@ -241,6 +261,33 @@ mod tests {
     }
 
     #[test]
+    fn the_text_size_scales_the_type_and_its_lines_and_nothing_else() {
+        let value = |scale: f32, name: &str| {
+            metric_values(scale)
+                .into_iter()
+                .find(|(known, _)| *known == name)
+                .map(|(_, value)| value)
+        };
+        for name in [
+            "body_text",
+            "small_text",
+            "title_text",
+            "text_line",
+            "heading_line",
+        ] {
+            assert_eq!(
+                value(1.25, name),
+                value(1., name).map(|size| size * 1.25),
+                "{name}"
+            );
+        }
+        assert_eq!(value(1.25, "text_scale"), Some(1.25));
+        for name in ["row", "icon", "toolbar", "space_md", "dialog"] {
+            assert_eq!(value(1.25, name), value(1., name), "{name}");
+        }
+    }
+
+    #[test]
     fn every_colour_the_qml_reads_is_handed_to_it() -> std::io::Result<()> {
         let known: Vec<&str> = Colors::charcoal(false)
             .named()
@@ -252,7 +299,7 @@ mod tests {
 
     #[test]
     fn every_size_and_font_the_qml_reads_is_handed_to_it() -> std::io::Result<()> {
-        let mut known: Vec<&str> = metric_values().iter().map(|(name, _)| *name).collect();
+        let mut known: Vec<&str> = metric_values(1.).iter().map(|(name, _)| *name).collect();
         known.extend(font_families().iter().map(|(name, _)| *name));
         check_reads("metrics", &known, 300)
     }

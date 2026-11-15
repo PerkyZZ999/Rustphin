@@ -39,6 +39,12 @@ pub mod qobject {
             bottom_right: &QModelIndex,
         );
         #[inherit]
+        #[cxx_name = "beginResetModel"]
+        fn begin_reset_model(self: Pin<&mut ToolbarModel>);
+        #[inherit]
+        #[cxx_name = "endResetModel"]
+        fn end_reset_model(self: Pin<&mut ToolbarModel>);
+        #[inherit]
         fn index(self: &ToolbarModel, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex;
 
         #[cxx_override]
@@ -53,5 +59,9 @@ pub mod qobject {
         /// Decides what is drawn in a toolbar `width` pixels wide.
         #[qinvokable]
         fn fit(self: Pin<&mut ToolbarModel>, width: f64);
+        /// Takes up the toolbar Settings arranges now, when it changed, and
+        /// fits it to `width` pixels.
+        #[qinvokable]
+        fn reload(self: Pin<&mut ToolbarModel>, width: f64);
     }
 }

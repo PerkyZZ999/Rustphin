@@ -113,6 +113,14 @@ Window {
         Qt.callLater(focusActive)
     }
 
+    // A text size chosen in Settings shows at once.
+    Connections {
+        target: Preferences
+        function onRevisionChanged() {
+            Tokens.refresh()
+        }
+    }
+
     // Several tabs close together only after asking, when Settings says so.
     onClosing: close => {
         if (tabList.count > 1 && Shell.askBeforeClosingTabs() && !closeAsked) {

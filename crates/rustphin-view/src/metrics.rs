@@ -203,21 +203,6 @@ pub mod size {
 
 /// Type scale in pixels (D-026).
 pub mod text {
-    use std::sync::atomic::{AtomicU32, Ordering};
-
-    static SCALE: AtomicU32 = AtomicU32::new(1f32.to_bits());
-
-    /// Scales every interface text size from now on (Settings,
-    /// Appearance, Text size); file names follow the View size instead.
-    pub fn set_scale(scale: f32) {
-        SCALE.store(scale.to_bits(), Ordering::Relaxed);
-    }
-
-    /// The factor every interface text size is drawn at.
-    pub fn scale() -> f32 {
-        f32::from_bits(SCALE.load(Ordering::Relaxed))
-    }
-
     /// Interface and file-name text (`body-md`, `body-sm`).
     pub const FAMILY_BODY: &str = "Inter";
     /// Sizes, dates, paths and counts (`data-md`, `data-sm`).

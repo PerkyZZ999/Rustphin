@@ -1,5 +1,14 @@
 # Validation evidence
 
+### 2026-11-14 — W-146b Settings that did nothing
+- **Change:** the toolbar model gains a `words` role and `IconButton` a `worded` form (the name after the icon, 8 px from it and from the end; a menu's chevron last); the toolbar model reloads when the settings change (`ToolbarModel.reload`, a model reset only when the arrangement differs); `Tokens.metrics` is rebuilt when the text size changes (`Tokens.refresh`, called on every settings change, a no-op otherwise); the Settings page list is a horizontal list of tabs when the window is narrower than `SETTINGS_NARROW`. DESIGN.md says so.
+- **Found on the way:** no Toolbar setting applied "at once" as the Settings footer says: the toolbar read its arrangement only when a window was made. Fixed with the words.
+- **Tests:** `toolbar::the_words_role_is_named_as_toolbar_qml_reads_it`; `tokens::the_text_size_scales_the_type_and_its_lines_and_nothing_else`.
+- **On screen (isolated KWin session, isolated home, debug build):** ticking "Show its words" for Back, Reload and New drew "Back", "Reload" and "New ⌄" on the toolbar behind the open Settings dialog, and Actions gave up its key hint to make room; Text size, Larger enlarged the dialog's and the window's text at once; on a 640 px wide screen the page list was a row of tabs (General … Confirmations), and Right moved through them to About, the row scrolling.
+- **Not verified:** Left in the tab row; a toolbar too narrow for its words (the fit is unit-tested in `toolbar_items`); the drive cards at the larger text size.
+- **Tests:** `rust-tc doctor` PASS, 976 tests (3 skipped).
+- **Waiver:** none
+
 ### 2026-11-14 — W-146a Styling from the tokens
 - **Change:** DESIGN.md first (Tooltips, Scrollbars, the bundled weights, where line heights apply; `tooltip` and `scrollbar-thumb` components). `Tip.qml` (raised surface, 1 px `border-strong`, 8 px padding, wraps at 440 px) replaces Qt's Basic tooltip on icon buttons, outlined buttons, the toolbar and the pane's buttons; `Scroller.qml` (8 px `text-muted` thumb at half opacity, 2 px inset, shown while there is more than fits) replaces every `ScrollBar`. Inter Medium and JetBrains Mono Medium removed from the bundle: no typography token has weight 500 and no QML asked for it. `size::COMPRESS_DIALOG` and `TOOL_MENU_BUTTON` replace the 560 and 48 written in QML. Text that wraps (23 places) takes its line height from `text_line`, `heading_line` or `title_line`, scaled with the text size.
 - **Tests:** new `tokens::every_size_and_font_the_qml_reads_is_handed_to_it` (beside the colour one, sharing its reader); proved by misspelling `Tokens.metrics.scrollbar_inset` in Scroller.qml: it failed and named the file.
