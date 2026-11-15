@@ -279,6 +279,22 @@ impl PaneState {
         })
     }
 
+    /// The keyboard reached the pane (Tab, Shift+Tab, a click): with no
+    /// focused entry, the first one on screen, `first_shown`, takes the
+    /// focus without being selected, so the focus can be seen (R-107).
+    /// `true` when the focus moved.
+    pub fn keyboard_arrived(&mut self, first_shown: usize) -> bool {
+        let Some(snapshot) = self.snapshot.clone() else {
+            return false;
+        };
+        if self.selection.focus_row(&snapshot).is_some() || snapshot.is_empty() {
+            return false;
+        }
+        self.selection
+            .focus_only(&snapshot, first_shown.min(snapshot.len() - 1));
+        true
+    }
+
     /// Forgets the folder and its listing, as when the pane starts listing
     /// through another filesystem; what comes next is a new folder.
     pub fn leave_filesystem(&mut self) {
@@ -469,6 +485,44 @@ mod tests {
         let other = Path::new("/home/user").join(OsStr::from_bytes(b"caf\xff"));
         assert!(pane.set_folder(&other));
         assert!(!pane.set_folder(&other));
+    }
+
+    #[test]
+    fn the_keyboard_reaching_a_pane_shows_its_focus_on_the_first_entry_on_screen() {
+        let mut harness = Harness::new();
+        harness.fs.put(Path::new("/a"), &[b"a", b"b", b"c", b"d"]);
+        harness.open(Path::new("/a"));
+        assert!(harness.pane.keyboard_arrived(2));
+        let snapshot = harness.pane.snapshot().unwrap().clone();
+        let selection = harness.pane.selection();
+        assert_eq!(selection.focus_row(&snapshot), Some(2));
+        // Focused, not selected: nothing acts on it until the user chooses.
+        assert!(selection.is_empty());
+        // An entry already focused keeps the focus.
+        assert!(!harness.pane.keyboard_arrived(0));
+        assert_eq!(harness.pane.selection().focus_row(&snapshot), Some(2));
+    }
+
+    #[test]
+    fn a_selection_without_focus_is_kept_when_the_keyboard_arrives() {
+        let mut harness = Harness::new();
+        harness.fs.put(Path::new("/a"), &[b"a", b"b", b"c"]);
+        harness.open(Path::new("/a"));
+        let snapshot = harness.pane.snapshot().unwrap().clone();
+        harness.pane.selection_mut().select_all(&snapshot);
+        // Past the end of the list: the last entry takes the focus.
+        assert!(harness.pane.keyboard_arrived(9));
+        assert_eq!(harness.pane.selection().focus_row(&snapshot), Some(2));
+        assert_eq!(harness.pane.selection().len(), 3);
+    }
+
+    #[test]
+    fn an_empty_or_unlisted_pane_has_no_entry_to_focus() {
+        let mut harness = Harness::new();
+        assert!(!harness.pane.keyboard_arrived(0));
+        harness.fs.put(Path::new("/empty"), &[]);
+        harness.open(Path::new("/empty"));
+        assert!(!harness.pane.keyboard_arrived(0));
     }
 
     #[test]

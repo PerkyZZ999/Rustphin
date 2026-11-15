@@ -294,7 +294,7 @@ Popup {
                             Repeater {
                                 model: [qsTr("Read"), qsTr("Write"), qsTr("Execute")]
 
-                                delegate: CheckBox {
+                                delegate: Check {
                                     id: box
 
                                     required property string modelData
@@ -308,12 +308,6 @@ Popup {
                                     // The box keeps Return and Enter from the dialog.
                                     Keys.onReturnPressed: info.apply()
                                     Keys.onEnterPressed: info.apply()
-                                    background: Rectangle {
-                                        color: "transparent"
-                                        radius: Tokens.metrics.radius
-                                        border.width: box.visualFocus ? 2 : 0
-                                        border.color: Tokens.colors.accent
-                                    }
                                     contentItem: Text {
                                         textFormat: Text.PlainText
                                         leftPadding: box.indicator.width + Tokens.metrics.space_xs

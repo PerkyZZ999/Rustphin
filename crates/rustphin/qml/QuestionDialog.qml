@@ -301,7 +301,7 @@ Popup {
                 Keys.onEnterPressed: dialog.answer(3)
                 Keys.onEscapePressed: dialog.answer(0)
             }
-            CheckBox {
+            Check {
                 id: all
 
                 Layout.leftMargin: Tokens.metrics.space_lg

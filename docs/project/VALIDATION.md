@@ -1,5 +1,18 @@
 # Validation evidence
 
+### 2026-11-15 — W-076t Keyboard-only pass of the Qt interface
+- **Pass (isolated KWin session, isolated home, debug build, opaque, the UI fixture):** K20 and K21, keyboard only.
+- **Found and fixed:**
+  - Tab into a view that had no focused entry (F3's new right view, a freshly listed folder) left nothing on screen showing where the keyboard was. Now the first entry on screen takes the focus, unselected, when the keyboard arrives and when a listing arrives while it is there (`Selection::focus_only`, `PaneState::keyboard_arrived`, `FolderModel.keyboardArrived`).
+  - Shift+Tab went the same way as Tab. The order moved to `workspace::next_focus` (left view, right view, places panel; Shift+Tab backward); QML passes the direction.
+  - The Settings page list had the keyboard when the dialog opened but was no Tab stop, so it could not be reached again, and showed no focus. It is now a Tab stop with the 1 px outline on the current page (DESIGN.md).
+  - Checkboxes used Qt's Basic indicator in the desktop colour scheme's colours (a cyan ring under Breeze, not `primary-bright`); Properties' boxes drew a second ring of their own. `Check.qml` gives the indicator the design's colours, the extra ring is gone, and the window's palette gives selected text in fields `selection` and `on-selection` (DESIGN.md, Checkboxes).
+- **Seen after the fixes:** at the start the first entry outlined and nothing selected; F3's right view outlined at once; Shift+Tab right → left → places → right, one step at a time; Settings: Down moved the page and its outline, Shift+Tab then Tab came back to the list, the checkbox ring royal blue; Properties: Close ×, the first permission box (one ring), Shift+Tab wrapping to Close (Esc) with the disabled Apply skipped; the delete question: the filled Delete for good with its white ring, cancelled; batch rename: Shift+Tab from Replace with back to Text to find, typing went there (J9), then the checkbox, buttons and the Replace segment ringed; Compress to… from the palette: the ZIP segment ringed; nothing was deleted, renamed or compressed.
+- **Tests:** `pane_state::the_keyboard_reaching_a_pane_shows_its_focus_on_the_first_entry_on_screen`, `a_selection_without_focus_is_kept_when_the_keyboard_arrives`, `an_empty_or_unlisted_pane_has_no_entry_to_focus`; `workspace::tab_visits_the_views_then_the_places_panel_and_shift_tab_goes_back`, `tab_skips_what_the_window_does_not_show` (both fail with the direction reversed and with Shift+Tab standing still); `tokens::every_checkbox_is_drawn_in_the_design_s_colours` (fails with one Qt `CheckBox` put back).
+- **Not replayed:** the transfer and problems dialogs, the View menu and context menus keyboard-only; the toolbar's buttons are not Tab stops, as in Dolphin (their actions have keys and palette entries, KEYBOARD.md).
+- **Tests:** `rust-tc doctor` PASS, 997 tests (3 skipped).
+- **Waiver:** none
+
 ### 2026-11-15 — W-115 Memory on reloading a very large folder
 - **Found:** a headless probe (the core's `DirectoryModel` on the 500,000-entry benchmark folder, reloaded after each complete snapshot, RssAnon read from `/proc/self/status`) grew about 11 MB per reload with glibc's defaults, levelling off at about 175 MB after 20 reloads on 16 cores, also with 1.5 s pauses between reloads. With `MALLOC_ARENA_MAX=1` it stayed at 32 MB, with 2 at 42 MB, with 4 at 60 MB. So no listing is kept: freed listings stay spread over the allocator's per-thread arenas (the listing threads and the CPU pool build them, the Qt thread frees them).
 - **Speed with two arenas:** `bench_listing` worst of 5: first entries 42.6 ms, sorted listing 211.8 ms, slowest re-sort 66.5 ms, against 42.9, 206.7 and 64.5 ms with the defaults (limits 200, 500 and 500 ms).

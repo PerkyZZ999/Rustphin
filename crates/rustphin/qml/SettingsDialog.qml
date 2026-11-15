@@ -140,6 +140,7 @@ Popup {
                 currentIndex: settings.page
                 keyNavigationEnabled: false
                 focus: true
+                activeFocusOnTab: true
                 Accessible.role: Accessible.List
                 Accessible.name: qsTr("Settings pages")
                 Keys.onUpPressed: settings.choosePage(Math.max(0, settings.page - 1))
@@ -167,6 +168,10 @@ Popup {
                     background: Rectangle {
                         radius: Tokens.metrics.radius
                         color: pageRow.chosen ? Tokens.colors.selection : pageRow.hovered ? Tokens.colors.hover : "transparent"
+                        // The keyboard is on the list: the chosen page's
+                        // outline, as a focused place's.
+                        border.width: pageRow.chosen && pages.activeFocus ? 1 : 0
+                        border.color: Tokens.colors.accent
 
                         // The chosen page's edge: on the left of a row,
                         // under a tab.
@@ -398,7 +403,7 @@ Popup {
                     text: combo.displayText
                 }
             }
-            CheckBox {
+            Check {
                 id: check
 
                 Layout.fillWidth: true
@@ -570,7 +575,7 @@ Popup {
                         empty: ""
                         onPicked: index => dialog.toolbarCursor = index
                     }
-                    CheckBox {
+                    Check {
                         id: wordsBox
 
                         enabled: dialog.toolbarCursor >= 0 && page.onBar[dialog.toolbarCursor].canShowWords

@@ -166,6 +166,18 @@ impl Selection {
         self.focus = Some(id);
     }
 
+    /// Puts the focus and the anchor on the entry in `row` and leaves what
+    /// is selected as it is (the keyboard reaching a list with no focused
+    /// entry).
+    pub fn focus_only(&mut self, snapshot: &Snapshot, row: usize) {
+        let Some(id) = self.adopt(snapshot, row) else {
+            return;
+        };
+        self.changed();
+        self.anchor = Some(id);
+        self.focus = Some(id);
+    }
+
     /// Adds the entry in `row` to the selection or removes it (Ctrl+click).
     pub fn toggle(&mut self, snapshot: &Snapshot, row: usize) {
         let Some(id) = self.adopt(snapshot, row) else {

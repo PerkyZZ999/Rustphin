@@ -101,6 +101,10 @@ Window {
             Tokens.refresh()
     }
     color: Tokens.translucent ? "transparent" : Tokens.colors.window
+    // Selected text in every field takes the selection's colours, not the
+    // desktop colour scheme's.
+    palette.highlight: Tokens.colors.selection
+    palette.highlightedText: Tokens.colors.on_selection
     title: admin ? qsTr("%1 (administrator) — Rustphin").arg(folder ? folder.title : "") : qsTr("%1 — Rustphin").arg(folder ? folder.title : "")
 
     // Frame timing for R-101 (RUSTPHIN_FRAME_LOG, RUSTPHIN_SCROLL_BENCH).
@@ -266,7 +270,7 @@ Window {
             tabList.toggleSplit()
             break
         case "other-pane":
-            otherPane()
+            otherPane(false)
             break
         case "toggle-sidebar":
             placesShown = !placesShown
@@ -317,21 +321,19 @@ Window {
         commandPalette.show(tabList.paletteJson(), places.model.paletteJson())
     }
 
-    // Tab: the next view, then the places panel, then back (W-076).
-    function otherPane() {
-        if (places.activeFocus) {
-            if (page)
-                tabList.setActivePane(page.key, 0)
-            focusActive()
-        } else if (page && page.split && page.activePane === 0) {
-            tabList.setActivePane(page.key, 1)
-            focusActive()
-        } else if (placesShown) {
+    // Tab: the next view, then the places panel, then back; Shift+Tab,
+    // `backward`, the other way (W-076, `workspace::next_focus`).
+    function otherPane(backward: bool) {
+        const split = page !== null && page.split
+        const from = places.activeFocus ? 0 : (split && page.activePane === 1) ? 2 : 1
+        const to = Shell.nextFocus(from, split, placesShown, backward)
+        if (to === 0) {
             places.focusPanel()
-        } else if (page && page.split) {
-            tabList.setActivePane(page.key, 0)
-            focusActive()
+            return
         }
+        if (page)
+            tabList.setActivePane(page.key, to - 1)
+        focusActive()
     }
 
     function openSettings() {
@@ -443,7 +445,7 @@ Window {
                 Layout.fillHeight: true
                 Layout.preferredWidth: places.model.width
                 current: root.folder ? root.folder.locationUri : ""
-                onOtherPane: root.otherPane()
+                onOtherPane: backward => root.otherPane(backward)
                 onOpenFolder: (uri, newTab) => {
                     if (newTab)
                         tabList.open(uri, false, [])
@@ -490,7 +492,7 @@ Window {
                             onMenuRequested: (pane, row, x, y) => root.paneMenu(pane, row, x, y)
                             onCopyText: words => textClip.put(words)
                             onDialogRequested: (kind, data) => root.openDialog(kind, data)
-                            onOtherPane: root.otherPane()
+                            onOtherPane: backward => root.otherPane(backward)
                         }
                     }
                 }

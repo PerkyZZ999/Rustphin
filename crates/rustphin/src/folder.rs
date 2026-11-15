@@ -1678,6 +1678,13 @@ impl qobject::FolderModel {
         self.change_selection(Selection::invert);
     }
 
+    fn keyboard_arrived(mut self: Pin<&mut Self>, first_shown: i32) {
+        let first_shown = usize::try_from(first_shown).unwrap_or(0);
+        if self.as_mut().rust_mut().pane.keyboard_arrived(first_shown) {
+            self.selection_changed();
+        }
+    }
+
     fn clear_selection(self: Pin<&mut Self>) {
         self.change_selection(|selection, _| selection.clear());
     }

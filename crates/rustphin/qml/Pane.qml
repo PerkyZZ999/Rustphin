@@ -62,8 +62,9 @@ FocusScope {
     signal dialogRequested(string kind, var data)
     // The pane shows another folder, or its title or trash state changed.
     signal reported
-    // Tab: the keyboard moves on to the other view or the places panel.
-    signal otherPane
+    // Tab: the keyboard moves on to the other view or the places panel;
+    // Shift+Tab, `backward`, the other way.
+    signal otherPane(bool backward)
 
     // Entries per line (icons) or per column (compact); one in details.
     function lanes(): int {
@@ -79,6 +80,18 @@ FocusScope {
     // The delegate drawing `row`, if it is on screen.
     function itemAtIndex(row: int): Item {
         return listView ? listView.itemAtIndex(row) : gridView ? gridView.itemAtIndex(row) : null
+    }
+
+    // The first row on screen; 0 when none can be found.
+    function firstShown(): int {
+        if (!view)
+            return 0
+        for (let y = 1; y < view.height; y += Tokens.metrics.space_sm) {
+            const row = indexAt(view.contentX + 1, view.contentY + y)
+            if (row >= 0)
+                return row
+        }
+        return 0
     }
 
     // The row at a point of the view's content; -1 for none.
@@ -140,8 +153,17 @@ FocusScope {
             folder.openTyped(startFolder)
     }
     onActiveFocusChanged: {
-        if (activeFocus)
+        if (activeFocus) {
             pane.entered()
+            showKeyboardFocus()
+        }
+    }
+
+    // With the keyboard here and no focused entry, the first entry on
+    // screen shows the focus (R-107).
+    function showKeyboardFocus() {
+        if (activeFocus)
+            folder.keyboardArrived(firstShown())
     }
 
     FolderModel {
@@ -177,6 +199,8 @@ FocusScope {
             pane.shownLocation = folder.locationUri
             if (same)
                 Qt.callLater(pane.restoreScroll)
+            // A listing that arrives after the pane took the keyboard.
+            Qt.callLater(pane.showKeyboardFocus)
         }
         onTitleChanged: pane.reported()
         onTrashChanged: pane.reported()
@@ -451,7 +475,7 @@ FocusScope {
                     }
                     const run = id => folder.command(id, pane.lanes())
                     if (!ctrl && !alt && (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)) {
-                        pane.otherPane()
+                        pane.otherPane(event.key === Qt.Key_Backtab)
                         event.accepted = true
                         return
                     }

@@ -35,8 +35,8 @@ REQUIREMENTS.md says per criterion what was and was not repeated on Qt.
 
 | Requirement · criterion | State | What is needed |
 |---|---|---|
-| R-004 · every action has a keyboard path; Dolphin defaults | One command table, tested against KEYBOARD.md (W-123); keys replayed on Qt (W-114h, W-123) | A keyboard-only pass of every surface on Qt. The GPUI blocker W-076e (a toolkit focus patch the maintainer did not approve) went with GPUI in W-114i |
-| R-107 · keyboard-complete with visible focus everywhere | A focus ring on Properties' permission boxes (W-116b); not checked surface by surface | The same keyboard-only pass, Shift+Tab included |
+| R-004 · every action has a keyboard path; Dolphin defaults | One command table, tested against KEYBOARD.md (W-123); keys replayed on Qt (W-114h, W-123) | The surfaces W-076t did not replay: the transfer and problems dialogs, the View menu and context menus |
+| R-107 · keyboard-complete with visible focus everywhere | Keyboard-only pass of the window and six surfaces, Shift+Tab included (W-076t, K20, K21) | The transfer and problems dialogs, the View menu and context menus, keyboard only |
 | R-019 · Settings reachable by keyboard | Pages and opening keys seen on Qt | Tab through each page's controls |
 | R-019 · every change applies in every window | Applies at once, survives restarts, damaged files kept (W-140) | A second window seen following a change |
 

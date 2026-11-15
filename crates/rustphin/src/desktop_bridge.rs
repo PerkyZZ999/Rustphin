@@ -43,6 +43,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "ownTitleBar"]
         fn own_title_bar(self: &Shell) -> bool;
+        /// Where Tab (Shift+Tab when `backward`) takes the keyboard from
+        /// `from`: 0 the places panel, 1 the left or only view, 2 the right.
+        #[qinvokable]
+        #[cxx_name = "nextFocus"]
+        fn next_focus(self: &Shell, from: i32, split: bool, places: bool, backward: bool) -> i32;
         /// Asks KWin for the active window's menu (a right-click on
         /// Rustphin's own title bar); it opens at the window's corner.
         #[qinvokable]

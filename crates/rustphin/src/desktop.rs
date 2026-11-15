@@ -22,6 +22,7 @@ use rustphin_view::{
     commands::{self, Target},
     questions::{self, Answer},
     settings::Programs,
+    workspace::{self, FocusStop},
 };
 
 use crate::{hub, prefs};
@@ -142,6 +143,15 @@ impl qobject::Shell {
         prefs::settings().title_bar() == rustphin_view::settings::TitleBar::Rustphin
     }
 
+    fn next_focus(&self, from: i32, split: bool, places: bool, backward: bool) -> i32 {
+        stop_number(workspace::next_focus(
+            stop_of(from),
+            split,
+            places,
+            backward,
+        ))
+    }
+
     fn window_menu(&self) {
         // Off the Qt thread: the bus call waits for KWin's answer.
         std::thread::spawn(|| {
@@ -184,6 +194,25 @@ impl qobject::Shell {
 
     fn command_target(&self, id: &QString) -> QString {
         QString::from(target_name(&id.to_string()))
+    }
+}
+
+/// A focus stop from its QML number: 0 the places panel, 2 the right view,
+/// anything else the left one.
+fn stop_of(number: i32) -> FocusStop {
+    match number {
+        0 => FocusStop::Places,
+        2 => FocusStop::Right,
+        _ => FocusStop::Left,
+    }
+}
+
+/// The QML number of a focus stop.
+fn stop_number(stop: FocusStop) -> i32 {
+    match stop {
+        FocusStop::Places => 0,
+        FocusStop::Left => 1,
+        FocusStop::Right => 2,
     }
 }
 

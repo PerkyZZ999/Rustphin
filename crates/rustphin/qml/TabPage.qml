@@ -26,7 +26,7 @@ Item {
     signal menuRequested(Pane pane, int row, real x, real y)
     signal copyText(string words)
     signal dialogRequested(string kind, var data)
-    signal otherPane
+    signal otherPane(bool backward)
 
     function report(side: int, pane: Pane) {
         const folder = pane.listing
@@ -65,7 +65,7 @@ Item {
             onReported: page.report(0, leftPane)
             onCopyText: words => page.copyText(words)
             onDialogRequested: (kind, data) => page.dialogRequested(kind, data)
-            onOtherPane: page.otherPane()
+            onOtherPane: backward => page.otherPane(backward)
         }
         Rectangle {
             visible: page.split
@@ -94,7 +94,7 @@ Item {
                 onReported: page.report(1, rightPane)
                 onCopyText: words => page.copyText(words)
                 onDialogRequested: (kind, data) => page.dialogRequested(kind, data)
-                onOtherPane: page.otherPane()
+                onOtherPane: backward => page.otherPane(backward)
                 Component.onCompleted: focusList()
             }
         }

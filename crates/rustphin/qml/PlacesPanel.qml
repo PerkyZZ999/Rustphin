@@ -24,7 +24,7 @@ FocusScope {
     signal copyText(string words)
     signal done
     // Tab: the keyboard goes back to the views.
-    signal otherPane
+    signal otherPane(bool backward)
 
     function focusPanel() {
         list.forceActiveFocus()
@@ -151,7 +151,7 @@ FocusScope {
                     break
                 case Qt.Key_Tab:
                 case Qt.Key_Backtab:
-                    panel.otherPane()
+                    panel.otherPane(event.key === Qt.Key_Backtab)
                     event.accepted = true
                     return
                 case Qt.Key_Menu:

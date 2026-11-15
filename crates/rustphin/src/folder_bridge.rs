@@ -224,6 +224,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "invertSelection"]
         fn invert_selection(self: Pin<&mut FolderModel>);
+        /// The pane took the keyboard: with no focused entry, the entry at
+        /// `first_shown` (the first on screen) takes the focus, unselected.
+        #[qinvokable]
+        #[cxx_name = "keyboardArrived"]
+        fn keyboard_arrived(self: Pin<&mut FolderModel>, first_shown: i32);
         /// Selects nothing.
         #[qinvokable]
         #[cxx_name = "clearSelection"]

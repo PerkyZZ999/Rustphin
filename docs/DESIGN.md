@@ -862,7 +862,10 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   (`panel-left`), Confirmations (`circle-check`), Shortcuts (`keyboard`),
   About (`info`); the current page in `selection` with `on-selection` text
   and a 2 px `primary-bright` edge on its left,
-  others `hover` under the pointer; Up and Down move through it. A page: its
+  others `hover` under the pointer; Up and Down move through it. The list
+  is the first stop of Tab and Shift+Tab in the dialog and, while it has the
+  keyboard, the current page carries the 1 px `primary-bright` outline of a
+  focused place. A page: its
   name in `headline-sm` and one sentence in `text-muted`, then groups under
   `label-sm` capitals; each setting a 32 px row with its label in a 184 px
   column and the control after it: a drop-down (`ComboBox`, at least 216 px)
@@ -1143,8 +1146,11 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   left out" in `headline-sm`; one row per entry with its path in `data-md`
   and the reason in `body-sm` `text-muted`, scrolling past 384 px; an
   outlined Close.
-- **Checkboxes:** the Qt Quick Controls Basic indicator with a 2 px
-  `primary-bright` outline on keyboard focus; the label is clickable.
+- **Checkboxes:** the Qt Quick Controls Basic indicator (`Check.qml`) in
+  the design's colours, never the desktop colour scheme's: `content` fill,
+  `border-strong` edge, `text` check, and a 2 px `primary-bright` outline on
+  keyboard focus; the label is clickable. Selected text in any field takes
+  `selection` and `on-selection` the same way.
 - **Activity line** (`NoticeBar.qml`): on `chrome-raised`: the operation's
   icon in `text-muted` (`copy`, `move`, `trash`, `undo-2` for restoring,
   `pencil`, `package-open`, `file-archive`, `loader` otherwise), the sentence

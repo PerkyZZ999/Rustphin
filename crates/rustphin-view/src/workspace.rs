@@ -596,9 +596,74 @@ impl Workspace {
     }
 }
 
+/// Where the keyboard is in a window, for Tab and Shift+Tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusStop {
+    /// The places panel.
+    Places,
+    /// The only view, or the left one of a split.
+    Left,
+    /// The right view of a split.
+    Right,
+}
+
+/// Where Tab, or Shift+Tab when `backward`, takes the keyboard from `from`
+/// (W-076): the left view, the right one when split, the places panel when
+/// shown, then round again; Shift+Tab goes the other way.
+pub fn next_focus(from: FocusStop, split: bool, places_shown: bool, backward: bool) -> FocusStop {
+    let stops: Vec<FocusStop> = [
+        Some(FocusStop::Left),
+        split.then_some(FocusStop::Right),
+        places_shown.then_some(FocusStop::Places),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    // A stop no longer offered (a view just joined, the panel just hidden)
+    // counts as the left view.
+    let at = stops.iter().position(|&stop| stop == from).unwrap_or(0);
+    let next = if backward {
+        (at + stops.len() - 1) % stops.len()
+    } else {
+        (at + 1) % stops.len()
+    };
+    stops[next]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tab_visits_the_views_then_the_places_panel_and_shift_tab_goes_back() {
+        use FocusStop::{Left, Places, Right};
+        let forward: Vec<FocusStop> = [Left, Right, Places]
+            .into_iter()
+            .map(|from| next_focus(from, true, true, false))
+            .collect();
+        assert_eq!(forward, [Right, Places, Left]);
+        let backward: Vec<FocusStop> = [Left, Right, Places]
+            .into_iter()
+            .map(|from| next_focus(from, true, true, true))
+            .collect();
+        assert_eq!(backward, [Places, Left, Right]);
+    }
+
+    #[test]
+    fn tab_skips_what_the_window_does_not_show() {
+        use FocusStop::{Left, Places, Right};
+        // One view and the panel: Tab and Shift+Tab both swap them.
+        assert_eq!(next_focus(Left, false, true, false), Places);
+        assert_eq!(next_focus(Left, false, true, true), Places);
+        assert_eq!(next_focus(Places, false, true, true), Left);
+        // Split without the panel: the two views swap.
+        assert_eq!(next_focus(Right, true, false, false), Left);
+        assert_eq!(next_focus(Left, true, false, true), Right);
+        // One view alone: the keyboard stays.
+        assert_eq!(next_focus(Left, false, false, true), Left);
+        // The right view just joined: Tab goes on from the left one.
+        assert_eq!(next_focus(Right, false, true, false), Places);
+    }
 
     #[test]
     fn the_other_view_receives_the_selection_or_a_reason() {

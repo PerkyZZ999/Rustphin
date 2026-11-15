@@ -185,7 +185,7 @@ Popup {
                     field: "replace"
                     label: qsTr("Replace with")
                 }
-                CheckBox {
+                Check {
                     id: regex
 
                     text: qsTr("Regular expression")

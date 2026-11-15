@@ -243,6 +243,32 @@ fn font_families() -> [(&'static str, &'static str); 3] {
 mod tests {
     use super::*;
 
+    /// Qt's own checkbox draws in the desktop colour scheme's colours; the
+    /// design's is `Check.qml` (DESIGN.md, Checkboxes).
+    #[test]
+    fn every_checkbox_is_drawn_in_the_design_s_colours() {
+        let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("qml");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&folder).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.extension().is_none_or(|ending| ending != "qml") {
+                continue;
+            }
+            checked += 1;
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            if path.file_name().is_some_and(|name| name == "Check.qml") {
+                assert!(text.contains("palette.highlight: Tokens.colors.accent"));
+                continue;
+            }
+            assert!(
+                !text.contains("CheckBox {"),
+                "{} uses Qt's CheckBox instead of Check",
+                path.display()
+            );
+        }
+        assert!(checked > 20, "only {checked} QML files found");
+    }
+
     #[test]
     fn rustphin_opaque_turns_the_glass_off_unless_it_is_zero() {
         assert!(glass_wanted(None));
