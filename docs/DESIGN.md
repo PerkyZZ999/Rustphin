@@ -832,9 +832,10 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   `toolbar_items::Toolbar::default`: Act as administrator (`shield-alert`) ·
   Back, Forward, Up one folder, Reload · the location field (fills the middle,
   at least 280 px) · New (`plus`) and Open terminal here (`square-terminal`) ·
-  View (`list`), Split view, Show hidden files, Filter by name · Settings
-  (`settings`) and Command palette (`command`), two icon buttons (W-154,
-  which replaced the worded Actions button).
+  View (`list`), Split view, Show hidden files, Filter by name · Command
+  palette (`command`) and Settings (`settings`) last, two icon buttons
+  (W-154, which replaced the worded Actions button; W-156 put Settings at
+  the right end).
   New and View are 48 px menu buttons with a 12 px `chevron-down` in
   `text-disabled`. Show hidden files and Filter by name are toggles: on, they
   take `toolbar-toggle-on`. Each tooltip is the item's name and its key
@@ -847,7 +848,7 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   location field and the Command palette button always stay. What leaves
   remains in the palette and on its key. Settings can be taken off the
   toolbar (Ctrl+Shift+, and the palette still open it); a toolbar saved with
-  the Actions button gets Settings and Command palette in its place.
+  the Actions button gets Command palette and Settings in its place.
 - **Location field:** 32 px, `content` with a `border-strong` outline. A
   16 px `folder` icon (`trash` in the trash), then the path as crumbs in
   `data-md` separated by 12 px `chevron-right`; the last crumb in `text` and
@@ -1074,10 +1075,10 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   draws a 2 px `on-primary` ring inside the fill. Every dialog button shows its
   key ("Close (Esc)", "Apply (Enter)", "Skip (S)"). A disabled default keeps
   its fill at half opacity with `text-disabled` words.
-- **Settings and Command palette buttons (W-154):** toolbar icon buttons
-  like the others, at its right end: `settings`, tooltip "Settings
-  (Ctrl+Shift+,)", opens Settings; `command`, tooltip "Command palette
-  (Ctrl+Shift+P)", opens the palette. Either can show its words (Settings,
+- **Command palette and Settings buttons (W-154, W-156):** toolbar icon
+  buttons like the others, at its right end, Settings last: `command`,
+  tooltip "Command palette (Ctrl+Shift+P)", opens the palette; `settings`,
+  tooltip "Settings (Ctrl+Shift+,)", opens Settings. Either can show its words (Settings,
   Toolbar). The dialog each opens takes the keyboard, so Escape closes it.
 - **Administrator bar:** while acting as administrator, 36 px across the
   window on `error-surface` with an `error-border` outline: `shield-alert`,
@@ -1373,8 +1374,9 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   cancels.
 - **Tooltips** (`Tip.qml`): after 600 ms of hover, the label then the key in
   parentheses, in `body-md` `text` on `surface-raised` with a 1 px
-  `border-strong` outline and 8 px padding; a long one wraps at 440 px. A
-  tooltip is a note, not a menu: it has no royal-blue outline or glow.
+  `border-strong` outline and 8 px padding; a long one wraps at 440 px. It
+  opens 4 px below its control, centred under it, and is kept inside the
+  window (W-156). A tooltip is a note, not a menu: it has no royal-blue outline or glow.
 - **Dragging:** entries leave as a system drag of their URIs, shown by the
   first entry's type icon (32 px); a folder under the pointer takes `hover`,
   and a drop on the folder itself outlines the pane in 2 px `primary-bright`.
@@ -1455,7 +1457,7 @@ values in `colors.rs` and `metrics.rs`. Built as described: the title bar
 and resize bands, the toolbar with Settings' items and `Toolbar::fit`, the
 location crumbs, the tab strip, split view with path bars, the places panel
 with groups, separators (W-152), folded counts, Remote and Devices, its menu
-and drag and drop, a drive's Properties with its ring (W-153), The toolbar ends with the Settings and Command palette icon buttons (W-154); the mockups in `docs/mockup/` still draw the worded Actions button they replaced.
+and drag and drop, a drive's Properties with its ring (W-153), The toolbar ends with the Command palette and Settings icon buttons (W-154, W-156); the mockups in `docs/mockup/` still draw the worded Actions button they replaced.
 the three views with the zoom table, selection, rubber band, rename in place
 and thumbnails, the status line, the filter bar, the in-place states, the
 re-read and trash banners, the administrator bar, the context, New, trash

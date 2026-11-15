@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-15 — W-156 Toolbar order, centred rows, tooltips below
+- **Phase:** 6 Implement (requested addition)
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` PASS (see the commit); the toolbar tests now expect Command palette then Settings at the right end, a list saved with Actions to gain Settings after the palette, and the palette to stay wherever it is. Seen in an isolated KWin session with an isolated home: the toolbar ends ⌘ then the gear; the Command palette tooltip opened under its button, moved left to stay inside the window; zoomed 4×, the chosen page's icon and name were 4 px below the row's middle before the fix and within a pixel of it after (RS10).
+- **Not verified:** the maintainer's own screenshot did not reach the agent; the off-centre item was taken to be the chosen page row, the only one found off centre.
+- **Waiver:** none
+- **Follow-up:** none.
+
 ### 2026-11-15 — W-155 Settings restyled after the maintainer's mockup
 - **Phase:** 6 Implement (requested addition)
 - **Result:** pass

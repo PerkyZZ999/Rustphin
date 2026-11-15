@@ -46,6 +46,8 @@ ComboBox {
         width: ListView.view.width
         implicitHeight: Tokens.metrics.setting_row
         leftPadding: Tokens.metrics.space_sm
+        topPadding: 0
+        bottomPadding: 0
         highlighted: combo.highlightedIndex === index
         Accessible.name: modelData
         Accessible.selected: combo.currentIndex === index

@@ -174,7 +174,7 @@ J7–J17 were written for the GPUI interface's minimum-size checks (W-076) and h
 
 | # | Steps | Expected |
 |---|---|---|
-| J1 | Open the fixture in one unsplit tab | Title bar, one toolbar across the window (as TB10) ending in the Settings and Command palette icon buttons (W-154), the places panel, the tab strip, the file view and the status line. Per-pane controls are only the path and the list; no trash buttons outside the trash |
+| J1 | Open the fixture in one unsplit tab | Title bar, one toolbar across the window (as TB10) ending in the Command palette and Settings icon buttons (W-154, W-156), the places panel, the tab strip, the file view and the status line. Per-pane controls are only the path and the list; no trash buttons outside the trash |
 | J2 | Click Actions, query `new folder`, Enter | Existing operation engine creates a folder and opens its inline rename field; F10 still does the same |
 | J3 | Actions, query `new group`, Enter; name it Work | Places panel receives focus, creates the group and opens its name field; group is saved in place-groups.toml |
 | J4 | Use Actions for view modes, zoom, hidden files, sorting, split view, new file, trash and place controls | Each is reached after opening Actions once (every command in `commands.rs` is in the palette); corresponding shortcuts still work; Extract and Compress say why not in the trash ("Archives cannot be extracted or made in the trash. Restore the files first.") |
@@ -624,6 +624,7 @@ Since W-155 on/off settings are switches (older rows below that say "tick" or "u
 | RS6 | Ctrl+F, type `hidden`; then select all and type `zebra`; clear it | The list shows Appearance, Views and Places under their headings and Appearance opens; then "No settings match "zebra". Try another word."; clearing shows every page (seen 2026-11-15) |
 | RS7 | Toolbar: click Command palette in the preview | It is picked in the preview and in On the toolbar, which scrolls to it; Take off is unavailable ("Always there") (seen 2026-11-15) |
 | RS8 | Appearance, About, Shortcuts | The look tiles (Glass chosen, the desktop showing through its window), Title bar and Text size segments, the hidden-files slider; About's version cap, "No telemetry" panel, Credits and Settings file panels; Shortcuts in a panel per category with "or" between key caps (seen 2026-11-15) |
+| RS10 | Hover a toolbar button 600 ms; open Settings and zoom on the chosen page | The tooltip opens under the button, inside the window; the chosen page's icon and name sit in the middle of its row (seen 2026-11-15, W-156) |
 | RS9 | A 700 px screen (the window fills it): Ctrl+Shift+,; Right six times | The page list is a row of tabs above the page, the search field narrower and without its key cap; Right moves along the tabs to Shortcuts and the row scrolls to keep it in view (seen 2026-11-15) |
 
 ### General page (W-106c1)
@@ -700,8 +701,8 @@ Isolated home with `~/.config/rustphin/place-groups.toml` holding two empty grou
 
 | ID | Steps | Expected |
 |---|---|---|
-| TB10 | Start with no `[toolbar]` in the settings | The toolbar as before W-106f: shield, Back, Forward, Up, Reload, location, New, terminal, View, Split, hidden, Filter, then the Settings (gear) and Command palette (⌘) icon buttons (W-154; before it a worded "Actions" button) |
-| TB11 | Hover the Command palette button, click it, Escape; click the Settings button, Escape. Then start with `[toolbar] items` saved by an older build, ending in `"actions"` (W-154) | Tooltips "Command palette (Ctrl+Shift+P)" and "Settings (Ctrl+Shift+,)"; each opens its dialog, which takes the keyboard so Escape closes it. The old list shows Settings and Command palette where Actions was; the file is not rewritten until the toolbar is changed |
+| TB10 | Start with no `[toolbar]` in the settings | The toolbar as before W-106f: shield, Back, Forward, Up, Reload, location, New, terminal, View, Split, hidden, Filter, then the Command palette (⌘) and Settings (gear) icon buttons, Settings last (W-154, W-156; before W-154 a worded "Actions" button) |
+| TB11 | Hover the Command palette button, click it, Escape; click the Settings button, Escape. Then start with `[toolbar] items` saved by an older build, ending in `"actions"` (W-154) | Tooltips "Command palette (Ctrl+Shift+P)" and "Settings (Ctrl+Shift+,)"; each opens its dialog, which takes the keyboard so Escape closes it. The old list shows Command palette and Settings where Actions was; the file is not rewritten until the toolbar is changed |
 | TB11 | Settings, Toolbar | A preview of the items; "Available actions" (search, Separator, then the palette's commands; nothing already on the toolbar); "On the toolbar" in order, Location and Actions marked "always there"; Add and Remove between them |
 | TB12 | Search `copy location`, choose it, Add | "Files: Copy location" goes before Actions; the preview and the real toolbar show its icon; the search list says nothing else matches |
 | TB13 | Choose Back on the toolbar; Page Down; tick Show its words; Move right; choose Act as administrator, Remove; Escape | The toolbar reads Forward, "← Back", Up…; no shield, and the separator left first is not drawn; `[toolbar]` lists the items and `words = ["back"]` |

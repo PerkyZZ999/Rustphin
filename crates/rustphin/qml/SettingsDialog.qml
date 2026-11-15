@@ -495,6 +495,9 @@ Popup {
 
         leftPadding: Tokens.metrics.space_sm + Tokens.metrics.hairline * 2
         rightPadding: Tokens.metrics.space_sm + Tokens.metrics.hairline * 2
+        // The style's own padding pushed the icon and name below the middle.
+        topPadding: 0
+        bottomPadding: 0
         implicitHeight: Tokens.metrics.setting_row
         focusPolicy: Qt.NoFocus
         Accessible.role: Accessible.ListItem
@@ -1115,6 +1118,8 @@ Popup {
             implicitHeight: Tokens.metrics.setting_row
             leftPadding: Tokens.metrics.space_sm
             rightPadding: Tokens.metrics.space_sm
+            topPadding: 0
+            bottomPadding: 0
             Accessible.name: name
             Accessible.selected: current
             background: Rectangle {

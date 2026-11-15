@@ -29,8 +29,8 @@ opens a tab or a window as Settings, General says.
     - New › *New menu* · Open terminal here
     - View › *View menu* · Split view · Show hidden files · Filter by name
     - any palette command added in Settings
-    - Settings (opens Settings) and Command palette (opens the palette),
-      two icon buttons (W-154)
+    - Command palette (opens the palette) and Settings (opens Settings), two
+      icon buttons, Settings last (W-154, W-156)
   - **Administrator bar** (only while acting as administrator), with "Stop
     acting as administrator"
   - **Body**

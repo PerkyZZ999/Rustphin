@@ -4,8 +4,9 @@
 //! Dolphin's "Configure Toolbars…": built-in buttons, any palette command,
 //! and separators. The location field and the Command palette button always
 //! stay: one is where the folder is shown, the other reaches every action.
-//! The Settings button sits beside the palette's by default (W-154, which
-//! replaced the worded Actions button with these two icon buttons). When the
+//! The Settings button sits after the palette's, at the right end, by
+//! default (W-154 replaced the worded Actions button with these two icon
+//! buttons; W-156 put Settings last). When the
 //! window is too narrow, items leave from the right end inwards.
 
 use crate::metrics::{size, space};
@@ -255,8 +256,8 @@ impl Default for Toolbar {
             Item::Hidden,
             Item::Filter,
             Item::Separator,
-            Item::Settings,
             Item::Palette,
+            Item::Settings,
         ];
         Self {
             items: items.into_iter().map(|item| (item, false)).collect(),
@@ -268,7 +269,7 @@ impl Toolbar {
     /// Reads the saved lists: item ids in order, and those showing words.
     /// Unknown ids and repeated buttons are dropped; the location field
     /// and the palette button are put back if missing. A list saved with
-    /// the Actions button, before W-154, gains Settings before the palette
+    /// the Actions button, before W-154, gains Settings after the palette
     /// as today's toolbar has it. An empty list is today's.
     pub fn from_ids(items: &[String], words: &[String]) -> Self {
         if items.is_empty() {
@@ -297,7 +298,7 @@ impl Toolbar {
         };
         let from_actions = items.iter().any(|id| id == LEGACY_ACTIONS);
         if from_actions && !list.iter().any(|(item, _)| *item == Item::Settings) {
-            list.insert(palette, (Item::Settings, false));
+            list.insert(palette + 1, (Item::Settings, false));
         }
         Self { items: list }
     }
@@ -514,7 +515,7 @@ mod tests {
         let old = Toolbar::from_ids(&ids(&["back", "location", "actions", "filter"]), &[]);
         assert_eq!(
             names(&old),
-            ["back", "location", "settings", "palette", "filter"]
+            ["back", "location", "palette", "settings", "filter"]
         );
         // Saved again, it says so in today's words, and stays as it is.
         let (items, words) = old.to_ids();
@@ -528,10 +529,11 @@ mod tests {
         assert_eq!(Item::Palette.icon(), crate::icons::Icon::Command);
         assert_eq!(Item::Settings.icon(), crate::icons::Icon::Settings);
         assert!(Item::Palette.is_fixed() && !Item::Settings.is_fixed());
+        // Today's toolbar ends with the palette, then Settings (W-156).
         let mut toolbar = Toolbar::default();
-        assert_eq!(toolbar.items.last(), Some(&(Item::Palette, false)));
-        let settings = toolbar.items.len() - 2;
+        let settings = toolbar.items.len() - 1;
         assert_eq!(toolbar.items[settings].0, Item::Settings);
+        assert_eq!(toolbar.items[settings - 1].0, Item::Palette);
         assert!(toolbar.remove(settings), "Settings can go");
         assert!(available(&toolbar, "").contains(&Item::Settings));
     }
@@ -545,10 +547,12 @@ mod tests {
             .position(|(i, _)| *i == Item::Location)
             .unwrap();
         assert!(!toolbar.remove(location));
-        assert!(
-            !toolbar.remove(toolbar.items.len() - 1),
-            "the palette stays"
-        );
+        let palette = toolbar
+            .items
+            .iter()
+            .position(|(i, _)| *i == Item::Palette)
+            .unwrap();
+        assert!(!toolbar.remove(palette), "the palette stays");
         assert_eq!(toolbar.add(Item::Back, None), None);
         let at = toolbar.add(Item::Separator, None).unwrap();
         assert_eq!(
