@@ -510,6 +510,34 @@ pub fn theme_icon_size(drawn: f32) -> u32 {
 /// small says less than the type's icon.
 pub const MIN_THUMBNAIL_EDGE: f32 = 24.;
 
+/// Where an entry may be drawn with a thumbnail rather than its type icon.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PreviewPlace {
+    /// The entry is a folder or another container.
+    pub container: bool,
+    /// Settings, Views shows pictures' thumbnails (W-158).
+    pub previews_on: bool,
+    /// The icon's edge at the zoom level, in pixels.
+    pub edge: f32,
+    /// The pane shows a trash.
+    pub in_trash: bool,
+    /// The pane acts as administrator: previews would read every picture
+    /// as root (ADMIN_MODE.md).
+    pub as_admin: bool,
+}
+
+impl PreviewPlace {
+    /// Whether a thumbnail may be asked for here; the type must still have
+    /// one.
+    pub fn may_preview(self) -> bool {
+        self.previews_on
+            && !self.container
+            && !self.in_trash
+            && !self.as_admin
+            && self.edge >= MIN_THUMBNAIL_EDGE
+    }
+}
+
 /// What an empty pane says: an icon, a heading and what can be done.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmptyState {
@@ -621,6 +649,53 @@ mod tests {
             error,
             moved,
         }
+    }
+
+    #[test]
+    fn thumbnails_are_asked_for_only_where_they_are_wanted_and_safe() {
+        let picture = PreviewPlace {
+            container: false,
+            previews_on: true,
+            edge: 48.,
+            in_trash: false,
+            as_admin: false,
+        };
+        assert!(picture.may_preview());
+        // Settings, Views switched thumbnails off (W-158).
+        assert!(
+            !PreviewPlace {
+                previews_on: false,
+                ..picture
+            }
+            .may_preview()
+        );
+        for place in [
+            PreviewPlace {
+                container: true,
+                ..picture
+            },
+            PreviewPlace {
+                edge: MIN_THUMBNAIL_EDGE - 1.,
+                ..picture
+            },
+            PreviewPlace {
+                in_trash: true,
+                ..picture
+            },
+            PreviewPlace {
+                as_admin: true,
+                ..picture
+            },
+        ] {
+            assert!(!place.may_preview(), "{place:?}");
+        }
+        assert!(
+            PreviewPlace {
+                edge: MIN_THUMBNAIL_EDGE,
+                ..picture
+            }
+            .may_preview()
+        );
     }
 
     #[test]

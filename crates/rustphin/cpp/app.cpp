@@ -229,6 +229,11 @@ void rustphin_shell_start(bool keep_running, const QString& home)
     (void)rustphin_blur_available();
 }
 
+void rustphin_shell_keep_running(bool keep_running)
+{
+    shell().keepRunning = keep_running;
+}
+
 void rustphin_shell_open(const QStringList& folders, const QString& activation)
 {
     QMetaObject::invokeMethod(

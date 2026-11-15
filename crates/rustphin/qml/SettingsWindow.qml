@@ -1,4 +1,6 @@
-// Settings (W-106, W-155): a title row with a search across the pages,
+// Settings (W-106, W-155, W-157): a window of its own, moved and resized
+// like any other and kept above the window that opened it. A title row with
+// a search across the pages,
 // the pages on the left under their headings with About at the foot, and
 // the chosen page's sections on the right, each a panel of rows. Rows come
 // from Rust (`settings_form`) as JSON and are drawn here by kind; the
@@ -10,15 +12,21 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Rustphin
 
-Popup {
+Window {
     id: dialog
 
+    // The window Settings was opened from: it stays above it.
+    required property Window owner
     // The `file:` URI of the folder the window shows, or empty.
     required property string shownFolder
     required property PlacesModel places
     // Rust hands the pages over as JSON (`settings_form`): typed here.
     // In a narrow window the page list is a row of tabs over the page.
-    readonly property bool narrow: parent !== null && parent.width < Tokens.metrics.settings_narrow
+    readonly property bool narrow: width < Tokens.metrics.settings_narrow
+    // Rustphin draws the title row and edges itself, as Settings, Appearance
+    // chose for windows when this one was made.
+    readonly property bool ownTitleBar: Shell.ownTitleBar()
+    readonly property bool framed: ownTitleBar && visibility !== Window.Maximized
     readonly property list<var> pageList: settings.pages.length > 0 ? JSON.parse(settings.pages) : []
     readonly property list<var> groups: settings.groups.length > 0 ? JSON.parse(settings.groups) : []
     readonly property bool pageShown: pageList.length > settings.page
@@ -65,22 +73,15 @@ Popup {
         settings.set(key, value)
     }
 
-    parent: Overlay.overlay
-    anchors.centerIn: parent
-    width: Math.min(Tokens.metrics.settings_width, parent.width - 2 * Tokens.metrics.space_lg)
-    height: Math.min(Tokens.metrics.settings_height, parent.height - 2 * Tokens.metrics.space_lg)
-    modal: true
-    focus: true
-    padding: 0
-    closePolicy: Popup.CloseOnEscape
-    Overlay.modal: Rectangle {
-        color: Tokens.colors.scrim
-    }
-    background: FloatingSurface {}
-    Component.onCompleted: {
-        settings.start(shownFolder)
-        open()
-    }
+    transientParent: owner
+    title: qsTr("Settings \u2014 Rustphin")
+    flags: ownTitleBar ? Qt.Dialog | Qt.FramelessWindowHint : Qt.Dialog
+    // Its size is set once, when Main.qml shows it, so a change of text
+    // size never undoes the size the user gave it.
+    minimumWidth: Tokens.metrics.settings_min_width
+    minimumHeight: Tokens.metrics.settings_min_height
+    color: Tokens.colors.raised
+    Component.onCompleted: settings.start(shownFolder)
 
     SettingsModel {
         id: settings
@@ -91,6 +92,10 @@ Popup {
         target: settings
         function onRevisionChanged() {
             Qt.callLater(dialog.forgetFocus)
+        }
+        // Another page opens at its top, not where the last one was left.
+        function onPageChanged() {
+            body.contentY = 0
         }
     }
 
@@ -166,10 +171,24 @@ Popup {
         color: Tokens.colors.border
     }
 
-    contentItem: ColumnLayout {
+    // The window's surface: solid, as dialogs are, with a royal-blue edge
+    // when Rustphin draws the frame itself.
+    Rectangle {
+        anchors.fill: parent
+        color: Tokens.colors.raised
+        border.width: dialog.framed ? Tokens.metrics.hairline : 0
+        border.color: Tokens.colors.border_accent
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: dialog.framed ? Tokens.metrics.hairline : 0
+        focus: true
         spacing: 0
         Accessible.role: Accessible.Dialog
         Accessible.name: qsTr("Settings")
+        // Escape closes the window; an open drop-down takes it first.
+        Keys.onEscapePressed: dialog.close()
         // Ctrl+F puts the keyboard in the search, wherever it is.
         Keys.onPressed: event => {
             if (event.key === Qt.Key_F && event.modifiers === Qt.ControlModifier) {
@@ -179,7 +198,9 @@ Popup {
             }
         }
 
-        // Title row: the name, the search across every page, Close.
+        // Title row: the name, the search across every page, Close. With
+        // Rustphin's own title bar it moves the window; with KDE's, KWin
+        // draws the name and Close above it and the row keeps the search.
         RowLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: Tokens.metrics.dialog_title
@@ -187,7 +208,17 @@ Popup {
             Layout.rightMargin: Tokens.metrics.space_sm
             spacing: Tokens.metrics.space_sm
 
+            DragHandler {
+                target: null
+                enabled: dialog.ownTitleBar
+                grabPermissions: PointerHandler.TakeOverForbidden
+                onActiveChanged: {
+                    if (active)
+                        dialog.startSystemMove()
+                }
+            }
             Lucide {
+                visible: dialog.ownTitleBar
                 name: "settings"
                 colour: Tokens.colors.text_muted
             }
@@ -198,8 +229,13 @@ Popup {
                 font.family: Tokens.metrics.family_heading
                 font.pixelSize: Tokens.metrics.title_text
                 font.weight: Font.DemiBold
+                visible: dialog.ownTitleBar
                 text: qsTr("Settings")
                 Accessible.role: Accessible.Heading
+            }
+            Item {
+                Layout.fillWidth: true
+                visible: !dialog.ownTitleBar
             }
             SearchField {
                 id: pageSearch
@@ -222,6 +258,7 @@ Popup {
                 }
             }
             IconButton {
+                visible: dialog.ownTitleBar
                 iconName: "x"
                 text: qsTr("Close")
                 tip: qsTr("Close (Esc)")
@@ -481,6 +518,93 @@ Popup {
         }
     }
 
+    // Bands along the edges resize the window when Rustphin draws its frame
+    // (4 pixels; 16-pixel corners), as on the main window.
+    ResizeBand {
+        edges: Qt.LeftEdge
+        shape: Qt.SizeHorCursor
+        l: 0
+        t: 16
+        w: 4
+        h: -32
+    }
+    ResizeBand {
+        edges: Qt.RightEdge
+        shape: Qt.SizeHorCursor
+        l: -4
+        t: 16
+        w: 4
+        h: -32
+    }
+    ResizeBand {
+        edges: Qt.TopEdge
+        shape: Qt.SizeVerCursor
+        l: 16
+        t: 0
+        w: -32
+        h: 4
+    }
+    ResizeBand {
+        edges: Qt.BottomEdge
+        shape: Qt.SizeVerCursor
+        l: 16
+        t: -4
+        w: -32
+        h: 4
+    }
+    ResizeBand {
+        edges: Qt.TopEdge | Qt.LeftEdge
+        shape: Qt.SizeFDiagCursor
+        l: 0
+        t: 0
+        w: 16
+        h: 16
+    }
+    ResizeBand {
+        edges: Qt.TopEdge | Qt.RightEdge
+        shape: Qt.SizeBDiagCursor
+        l: -16
+        t: 0
+        w: 16
+        h: 16
+    }
+    ResizeBand {
+        edges: Qt.BottomEdge | Qt.LeftEdge
+        shape: Qt.SizeBDiagCursor
+        l: 0
+        t: -16
+        w: 16
+        h: 16
+    }
+    ResizeBand {
+        edges: Qt.BottomEdge | Qt.RightEdge
+        shape: Qt.SizeFDiagCursor
+        l: -16
+        t: -16
+        w: 16
+        h: 16
+    }
+
+    // A band that resizes the window from `edges`. Negative `l`/`t` count
+    // from the right or bottom; `w`/`h` of zero or less take the window's
+    // size less that much.
+    component ResizeBand: MouseArea {
+        required property int edges
+        required property int shape
+        required property real l
+        required property real t
+        required property real w
+        required property real h
+
+        visible: dialog.framed
+        x: l < 0 ? dialog.width + l : l
+        y: t < 0 ? dialog.height + t : t
+        width: w <= 0 ? dialog.width + w : w
+        height: h <= 0 ? dialog.height + h : h
+        cursorShape: shape
+        onPressed: dialog.startSystemResize(edges)
+    }
+
     // One page in the page list: its icon and name, the chosen one in
     // `selection` with a royal-blue edge on its left (under a tab).
     component PageRow: ItemDelegate {
@@ -624,28 +748,25 @@ Popup {
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 2
 
-                RowLayout {
-                    id: labelRow
+                Words {
+                    id: labelWords
+
+                    readonly property bool locked: !line.controlEnabled && line.kind === "toggle" && line.isOn
 
                     Layout.fillWidth: true
-                    spacing: Tokens.metrics.space_xs
+                    rightPadding: locked ? Tokens.metrics.icon_small + Tokens.metrics.space_xs : 0
+                    color: line.controlEnabled ? Tokens.colors.text : Tokens.colors.text_muted
+                    text: line.label
 
-                    Words {
-                        Layout.maximumWidth: labelRow.width - (lock.visible ? lock.width + labelRow.spacing : 0)
-                        color: line.controlEnabled ? Tokens.colors.text : Tokens.colors.text_muted
-                        text: line.label
-                    }
-                    // A setting that cannot be changed says so by a lock too.
+                    // A setting that cannot be changed says so by a lock too,
+                    // just after its words.
                     Lucide {
-                        id: lock
-
-                        visible: !line.controlEnabled && line.kind === "toggle" && line.isOn
+                        visible: labelWords.locked
+                        x: Math.min(labelWords.contentWidth + Tokens.metrics.space_xs, labelWords.width - width)
+                        y: (Tokens.metrics.text_line - height) / 2
                         name: "lock"
                         side: Tokens.metrics.icon_small
                         colour: Tokens.colors.text_muted
-                    }
-                    Item {
-                        Layout.fillWidth: true
                     }
                 }
                 Quiet {

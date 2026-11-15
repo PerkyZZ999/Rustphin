@@ -1,5 +1,16 @@
 # Validation evidence
 
+### 2026-11-15 — W-157 Settings window, W-158 every option checked
+- **Phase:** 6 Implement (requested additions)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS (see the commit). New tests: `pane::PreviewPlace::may_preview` refuses a thumbnail when Settings switched previews off, and keeps the older refusals (containers, small icons, the trash, administrator mode); `PlacesPanel::set_units` lays the rows out again only when the units change. Each was seen failing with its code broken (the switch ignored; the units never compared). `keeps_running` was already tested; it is now asked again whenever Settings changes.
+  - Seen in an isolated KWin session with an isolated home and test files (`Box/` with a folder, a text file, a picture, a hidden file and an executable script): Settings opened as a window above the main one, moved by its title row past the main window's edge, resized from its corner into the narrow layout, kept its size through a text-size change, and with KDE's title bar showed KWin's frame with only the search in its row (RS11, RS12). Every option tried against the window beside it: View, Icon size, Direction, Folders first, Show hidden files, the Size column chip, Sizes (status line and, after the fix, the drive cards; RS14), Dates ("Today 14:06"), thumbnails off and on (after the fix; RS13), Look Opaque ("theme changed glass=false" in the log), Text size, the hidden-files slider, Devices, the panel width and Reset (W-155), Moving to the trash asking, Opening one: Run it running `script.sh` without a question (`ran.log`), A single click opening a folder, Start when you log in writing `~/.config/autostart/rustphin.desktop`, a second launch opening a new tab, Keep running off ending the process when the window closed and removing the autostart entry (after the fix; RS15). A page opened at its top after the fix (RS16).
+  - Found while testing and fixed: the window's size was bound to the size tokens, so a text-size change undid the user's size; the lock after "Deleting for good" made a layout loop ("Detected recursive rearrange" in the log), now gone.
+- **Not verified:** Remote, Hidden places, Largest picture previewed, When Rustphin starts, Folders opened by other applications: New window, the terminal command and Emptying the trash and Closing a window were not tried again here (their code paths were read and the earlier W-106 scenarios cover them); Title bar was tried through the settings file before launch, not by switching it in the window. Glass and opaque cannot be judged by eye in the isolated session.
+- **Waiver:** none
+- **Follow-up:** none.
+
 ### 2026-11-15 — W-156 Toolbar order, centred rows, tooltips below
 - **Phase:** 6 Implement (requested addition)
 - **Result:** pass

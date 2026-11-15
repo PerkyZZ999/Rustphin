@@ -155,10 +155,14 @@ pub mod size {
     pub const BUTTON: f32 = 32.;
     /// Height of a dialog's title row.
     pub const DIALOG_TITLE: f32 = 48.;
-    /// The Settings dialog's width at its largest (W-106, W-155).
+    /// The Settings window's width when it opens (W-106, W-155, W-157).
     pub const SETTINGS_WIDTH: f32 = 800.;
-    /// The Settings dialog's height at its largest.
+    /// The Settings window's height when it opens.
     pub const SETTINGS_HEIGHT: f32 = 576.;
+    /// The Settings window's least width (W-157), as the main window's.
+    pub const SETTINGS_MIN_WIDTH: f32 = 480.;
+    /// The Settings window's least height.
+    pub const SETTINGS_MIN_HEIGHT: f32 = 360.;
     /// Its page list on the left.
     pub const SETTINGS_NAV: f32 = 216.;
     /// The search field in its title row.

@@ -24,6 +24,7 @@ use super::{
 };
 use crate::{
     commands::PlacesCommand,
+    format::Units,
     groups::{Groups, SeparatorAt},
     menu::OpenMenu,
     place_menu::{self, PlaceCommand, Target},
@@ -238,6 +239,9 @@ pub struct PlacesPanel {
     places: Vec<Place>,
     groups: Groups,
     choice: PlacesChoice,
+    /// The units the drive cards' figures were written in; `None` until
+    /// the adapter first says.
+    units: Option<Units>,
     home: Option<PathBuf>,
     devices: Vec<Device>,
     devices_unavailable: bool,
@@ -264,6 +268,7 @@ impl PlacesPanel {
             places: Vec::new(),
             groups: Groups::default(),
             choice,
+            units: None,
             home,
             devices: Vec::new(),
             devices_unavailable: false,
@@ -506,6 +511,17 @@ impl PlacesPanel {
         let changed = sections(&self.choice) != sections(&choice);
         self.choice = choice;
         if changed {
+            self.changed(false)
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Settings, Views chose the units sizes are written in (W-158): the
+    /// drive cards are written again in them, as the status line is.
+    pub fn set_units(&mut self, units: Units) -> Vec<Effect> {
+        let before = self.units.replace(units);
+        if before.is_some_and(|before| before != units) {
             self.changed(false)
         } else {
             Vec::new()
@@ -2075,6 +2091,15 @@ mod tests {
         assert_eq!(effects, [Effect::Relayout]);
         assert_eq!(world.panel.devices_note(), "");
         assert!(!world.panel.rows().contains(&Row::Devices));
+    }
+
+    #[test]
+    fn a_change_of_units_writes_the_drive_cards_again() {
+        let mut world = with_devices();
+        assert_eq!(world.panel.set_units(Units::Binary), []);
+        assert_eq!(world.panel.set_units(Units::Binary), []);
+        assert_eq!(world.panel.set_units(Units::Decimal), [Effect::Relayout]);
+        assert_eq!(world.panel.set_units(Units::Decimal), []);
     }
 
     #[test]

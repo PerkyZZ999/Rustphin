@@ -100,8 +100,9 @@ opens a tab or a window as Settings, General says.
 - **Utility navigation:** the Actions palette is the index of everything:
   every command, every place, every open tab and recent folders, searchable
   by name. The context menu offers what applies to the selection, or paste
-  and new entries on empty space. There is no menu bar. Settings is a dialog
-  (Ctrl+Shift+, or "Workspace: Settings…"); the view mode, hidden files,
+  and new entries on empty space. There is no menu bar. Settings is a window
+  of its own, kept above the window that opened it (Ctrl+Shift+, or
+  "Workspace: Settings…"); the view mode, hidden files,
   folders first and zoom are also commands, the View menu and toolbar
   toggles.
 - **Mobile navigation:** not applicable (desktop only). The narrow-window

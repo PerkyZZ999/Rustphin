@@ -13,6 +13,9 @@
 // window's closing is handled. Call once, on the GUI thread, before the
 // event loop.
 void rustphin_shell_start(bool keep_running, const QString& home);
+// Whether closing the last window leaves the process running, as Settings
+// now says (W-158). On the GUI thread.
+void rustphin_shell_keep_running(bool keep_running);
 // Opens a window on each folder (one at home when the list is empty),
 // giving the launch's activation token to the window. Safe from any thread.
 void rustphin_shell_open(const QStringList& folders, const QString& activation);

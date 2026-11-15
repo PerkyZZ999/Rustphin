@@ -14,6 +14,9 @@ pub mod qobject {
         /// Registers fonts and the icon theme, and how closing the last
         /// window is handled. Once, on the GUI thread, before the loop.
         fn rustphin_shell_start(keep_running: bool, home: &QString);
+        /// Whether closing the last window leaves the process running, as
+        /// Settings now says. Qt thread.
+        fn rustphin_shell_keep_running(keep_running: bool);
         /// Opens a window on each folder (one at home for none). Any thread.
         fn rustphin_shell_open(folders: &QStringList, activation: &QString);
         /// Shows another launch's folders: as tabs of the window last used

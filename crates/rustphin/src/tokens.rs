@@ -211,6 +211,8 @@ fn metric_values(scale: f32) -> Vec<(&'static str, f32)> {
         ("settings_width", size::SETTINGS_WIDTH),
         ("settings_height", size::SETTINGS_HEIGHT),
         ("settings_nav", size::SETTINGS_NAV),
+        ("settings_min_width", size::SETTINGS_MIN_WIDTH),
+        ("settings_min_height", size::SETTINGS_MIN_HEIGHT),
         ("settings_search", size::SETTINGS_SEARCH),
         ("settings_narrow", size::SETTINGS_NARROW),
         ("setting_row", size::SETTING_ROW),

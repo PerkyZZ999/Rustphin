@@ -182,6 +182,7 @@ impl qobject::SettingsModel {
         }
         if applied != Applied::Nothing {
             preferences::changed();
+            crate::follow_keep_running();
         }
         self.refresh();
     }

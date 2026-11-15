@@ -343,7 +343,21 @@ Window {
         focusActive()
     }
 
+    // Settings closed: its window goes and the keyboard is back here.
+    function closeSettings() {
+        settingsLoader.active = false
+        root.requestActivate()
+        root.focusActive()
+    }
+
+    // Opens Settings, or brings its window forward when it is open.
     function openSettings() {
+        if (settingsLoader.item !== null) {
+            const settingsWindow = settingsLoader.item as Window
+            settingsWindow.raise()
+            settingsWindow.requestActivate()
+            return
+        }
         settingsLoader.active = true
     }
 
@@ -602,17 +616,25 @@ Window {
             focusActive()
     }
 
-    // Settings (W-106), opened on demand.
+    // Settings (W-106), opened on demand in a window of its own (W-157).
     Loader {
         id: settingsLoader
 
         active: false
-        sourceComponent: SettingsDialog {
+        // Shown at its opening size; afterwards the size is the user's.
+        onLoaded: {
+            const settingsWindow = item as Window
+            settingsWindow.width = Tokens.metrics.settings_width
+            settingsWindow.height = Tokens.metrics.settings_height
+            settingsWindow.show()
+            settingsWindow.requestActivate()
+        }
+        sourceComponent: SettingsWindow {
+            owner: root
             shownFolder: root.folder ? root.folder.locationUri : ""
             places: root.placesModel
-            onClosed: {
-                settingsLoader.active = false
-                root.focusActive()
+            onClosing: {
+                Qt.callLater(root.closeSettings)
             }
         }
     }

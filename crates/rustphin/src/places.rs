@@ -185,6 +185,9 @@ impl Default for PlacesModelRust {
             places_notice: None,
             panel: {
                 let mut panel = PlacesPanel::new(choice, xdg::home());
+                // The units the cards are first written in, so a change
+                // in Settings is seen as one.
+                let _ = panel.set_units(prefs::settings().formats().1);
                 // The Trash place is marked while its folder is shown.
                 panel.set_trash_folder(
                     crate::hub::with(|hub| hub.trash())
@@ -663,8 +666,12 @@ impl qobject::PlacesModel {
     }
 
     fn adopt_settings(mut self: Pin<&mut Self>) {
-        let choice = prefs::settings().places();
-        let effects = self.as_mut().rust_mut().panel.set_choice(choice);
+        let settings = prefs::settings();
+        let choice = settings.places();
+        let mut effects = self.as_mut().rust_mut().panel.set_choice(choice);
+        // The drive cards' figures follow Settings, Views, Sizes (W-158).
+        let units = settings.formats().1;
+        effects.extend(self.as_mut().rust_mut().panel.set_units(units));
         self.as_mut()
             .set_width(i32::try_from(choice.width).unwrap_or(240));
         self.apply(effects);

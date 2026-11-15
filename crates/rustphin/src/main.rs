@@ -50,6 +50,19 @@ fn keeps_running(owns_name: bool, setting: bool) -> bool {
     owns_name && setting
 }
 
+/// This process serves later launches (it owns the bus name).
+static SERVES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Tells the shell what closing the last window does now, after Settings
+/// changed (W-158: the choice used to wait for the next start). Qt thread.
+pub(crate) fn follow_keep_running() {
+    let serves = SERVES.load(std::sync::atomic::Ordering::Relaxed);
+    shell::qobject::rustphin_shell_keep_running(keeps_running(
+        serves,
+        prefs::settings().keep_running(),
+    ));
+}
+
 /// What `--quit` says and how it ends, from the running Rustphin's answer.
 fn quit_outcome(answer: &HandOver) -> (Option<String>, bool) {
     match answer {
@@ -182,6 +195,7 @@ fn main() -> ExitCode {
         }
     };
     let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("/"), PathBuf::from);
+    SERVES.store(instance.is_some(), std::sync::atomic::Ordering::Relaxed);
     let keep = keeps_running(instance.is_some(), prefs::settings().keep_running());
     let mut app = QGuiApplication::new();
     shell::qobject::rustphin_shell_start(keep, &qml_path::to_qml(&home));

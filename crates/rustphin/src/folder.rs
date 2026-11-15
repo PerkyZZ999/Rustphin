@@ -134,6 +134,8 @@ struct Thumbs {
     known: HashMap<(PathBuf, ThumbSize), Option<PathBuf>>,
     waiting: HashSet<(PathBuf, ThumbSize)>,
     limit: u64,
+    /// Settings, Views shows pictures' thumbnails at all.
+    shown: bool,
 }
 
 impl Thumbs {
@@ -340,6 +342,7 @@ impl Default for FolderModelRust {
             descriptions: RefCell::new(HashMap::new()),
             thumbs: RefCell::new(Thumbs {
                 limit: settings.previews().limit_bytes(),
+                shown: settings.previews().shown,
                 ..Thumbs::default()
             }),
             trash_store: crate::hub::with(|hub| hub.trash()),
@@ -415,11 +418,14 @@ impl FolderModelRust {
         let edge = self.view.layout(self.zoom_level).icon;
         // No previews as administrator: they would read every picture as
         // root (docs/project/ADMIN_MODE.md).
-        if snapshot.is_container(row)
-            || edge < pane::MIN_THUMBNAIL_EDGE
-            || self.trash_dir.is_some()
-            || self.as_admin
-        {
+        let place = pane::PreviewPlace {
+            container: snapshot.is_container(row),
+            previews_on: self.thumbs.borrow().shown,
+            edge,
+            in_trash: self.trash_dir.is_some(),
+            as_admin: self.as_admin,
+        };
+        if !place.may_preview() {
             return None;
         }
         let name = snapshot.link_target_name(row).unwrap_or(snapshot.name(row));
@@ -1444,7 +1450,7 @@ impl qobject::FolderModel {
 
     fn adopt_settings(mut self: Pin<&mut Self>) {
         let location = self.rust().folder();
-        let (epoch, adopt, one_click, limit) = prefs::with(|store| {
+        let (epoch, adopt, one_click, limit, shown) = prefs::with(|store| {
             let own = store.settings().per_folder()
                 && store
                     .folder_view(&Location::Folder(location).to_saved())
@@ -1454,6 +1460,7 @@ impl qobject::FolderModel {
                 (!own).then(|| default_view(store.settings())),
                 store.opens_with_one_click(),
                 store.settings().previews().limit_bytes(),
+                store.settings().previews().shown,
             )
         });
         if epoch != self.rust().view_epoch {
@@ -1474,6 +1481,9 @@ impl qobject::FolderModel {
                 thumbs.known.clear();
                 thumbs.waiting.clear();
             }
+            // Thumbnails switched off or on: the rows are drawn again below,
+            // with their type icons or asking for their pictures.
+            thumbs.shown = shown;
         }
         let width = self.rust().width;
         self.as_mut().set_width(f64::from(width));

@@ -444,6 +444,9 @@ components:
     rounded: "{rounded.sm}"
     width: 800px
     height: 576px
+  settings-window-min:
+    width: 480px
+    height: 360px
   settings-page-list:
     width: 216px
   settings-search:
@@ -921,11 +924,22 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   at most (Settings). A question with many buttons grows to fit them.
 - **Settings (W-106, D-029, W-155; the maintainer's refined mockup of
   2026-11-15, kept to this document's 2 px corners, type scale and flat
-  depth):** a dialog opened by Ctrl+Shift+, and the palette's "Workspace:
-  Settings…", 800 × 576 px at most. A title row: `settings` in `text-muted`,
+  depth):** a window of its own (`SettingsWindow.qml`, W-157), opened by
+  Ctrl+Shift+, and the palette's "Workspace: Settings…"; opening it again
+  brings it forward. It belongs to the window that opened it (kept above
+  it, closed with it) but does not block it, so a change is seen in the
+  window at once; no scrim. It opens at 800 × 576 px and can be moved and
+  resized down to 480 × 360 px; a change of text size keeps the size the
+  user gave it. It follows the Title bar setting as the main window does:
+  with Rustphin's own, it has no system frame, a 1 px `border-accent`
+  edge, 4 px resize bands with 16 px corners, and its title row moves it;
+  with KDE's, KWin draws its frame, title ("Settings — Rustphin") and Close,
+  and the title row holds only the search. Escape closes it (an open
+  drop-down takes Escape first) and the keyboard goes back to its window.
+  A title row: `settings` in `text-muted`,
   "Settings" in Space Grotesk, a 240 px search field (`search` icon inside,
   "Search settings", a "Ctrl+F" key cap until something is typed) and a Close
-  icon button, "Close (Esc)". Ctrl+F anywhere in the dialog puts the keyboard
+  icon button, "Close (Esc)". Ctrl+F anywhere in the window puts the keyboard
   in the search; every word typed must be found in a page's name or its
   keywords (`settings_form::Page::keywords`), the page list shows only the
   pages found, a page the search hides gives way to the first one found, and

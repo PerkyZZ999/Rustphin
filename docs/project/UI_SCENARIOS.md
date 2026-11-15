@@ -601,7 +601,7 @@ Isolated home; a fresh one has no `~/.config/rustphin/settings.toml`. In kwin-mc
 
 | ID | Steps | Expected |
 |---|---|---|
-| ST1 | Ctrl+Shift+,; Escape. Then Ctrl+Shift+P, "settings", Return | Settings opens over the dimmed window on its first page and closes again; the palette offers "Settings…" with Ctrl+Shift+, and opens the same dialog |
+| ST1 | Ctrl+Shift+,; Escape. Then Ctrl+Shift+P, "settings", Return | Settings opens in its own window above the main one, on its first page, and closes again; the palette offers "Settings…" with Ctrl+Shift+, and opens the same window (W-157) |
 | ST2 | Open Settings in a fresh home; look at About | Logo, "Rustphin", "Version 0.1.0", the licence row, credits, the privacy line with a green check; the path ends "(made when you first change a setting)" and "Open the settings folder" is unavailable |
 | ST3 | Show the licence; Back | The GPL's full text replaces the page, in the data font, with Back above it at its own width; Back returns to About |
 | ST4 | Close Settings, Ctrl+= in the list, open Settings, Open the settings folder | The path loses its note and the button is available; the dialog closes and a new tab shows `settings.toml` |
@@ -625,6 +625,12 @@ Since W-155 on/off settings are switches (older rows below that say "tick" or "u
 | RS7 | Toolbar: click Command palette in the preview | It is picked in the preview and in On the toolbar, which scrolls to it; Take off is unavailable ("Always there") (seen 2026-11-15) |
 | RS8 | Appearance, About, Shortcuts | The look tiles (Glass chosen, the desktop showing through its window), Title bar and Text size segments, the hidden-files slider; About's version cap, "No telemetry" panel, Credits and Settings file panels; Shortcuts in a panel per category with "or" between key caps (seen 2026-11-15) |
 | RS10 | Hover a toolbar button 600 ms; open Settings and zoom on the chosen page | The tooltip opens under the button, inside the window; the chosen page's icon and name sit in the middle of its row (seen 2026-11-15, W-156) |
+| RS11 | Drag Settings' title row; drag its bottom-left corner up and right; switch Text size to Larger | The window moves, even past the main window's edge, and resizes (below 720 px the pages become tabs); the larger text keeps the size it was given (seen 2026-11-15, W-157) |
+| RS12 | Title bar set to KDE's before launch; open Settings | KWin's frame with "Settings — Rustphin" and its buttons; the title row holds only the search (seen 2026-11-15, W-157) |
+| RS13 | Views: thumbnails off, then on, in the icons view with `picture.png` | Off: the picture shows its type icon; on: its thumbnail again (seen 2026-11-15, W-158) |
+| RS14 | Views: Sizes, Decimal | The status line and the drive cards in the places panel say kB, GB, TB (seen 2026-11-15, W-158) |
+| RS15 | General: Keep running off; close the main window | The process ends, Settings closes with its window, and Start when you log in is switched off with its entry gone from `~/.config/autostart` (seen 2026-11-15, W-158) |
+| RS16 | Switch pages after scrolling one | The new page opens at its top (seen 2026-11-15, W-158) |
 | RS9 | A 700 px screen (the window fills it): Ctrl+Shift+,; Right six times | The page list is a row of tabs above the page, the search field narrower and without its key cap; Right moves along the tabs to Shortcuts and the row scrolls to keep it in view (seen 2026-11-15) |
 
 ### General page (W-106c1)
