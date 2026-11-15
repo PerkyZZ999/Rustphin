@@ -22,6 +22,7 @@ use rustphin_view::{
     commands::{self, Target},
     questions::{self, Answer},
     settings::Programs,
+    window_size::Shown,
     workspace::{self, FocusStop},
 };
 
@@ -182,6 +183,24 @@ impl qobject::Shell {
 
     fn quit(self: Pin<&mut Self>) {
         crate::shell::qobject::rustphin_shell_quit();
+    }
+
+    fn window_width(&self) -> i32 {
+        prefs::with(|store| i32::try_from(store.window_size().width).unwrap_or(i32::MAX))
+    }
+
+    fn window_height(&self) -> i32 {
+        prefs::with(|store| i32::try_from(store.window_size().height).unwrap_or(i32::MAX))
+    }
+
+    fn window_maximised(&self) -> bool {
+        prefs::with(|store| store.window_size().maximised)
+    }
+
+    fn keep_window_size(&self, width: i32, height: i32, visibility: i32) {
+        prefs::with(|store| {
+            store.set_window_size(width, height, Shown::from_visibility(visibility));
+        });
     }
 
     fn keyboard_modifiers(&self) -> i32 {

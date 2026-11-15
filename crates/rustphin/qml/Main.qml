@@ -74,11 +74,24 @@ Window {
             Qt.callLater(focusActive)
     }
 
-    width: 1000
-    height: 700
+    // A new window opens at the size the user last gave one, maximised
+    // if that one was (W-160); read once, so the user's resizing stays.
+    width: Shell.windowWidth()
+    height: Shell.windowHeight()
     minimumWidth: 480
     minimumHeight: 320
-    visible: true
+    visibility: Shell.windowMaximised() ? Window.Maximized : Window.Windowed
+    onWidthChanged: sizeKept.restart()
+    onHeightChanged: sizeKept.restart()
+    onVisibilityChanged: sizeKept.restart()
+
+    // Remembers the size once a resize settles, for the next window.
+    Timer {
+        id: sizeKept
+
+        interval: 500
+        onTriggered: Shell.keepWindowSize(root.width, root.height, root.visibility)
+    }
     // The window's number in calls about its rights, and whether it acts
     // as administrator: the mode belongs to the window (D-028) and ends
     // when it closes.
@@ -161,8 +174,11 @@ Window {
             close.accepted = false
             closeQuestion.asking = true
         }
-        if (close.accepted)
+        if (close.accepted) {
             Operations.leaveAdmin(windowId)
+            sizeKept.stop()
+            Shell.keepWindowSize(width, height, visibility)
+        }
     }
 
     TabsModel {

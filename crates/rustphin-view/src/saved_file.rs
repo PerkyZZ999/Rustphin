@@ -17,6 +17,8 @@ pub enum SavedFile {
     Groups,
     /// `views.toml`, each folder's own view.
     FolderViews,
+    /// `window.toml`, the size new windows open at.
+    WindowSize,
 }
 
 impl SavedFile {
@@ -26,6 +28,7 @@ impl SavedFile {
             Self::Settings => "Settings",
             Self::Groups => "Place groups",
             Self::FolderViews => "Folder views",
+            Self::WindowSize => "Window sizes",
         }
     }
 
@@ -35,6 +38,7 @@ impl SavedFile {
             Self::Settings => "Saving settings",
             Self::Groups => "Saving place groups",
             Self::FolderViews => "Saving folder views",
+            Self::WindowSize => "Saving the window size",
         }
     }
 
@@ -44,6 +48,7 @@ impl SavedFile {
             Self::Settings => "settings.toml",
             Self::Groups => "place-groups.toml",
             Self::FolderViews => "views.toml",
+            Self::WindowSize => "window.toml",
         }
     }
 }

@@ -15,6 +15,7 @@ use crate::{
     folder_views::{FolderView, FolderViews},
     saved_file::{FileIssue, SavedFile},
     settings::{Click, Settings},
+    window_size::{Shown, WindowSize},
 };
 
 /// What [`Store::load`] found.
@@ -36,6 +37,12 @@ pub struct Loaded {
     pub folder_path: Option<PathBuf>,
     /// Why the folders' views file is kept as it is, if so.
     pub folder_issue: Option<FileIssue>,
+    /// The size new windows open at.
+    pub window_size: WindowSize,
+    /// Where it is saved.
+    pub window_path: Option<PathBuf>,
+    /// Why the window size file is kept as it is, if so.
+    pub window_issue: Option<FileIssue>,
 }
 
 impl Loaded {
@@ -62,6 +69,15 @@ impl Loaded {
         if let Some(issue) = &folder_issue {
             tracing::warn!(%issue, "the folder views file is kept for this run");
         }
+        let window_path = rustphin_platform::config::state_dir().map(|dir| dir.join("window.toml"));
+        let (window_size, window_issue) = WindowSize::read(
+            window_path
+                .as_deref()
+                .map_or(Ok(None), rustphin_platform::config::read),
+        );
+        if let Some(issue) = &window_issue {
+            tracing::warn!(%issue, "the window size file is kept for this run");
+        }
         Self {
             settings,
             issue,
@@ -71,6 +87,9 @@ impl Loaded {
             folder_views,
             folder_path,
             folder_issue,
+            window_size,
+            window_path,
+            window_issue,
         }
     }
 }
@@ -97,6 +116,9 @@ pub struct Store {
     folder_writer: Option<Writer>,
     folder_issue: Option<FileIssue>,
     view_epoch: u64,
+    window_size: WindowSize,
+    window_writer: Option<Writer>,
+    window_issue: Option<FileIssue>,
 }
 
 impl Store {
@@ -116,6 +138,14 @@ impl Store {
                 .filter(|_| !newer && loaded.folder_issue.is_none())
                 .map(Writer::new),
             folder_issue: loaded.folder_issue,
+            // Kept as the others are: not over a file this run could not
+            // read whole (W-160).
+            window_writer: loaded
+                .window_path
+                .filter(|_| loaded.window_issue.is_none())
+                .map(Writer::new),
+            window_issue: loaded.window_issue,
+            window_size: loaded.window_size,
             settings: loaded.settings,
             issue: loaded.issue,
             told: false,
@@ -184,6 +214,11 @@ impl Store {
                     .as_ref()
                     .map(|issue| issue.notice(SavedFile::FolderViews))
             })
+            .or_else(|| {
+                self.window_issue
+                    .as_ref()
+                    .map(|issue| issue.notice(SavedFile::WindowSize))
+            })
     }
 
     /// Where the folders' views are saved; `None` when they are not.
@@ -245,6 +280,33 @@ impl Store {
         }
         if let Some(writer) = &self.folder_writer {
             writer.job(self.folder_views.to_toml()).spawn();
+        }
+    }
+}
+
+impl Store {
+    /// The size a new window opens at.
+    pub fn window_size(&self) -> WindowSize {
+        self.window_size
+    }
+
+    /// Where the window size is saved; `None` when it is not.
+    pub fn window_size_path(&self) -> Option<&Path> {
+        self.window_writer
+            .as_ref()
+            .map(|writer| writer.path.as_path())
+    }
+
+    /// Remembers a window's size after it changed, and saves it in the
+    /// background when it differs from what is saved.
+    pub fn set_window_size(&mut self, width: i32, height: i32, shown: Shown) {
+        let next = self.window_size.after(width, height, shown);
+        if next == self.window_size {
+            return;
+        }
+        self.window_size = next;
+        if let Some(writer) = &self.window_writer {
+            writer.job(next.to_toml()).spawn();
         }
     }
 }
@@ -468,6 +530,51 @@ mod tests {
         let newer = Store::new(views_at(dir.path(), Ok(Some("version = 9\n".to_owned()))));
         assert_eq!(unreadable.folder_views_path(), None);
         assert_eq!(newer.folder_views_path(), None);
+    }
+
+    fn window_at(dir: &Path, text: &str) -> Loaded {
+        let (window_size, window_issue) = WindowSize::read(Ok(Some(text.to_owned())));
+        Loaded {
+            window_size,
+            window_issue,
+            window_path: Some(dir.join("window.toml")),
+            ..Loaded::default()
+        }
+    }
+
+    #[test]
+    fn new_windows_open_at_the_size_last_given_to_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::new(window_at(
+            dir.path(),
+            "version = 1\nwidth = 1200\nheight = 800\n",
+        ));
+        assert_eq!(store.window_size().width, 1200);
+        assert_eq!(
+            store.window_size_path(),
+            Some(dir.path().join("window.toml").as_path())
+        );
+        store.set_window_size(1500, 950, Shown::Windowed);
+        store.set_window_size(2560, 1400, Shown::Maximised);
+        assert_eq!(
+            store.window_size(),
+            WindowSize {
+                width: 1500,
+                height: 950,
+                maximised: true
+            }
+        );
+    }
+
+    #[test]
+    fn a_damaged_window_size_file_is_kept_and_the_user_told() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::new(window_at(dir.path(), "width = [ not toml"));
+        assert_eq!(store.window_size_path(), None);
+        store.set_window_size(1500, 950, Shown::Windowed);
+        assert_eq!(store.window_size().width, 1500, "used for this run");
+        let notice = store.take_notice().unwrap();
+        assert!(notice.starts_with("Window sizes are damaged."), "{notice}");
     }
 
     #[test]

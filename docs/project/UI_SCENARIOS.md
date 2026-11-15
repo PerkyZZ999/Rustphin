@@ -285,6 +285,8 @@ filename contains a build hash. The child is an ignored test, so run it with
 | T4 | Double-click the title bar, then click the middle button | Maximised without the frame, the middle button shows Restore; Restore brings the earlier size and place back |
 | T5 | Right-click the title bar, Escape | KWin's window menu (Maximize, Minimize, Keep Above Others, More Actions, Close) opens at the window's top-left corner, not under the pointer (KWin's "Window Operations Menu" shortcut, asked for over D-Bus); Escape closes it and nothing else changes. Where KWin does not answer, a right-click does nothing and the log says why |
 | T6 | Click Close | The window closes and the session is saved, as with Ctrl+Q |
+| T7 | In an isolated home, resize the window from its corner (T3), close it, end Rustphin, start it again | `window.toml` in the state folder holds the new size within a second of the resize, and the window opens at it (W-160) |
+| T8 | Maximise, end Rustphin, start it again, then click Restore | It opens maximised; Restore brings the size of T7 back; `window.toml` says `maximised = true`, then `false` |
 
 ## Toolbar across the window (W-096b/c)
 

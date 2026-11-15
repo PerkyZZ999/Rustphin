@@ -821,8 +821,9 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   operation runs and the notice line (44 px) after one ends or while
   connecting. The places panel runs from under the toolbar to the window
   lines. When not maximised a 1 px `border-strong` frame marks the window's
-  edge. The window opens at 1000 × 700 px and cannot be made smaller than
-  480 × 320 px.
+  edge. A new window opens at the size the user last gave a window, and
+  maximised if that one was (W-160); the first opens at 1000 × 700 px. It
+  cannot be made smaller than 480 × 320 px.
 - **Title bar:** the 16 px logo on the left, the window title ("<folder> —
   Rustphin") centred in `body-md` `text-muted`, then Minimise (`minus`),
   Maximise (`square`; Restore, `copy`, when maximised) and Close window (`x`,

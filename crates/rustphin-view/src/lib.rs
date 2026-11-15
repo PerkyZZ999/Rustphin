@@ -39,4 +39,5 @@ pub mod settings_form;
 pub mod tabs;
 pub mod toolbar_items;
 pub mod transfer;
+pub mod window_size;
 pub mod workspace;

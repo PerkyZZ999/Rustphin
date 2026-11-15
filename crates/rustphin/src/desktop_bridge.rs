@@ -65,6 +65,24 @@ pub mod qobject {
         /// Closes every window and ends Rustphin.
         #[qinvokable]
         fn quit(self: Pin<&mut Shell>);
+        /// The width a new window opens at: the last one given to a window
+        /// (W-160).
+        #[qinvokable]
+        #[cxx_name = "windowWidth"]
+        fn window_width(self: &Shell) -> i32;
+        /// The height a new window opens at.
+        #[qinvokable]
+        #[cxx_name = "windowHeight"]
+        fn window_height(self: &Shell) -> i32;
+        /// Whether a new window opens maximised.
+        #[qinvokable]
+        #[cxx_name = "windowMaximised"]
+        fn window_maximised(self: &Shell) -> bool;
+        /// Remembers a window's size, `visibility` as Qt's
+        /// `QWindow::Visibility` number, for the next window.
+        #[qinvokable]
+        #[cxx_name = "keepWindowSize"]
+        fn keep_window_size(self: &Shell, width: i32, height: i32, visibility: i32);
         /// The keyboard modifiers held now (a drop decides copy or move by
         /// them; QML's drop event does not carry them).
         #[qinvokable]

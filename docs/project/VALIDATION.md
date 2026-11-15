@@ -1,5 +1,15 @@
 # Validation evidence
 
+### 2026-11-15 — W-160 The window keeps its size
+- **Phase:** 6 Implement (requested addition)
+- **Result:** pass
+- **Evidence:**
+  - `rust-tc doctor` PASS (see the commit). New tests in `rustphin-view`: `window_size` (a saved size read back, the default without a file, a size out of reason brought within it, a damaged or newer file kept, a resize remembered, maximising keeping the size to go back to, full screen and minimised changing nothing) and `preferences` (new windows take the last size; a damaged `window.toml` is not written over and the user is told). Each was proved by breaking the code: the maximised branch taking the screen size, the minimum dropped, full screen remembered as maximised, and the writer kept over a damaged file each failed tests.
+  - Seen in an isolated KWin session with an isolated home: the first window opened at 1000 × 700 and wrote nothing; dragging its corner to 1300 × 800 wrote `window.toml` (`width = 1300`, `height = 800`, `maximised = false`); after Close and ending the process, the next start opened at 1300 × 800 (T7). Maximise wrote `maximised = true` with the size kept; the next start opened maximised and Restore gave 1300 × 800, `maximised = false` (T8). No QML warning in the logs.
+- **Not verified:** the window's place is not kept (Wayland leaves placement to KWin); several windows of different sizes, where the last resized wins, were not tried on screen; the damaged-file notice was not seen on screen.
+- **Waiver:** none
+- **Follow-up:** none.
+
 ### 2026-11-15 — W-159 Drives in three styles
 - **Phase:** 6 Implement (requested addition)
 - **Result:** pass, the red "almost full" state seen only in tests

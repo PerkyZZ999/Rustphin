@@ -61,7 +61,7 @@ encrypted.
 A file of Rustphin's own that cannot be read, is damaged or was written by a
 newer Rustphin is kept unchanged for the whole run: saving that file is off
 until the next start, and Rustphin says which file and why (`settings.toml`,
-`place-groups.toml`, `views.toml` since W-140/W-143; `session.toml` since
+`place-groups.toml`, `views.toml` since W-140/W-143; `window.toml` since W-160; `session.toml` since
 W-077g). A missing file is created on the first save.
 
 ### Rustphin's own files
@@ -72,6 +72,7 @@ W-077g). A missing file is created on the first save.
 | `$XDG_CONFIG_HOME/rustphin/place-groups.toml` | Group titles, order, folded state (also of the Devices and Remote sections), the KDE bookmark identifiers each group holds (D-008), and the places panel's separators with the bookmark identifier each one follows (W-152) | Remove groups through the places panel; to reset all groups, quit Rustphin and remove the file. The shared bookmarks remain. |
 | `$XDG_STATE_HOME/rustphin/session.toml` (default `~/.local/state/…`) | The start window's open tabs: each pane's folder as a byte-safe local `file://` URI or a remote address without password, the active tab and pane (format 2; UTF-8 format 1 upgrades on save) | Quit Rustphin, then remove the file to forget saved tabs. Clearing recent folders does not clear it. Start with folders on the command line to choose other tabs. |
 | `$XDG_STATE_HOME/rustphin/recent-locations.toml` | At most 10,000 distinct folders visited successfully, newest first, as byte-safe local URIs or remote addresses without password | Ctrl+Shift+P → **History: Clear recent folders**; wait for **Recent folders cleared.** New visits are recorded again. A read or save error is shown in the palette; do not treat it as a successful clear. |
+| `$XDG_STATE_HOME/rustphin/window.toml` | The size new windows open at: the width and height the user last gave a window, and whether it was maximised (W-160). No position, folder or screen name | Quit Rustphin and remove the file; the next window opens at 1000 × 700 px. |
 | `$XDG_STATE_HOME/rustphin/views.toml` | Only while Settings › Views › Default view › "Each folder" is on (off by default): up to 2,000 folders, each as a saved location with its mode, zoom, sorting and filter options; the oldest leave first | Turning the setting off stops new entries but keeps the file. Quit Rustphin and remove the file to forget them. Clearing recent folders does not clear it. |
 | `$XDG_CONFIG_HOME/autostart/rustphin.desktop` | Only when Settings › General › "Also start it when you log in" is on: an autostart entry naming the Rustphin program's path, run with `--background` (W-110c) | Turn the setting off: Rustphin removes the entry, and never one it did not write. |
 | `.rustphin-rename-journal` in a batch rename's folder | Original, staged and final names plus the file identity needed for recovery (W-071) | Removed after a successful rename or recovery. After an interruption it is kept, with the staged `.rustphin-part-rename-<n>` entries, and recovered at the next start (D-020) or with **Files: Recover original names after interruption**. Never delete recovery material as a privacy-cleanup shortcut. |
@@ -127,4 +128,5 @@ saved.
   are not proved.
 - No connection trace has been made on the Qt build (see above).
 - The protection of damaged settings and place-groups files was seen on
-  screen (W-140); that of `views.toml` is unit-tested only (W-143).
+  screen (W-140); that of `views.toml` (W-143) and `window.toml` (W-160) is
+  unit-tested only.
