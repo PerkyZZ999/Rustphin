@@ -44,6 +44,7 @@ pub mod qobject {
         // A drive's Properties shown, as JSON
         // (`rustphin_view::drive_properties::DriveSheet`); empty when none.
         #[qproperty(QString, drive)]
+        #[qproperty(QString, drive_style, cxx_name = "driveStyle")]
         type PlacesModel = super::PlacesModelRust;
     }
 

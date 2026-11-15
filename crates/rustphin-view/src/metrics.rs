@@ -95,6 +95,18 @@ pub mod size {
     pub const CHECK_ROW: f32 = 28.;
     /// Height of a usage bar under a volume's name.
     pub const USAGE: f32 = 4.;
+    /// A drive's row in the rings style (W-159): two lines beside a ring.
+    pub const DRIVE_RING_ROW: f32 = 48.;
+    /// The ring around a drive's icon in the rings style.
+    pub const PLACE_RING: f32 = 32.;
+    /// The width of that ring's stroke.
+    pub const PLACE_RING_STROKE: f32 = 3.;
+    /// The small bar of a drive in the compact style.
+    pub const COMPACT_BAR: f32 = 48.;
+    /// The room kept for a drive's percentage in the compact style.
+    pub const COMPACT_PERCENT: f32 = 32.;
+    /// Eject and Mount on a drive's row.
+    pub const DRIVE_BUTTON: f32 = 24.;
     /// Diameter of the ring of used and free space in a drive's Properties
     /// (W-153).
     pub const DRIVE_RING: f32 = 112.;

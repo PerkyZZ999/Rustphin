@@ -1,5 +1,15 @@
 # Validation evidence
 
+### 2026-11-15 — W-159 Drives in three styles
+- **Phase:** 6 Implement (requested addition)
+- **Result:** pass, the red "almost full" state seen only in tests
+- **Evidence:**
+  - `rust-tc doctor` PASS (see the commit). New or rewritten tests: each style's line, the free space, the percentage and the compact figures for a mounted, an almost full, an unmounted, a busy and an unmeasured drive (`places_panel`); removable drives listed after the fixed ones with "Removable" over the first; the style choosing each row's line and its change laying the rows out again; Eject only on a mounted removable drive, Mount only on an unmounted one, neither while busy (`places_panel::panel`); the style saved, read back and an unknown one read as bars (`settings`); the Settings row covered by the segment test. Each was seen failing with its code broken (the order, the label, the style mapping, the change test, the busy rule, the "Almost full" words).
+  - Seen in an isolated KWin session with an isolated home, the stand-in UDisks2 on a private bus (never the machine's drives): Bars, Rings and Compact switched from the Settings window beside the panel (DV1, DV9); Compact opened Data's Free, Used and Mount when Data was opened; Mount on BACKUP reached the stand-in ("Mount BACKUP"), opened it and turned into Eject; Eject on STICK sent Unmount then PowerOff and said "“STICK” can be unplugged now." (DV10). No QML warning in the log.
+- **Not verified:** the red bar, ring and free space of a drive 90 % full on screen (the stand-in's volumes share one filesystem at 14 %; the tests cover the words and the flag, and the colour binding is the one W-148 used); the narrowest panel.
+- **Waiver:** none
+- **Follow-up:** none.
+
 ### 2026-11-15 — W-157 Settings window, W-158 every option checked
 - **Phase:** 6 Implement (requested additions)
 - **Result:** pass

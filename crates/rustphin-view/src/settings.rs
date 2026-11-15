@@ -59,6 +59,9 @@ struct Places {
     /// The panel's width in pixels, within 200–360.
     #[serde(deserialize_with = "lenient_width")]
     width: u32,
+    /// How each drive is drawn (W-159).
+    #[serde(deserialize_with = "lenient")]
+    drive_style: DriveStyle,
 }
 
 impl Default for Places {
@@ -68,6 +71,43 @@ impl Default for Places {
             remote: true,
             show_hidden: false,
             width: crate::metrics::size::SIDEBAR as u32,
+            drive_style: DriveStyle::default(),
+        }
+    }
+}
+
+/// How the places panel draws each drive (W-159, the maintainer's three
+/// mockups of 2026-11-15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DriveStyle {
+    /// Its name and what is free, a bar across the row, then the
+    /// filesystem and size.
+    #[default]
+    Bars,
+    /// One short line with a small bar and the percentage; the drive whose
+    /// folder is shown opens its figures under it.
+    Compact,
+    /// A ring of the used space around its icon, its name and what is free.
+    Rings,
+}
+
+impl DriveStyle {
+    /// The name QML and the settings form use.
+    pub fn id(self) -> &'static str {
+        match self {
+            DriveStyle::Bars => "bars",
+            DriveStyle::Compact => "compact",
+            DriveStyle::Rings => "rings",
+        }
+    }
+
+    /// The style a name stands for; bars for any other.
+    pub fn from_id(id: &str) -> Self {
+        match id {
+            "compact" => DriveStyle::Compact,
+            "rings" => DriveStyle::Rings,
+            _ => DriveStyle::Bars,
         }
     }
 }
@@ -83,6 +123,8 @@ pub struct PlacesChoice {
     pub show_hidden: bool,
     /// The panel's width in pixels.
     pub width: u32,
+    /// How each drive is drawn.
+    pub drive_style: DriveStyle,
 }
 
 /// A panel width within what the window allows, on the 4-pixel grid.
@@ -707,6 +749,7 @@ impl Settings {
             remote: self.places.remote,
             show_hidden: self.places.show_hidden,
             width: clamp_width(self.places.width),
+            drive_style: self.places.drive_style,
         }
     }
 
@@ -717,6 +760,7 @@ impl Settings {
             remote: choice.remote,
             show_hidden: choice.show_hidden,
             width: clamp_width(choice.width),
+            drive_style: choice.drive_style,
         };
         self.version = VERSION;
     }
@@ -1183,15 +1227,19 @@ mod tests {
         let defaults = Settings::default().places();
         assert!(defaults.devices && defaults.remote && !defaults.show_hidden);
         assert_eq!(defaults.width, 240);
+        // The drives are drawn as bars until another style is chosen (W-159).
+        assert_eq!(defaults.drive_style, DriveStyle::Bars);
         let mut settings = sample();
         settings.set_places(PlacesChoice {
             devices: false,
             remote: true,
             show_hidden: true,
             width: 301,
+            drive_style: DriveStyle::Rings,
         });
         let loaded = Settings::parse(&settings.to_toml()).places();
         assert!(!loaded.devices && loaded.show_hidden);
+        assert_eq!(loaded.drive_style, DriveStyle::Rings);
         assert_eq!(loaded.width, 300, "on the 4-pixel grid");
         settings.set_places(PlacesChoice {
             width: 1000,
@@ -1201,6 +1249,11 @@ mod tests {
         let narrow = Settings::parse("version = 3\n[places]\nwidth = 12\nremote = \"x\"\n");
         assert_eq!(narrow.places().width, 200);
         assert!(narrow.places().remote);
+        // A style this build does not know is read as bars, the rest kept.
+        let unknown =
+            Settings::parse("version = 3\n[places]\ndrive_style = \"tiles\"\nwidth = 280\n");
+        assert_eq!(unknown.places().drive_style, DriveStyle::Bars);
+        assert_eq!(unknown.places().width, 280);
         settings.reset_places();
         assert_eq!(settings.places(), defaults);
     }

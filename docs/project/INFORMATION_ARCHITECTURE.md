@@ -338,7 +338,7 @@ Pick one word and use it everywhere: menu, palette, tooltip, notices.
 | Outlined button | Trash actions, Undo, Details, state actions, Stop acting as administrator, dialog secondary buttons | |
 | Default button | Default action of a dialog (Apply, Rename, Compress, a question's default) | Destructive defaults use the error colours |
 | Window line (icon, sentence, actions, dismiss) | Activity line, notice line | A problem uses the error surface |
-| Progress or usage bar | Activity line, transfer cards, drive cards | Both `progress` (lightened royal blue) on `track`: activity 6 px; drive card 4 px, `error` from 90 % used (D-039) |
+| Progress or usage bar | Activity line, transfer cards, drives in the places panel | Both `progress` (lightened royal blue) on `track`: activity 6 px; a drive's bar 4 px (or its ring, in the rings style), `error` from 90 % used with "Almost full" in words (D-039, W-159) |
 | Scrolling dialog body | Every dialog | |
 | State block (icon, heading, reason, actions) | Empty, loading, hidden-only, filter-empty, unreadable folder | |
 | Text field | Location (editing), filter, palette search, rename field, batch-rename rules, Compress name, group names, Settings fields | The rename field sits inside a row |

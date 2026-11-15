@@ -13,8 +13,8 @@ use crate::{
     layout::{ViewMode, ZOOM_LEVELS},
     metrics::{HIDDEN_OPACITY_MIN_PERCENT, size},
     settings::{
-        Click, Confirmations, DetailColumns, Look, PlacesChoice, Previews, Programs, Settings,
-        ShownIn, Start, TextSize, TitleBar,
+        Click, Confirmations, DetailColumns, DriveStyle, Look, PlacesChoice, Previews, Programs,
+        Settings, ShownIn, Start, TextSize, TitleBar,
     },
 };
 
@@ -127,7 +127,7 @@ impl Page {
             Page::Toolbar => "buttons actions items separator order words labels palette",
             Page::Places => {
                 "places panel sidebar devices drives remote network hidden places width groups \
-                 separators"
+                 separators style bars compact rings removable"
             }
             Page::Confirmations => {
                 "ask confirm trash delete empty close tabs window executable programs run"
@@ -919,6 +919,24 @@ fn places(settings: &Settings) -> Vec<Group> {
             ],
         ),
         group(
+            "Drives",
+            vec![hinted(
+                row(
+                    "drive-style",
+                    "Style",
+                    segmented(
+                        choice_now.drive_style.id(),
+                        &[
+                            ("bars", "Bars", ""),
+                            ("compact", "Compact", ""),
+                            ("rings", "Rings", ""),
+                        ],
+                    ),
+                ),
+                "How each drive is drawn in the places panel.",
+            )],
+        ),
+        group(
             "Panel",
             vec![hinted(
                 row(
@@ -1166,12 +1184,13 @@ pub fn apply(settings: &mut Settings, key: &str, value: &str, facts: &Facts) -> 
             }
             settings.set_appearance(look, title_bar, text_size, hidden);
         }
-        "places-devices" | "places-remote" | "hidden-places" | "places-width" => {
+        "places-devices" | "places-remote" | "hidden-places" | "places-width" | "drive-style" => {
             let mut places: PlacesChoice = settings.places();
             match key {
                 "places-devices" => places.devices = on,
                 "places-remote" => places.remote = on,
                 "hidden-places" => places.show_hidden = value == "show",
+                "drive-style" => places.drive_style = DriveStyle::from_id(value),
                 _ => {
                     places.width = number
                         .and_then(|width| u32::try_from(width).ok())

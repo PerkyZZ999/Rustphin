@@ -7,6 +7,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import QtQuick.Shapes
 import Rustphin
 
 FocusScope {
@@ -195,15 +196,27 @@ FocusScope {
                 required property string percent
                 required property bool nearlyFull
                 required property string description
+                required property string facts
+                required property bool ejectable
+                required property bool busy
+                required property bool mountable
+                required property string subheading
 
                 readonly property bool heading: kind === "group" || kind === "heading"
                 readonly property bool device: kind === "device"
                 // A separator (W-152): a hairline, moved and removed as a row.
                 readonly property bool separator: kind === "separator"
                 readonly property bool pointed: rowArea.containsMouse || drop.containsDrag
+                // How drives are drawn, as Settings, Places chose (W-159).
+                readonly property string style: places.driveStyle
+                // The compact style's figures under the drive shown.
+                readonly property list<string> factLines: device && style === "compact" && current && facts.length > 0 ? facts.split("\n") : []
+                // "Removable" over the first removable drive.
+                readonly property real above: subheading.length > 0 ? Tokens.metrics.place_row : 0
+                readonly property real driveHeight: style === "compact" ? Tokens.metrics.place_row + (factLines.length > 0 ? factLines.length * Tokens.metrics.line + Tokens.metrics.space_sm : 0) : style === "rings" ? Tokens.metrics.drive_ring_row : Tokens.metrics.device_row
 
                 width: ListView.view.width
-                height: device ? Tokens.metrics.device_row : separator ? Tokens.metrics.place_separator : Tokens.metrics.place_row
+                height: device ? above + driveHeight : separator ? Tokens.metrics.place_separator : Tokens.metrics.place_row
                 Accessible.role: heading ? Accessible.Heading : separator ? Accessible.Separator : Accessible.ListItem
                 Accessible.name: title
                 Accessible.selected: current
@@ -216,20 +229,14 @@ FocusScope {
                     anchors.fill: parent
                     anchors.leftMargin: Tokens.metrics.space_xs
                     anchors.rightMargin: Tokens.metrics.space_xs
-                    // A drive card leaves a gap under it (W-148).
-                    anchors.bottomMargin: row.device ? Tokens.metrics.device_row - Tokens.metrics.device_card : 0
+                    anchors.topMargin: row.above
+                    // A bar leaves a gap under it (W-148).
+                    anchors.bottomMargin: row.device && row.style === "bars" ? Tokens.metrics.device_row - Tokens.metrics.device_card : 0
                     radius: Tokens.metrics.radius
-                    color: row.current ? Tokens.colors.selection : row.device ? Tokens.colors.chrome_raised : row.pointed ? Tokens.colors.hover : "transparent"
+                    color: row.current ? Tokens.colors.selection : row.pointed ? Tokens.colors.hover : "transparent"
                     border.width: row.focused && list.activeFocus ? 1 : 0
                     border.color: Tokens.colors.accent
 
-                    // The pointer over a drive card lightens it as it does a row.
-                    Rectangle {
-                        visible: row.device && row.pointed && !row.current
-                        anchors.fill: parent
-                        radius: parent.radius
-                        color: Tokens.colors.hover
-                    }
                     // The current place's royal-blue edge (D-038).
                     Rectangle {
                         visible: row.current
@@ -248,17 +255,97 @@ FocusScope {
                     height: Tokens.metrics.hairline
                     color: Tokens.colors.border_strong
                 }
-                // A drive card (W-148): icon, name and figures; the usage
-                // bar; the filesystem and its traits, and how full it is.
-                ColumnLayout {
-                    visible: row.device
+                // "Removable" over the first removable drive (W-159).
+                Text {
+                    textFormat: Text.PlainText
+                    visible: row.device && row.above > 0
+                    x: Tokens.metrics.space_md
+                    height: row.above
+                    verticalAlignment: Text.AlignVCenter
+                    color: Tokens.colors.text_muted
+                    font.family: Tokens.metrics.family_body
+                    font.pixelSize: Tokens.metrics.label_text
+                    font.capitalization: Font.AllUppercase
+                    text: row.subheading
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: text
+                }
+
+                // A drive in the bars style (W-159, the default): its name
+                // and what is free, a bar across the row, then the
+                // filesystem and size; Eject or Mount at the right.
+                RowLayout {
+                    visible: row.device && row.style === "bars"
+                    z: 1
                     anchors.fill: rowFill
-                    anchors.margins: Tokens.metrics.space_sm
+                    anchors.leftMargin: Tokens.metrics.space_sm
+                    anchors.rightMargin: Tokens.metrics.space_sm
+                    spacing: Tokens.metrics.space_sm
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 0
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Tokens.metrics.line
+                            spacing: Tokens.metrics.space_sm
+
+                            Lucide {
+                                name: row.icon
+                                side: Tokens.metrics.place_icon
+                                colour: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
+                            }
+                            DriveName {
+                                chosen: row.current
+                                text: row.title
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                visible: row.figures.length > 0
+                                color: row.nearlyFull ? Tokens.colors.danger : row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
+                                font.family: Tokens.metrics.family_data
+                                font.pixelSize: Tokens.metrics.small_text
+                                text: row.figures
+                            }
+                        }
+                        // The bar's place is kept when there is no bar, so
+                        // the last line sits at the same height on every row.
+                        UsageBar {
+                            Layout.fillWidth: true
+                            Layout.topMargin: Tokens.metrics.space_xs
+                            Layout.bottomMargin: Tokens.metrics.space_xs
+                            usage: row.usage
+                            warn: row.nearlyFull
+                        }
+                        DriveLine {
+                            Layout.fillWidth: true
+                            chosen: row.current
+                            text: row.detail
+                        }
+                    }
+                    DriveButtons {
+                        index: row.index
+                        name: row.title
+                        ejectable: row.ejectable
+                        mountable: row.mountable
+                    }
+                }
+
+                // The compact style: one line with a small bar and the
+                // percentage; the drive shown opens its figures under it.
+                ColumnLayout {
+                    visible: row.device && row.style === "compact"
+                    z: 1
+                    anchors.fill: rowFill
+                    anchors.leftMargin: Tokens.metrics.space_sm
+                    anchors.rightMargin: Tokens.metrics.space_sm
                     spacing: 0
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Tokens.metrics.line
+                        Layout.preferredHeight: Tokens.metrics.place_row
                         spacing: Tokens.metrics.space_sm
 
                         Lucide {
@@ -266,79 +353,162 @@ FocusScope {
                             side: Tokens.metrics.place_icon
                             colour: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
                         }
-                        Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Tokens.metrics.line
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                            color: row.current ? Tokens.colors.on_selection : Tokens.colors.text
-                            font.family: Tokens.metrics.family_body
-                            font.pixelSize: Tokens.metrics.body_text
-                            font.weight: Font.DemiBold
+                        DriveName {
+                            chosen: row.current
                             text: row.title
                         }
-                        Text {
-                            textFormat: Text.PlainText
-                            visible: row.figures.length > 0
-                            Layout.preferredHeight: Tokens.metrics.line
-                            verticalAlignment: Text.AlignVCenter
-                            color: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
-                            font.family: Tokens.metrics.family_data
-                            font.pixelSize: Tokens.metrics.small_text
-                            text: row.figures
-                        }
-                    }
-                    // The bar's place is kept when there is no bar, so the
-                    // last line sits at the same height on every card.
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Tokens.metrics.space_xs
-                        Layout.preferredHeight: Tokens.metrics.usage
-
-                        Rectangle {
+                        UsageBar {
                             visible: row.usage >= 0
-                            anchors.fill: parent
-                            radius: Tokens.metrics.radius
-                            color: Tokens.colors.track
-
-                            Rectangle {
-                                height: parent.height
-                                width: parent.width * Math.max(0, Math.min(1, row.usage))
-                                radius: parent.radius
-                                // From 90 % used; "NN% used" says it in words too.
-                                color: row.nearlyFull ? Tokens.colors.danger : Tokens.colors.activity
-                            }
-                        }
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: Tokens.metrics.line
-                        spacing: Tokens.metrics.space_sm
-
-                        Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Tokens.metrics.line
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                            color: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
-                            font.family: Tokens.metrics.family_body
-                            font.pixelSize: Tokens.metrics.small_text
-                            text: row.detail
+                            Layout.preferredWidth: Tokens.metrics.compact_bar
+                            usage: row.usage
+                            warn: row.nearlyFull
                         }
                         Text {
                             textFormat: Text.PlainText
                             visible: row.percent.length > 0
-                            Layout.preferredHeight: Tokens.metrics.line
-                            verticalAlignment: Text.AlignVCenter
-                            color: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
+                            Layout.minimumWidth: Tokens.metrics.compact_percent
+                            horizontalAlignment: Text.AlignRight
+                            color: row.nearlyFull ? Tokens.colors.danger : row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
                             font.family: Tokens.metrics.family_data
                             font.pixelSize: Tokens.metrics.small_text
                             text: row.percent
                         }
+                        // Not measured: the line says why (Not mounted, Working…).
+                        Text {
+                            textFormat: Text.PlainText
+                            visible: row.percent.length === 0 && !row.mountable
+                            color: Tokens.colors.text_muted
+                            font.family: Tokens.metrics.family_body
+                            font.pixelSize: Tokens.metrics.small_text
+                            text: row.busy ? qsTr("Working\u2026") : ""
+                        }
+                        DriveButtons {
+                            index: row.index
+                            name: row.title
+                            ejectable: row.ejectable
+                            mountable: row.mountable
+                        }
+                    }
+                    Repeater {
+                        model: row.factLines
+
+                        delegate: RowLayout {
+                            id: fact
+
+                            required property string modelData
+                            readonly property list<string> parts: modelData.split("\t")
+
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Tokens.metrics.line
+                            Layout.leftMargin: Tokens.metrics.place_icon + Tokens.metrics.space_sm
+                            spacing: Tokens.metrics.space_sm
+
+                            Text {
+                                textFormat: Text.PlainText
+                                color: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
+                                font.family: Tokens.metrics.family_body
+                                font.pixelSize: Tokens.metrics.small_text
+                                text: fact.parts[0] ?? ""
+                            }
+                            Text {
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignRight
+                                elide: Text.ElideLeft
+                                color: row.current ? Tokens.colors.on_selection : Tokens.colors.text
+                                font.family: Tokens.metrics.family_data
+                                font.pixelSize: Tokens.metrics.small_text
+                                text: fact.parts[1] ?? ""
+                            }
+                        }
+                    }
+                    Item {
+                        Layout.fillHeight: true
                     }
                 }
+
+                // The rings style: a ring of the used space around the
+                // drive's icon, its name, and what is free.
+                RowLayout {
+                    visible: row.device && row.style === "rings"
+                    z: 1
+                    anchors.fill: rowFill
+                    anchors.leftMargin: Tokens.metrics.space_sm
+                    anchors.rightMargin: Tokens.metrics.space_sm
+                    spacing: Tokens.metrics.space_sm
+
+                    Item {
+                        Layout.preferredWidth: Tokens.metrics.place_ring
+                        Layout.preferredHeight: Tokens.metrics.place_ring
+
+                        Shape {
+                            anchors.fill: parent
+                            preferredRendererType: Shape.CurveRenderer
+
+                            ShapePath {
+                                strokeColor: Tokens.colors.track
+                                strokeWidth: Tokens.metrics.place_ring_stroke
+                                fillColor: "transparent"
+                                // Not mounted: a dashed, empty ring.
+                                strokeStyle: row.usage < 0 && row.mountable ? ShapePath.DashLine : ShapePath.SolidLine
+                                dashPattern: [1, 1]
+
+                                PathAngleArc {
+                                    centerX: Tokens.metrics.place_ring / 2
+                                    centerY: Tokens.metrics.place_ring / 2
+                                    radiusX: (Tokens.metrics.place_ring - Tokens.metrics.place_ring_stroke) / 2
+                                    radiusY: (Tokens.metrics.place_ring - Tokens.metrics.place_ring_stroke) / 2
+                                    startAngle: -90
+                                    sweepAngle: 360
+                                }
+                            }
+                            ShapePath {
+                                strokeColor: row.usage < 0 ? "transparent" : row.nearlyFull ? Tokens.colors.danger : Tokens.colors.activity
+                                strokeWidth: Tokens.metrics.place_ring_stroke
+                                fillColor: "transparent"
+                                capStyle: ShapePath.FlatCap
+
+                                PathAngleArc {
+                                    centerX: Tokens.metrics.place_ring / 2
+                                    centerY: Tokens.metrics.place_ring / 2
+                                    radiusX: (Tokens.metrics.place_ring - Tokens.metrics.place_ring_stroke) / 2
+                                    radiusY: (Tokens.metrics.place_ring - Tokens.metrics.place_ring_stroke) / 2
+                                    startAngle: -90
+                                    sweepAngle: 360 * Math.max(0, Math.min(1, row.usage))
+                                }
+                            }
+                        }
+                        Lucide {
+                            anchors.centerIn: parent
+                            name: row.icon
+                            side: Tokens.metrics.icon_small
+                            colour: row.current ? Tokens.colors.on_selection : Tokens.colors.text_muted
+                        }
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 0
+
+                        DriveName {
+                            Layout.preferredHeight: Tokens.metrics.line
+                            chosen: row.current
+                            text: row.title
+                        }
+                        DriveLine {
+                            Layout.fillWidth: true
+                            chosen: row.current
+                            text: row.detail
+                        }
+                    }
+                    DriveButtons {
+                        index: row.index
+                        name: row.title
+                        ejectable: row.ejectable
+                        mountable: row.mountable
+                    }
+                }
+
                 RowLayout {
                     visible: !row.device && !row.separator
                     anchors.fill: parent
@@ -609,6 +779,87 @@ FocusScope {
         onPositionChanged: mouse => {
             if (pressed)
                 places.resize(panel.width + mouse.x - startX)
+        }
+    }
+
+    // A drive's name, semibold (W-148, W-159).
+    component DriveName: Text {
+        required property bool chosen
+
+        textFormat: Text.PlainText
+        Layout.fillWidth: true
+        elide: Text.ElideRight
+        verticalAlignment: Text.AlignVCenter
+        color: chosen ? Tokens.colors.on_selection : Tokens.colors.text
+        font.family: Tokens.metrics.family_body
+        font.pixelSize: Tokens.metrics.body_text
+        font.weight: Font.DemiBold
+    }
+    // A drive's line under its name or bar: filesystem, size, what is free.
+    component DriveLine: Text {
+        required property bool chosen
+
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
+        color: chosen ? Tokens.colors.on_selection : Tokens.colors.text_muted
+        font.family: Tokens.metrics.family_body
+        font.pixelSize: Tokens.metrics.small_text
+    }
+    // A usage bar: the used part in `progress`, in `error` from 90 % used
+    // (the words say it too); nothing drawn while unknown.
+    component UsageBar: Item {
+        id: bar
+
+        required property real usage
+        required property bool warn
+
+        implicitHeight: Tokens.metrics.usage
+
+        Rectangle {
+            visible: bar.usage >= 0
+            anchors.fill: parent
+            radius: Tokens.metrics.radius
+            color: Tokens.colors.track
+
+            Rectangle {
+                height: parent.height
+                width: parent.width * Math.max(0, Math.min(1, bar.usage))
+                radius: parent.radius
+                color: bar.warn ? Tokens.colors.danger : Tokens.colors.activity
+            }
+        }
+    }
+    // Eject on a removable drive's row, Mount on an unmounted one's (W-159).
+    component DriveButtons: RowLayout {
+        id: buttons
+
+        required property int index
+        required property string name
+        required property bool ejectable
+        required property bool mountable
+
+        visible: ejectable || mountable
+        spacing: Tokens.metrics.space_xs
+
+        OutlinedButton {
+            visible: buttons.mountable
+            implicitHeight: Tokens.metrics.drive_button
+            leftPadding: Tokens.metrics.space_sm
+            rightPadding: Tokens.metrics.space_sm
+            focusPolicy: Qt.NoFocus
+            text: qsTr("Mount")
+            tip: qsTr("Mount %1 and open it").arg(buttons.name)
+            onClicked: places.activate(buttons.index, false)
+        }
+        IconButton {
+            visible: buttons.ejectable
+            side: Tokens.metrics.drive_button
+            iconName: "arrow-up-from-line"
+            text: qsTr("Eject %1").arg(buttons.name)
+            onClicked: {
+                places.focusOn(buttons.index)
+                places.command("eject")
+            }
         }
     }
 }

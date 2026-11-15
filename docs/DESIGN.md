@@ -222,7 +222,6 @@ components:
     backgroundColor: "{colors.border-strong}"
     height: 12px
   device-card:
-    backgroundColor: "{colors.chrome-raised-solid}"
     textColor: "{colors.text}"
     typography: "{typography.body-md-strong}"
     rounded: "{rounded.sm}"
@@ -230,6 +229,20 @@ components:
     height: 56px
   device-row:
     height: 60px
+  drive-compact-row:
+    height: 28px
+  drive-compact-bar:
+    backgroundColor: "{colors.track}"
+    width: 48px
+    height: 4px
+  drive-ring-row:
+    height: 48px
+  place-ring:
+    backgroundColor: "{colors.track}"
+    size: 32px
+  drive-button:
+    rounded: "{rounded.sm}"
+    size: 24px
   device-figures:
     textColor: "{colors.text-muted}"
     typography: "{typography.data-sm}"
@@ -739,9 +752,9 @@ boxes. Zooming out reaches 24-pixel rows.
   never told by a grey alone. `current` (`#2A2C30`) is the quiet fill of the
   focused entry when it is not selected.
 - **Hover** is white at 6 %, under the pointer on rows, buttons and tabs.
-- **Usage bars** of drive cards are `progress` on `track`; a volume 90 % full
-  or more draws its bar in `error`, and the card's "NN% used" says the same in
-  words, so the warning is never colour alone. **Tertiary** (emerald) marks a
+- **Usage bars and rings** of drives are `progress` on `track`; a volume
+  90 % full or more draws them in `error`, and its line says "Almost full",
+  so the warning is never colour alone. **Tertiary** (emerald) marks a
   completed operation. Neither is decoration.
 - **Error** text and icons on `error-surface` (a dark red-grey) with an
   `error-border` outline and a warning icon; colour never carries the message
@@ -871,8 +884,10 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   it. A 36 px title row: "PLACES" in `label-sm` `text-muted` and a 28 px
   "New group" icon button (`list-plus`, tooltip "New group (Ctrl+Shift+G)").
   Place rows and section headings 28 px, place icons 16 px, a 12 px inset
-  (24 px for a place inside a group); drive cards 56 px tall with 4 px
-  between them (`size::DEVICE_CARD`, `DEVICE_ROW`), with 16 px icons. The
+  (24 px for a place inside a group); drives 56 px tall with 4 px between
+  them in the bars style (`size::DEVICE_CARD`, `DEVICE_ROW`), 28 px in the
+  compact style and 48 px in the rings style (`DRIVE_RING_ROW`), with 16 px
+  icons. The
   panel scrolls on its own.
 - **Details view:** 28 px heading row (Name, Size, Modified, Type); columns
   name (fills), size (96 px, right-aligned), modified (168 px), type (160 px),
@@ -1012,7 +1027,8 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
     off, move left and move right; a double click adds or takes off. Under
     them "Buttons": the switch that shows the chosen button's words.
   - **Places:** "Sections" (Show Devices, Remote; Hidden places: Keep them
-    hidden, Show them faded); "Groups" lists each group with its name as a
+    hidden, Show them faded); "Drives" (Style: Bars, Compact, Rings, "How
+    each drive is drawn in the places panel.", W-159); "Groups" lists each group with its name as a
     field, "N places" and icon buttons Move up, Move down and Delete
     ("Deleting a group keeps its places.", or "No groups yet. Make one with
     New group in the places panel."); "Panel" (Width, a slider from 200 to
@@ -1151,24 +1167,38 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   removable or power-off capable drive; Copy location (`link`) when it is
   mounted; then Properties (`info`, W-153). The volumes the system and the
   home folder run from offer neither Unmount nor Safely remove.
-- **Drive cards (W-148):** each volume under Devices is a card 56 px tall on
-  `chrome-raised`, 2 px corners, 8 px padding, 4 px apart. First line: a 16 px
-  `hard-drive` or `usb` icon and the name in `body-md-strong` `text` on the
-  left; on the right "used / total" in `data-sm` `text-muted`, one unit when
-  both share it ("211.3 / 927.0 GiB", else "512.0 MiB / 1.2 GiB", in the
-  units Settings, Views chose, as the status line). Then a full-width 4 px
-  usage bar (`progress` on `track`; `error` from 90 % used). Last line in
-  `text-muted`: the filesystem and its traits on the left in `body-sm`
-  ("Btrfs · Encrypted", "exFAT · Removable"; the type is UDisks2's `IdType`,
-  "Encrypted" when the volume is unlocked from an encrypted container), and
-  "NN% used" (whole percent, rounded down) on the right in `data-sm`. A drive
-  that is not mounted has no bar: its size on the right of the first line and
-  "Not mounted" below. While it is being mounted or removed the last line
-  says "Working…". Hover, the current place's fill and edge and the focus
-  outline are those of place rows. There is no eject button: the drive menu
-  holds every drive action (Mount, Unmount, Safely remove), and none has a
-  key of its own. Clicking an unmounted drive
-  mounts and opens it. Its accessible description reads the card's words.
+- **Drives (W-148, W-159):** each volume under Devices is drawn in one of
+  three styles, chosen in Settings, Places, Drives, Style (the maintainer's
+  three mockups of 2026-11-15); Bars is the default. Fixed drives come
+  first; removable ones follow under "REMOVABLE" (`label-sm` `text-muted`,
+  28 px above the first). In every style: no card fill (the place rows'
+  `hover`, the current place's `selection` fill and 2 px edge, and the focus
+  outline); the name in `body-md-strong`; a 16 px `hard-drive` or `usb`
+  icon; usage in `progress` on `track`, `error` from 90 % used with "Almost
+  full" in the words so the warning is never colour alone; a mounted
+  removable drive has a 24 px Eject icon button (`arrow-up-from-line`,
+  tooltip "Eject <name>": Safely remove where it can be powered off, else
+  Unmount) at its row's right, and a drive that is not mounted a 24 px
+  outlined Mount button (tooltip "Mount <name> and open it") instead; while
+  it is being mounted or removed it says "Working…" and offers neither.
+  Clicking a drive opens it (mounting it first); the drive menu holds every
+  action. Its accessible description reads its figures in one sentence.
+  - **Bars** (default): 56 px tall, 4 px apart, 8 px sides. The name, and on
+    the right what is free ("261.2 GiB free", `data-sm`, `text-muted`,
+    `error` when almost full); a full-width 4 px bar; then in `body-sm`
+    `text-muted` the filesystem and size ("Btrfs · 927.4 GiB"), "Almost full ·
+    ext4", or "Not mounted · NTFS · 237.9 GiB".
+  - **Compact:** one 28 px line: icon, name, a 48 px bar and "NN%" in
+    `data-sm`. The drive whose folder is shown opens its figures under it,
+    16 px a line in `body-sm` and `data-sm`: Free, Used ("used / total"),
+    Mount (mount point and filesystem), or Size when not mounted.
+  - **Rings:** 48 px tall: a 32 px ring (3 px stroke, used share in
+    `progress` or `error`, dashed and empty when not mounted) around a 12 px
+    icon; the name, and under it "261.2 GiB free · Btrfs", "Almost full ·
+    8.1 GiB free" or "Not mounted · ext4" in `body-sm` `text-muted`.
+  Sizes are in the units Settings, Views chose, as the status line, and
+  follow a change at once (W-158). The filesystem is UDisks2's `IdType`
+  ("Encrypted" added when unlocked from an encrypted container).
 - **Column headings:** `body-sm` `text-muted`, `hover` under the pointer; the
   sorted column in `text`, semibold, with a 12 px `arrow-up` or `arrow-down`,
   so direction is never colour alone. Clicking a heading sorts; clicking
@@ -1478,7 +1508,7 @@ re-read and trash banners, the administrator bar, the context, New, trash
 and View menus with submenu icons (W-118), the palette, the activity and
 notice lines, the transfer dialog (W-149), Properties, batch rename,
 Compress to…, the questions, the problems dialog and Settings with all eight
-pages, restyled after the maintainer's refined mockup (W-155:
+pages, with drives drawn in three styles (W-159), and Settings restyled after the maintainer's refined mockup (W-155:
 `docs/mockup/SettingsDialog_Refined`, a React project kept out of the
 repository) with its search, page headings, section panels, switches,
 segments, sliders, chips and look tiles; the mockup's 6–8 px corners, larger

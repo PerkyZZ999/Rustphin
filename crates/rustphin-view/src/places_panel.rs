@@ -268,75 +268,146 @@ pub fn filesystem_name(id_type: &str) -> String {
     .to_owned()
 }
 
-/// What a volume's card shows (W-148), besides its name and icon.
+/// What a volume's row shows (W-148, W-159), besides its name and icon,
+/// for each of the drive styles Settings offers.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceCard {
-    /// Right of the name: "used / total" when mounted, the size when not.
-    pub figures: String,
-    /// The last line's left: the filesystem and its traits ("Btrfs ·
-    /// Encrypted"), "Not mounted", or "Working…" while it is mounted or
-    /// removed.
-    pub traits: String,
-    /// The last line's right: "22% used", or empty.
+    /// "261.2 GiB free" when mounted and measured; empty otherwise. The
+    /// bars style puts it right of the name.
+    pub free: String,
+    /// The bars style's last line: the filesystem and size ("Btrfs ·
+    /// 927.4 GiB"), "Almost full · ext4", "Not mounted · NTFS · 237.9 GiB",
+    /// or "Working…" while it is mounted or removed.
+    pub bars_line: String,
+    /// The rings style's line under the name: "261.2 GiB free · Btrfs",
+    /// "Almost full · 8.1 GiB free", "Not mounted · NTFS", or "Working…".
+    pub rings_line: String,
+    /// "72%" when measured, else empty: the compact style's figure.
     pub percent: String,
-    /// How full it is, 0 to 1; -1 when there is no bar to draw.
+    /// The compact style's figures, shown under the drive whose folder is
+    /// shown: Free, Used and Mount when mounted, the Size when not.
+    pub facts: Vec<(String, String)>,
+    /// How full it is, 0 to 1; -1 when there is nothing to draw.
     pub usage: f64,
-    /// At least [`NEARLY_FULL_PERCENT`] used: the bar warns.
+    /// At least [`NEARLY_FULL_PERCENT`] used: it warns in colour and words.
     pub nearly_full: bool,
-    /// The card in one sentence, for screen readers.
+    /// The row in one sentence, for screen readers.
     pub description: String,
 }
 
-/// The card of `device`, with the `(total, free)` bytes of its filesystem
+/// Words joined by a middle dot, the empty ones left out.
+fn dotted(parts: &[&str]) -> String {
+    parts
+        .iter()
+        .filter(|part| !part.is_empty())
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" \u{b7} ")
+}
+
+/// The row of `device`, with the `(total, free)` bytes of its filesystem
 /// when mounted and measured; `busy` while it is being mounted or removed.
 pub fn device_card(device: &Device, usage: Option<(u64, u64)>, busy: bool) -> DeviceCard {
-    let mounted = device.mount_point.is_some();
-    let mut traits: Vec<String> = device
+    let mounted = device.mount_point.as_deref();
+    let filesystem = device
         .filesystem
         .as_deref()
         .map(filesystem_name)
-        .into_iter()
-        .collect();
-    if device.encrypted {
-        traits.push("Encrypted".to_owned());
-    }
-    if device.removable {
-        traits.push("Removable".to_owned());
-    }
-    let traits = traits.join(" \u{b7} ");
-    let measured = usage.filter(|_| mounted);
-    let (figures, percent) = match measured {
-        Some((total, free)) => (used_of_total(total, free), Some(percent_used(total, free))),
-        None if !mounted && device.size > 0 => (format::size(device.size), None),
-        None => (String::new(), None),
-    };
-    let line = if busy {
-        "Working\u{2026}".to_owned()
-    } else if mounted {
-        traits.clone()
+        .unwrap_or_default();
+    let traits = dotted(&[&filesystem, if device.encrypted { "Encrypted" } else { "" }]);
+    let measured = usage.filter(|_| mounted.is_some());
+    let percent = measured.map(|(total, free)| percent_used(total, free));
+    let nearly_full = percent.is_some_and(|percent| percent >= NEARLY_FULL_PERCENT);
+    let free = measured.map_or_else(String::new, |(total, free)| {
+        format!("{} free", format::size(free.min(total)))
+    });
+    let size = measured.map_or(device.size, |(total, _)| total);
+    let size_words = if size > 0 {
+        format::size(size)
     } else {
-        "Not mounted".to_owned()
+        String::new()
     };
-    let description = match (measured, percent) {
-        (Some((total, free)), Some(percent)) => {
-            let used = format::size(total - free.min(total));
-            let total = format::size(total);
-            [format!("{used} of {total} used ({percent}%)"), traits]
-                .into_iter()
-                .filter(|part| !part.is_empty())
-                .collect::<Vec<_>>()
-                .join(", ")
+    let working = "Working\u{2026}".to_owned();
+    let (bars_line, rings_line) = if busy {
+        (working.clone(), working)
+    } else if mounted.is_none() {
+        (
+            dotted(&["Not mounted", &filesystem, &size_words]),
+            dotted(&["Not mounted", &filesystem]),
+        )
+    } else if nearly_full {
+        (
+            dotted(&["Almost full", &traits]),
+            dotted(&["Almost full", &free]),
+        )
+    } else if measured.is_some() {
+        (dotted(&[&traits, &size_words]), dotted(&[&free, &traits]))
+    } else {
+        (traits.clone(), traits.clone())
+    };
+    let mut facts: Vec<(String, String)> = Vec::new();
+    match (mounted, measured) {
+        (Some(mount), measured) => {
+            if let Some((total, free_bytes)) = measured {
+                facts.push(("Free".to_owned(), format::size(free_bytes.min(total))));
+                facts.push(("Used".to_owned(), used_of_total(total, free_bytes)));
+            }
+            facts.push((
+                "Mount".to_owned(),
+                dotted(&[&mount.to_string_lossy(), &filesystem]),
+            ));
         }
-        _ => [line.clone(), figures.clone()]
+        (None, _) if !size_words.is_empty() => facts.push(("Size".to_owned(), size_words.clone())),
+        (None, _) => {}
+    }
+    let description = match (measured, percent) {
+        (Some((total, free_bytes)), Some(percent)) => {
+            let used = format::size(total - free_bytes.min(total));
+            let total = format::size(total);
+            [
+                format!("{used} of {total} used ({percent}%)"),
+                if nearly_full {
+                    "almost full".to_owned()
+                } else {
+                    String::new()
+                },
+                traits.clone(),
+                if device.removable {
+                    "removable".to_owned()
+                } else {
+                    String::new()
+                },
+            ]
             .into_iter()
             .filter(|part| !part.is_empty())
             .collect::<Vec<_>>()
-            .join(", "),
+            .join(", ")
+        }
+        _ => [
+            if busy {
+                "Working\u{2026}".to_owned()
+            } else if mounted.is_none() {
+                "Not mounted".to_owned()
+            } else {
+                traits.clone()
+            },
+            if mounted.is_none() {
+                size_words
+            } else {
+                String::new()
+            },
+        ]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(", "),
     };
     DeviceCard {
-        figures,
-        traits: line,
-        percent: percent.map_or_else(String::new, |percent| format!("{percent}% used")),
+        free,
+        bars_line,
+        rings_line,
+        percent: percent.map_or_else(String::new, |percent| format!("{percent}%")),
+        facts,
         usage: measured.map_or(-1., |(total, free)| {
             if total == 0 {
                 0.
@@ -344,7 +415,7 @@ pub fn device_card(device: &Device, usage: Option<(u64, u64)>, busy: bool) -> De
                 (total - free.min(total)) as f64 / total as f64
             }
         }),
-        nearly_full: percent.is_some_and(|percent| percent >= NEARLY_FULL_PERCENT),
+        nearly_full,
         description,
     }
 }
@@ -612,16 +683,28 @@ mod tests {
     }
 
     #[test]
-    fn a_mounted_card_shows_used_and_total_its_filesystem_and_traits_and_percent() {
+    fn a_mounted_drive_says_what_is_free_in_each_style() {
         let mut data = device(Some("/mnt/data"), false, false);
         data.filesystem = Some("btrfs".into());
         data.encrypted = true;
 
         let card = device_card(&data, Some((1000 * GIB, 780 * GIB)), false);
 
-        assert_eq!(card.figures, "220.0 / 1000.0 GiB");
-        assert_eq!(card.traits, "Btrfs \u{b7} Encrypted");
-        assert_eq!(card.percent, "22% used");
+        assert_eq!(card.free, "780.0 GiB free");
+        assert_eq!(card.bars_line, "Btrfs \u{b7} Encrypted \u{b7} 1000.0 GiB");
+        assert_eq!(
+            card.rings_line,
+            "780.0 GiB free \u{b7} Btrfs \u{b7} Encrypted"
+        );
+        assert_eq!(card.percent, "22%");
+        assert_eq!(
+            card.facts,
+            [
+                ("Free".to_owned(), "780.0 GiB".to_owned()),
+                ("Used".to_owned(), "220.0 / 1000.0 GiB".to_owned()),
+                ("Mount".to_owned(), "/mnt/data \u{b7} Btrfs".to_owned()),
+            ]
+        );
         assert!((card.usage - 0.22).abs() < 1e-9, "{}", card.usage);
         assert!(!card.nearly_full);
         assert_eq!(
@@ -631,53 +714,71 @@ mod tests {
     }
 
     #[test]
-    fn a_removable_card_says_so_after_its_filesystem() {
+    fn a_removable_drive_is_said_to_be_one_to_screen_readers_only() {
         let mut stick = device(Some("/run/media/u/STICK"), true, true);
         stick.filesystem = Some("exfat".into());
         let card = device_card(&stick, Some((64 * GIB, 32 * GIB)), false);
-        assert_eq!(card.traits, "exFAT \u{b7} Removable");
-        assert_eq!(card.percent, "50% used");
+        // Its group says it on screen; the lines keep their room.
+        assert_eq!(card.bars_line, "exFAT \u{b7} 64.0 GiB");
+        assert!(
+            card.description.ends_with(", removable"),
+            "{}",
+            card.description
+        );
     }
 
     #[test]
-    fn a_volume_warns_from_ninety_percent_used() {
-        let data = device(Some("/mnt/data"), false, false);
+    fn a_drive_warns_from_ninety_percent_used_in_words_too() {
+        let mut data = device(Some("/mnt/data"), false, false);
+        data.filesystem = Some("ext4".into());
         let at = |free| device_card(&data, Some((1000, free)), false);
         assert!(!at(101).nearly_full, "89 %");
         assert!(at(100).nearly_full, "90 %");
-        assert!(at(0).nearly_full, "full");
-        // Its words say it too, so the warning is never colour alone.
-        assert_eq!(at(0).percent, "100% used");
+        let full = at(81);
+        assert!(full.nearly_full);
+        // Never colour alone: every style's words say it.
+        assert_eq!(full.bars_line, "Almost full \u{b7} ext4");
+        assert_eq!(full.rings_line, "Almost full \u{b7} 81 B free");
+        assert!(
+            full.description.contains("almost full"),
+            "{}",
+            full.description
+        );
     }
 
     #[test]
-    fn an_unmounted_card_shows_its_size_and_not_mounted_without_a_bar() {
+    fn an_unmounted_drive_says_so_with_its_filesystem_and_size_and_no_bar() {
         let mut stick = device(None, true, true);
-        stick.filesystem = Some("ext4".into());
+        stick.filesystem = Some("ntfs".into());
         // A measure left over from before it was unmounted is not drawn.
         let card = device_card(&stick, Some((100, 50)), false);
-        assert_eq!(card.figures, "64.0 GiB");
-        assert_eq!(card.traits, "Not mounted");
+        assert_eq!(card.free, "");
+        assert_eq!(card.bars_line, "Not mounted \u{b7} NTFS \u{b7} 64.0 GiB");
+        assert_eq!(card.rings_line, "Not mounted \u{b7} NTFS");
         assert_eq!(card.percent, "");
+        assert_eq!(card.facts, [("Size".to_owned(), "64.0 GiB".to_owned())]);
         assert!((card.usage + 1.).abs() < 1e-9, "no bar: {}", card.usage);
         assert!(!card.nearly_full);
         assert_eq!(card.description, "Not mounted, 64.0 GiB");
     }
 
     #[test]
-    fn a_card_being_mounted_or_removed_says_it_is_working() {
+    fn a_drive_being_mounted_or_removed_says_it_is_working() {
         let stick = device(None, true, true);
-        assert_eq!(device_card(&stick, None, true).traits, "Working\u{2026}");
+        let card = device_card(&stick, None, true);
+        assert_eq!(card.bars_line, "Working\u{2026}");
+        assert_eq!(card.rings_line, "Working\u{2026}");
         let data = device(Some("/mnt/data"), false, false);
         let card = device_card(&data, Some((100, 50)), true);
-        assert_eq!(card.traits, "Working\u{2026}");
-        assert_eq!(card.percent, "50% used");
+        assert_eq!(card.bars_line, "Working\u{2026}");
+        assert_eq!(card.percent, "50%");
     }
 
     #[test]
-    fn a_mounted_card_not_yet_measured_draws_no_bar_and_no_figures() {
+    fn a_mounted_drive_not_yet_measured_draws_no_bar_and_no_figures() {
         let card = device_card(&device(Some("/mnt/data"), false, false), None, false);
-        assert_eq!((card.figures.as_str(), card.percent.as_str()), ("", ""));
+        assert_eq!((card.free.as_str(), card.percent.as_str()), ("", ""));
+        assert_eq!(card.facts.len(), 1, "only where it is mounted");
         assert!((card.usage + 1.).abs() < 1e-9);
     }
 

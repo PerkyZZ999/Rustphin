@@ -28,7 +28,7 @@ use crate::{
     groups::{Groups, SeparatorAt},
     menu::OpenMenu,
     place_menu::{self, PlaceCommand, Target},
-    settings::PlacesChoice,
+    settings::{DriveStyle, PlacesChoice},
 };
 
 /// A change to KDE's shared places file (`user-places.xbel`), made by the
@@ -210,13 +210,24 @@ pub struct RowView {
     pub hidden: bool,
     /// A folded heading.
     pub collapsed: bool,
-    /// A group's count, or a drive card's last line: its filesystem and
-    /// traits, "Not mounted" or "Working…" (W-148).
+    /// A group's count, or a drive's line in the chosen style (W-159):
+    /// the bars style's last line or the rings style's line under the name.
     pub detail: String,
-    /// A drive card's figures right of its name: "used / total", or its size.
+    /// A drive's free space ("261.2 GiB free"), or empty.
     pub figures: String,
-    /// A drive card's "NN% used", or empty.
+    /// A drive's "NN%", or empty: the compact style's figure.
     pub percent: String,
+    /// A drive's Free, Used and Mount (or Size), shown in the compact style
+    /// under the drive whose folder is shown.
+    pub facts: Vec<(String, String)>,
+    /// A mounted removable drive that can be unmounted or safely removed:
+    /// Eject is on its row (an unmounted one has Mount there instead, and
+    /// Safely remove in its menu).
+    pub ejectable: bool,
+    /// A drive that is not mounted: Mount is on its row.
+    pub mountable: bool,
+    /// Words above the row: "Removable" on the first removable drive.
+    pub subheading: &'static str,
     /// How full a volume is, 0 to 1; -1 when there is no bar.
     pub usage: f64,
     /// A volume at least 90 % full: its bar warns.
@@ -345,6 +356,10 @@ impl PlacesPanel {
             detail: String::new(),
             figures: String::new(),
             percent: String::new(),
+            facts: Vec::new(),
+            ejectable: false,
+            mountable: false,
+            subheading: "",
             usage: -1.,
             nearly_full: false,
             description: String::new(),
@@ -425,6 +440,19 @@ impl PlacesPanel {
                 let device = self.device(id)?;
                 let busy = self.busy.as_deref() == Some(id);
                 let card = device_card(device, self.usage.get(id).copied(), busy);
+                let home = self.home.as_deref();
+                let first_removable = device.removable
+                    && self
+                        .rows
+                        .iter()
+                        .find_map(|row| match row {
+                            Row::Device(other) => self
+                                .device(other)
+                                .filter(|other| other.removable)
+                                .map(|other| other.id == device.id),
+                            _ => None,
+                        })
+                        .unwrap_or(false);
                 RowView {
                     kind: RowKind::Device,
                     title: device_name(device),
@@ -434,9 +462,19 @@ impl PlacesPanel {
                         "hard-drive"
                     },
                     current: self.current.is_some() && device.mount_point == self.current,
-                    detail: card.traits,
-                    figures: card.figures,
+                    detail: match self.choice.drive_style {
+                        DriveStyle::Rings => card.rings_line,
+                        DriveStyle::Bars | DriveStyle::Compact => card.bars_line,
+                    },
+                    figures: card.free,
                     percent: card.percent,
+                    facts: card.facts,
+                    ejectable: !busy
+                        && device.removable
+                        && device.mount_point.is_some()
+                        && (can_remove(device, home) || can_unmount(device, home)),
+                    mountable: !busy && device.mount_point.is_none(),
+                    subheading: if first_removable { "Removable" } else { "" },
                     usage: card.usage,
                     nearly_full: card.nearly_full,
                     description: card.description,
@@ -507,7 +545,15 @@ impl PlacesPanel {
 
     /// Which sections show, from Settings.
     pub fn set_choice(&mut self, choice: PlacesChoice) -> Vec<Effect> {
-        let sections = |choice: &PlacesChoice| (choice.devices, choice.remote, choice.show_hidden);
+        // The drive style changes what each drive's row says (W-159).
+        let sections = |choice: &PlacesChoice| {
+            (
+                choice.devices,
+                choice.remote,
+                choice.show_hidden,
+                choice.drive_style,
+            )
+        };
         let changed = sections(&self.choice) != sections(&choice);
         self.choice = choice;
         if changed {
@@ -960,11 +1006,16 @@ impl PlacesPanel {
                 rows.push(Row::Devices);
             }
             if !self.groups.devices_folded {
-                rows.extend(
-                    self.devices
-                        .iter()
-                        .map(|device| Row::Device(device.id.clone())),
-                );
+                // The fixed drives, then the removable ones under their
+                // own words (W-159).
+                for removable in [false, true] {
+                    rows.extend(
+                        self.devices
+                            .iter()
+                            .filter(|device| device.removable == removable)
+                            .map(|device| Row::Device(device.id.clone())),
+                    );
+                }
             }
         }
         self.rows = rows;
@@ -1402,6 +1453,7 @@ mod tests {
                 remote: true,
                 show_hidden: false,
                 width: 240,
+                drive_style: crate::settings::DriveStyle::Bars,
             };
             let mut world = Self {
                 panel: PlacesPanel::new(choice, Some(PathBuf::from("/home/u"))),
@@ -1941,17 +1993,32 @@ mod tests {
             false,
         );
         assert_eq!(
-            (data.detail, data.figures, data.percent, data.description),
-            (card.traits, card.figures, card.percent, card.description)
+            (
+                data.detail,
+                data.figures,
+                data.percent,
+                data.facts,
+                data.description
+            ),
+            (
+                card.bars_line,
+                card.free,
+                card.percent,
+                card.facts,
+                card.description
+            )
         );
+        assert!(!data.ejectable && !data.mountable);
         assert!((data.usage - 0.75).abs() < 1e-9, "{}", data.usage);
         assert!(!data.nearly_full && !data.busy);
 
         let stick = world.panel.view(&d("stick")).unwrap();
         assert_eq!(stick.icon, "usb");
         assert!(!stick.current, "not mounted, so not the folder shown");
-        assert_eq!(stick.detail, "Not mounted");
+        assert_eq!(stick.detail, "Not mounted \u{b7} ext4 \u{b7} 1 B");
         assert!((stick.usage + 1.).abs() < 1e-9, "unknown: {}", stick.usage);
+        // Not mounted: Mount on its row, and no Eject beside it.
+        assert!(stick.mountable && !stick.ejectable);
 
         assert!(!world.panel.view(&d("bare")).unwrap().current);
         // A volume of no size is not full.
@@ -1966,6 +2033,79 @@ mod tests {
     }
 
     #[test]
+    fn removable_drives_come_last_under_their_own_words() {
+        let world = with_devices();
+        let order: Vec<&Row> = world
+            .panel
+            .rows()
+            .iter()
+            .filter(|row| matches!(row, Row::Device(_)))
+            .collect();
+        // The stick was listed second; it now follows every fixed drive.
+        assert_eq!(order.last(), Some(&&d("stick")));
+        assert_eq!(
+            world.panel.view(&d("stick")).unwrap().subheading,
+            "Removable"
+        );
+        for fixed in ["data", "root", "home", "empty", "bare"] {
+            assert_eq!(
+                world.panel.view(&d(fixed)).unwrap().subheading,
+                "",
+                "{fixed}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_drive_style_chooses_each_drives_line_and_is_a_change_to_lay_out() {
+        let mut world = with_devices();
+        let bars = world.panel.view(&d("data")).unwrap().detail;
+        assert_eq!(bars, "ext4 \u{b7} 1000 B");
+        let choice = PlacesChoice {
+            devices: true,
+            remote: true,
+            show_hidden: false,
+            width: 240,
+            drive_style: DriveStyle::Rings,
+        };
+        assert_eq!(world.panel.set_choice(choice), [Effect::Relayout]);
+        let rings = world.panel.view(&d("data")).unwrap().detail;
+        assert_eq!(rings, "250 B free \u{b7} ext4");
+        assert_eq!(
+            world.panel.set_choice(PlacesChoice {
+                drive_style: DriveStyle::Compact,
+                ..choice
+            }),
+            [Effect::Relayout]
+        );
+    }
+
+    #[test]
+    fn a_mounted_removable_drive_offers_eject_on_its_row() {
+        let mut world = with_devices();
+        let mut devices: Vec<Device> = ["data", "root", "home", "empty", "bare"]
+            .iter()
+            .filter_map(|id| world.panel.device(id).cloned())
+            .collect();
+        devices.push(device("stick", Some("/run/media/u/STICK"), true));
+        let effects = world.panel.set_devices(devices, HashMap::new());
+        world.carry_out(effects);
+        let stick = world.panel.view(&d("stick")).unwrap();
+        assert!(stick.ejectable && !stick.mountable);
+        // A fixed drive keeps Unmount in its menu, not on its row.
+        assert!(!world.panel.view(&d("data")).unwrap().ejectable);
+    }
+
+    #[test]
+    fn a_drive_being_worked_on_offers_neither_eject_nor_mount() {
+        let mut world = with_devices();
+        let effects = world.panel.set_busy(Some("stick".into()));
+        world.carry_out(effects);
+        let stick = world.panel.view(&d("stick")).unwrap();
+        assert!(!stick.ejectable && !stick.mountable);
+    }
+
+    #[test]
     fn a_nearly_full_volume_row_warns() {
         let mut world = world();
         let effects = world.panel.set_devices(
@@ -1975,7 +2115,9 @@ mod tests {
         world.carry_out(effects);
         let full = world.panel.view(&d("full")).unwrap();
         assert!(full.nearly_full);
-        assert_eq!(full.percent, "96% used");
+        assert_eq!(full.percent, "96%");
+        // The words warn too, in whichever style.
+        assert_eq!(full.detail, "Almost full \u{b7} ext4");
     }
 
     #[test]
@@ -2087,6 +2229,7 @@ mod tests {
             remote: true,
             show_hidden: false,
             width: 240,
+            drive_style: crate::settings::DriveStyle::Bars,
         });
         assert_eq!(effects, [Effect::Relayout]);
         assert_eq!(world.panel.devices_note(), "");
@@ -2110,6 +2253,7 @@ mod tests {
             remote: true,
             show_hidden: false,
             width,
+            drive_style: crate::settings::DriveStyle::Bars,
         };
         assert_eq!(world.panel.set_choice(choice(300)), []);
         assert_eq!(

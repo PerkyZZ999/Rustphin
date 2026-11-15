@@ -66,6 +66,10 @@ enum Role {
     Percent,
     NearlyFull,
     Description,
+    Facts,
+    Ejectable,
+    Mountable,
+    Subheading,
 }
 
 thread_local! {
@@ -83,7 +87,7 @@ pub fn volume_name(mount: &std::path::Path) -> Option<String> {
 }
 
 impl Role {
-    const ALL: [Role; 16] = [
+    const ALL: [Role; 20] = [
         Role::Kind,
         Role::Title,
         Role::Icon,
@@ -100,6 +104,10 @@ impl Role {
         Role::Percent,
         Role::NearlyFull,
         Role::Description,
+        Role::Facts,
+        Role::Ejectable,
+        Role::Mountable,
+        Role::Subheading,
     ];
 
     fn from_number(number: i32) -> Option<Role> {
@@ -124,6 +132,10 @@ impl Role {
             Role::Percent => "percent",
             Role::NearlyFull => "nearlyFull",
             Role::Description => "description",
+            Role::Facts => "facts",
+            Role::Ejectable => "ejectable",
+            Role::Mountable => "mountable",
+            Role::Subheading => "subheading",
         }
     }
 }
@@ -147,6 +159,8 @@ pub struct PlacesModelRust {
     width: i32,
     /// A drive's Properties shown, as JSON; empty when none (W-153).
     drive: QString,
+    /// How each drive is drawn: `bars`, `compact` or `rings` (W-159).
+    drive_style: QString,
 
     started: bool,
     places_path: Option<PathBuf>,
@@ -174,6 +188,7 @@ impl Default for PlacesModelRust {
             menu: QString::default(),
             width: i32::try_from(choice.width).unwrap_or(240),
             drive: QString::default(),
+            drive_style: QString::from(choice.drive_style.id()),
             started: false,
             places_path: xdg::data_dirs()
                 .into_iter()
@@ -267,6 +282,18 @@ impl qobject::PlacesModel {
             Role::Percent => words(&view.percent),
             Role::NearlyFull => QVariant::from(&view.nearly_full),
             Role::Description => words(&view.description),
+            // One line per figure, its label and value apart by a tab.
+            Role::Facts => words(
+                &view
+                    .facts
+                    .iter()
+                    .map(|(label, value)| format!("{label}\t{value}"))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ),
+            Role::Ejectable => QVariant::from(&view.ejectable),
+            Role::Mountable => QVariant::from(&view.mountable),
+            Role::Subheading => words(view.subheading),
         }
     }
 
@@ -668,6 +695,8 @@ impl qobject::PlacesModel {
     fn adopt_settings(mut self: Pin<&mut Self>) {
         let settings = prefs::settings();
         let choice = settings.places();
+        self.as_mut()
+            .set_drive_style(QString::from(choice.drive_style.id()));
         let mut effects = self.as_mut().rust_mut().panel.set_choice(choice);
         // The drive cards' figures follow Settings, Views, Sizes (W-158).
         let units = settings.formats().1;
