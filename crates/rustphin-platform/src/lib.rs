@@ -26,4 +26,5 @@ pub mod terminal;
 pub mod thumbnails;
 pub mod trash;
 pub mod uri;
+pub mod window_menu;
 pub mod xdg;

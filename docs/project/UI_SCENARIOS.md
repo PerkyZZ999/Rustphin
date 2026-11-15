@@ -278,7 +278,7 @@ filename contains a build hash. The child is an ignored test, so run it with
 | T2 | Press on the title bar, move the pointer, release (`mouse_button_down`, two `mouse_move`, `mouse_button_up`) | The window moves with the pointer |
 | T3 | The same from the bottom-right corner | The window resizes |
 | T4 | Double-click the title bar, then click the middle button | Maximised without the frame, the middle button shows Restore; Restore brings the earlier size and place back |
-| T5 | Right-click the title bar, Escape | **Known gap** on Qt: KWin's window menu (Maximize, Minimize, Keep Above Others, More Actions, Close) is not offered; a right-click on the bar does nothing. Qt has no public call for it: the ways open are Qt Wayland's private API or asking KWin for its "Window Operations Menu" shortcut over D-Bus, and the maintainer has not chosen (W-146) |
+| T5 | Right-click the title bar, Escape | KWin's window menu (Maximize, Minimize, Keep Above Others, More Actions, Close) opens at the window's top-left corner, not under the pointer (KWin's "Window Operations Menu" shortcut, asked for over D-Bus); Escape closes it and nothing else changes. Where KWin does not answer, a right-click does nothing and the log says why |
 | T6 | Click Close | The window closes and the session is saved, as with Ctrl+Q |
 
 ## Toolbar across the window (W-096b/c)
@@ -299,7 +299,6 @@ filename contains a build hash. The child is an ignored test, so run it with
 
 - How the blur looks and the user's own icon theme: an isolated session cannot show them. They need the live desktop.
 - A new window taking the focus from the caller's activation token (W-120): needs the real desktop.
-- KWin's window menu on the title bar (T5 of W-096a): the Qt interface does not offer it.
 - Dragging with a modifier held (G2, G3, the Ctrl/Shift drop shortcuts): kwin-mcp refuses a held key during a drag.
 - Strict frame pacing and wider R-101 acceptance remain open.
 - Dropping entries on a tab. W-074c verified mouse tab reordering (T7).

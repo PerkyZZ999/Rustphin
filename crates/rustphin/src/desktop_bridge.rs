@@ -43,6 +43,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "ownTitleBar"]
         fn own_title_bar(self: &Shell) -> bool;
+        /// Asks KWin for the active window's menu (a right-click on
+        /// Rustphin's own title bar); it opens at the window's corner.
+        #[qinvokable]
+        #[cxx_name = "windowMenu"]
+        fn window_menu(self: &Shell);
         /// The question before closing a window with `count` tabs, as JSON.
         #[qinvokable]
         #[cxx_name = "closeQuestion"]

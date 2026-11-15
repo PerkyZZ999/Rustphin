@@ -1,6 +1,7 @@
 // The window's own title bar (W-114c2b): logo, centred title, Minimise,
 // Maximise or Restore, Close. Dragging moves the window; a double click
-// maximises or restores it.
+// maximises or restores it; a right-click opens KWin's window menu, which
+// KWin places at the window's top-left corner.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -54,6 +55,13 @@ Rectangle {
     }
     TapHandler {
         onDoubleTapped: bar.toggleMaximised()
+    }
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: {
+            bar.window.requestActivate()
+            Shell.windowMenu()
+        }
     }
     Row {
         id: windowButtons

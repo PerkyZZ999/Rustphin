@@ -123,8 +123,8 @@ Each slice ends with something the author can run and use, and with its acceptan
 
 ## Done — Slice S12: Charcoal colour scheme and UI completion (W-147, W-148, W-149, W-146, W-117)
 
-Done 2026-11-15, but for KWin's window menu on a right-click of the title
-bar, which waits on the maintainer's choice of how (STATE.md).
+Done 2026-11-15. KWin's window menu on a right-click of the title bar came
+last (W-146f), by KWin's shortcut over D-Bus, the maintainer's choice.
 
 **Goal:** Rustphin's look moves from navy to dark charcoal, and everything the
 documents describe but the interface does not yet do is built. Asked for by the
@@ -205,7 +205,7 @@ are replayed on screen.
 
 ## What remains
 
-- **Next:** plan the v0.2.0 roadmap with the maintainer. Slice S12 is done but for the title bar's window menu.
+- **Next:** plan the v0.2.0 roadmap with the maintainer. Slice S12 is done.
 - **Also open:** W-115 (memory grows on each reload of a very large folder).
 - **S11 acceptance:** a keyboard-only pass of the Qt interface (R-004, R-107, R-019); the maintainer's real-desktop and hardware checks (R-013, R-105, R-020 focus, W-098e administrator mode).
 - **Then:** the two-week daily-driver trial (the MVP success signal), and phase 7 (release).

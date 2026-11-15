@@ -142,6 +142,15 @@ impl qobject::Shell {
         prefs::settings().title_bar() == rustphin_view::settings::TitleBar::Rustphin
     }
 
+    fn window_menu(&self) {
+        // Off the Qt thread: the bus call waits for KWin's answer.
+        std::thread::spawn(|| {
+            if let Err(error) = rustphin_platform::window_menu::open() {
+                tracing::warn!(%error, "the title bar's window menu was not opened");
+            }
+        });
+    }
+
     fn close_question(&self, count: i32) -> QString {
         let shown = questions::close_window(usize::try_from(count).unwrap_or(0));
         QString::from(&serde_json::to_string(&shown).unwrap_or_default())

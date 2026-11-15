@@ -26,7 +26,7 @@ about every execution path.
 
 Local IPC is required: Wayland for display and the file clipboard; the
 session D-Bus for the single-instance service (`org.rustphin.Rustphin`),
-FileManager1, kio-fuse and accessibility; the system D-Bus for UDisks2 and,
+FileManager1, kio-fuse, KWin's global shortcuts (`org.kde.kglobalaccel`, only to open the window menu when the title bar is right-clicked) and accessibility; the system D-Bus for UDisks2 and,
 in administrator mode, KDE's kio-admin helper. Bus addresses come from the
 desktop environment; Rustphin does not enforce Unix-only D-Bus addresses.
 Opening a file hands its path to the chosen desktop application; "Open

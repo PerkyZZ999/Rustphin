@@ -1338,8 +1338,11 @@ Where the build differs from this document today:
 - **Error banner:** the pane's re-read banner has no "Details…" or dismiss
   button; Details is on the notice line, since operation results are
   window-level, and the problems dialog has no "Copy list".
-- **Title bar menu:** right-clicking Rustphin's own title bar does not
-  offer KWin's window menu (T5 of the title bar); waiting on a choice of how.
+- **Title bar menu:** right-clicking Rustphin's own title bar opens KWin's
+  window menu by asking KWin for its "Window Operations Menu" shortcut over
+  D-Bus (the maintainer's choice, 2026-11-15). KWin places that menu at the
+  window's top-left corner, not under the pointer; Qt has no public call
+  that would place it there.
 
 Carried over and implemented: the palette's **Recover original names after
 interruption** for the current folder (browsing never starts recovery; an

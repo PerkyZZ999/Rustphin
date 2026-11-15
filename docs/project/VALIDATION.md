@@ -1,5 +1,14 @@
 # Validation evidence
 
+### 2026-11-15 — W-146f KWin's window menu on the title bar
+- **Decision:** the maintainer chose KWin's "Window Operations Menu" global shortcut over D-Bus rather than Qt Wayland's private API (2026-11-15).
+- **Change:** DESIGN.md, UI_SCENARIOS.md (T5), PRIVACY.md, ARCHITECTURE.md and AGENTS.md first. Platform: `window_menu::open` calls `invokeShortcut("Window Operations Menu")` on `org.kde.kglobalaccel`, `/component/kwin`, on the session bus (the method and the name were read from the running KWin by introspection). Interface: `Shell.windowMenu()` makes the call on its own thread and logs a failure; TitleBar.qml activates the window and calls it on a right-click.
+- **Tests:** `window_menu::a_right_click_asks_kwin_for_its_window_operations_menu` and `a_service_without_kwin_s_component_is_an_error_not_a_hang`, against a stand-in component on a private peer-to-peer bus; the first was proved by renaming the shortcut, when it failed.
+- **On screen (isolated KWin session, isolated home, debug build, opaque):** a right-click on the title bar opened KWin's menu (Maximize, Minimize, Keep Above Others, More Actions, Close) at the window's top-left corner; Escape closed it; nothing was logged.
+- **Not verified:** the menu on the maintainer's desktop; the logged failure when KWin does not answer.
+- **Tests:** `rust-tc doctor` PASS, 990 tests (3 skipped).
+- **Waiver:** none
+
 ### 2026-11-15 — W-117 Qt leftovers
 - **Change:** DESIGN.md first (notice icons by kind, the Run question's buttons, the Trash place's mark, a link's icon in Properties, its scrolling keys; the "Open leftovers" paragraph replaced by the one open item). View: `Notice::success` and `Notice::icon`; a rename recovery's words ("left no interrupted rename in") and its failure told alone; the Run button `Style::Plain`; `PlacesPanel::set_trash_folder`, which marks the `trash:/` place while that folder is shown; `properties::icon_subject` (a link is iconed as its target). Interface: `Operations.noticeIcon`; `OutlinedButton` ignored over AT-SPI while hidden; PropertiesDialog's column takes the keyboard and scrolls the facts with Home, End, Page Up/Down and the arrows.
 - **Settled without a change of code, by the documents:** the one-tab strip stays shown (DESIGN.md and INFORMATION_ARCHITECTURE.md since W-096b; T5's wording came from the GPUI build and is corrected); Ctrl+0 returns to the default level 2, as V3, K14, P1 and TB7 already say.
