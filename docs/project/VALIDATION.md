@@ -1,5 +1,14 @@
 # Validation evidence
 
+### 2026-11-15 — W-151 Thumbnails and Properties on screen
+- **Place:** isolated KWin session, isolated home (deleted afterwards), release build, opaque; two folders of generated pictures (a 640 × 400 JPEG, a 300 × 500 GIF, a 500 × 500 WebP, an 800 × 300 PNG), the UI fixture.
+- **H3:** Rustphin's icon view showed all four pictures, each in its proportions.
+- **H4:** Dolphin (icons) wrote four thumbnails into `.cache/thumbnails/normal/` at 06:05:04. Rustphin on the same folder showed all four with the cache unchanged (same four files, same times). Rustphin on the second folder wrote four more at 06:05:42; Dolphin then showed them and the eight files and their times stayed the same.
+- **Properties on a folder holding `locked` (mode 000):** "5.1 MiB (5,370,262 bytes), 20 items. 1 item could not be read." The sentence broke inside "could"; fact values now wrap between words and inside a path only where they must (DESIGN.md), seen afterwards with the line ending "1 item" and the path breaking at its hyphens.
+- **Not verified:** cancelling a folder measurement on screen (between folders only, and a warm cache measured these trees in well under a second; `properties::a_cancelled_folder_size_says_so` covers it); scrolling a large picture folder.
+- **Tests:** `rust-tc doctor` PASS, 997 tests (3 skipped).
+- **Waiver:** none
+
 ### 2026-11-15 — W-150 R-101 and R-102 on the Qt interface
 - **Build and place:** release build after W-115 and W-076t, isolated KWin session at 60 Hz, isolated home, opaque, the 500,000-entry benchmark folder.
 - **Scrolling (`RUSTPHIN_SCROLL_BENCH=1`, D-019: at most 5% of intervals over 1.5 × the median):** details 0 of 1,200 dropped (max 17.87 ms); icons (Ctrl+1) 2 of 1,200 (0.17%, max 31.43 ms) in the interval holding the switch, then 0 (max 17.78 ms); compact (Ctrl+2) 1 of 1,200 (0.08%, max 25.21 ms) with the switch, then 0 (max 18.23 ms), scrolling sideways. Screenshots showed the icon grid and the compact columns moving. PASS in every view.

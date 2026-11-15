@@ -1108,7 +1108,8 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
 - **Properties** (`PropertiesDialog.qml`, mockups 13–14): title "<name> —
   Properties" with a Close icon button. Header: a 96 × 64 thumbnail (or the
   48 px type icon), the name and the type. Facts as label (`text-muted`,
-  128 px column) and value (`data-md`): Location, Size (with exact bytes),
+  128 px column) and value (`data-md`, wrapping between words, and inside
+  a long path only where it must): Location, Size (with exact bytes),
   Modified, Accessed, Created when known, and a link's target; a link's
   icon is that of what it points to, as in the list. A folder's
   size reads "Calculating size…", then "Calculating… 1,204 items so far",

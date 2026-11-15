@@ -218,7 +218,7 @@ Popup {
                         Text {
                             textFormat: Text.PlainText
                             Layout.fillWidth: true
-                            wrapMode: Text.WrapAnywhere
+                            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                             color: Tokens.colors.text
                             font.family: Tokens.metrics.family_data
                             font.pixelSize: Tokens.metrics.data_text

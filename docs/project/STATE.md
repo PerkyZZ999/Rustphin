@@ -15,7 +15,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-15 — W-150 R-101/R-102 on Qt
+- Latest validation entry: VALIDATION.md, 2026-11-15 — W-151 thumbnails and Properties on screen
 - Acceptance: ACCEPTANCE.md lists every open criterion and who can close it (re-mapped 2026-11-14 for the Qt interface).
 
 ## Open loops
@@ -25,8 +25,8 @@
 - Task: `rust-tc fuzz` could not run after W-129 and W-133: the installed nightly (1.97) is below the 1.100 minimum. The fuzz harness checks in `rust-tc doctor` pass.
 - Task: remote folders (W-080–W-080c) not tried against a real sftp or smb server, nor replayed on Qt (no kio-fuse mount in the test session).
 - Task: compact view on Qt not scrolled with a real wheel (the benchmark scrolled it sideways through 500,000 entries, W-150); drops on a tab and onto a place from another application not seen.
-- Task: thumbnails not yet observed: reuse of a thumbnail Dolphin made and the reverse on screen (the cache format is unit-tested against the specification's example); JPEG, GIF and WebP files; scrolling a large picture folder.
-- Task: Properties' folder measurement with unreadable entries, and its cancellation, not seen on screen; another volume's trash never exercised (real volumes are not test data).
+- Task: thumbnails: scrolling a large picture folder not observed (sharing the cache with Dolphin both ways and JPEG, GIF and WebP pictures seen, W-151).
+- Task: Properties' folder measurement cancelled on screen not seen (a warm cache measures too fast to cancel by hand; unit-tested); another volume's trash never exercised (real volumes are not test data).
 - Task: data safety beyond the tests: physical power loss, partial source-tree deletion after a cross-filesystem move, and restart cleanup remain unproved (W-070, W-072).
 - Product: an operation that replaced or deleted something cannot be undone at all, even its reversible parts (`UndoError::Replaced`).
 - Product: Ctrl+F3 is bound but KWin takes it by default, as for Dolphin; redo is not offered (KEYBOARD.md).
