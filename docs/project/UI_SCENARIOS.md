@@ -278,7 +278,7 @@ filename contains a build hash. The child is an ignored test, so run it with
 | T2 | Press on the title bar, move the pointer, release (`mouse_button_down`, two `mouse_move`, `mouse_button_up`) | The window moves with the pointer |
 | T3 | The same from the bottom-right corner | The window resizes |
 | T4 | Double-click the title bar, then click the middle button | Maximised without the frame, the middle button shows Restore; Restore brings the earlier size and place back |
-| T5 | Right-click the title bar, Escape | **Known gap** on Qt: KWin's window menu (Maximize, Minimize, Keep Above Others, More Actions, Close) needs private Qt Wayland API and is not offered (W-114h); a right-click on the bar does nothing |
+| T5 | Right-click the title bar, Escape | **Known gap** on Qt: KWin's window menu (Maximize, Minimize, Keep Above Others, More Actions, Close) is not offered; a right-click on the bar does nothing. Qt has no public call for it: the ways open are Qt Wayland's private API or asking KWin for its "Window Operations Menu" shortcut over D-Bus, and the maintainer has not chosen (W-146) |
 | T6 | Click Close | The window closes and the session is saved, as with Ctrl+Q |
 
 ## Toolbar across the window (W-096b/c)
@@ -536,7 +536,7 @@ both run at once.
 
 | ID | Steps | Expected |
 |---|---|---|
-| DL1 | Open a folder in the isolated home (tmpfs) and `/usr` in a second tab | The first status line reads "Free: … of …" without a name; `/usr` reads "Free: … of … (System)". **Known gap** on Qt: the pane passes no volume name to `pane::free_text`, so `/usr` also reads "Free: … of …" |
+| DL1 | Open a folder in the isolated home (tmpfs) and `/usr` in a second tab | The first status line reads "Free: … of …" without a name; `/usr` reads "Free: … of … (System)"; a folder on another listed volume ends with that volume\'s name (seen in W-146e) |
 | DL2 | Open eight tabs in a 960 × 640 window | Tabs shrink to 96 px, the strip scrolls, "+" stays at its end, only the active tab has a close button; Ctrl+Shift+Tab to the last tab scrolls it into view |
 | DL3 | Ctrl+Shift+P, type "files" | Each result has its own icon (file-plus, folder-plus, info, scissors, link, copy, copy-plus) |
 | DL4 | Select a folder and two files, Shift+Del | The list shows a folder icon for the folder, file icons and sizes for the files |

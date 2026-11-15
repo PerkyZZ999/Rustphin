@@ -15,7 +15,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-15 — W-146d Administrator mode per window
+- Latest validation entry: VALIDATION.md, 2026-11-15 — W-146e Volume name, read-only Extract, a panicking operation
 - Acceptance: ACCEPTANCE.md lists every open criterion and who can close it (re-mapped 2026-11-14 for the Qt interface).
 
 ## Open loops

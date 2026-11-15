@@ -325,6 +325,17 @@ pub fn usage(mount_point: &Path) -> Option<(u64, u64)> {
     (total > 0).then_some((total, free.min(total)))
 }
 
+/// Whether the user may make entries in the folder `dir`, as the kernel
+/// judges it now (permissions, a read-only mount). Blocking on a slow
+/// filesystem: call from a background thread.
+pub fn can_write(dir: &Path) -> bool {
+    rustix::fs::access(
+        dir,
+        rustix::fs::Access::WRITE_OK | rustix::fs::Access::EXEC_OK,
+    )
+    .is_ok()
+}
+
 /// Where the filesystem holding `path` is mounted, from the kernel's
 /// mount table. Blocking: call from a background thread.
 pub fn mount_point_of(path: &Path) -> Option<PathBuf> {
@@ -613,6 +624,22 @@ mod tests {
         );
         assert_eq!(mount("/mnt/database"), Some(PathBuf::from("/")));
         assert_eq!(mount_point_in(b"", Path::new("/x")), None);
+    }
+
+    #[test]
+    fn a_folder_without_write_permission_cannot_be_written_to() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let open = dir.path().join("open");
+        let closed = dir.path().join("closed");
+        std::fs::create_dir(&open).unwrap();
+        std::fs::create_dir(&closed).unwrap();
+        std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        assert!(can_write(&open));
+        // Root may write anywhere.
+        assert_eq!(can_write(&closed), rustix::process::geteuid().is_root());
+        assert!(!can_write(&dir.path().join("missing")));
     }
 
     #[test]

@@ -726,6 +726,7 @@ mod tests {
             folder: Path::new("/a"),
             in_trash: false,
             as_administrator: false,
+            read_only: false,
             selected: Vec::new(),
             listing: &*snapshot,
         };

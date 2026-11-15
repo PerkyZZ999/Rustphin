@@ -404,6 +404,8 @@ pub struct MenuFacts {
     pub in_trash: bool,
     /// The window acts as administrator: KDE's helper has no trash.
     pub as_administrator: bool,
+    /// The folder shown cannot be written to: nothing is extracted into it.
+    pub read_only: bool,
     /// The clipboard holds files that can be pasted here.
     pub can_paste: bool,
     /// Applications registered for the one selected file.
@@ -535,9 +537,23 @@ fn archive_menus(facts: &MenuFacts) -> Vec<MenuEntry> {
         menus.push(MenuEntry::Submenu {
             label: "Extract".to_owned(),
             icon: crate::icons::Icon::ArchiveRestore,
+            // In a folder that cannot be written to only "Extract to…" can
+            // work; the first of the others says why they are off.
             items: vec![
-                item("Extract here", MenuCommand::Extract(ExtractHow::Here), true),
-                item(&into, MenuCommand::Extract(ExtractHow::NewFolder), true),
+                item(
+                    if facts.read_only {
+                        "Extract here (read-only folder)"
+                    } else {
+                        "Extract here"
+                    },
+                    MenuCommand::Extract(ExtractHow::Here),
+                    !facts.read_only,
+                ),
+                item(
+                    &into,
+                    MenuCommand::Extract(ExtractHow::NewFolder),
+                    !facts.read_only,
+                ),
                 item(
                     if several {
                         "Extract and trash archives"
@@ -545,7 +561,7 @@ fn archive_menus(facts: &MenuFacts) -> Vec<MenuEntry> {
                         "Extract and trash archive"
                     },
                     MenuCommand::Extract(ExtractHow::AndTrash),
-                    true,
+                    !facts.read_only,
                 ),
                 item(
                     "Extract to\u{2026}",
@@ -812,6 +828,7 @@ mod tests {
             single_container: false,
             in_trash: false,
             as_administrator: false,
+            read_only: false,
             can_paste: true,
             applications: vec![AppChoice {
                 id: "org.kde.kate.desktop".into(),
@@ -881,6 +898,41 @@ mod tests {
             [
                 ("Open with".to_owned(), "app-window".to_owned()),
                 ("Compress".to_owned(), "archive".to_owned())
+            ]
+        );
+    }
+
+    #[test]
+    fn a_read_only_folder_offers_only_extract_to_and_says_why() {
+        let entries = context_menu(&facts(|f| {
+            f.all_archives = true;
+            f.extract_folder = Some("Holiday".into());
+            f.read_only = true;
+        }));
+        let offered: Vec<(&str, bool)> = entries
+            .iter()
+            .find_map(|entry| match entry {
+                MenuEntry::Submenu { label, items, .. } if label == "Extract" => Some(
+                    items
+                        .iter()
+                        .filter_map(|item| match item {
+                            MenuEntry::Item { label, enabled, .. } => {
+                                Some((label.as_str(), *enabled))
+                            }
+                            _ => None,
+                        })
+                        .collect(),
+                ),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(
+            offered,
+            [
+                ("Extract here (read-only folder)", false),
+                ("Extract into “Holiday/”", false),
+                ("Extract and trash archive", false),
+                ("Extract to…", true),
             ]
         );
     }

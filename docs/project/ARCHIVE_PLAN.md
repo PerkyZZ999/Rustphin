@@ -21,10 +21,11 @@
 >   (W-113, W-114g), not the GPUI portal prompt.
 > - **Several archives** get "Extract each into its own folder" in place of
 >   "Extract into "name/"", and "Extract and trash archives".
-> - **Not built:** the menu does not disable the "here" entries in a
->   read-only folder (`menu::archive_menus` has no such check); a failure is
->   reported when the operation runs. "Actions menu" in this plan is the
->   command palette (Files: Extract here, …).
+> - **Read-only folders** (W-146e): the three entries that extract into the
+>   folder shown are disabled there and the first reads "Extract here
+>   (read-only folder)"; from the palette they say "This folder is
+>   read-only. Use Extract to… and choose another folder." "Actions menu"
+>   in this plan is the command palette (Files: Extract here, …).
 > - **Trash and administrator:** no Extract or Compress in either, from the
 >   menu or the palette (W-140); links whose target climbs out after a name
 >   are left out (W-133).

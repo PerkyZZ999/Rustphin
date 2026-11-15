@@ -67,6 +67,20 @@ enum Role {
     Description,
 }
 
+thread_local! {
+    /// The volumes last listed, for naming the one a folder is on.
+    static VOLUMES: std::cell::RefCell<Vec<Device>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// The name of the listed volume mounted at `mount`, as the places panel
+/// shows it; none for a filesystem that is not a listed volume.
+pub fn volume_name(mount: &std::path::Path) -> Option<String> {
+    VOLUMES.with(|volumes| {
+        rustphin_view::places_panel::volume_at(&volumes.borrow(), mount)
+            .map(rustphin_view::places_panel::device_name)
+    })
+}
+
 impl Role {
     const ALL: [Role; 16] = [
         Role::Kind,
@@ -574,6 +588,7 @@ impl qobject::PlacesModel {
             });
             let _ = thread.queue(move |mut model| match listed {
                 Ok((devices, usage)) => {
+                    VOLUMES.with(|volumes| volumes.replace(devices.clone()));
                     let effects = model.as_mut().rust_mut().panel.set_devices(devices, usage);
                     model.apply(effects);
                 }
@@ -586,6 +601,7 @@ impl qobject::PlacesModel {
     }
 
     fn devices_failed(mut self: Pin<&mut Self>) {
+        VOLUMES.with(|volumes| volumes.borrow_mut().clear());
         let effects = self.as_mut().rust_mut().panel.devices_failed();
         self.apply(effects);
     }

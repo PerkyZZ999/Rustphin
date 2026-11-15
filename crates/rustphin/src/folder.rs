@@ -242,7 +242,11 @@ pub struct FolderModelRust {
     zone: TimeZone,
     width: f32,
     /// The folder, total and free bytes of its volume.
-    usage: Option<(PathBuf, u64, u64)>,
+    /// The folder measured, its volume's size and free space, and where
+    /// that volume is mounted.
+    usage: Option<(PathBuf, u64, u64, Option<PathBuf>)>,
+    /// The folder shown was found not to be writable.
+    read_only: bool,
     frame_log: bool,
     menu: QString,
     scroll_bench: bool,
@@ -347,6 +351,7 @@ impl Default for FolderModelRust {
             zone: TimeZone::system(),
             width: 1000.,
             usage: None,
+            read_only: false,
             menu: QString::default(),
             frame_log: std::env::var_os("RUSTPHIN_FRAME_LOG").is_some()
                 || std::env::var_os("RUSTPHIN_SCROLL_BENCH").is_some(),
@@ -888,7 +893,10 @@ impl qobject::FolderModel {
             .usage
             .as_ref()
             .filter(|(path, ..)| path == snapshot.path())
-            .map(|(_, total, free)| pane::free_text(*total, *free, None))
+            .map(|(_, total, free, mount)| {
+                let volume = mount.as_deref().and_then(crate::places::volume_name);
+                pane::free_text(*total, *free, volume.as_deref())
+            })
             .unwrap_or_default();
         let empty = snapshot.is_empty();
         let state = pane::empty_state(
@@ -1342,12 +1350,18 @@ impl qobject::FolderModel {
     /// Reads how much space the folder's volume has left, in the background.
     fn measure_free_space(mut self: Pin<&mut Self>, path: PathBuf) {
         self.as_mut().rust_mut().usage = None;
+        self.as_mut().rust_mut().read_only = false;
         let thread = self.qt_thread();
         std::thread::spawn(move || {
             let usage = rustphin_platform::devices::usage(&path);
+            let mount = rustphin_platform::devices::mount_point_of(&path);
+            let read_only = !rustphin_platform::devices::can_write(&path);
             let _ = thread.queue(move |mut model| {
+                if model.rust().pane.folder() == Some(path.as_path()) {
+                    model.as_mut().rust_mut().read_only = read_only;
+                }
                 if let Some((total, free)) = usage {
-                    model.as_mut().rust_mut().usage = Some((path, total, free));
+                    model.as_mut().rust_mut().usage = Some((path, total, free, mount));
                     model.update_status();
                 }
             });
@@ -1986,6 +2000,7 @@ impl qobject::FolderModel {
             single_container,
             in_trash: rust.trash_dir.is_some(),
             as_administrator: rust.as_admin,
+            read_only: rust.read_only,
             can_paste,
             applications,
             types_ready: rust.types.is_some(),
@@ -2276,6 +2291,7 @@ impl qobject::FolderModel {
                     folder: snapshot.path(),
                     in_trash: self.rust().trash_dir.is_some(),
                     as_administrator: self.rust().as_admin,
+                    read_only: self.rust().read_only,
                     selected,
                     listing: &*snapshot,
                 },

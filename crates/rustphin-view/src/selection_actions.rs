@@ -99,6 +99,8 @@ pub struct Facts<'a, L: Listing + ?Sized> {
     pub in_trash: bool,
     /// The pane works as administrator (KDE's helper has no trash).
     pub as_administrator: bool,
+    /// The folder shown cannot be written to.
+    pub read_only: bool,
     /// The selected entries, in the listing's order.
     pub selected: Vec<Selected<'a>>,
     /// Every name in the folder.
@@ -183,6 +185,8 @@ pub const IN_TRASH: &str =
 
 /// What renaming several entries at once says as administrator.
 pub const BATCH_AS_ADMINISTRATOR: &str = "Several entries cannot be renamed at once as administrator: KDE's helper cannot lock the folder. Rename them one by one.";
+/// What extracting into the folder shown says when it cannot be written to.
+pub const READ_ONLY: &str = "This folder is read-only. Use Extract to… and choose another folder.";
 /// What Extract and Compress say as administrator.
 pub const AS_ADMINISTRATOR: &str = "Archives cannot be extracted or made as administrator.";
 
@@ -304,6 +308,7 @@ fn extract<L: Listing + ?Sized>(how: ExtractHow, facts: &Facts<'_, L>) -> Plan {
                 trash: false,
             }));
         }
+        _ if facts.read_only => return Plan::Say(READ_ONLY.to_owned()),
         ExtractHow::Here => (Layout::Here, false),
         ExtractHow::NewFolder => (Layout::NewFolder, false),
         ExtractHow::AndTrash => (Layout::Here, true),
@@ -455,6 +460,7 @@ mod tests {
             folder: Path::new(HOME),
             in_trash: false,
             as_administrator: false,
+            read_only: false,
             selected,
             listing,
         }
@@ -609,6 +615,29 @@ mod tests {
             matches!(choose, Plan::Say(ref words) if words == IN_TRASH),
             "{choose:?}"
         );
+    }
+
+    #[test]
+    fn nothing_is_extracted_into_a_read_only_folder_but_elsewhere() {
+        let listing: &[&[u8]] = &[b"a.zip"];
+        let read_only = || Facts {
+            read_only: true,
+            ..facts(vec![archive("a.zip")], listing)
+        };
+        for how in [
+            ExtractHow::Here,
+            ExtractHow::NewFolder,
+            ExtractHow::AndTrash,
+        ] {
+            match plan(SelectionAction::Extract(how), &read_only()) {
+                Plan::Say(words) => assert_eq!(words, READ_ONLY),
+                other => panic!("expected a refusal of {how:?}, got {other:?}"),
+            }
+        }
+        assert!(matches!(
+            plan(SelectionAction::Extract(ExtractHow::To), &read_only()),
+            Plan::Open(Dialog::ExtractTo(_))
+        ));
     }
 
     #[test]

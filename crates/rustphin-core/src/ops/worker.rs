@@ -126,6 +126,10 @@ struct Shared {
     running: Mutex<HashMap<OpId, Running>>,
 }
 
+/// What an operation that panicked ends with: said to the user after "Not
+/// done:".
+pub const INTERNAL_ERROR: &str = "Rustphin hit an internal error and stopped this operation; what it had already changed stays as it is. Please report it";
+
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     // A panic on another operation's thread must not disable this one.
     mutex
@@ -252,10 +256,13 @@ impl Operations {
                 cancel,
                 last_progress: None,
             };
-            let result = match request {
+            // A panic in the operation must still end it for the interface,
+            // which otherwise shows it running for ever.
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match request {
                 Some(request) => perform(&shared, id, request, &mut controller),
                 None => revert(&shared, id, &mut controller),
-            };
+            }))
+            .unwrap_or_else(|_| Finished::Refused(INTERNAL_ERROR.to_owned()));
             lock(&shared.running).remove(&id);
             let _ = shared.events.send(OpEvent::Finished { id, result });
         };
@@ -454,6 +461,45 @@ mod tests {
             OpEvent::Finished { id: done, result } if done == id => result,
             other => panic!("expected the end of {id:?}, got {other:?}"),
         }
+    }
+
+    /// A trash whose code is broken.
+    struct PanickingTrash;
+
+    impl crate::ops::Trash for PanickingTrash {
+        fn trash(&self, _: &Path) -> std::io::Result<crate::ops::TrashedItem> {
+            panic!("a bug in the trash")
+        }
+
+        fn restore(&self, _: &crate::ops::TrashedItem) -> std::io::Result<()> {
+            panic!("a bug in the trash")
+        }
+    }
+
+    #[test]
+    fn an_operation_that_panics_still_ends_and_says_so() {
+        let d = dirs();
+        file(d.src.join("a.txt"), "a");
+        let (ops, events) = Operations::new(
+            Arc::new(RealFs),
+            Arc::new(PanickingTrash),
+            Arc::new(crate::archive::NoForeignReader),
+        );
+
+        let id = ops.start(Request::Trash {
+            paths: vec![d.src.join("a.txt")],
+        });
+
+        assert!(matches!(next(&events), OpEvent::Started { .. }));
+        assert!(matches!(
+            finished(&events, id),
+            Finished::Refused(message) if message == INTERNAL_ERROR
+        ));
+        assert_eq!(read(d.src.join("a.txt")), "a");
+        // The runner goes on working.
+        let id = ops.start(copy(&[d.src.join("a.txt")], &d.dst));
+        assert!(matches!(next(&events), OpEvent::Started { .. }));
+        assert!(matches!(finished(&events, id), Finished::Done(_)));
     }
 
     #[test]

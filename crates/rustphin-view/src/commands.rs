@@ -1558,6 +1558,7 @@ mod tests {
             single_container: false,
             in_trash: false,
             as_administrator: false,
+            read_only: false,
             can_paste: true,
             applications: Vec::new(),
             types_ready: true,
