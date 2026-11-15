@@ -5,7 +5,7 @@
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 (hardening) in progress; the interface is Qt 6 and QML through cxx-qt since W-114i (D-033, D-034)
-- **Status:** active — Slice S12 done: W-147 charcoal colours, W-148 drive cards, W-149 transfer details (2026-11-14), W-146 UI completion, W-117 Qt leftovers and W-146f KWin's window menu on the title bar (2026-11-15); W-115 memory on reload, W-076t keyboard pass (2026-11-15); open:, the maintainer's real-desktop checks, then the v0.2.0 roadmap
+- **Status:** active — Slice S12 done: W-147 charcoal colours, W-148 drive cards, W-149 transfer details (2026-11-14), W-146 UI completion, W-117 Qt leftovers and W-146f KWin's window menu on the title bar (2026-11-15); W-115 memory on reload, W-076t keyboard pass, W-152 separators in the places panel (2026-11-15); W-153 drive Properties and W-154 toolbar buttons next; open:, the maintainer's real-desktop checks, then the v0.2.0 roadmap
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-11-15
 
@@ -15,7 +15,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-15 — W-076u problems dialog by keyboard
+- Latest validation entry: VALIDATION.md, 2026-11-15 — W-152 separators in the places panel
 - Acceptance: ACCEPTANCE.md lists every open criterion and who can close it (re-mapped 2026-11-14 for the Qt interface).
 
 ## Open loops
@@ -37,7 +37,7 @@
 - None for the agent. The real-desktop and hardware checks above wait on the maintainer.
 
 ## Next action
-- Slice S12 is done. Next: the v0.2.0 roadmap with the maintainer (ROADMAP.md).
+- Requested by the maintainer (2026-11-15): W-153 drive Properties, W-154 Settings and palette buttons in place of Actions. Slice S12 is done. Then: the v0.2.0 roadmap with the maintainer (ROADMAP.md).
 - For the maintainer on the real desktop: after installing a build, run `rustphin --quit` once so the new build answers launches; then the checks under "Manual" above.
 - Then: the two-week daily-driver trial, and phase 7 (release).
 

@@ -171,6 +171,7 @@ fn metric_values(scale: f32) -> Vec<(&'static str, f32)> {
         ("device_row", size::DEVICE_ROW),
         ("device_card", size::DEVICE_CARD),
         ("place_row", size::PLACE_ROW),
+        ("place_separator", size::PLACE_SEPARATOR),
         ("place_icon", size::PLACE_ICON),
         ("small_button", size::SMALL_BUTTON),
         ("state_text_max", size::STATE_TEXT_MAX),

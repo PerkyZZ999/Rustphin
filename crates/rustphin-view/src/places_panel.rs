@@ -12,7 +12,10 @@ use rustphin_platform::{
     remote::{RemoteAddress, network_folder_name},
 };
 
-use crate::{format, groups::Groups};
+use crate::{
+    format,
+    groups::{Groups, Member},
+};
 
 mod panel;
 
@@ -31,6 +34,8 @@ pub enum Row {
     Devices,
     /// The Remote heading, which folds the network places away.
     Remote,
+    /// A separator, by its identifier (W-152).
+    Separator(String),
 }
 
 /// The message shown when the device service cannot be reached.
@@ -67,9 +72,54 @@ pub fn is_shown(place: &Place, show_hidden: bool) -> bool {
     reachable && ours && (show_hidden || !place.hidden)
 }
 
-/// The rows of the panel, top to bottom: local places outside groups, then
-/// each group's heading followed by its places unless it is collapsed, then
-/// the Remote heading and the network places outside groups unless folded.
+/// The local places outside groups that the panel shows, in the shared
+/// file's order: the places the separators outside groups sit between.
+pub(crate) fn shown_loose<'a>(
+    places: &'a [Place],
+    groups: &'a Groups,
+    show_hidden: bool,
+) -> Vec<&'a Place> {
+    groups
+        .layout(places)
+        .ungrouped
+        .into_iter()
+        .filter(|place| is_shown(place, show_hidden) && !is_remote(place))
+        .collect()
+}
+
+/// Where each separator outside groups is drawn among `shown` (the places
+/// of [`shown_loose`]), in the order of [`Groups::separators`]: below that
+/// many of them, 0 above them all. One below a place that is not shown
+/// (hidden, in a group, remote) sits below the last shown place before it
+/// in the shared file; one below a place gone from the file is not drawn.
+pub(crate) fn loose_slots(
+    places: &[Place],
+    shown: &[&Place],
+    groups: &Groups,
+) -> Vec<Option<usize>> {
+    let position = |id: &str| places.iter().position(|place| place.id == id);
+    let shown_at: Vec<usize> = shown
+        .iter()
+        .filter_map(|place| position(&place.id))
+        .collect();
+    groups
+        .separators
+        .iter()
+        .map(|separator| match separator.after.as_deref() {
+            None => Some(0),
+            Some(after) => {
+                let anchor = position(after)?;
+                Some(shown_at.iter().filter(|at| **at <= anchor).count())
+            }
+        })
+        .collect()
+}
+
+/// The rows of the panel, top to bottom: local places outside groups with
+/// the separators between them, then each entry of the group list (a
+/// group's heading followed by its places and separators unless it is
+/// collapsed, or a separator between groups), then the Remote heading and
+/// the network places outside groups unless folded.
 pub fn rows(
     places: &[Place],
     groups: &Groups,
@@ -78,25 +128,40 @@ pub fn rows(
     show_remote: bool,
 ) -> Vec<Row> {
     let layout = groups.layout(places);
-    let (remote, local): (Vec<&Place>, Vec<&Place>) = layout
+    let local = shown_loose(places, groups, show_hidden);
+    let remote: Vec<&Place> = layout
         .ungrouped
         .iter()
         .copied()
-        .filter(|place| is_shown(place, show_hidden))
-        .partition(|place| is_remote(place));
-    let mut rows: Vec<Row> = local
-        .iter()
-        .map(|place| Row::Place(place.id.clone()))
+        .filter(|place| is_shown(place, show_hidden) && is_remote(place))
         .collect();
+    let slots = loose_slots(places, &local, groups);
+    let separators_at = |slot: usize| {
+        groups
+            .separators
+            .iter()
+            .zip(&slots)
+            .filter(move |(_, at)| **at == Some(slot))
+            .map(|(separator, _)| Row::Separator(separator.id.clone()))
+    };
+    let mut rows: Vec<Row> = separators_at(0).collect();
+    for (index, place) in local.iter().enumerate() {
+        rows.push(Row::Place(place.id.clone()));
+        rows.extend(separators_at(index + 1));
+    }
     for (index, (group, members)) in layout.groups.iter().enumerate() {
+        if let Some(id) = &group.separator {
+            rows.push(Row::Separator(id.clone()));
+            continue;
+        }
         rows.push(Row::Group(index));
         if !group.collapsed {
-            rows.extend(
-                members
-                    .iter()
-                    .filter(|place| is_shown(place, show_hidden))
-                    .map(|place| Row::Place(place.id.clone())),
-            );
+            rows.extend(members.iter().filter_map(|member| match member {
+                Member::Place(place) => {
+                    is_shown(place, show_hidden).then(|| Row::Place(place.id.clone()))
+                }
+                Member::Separator(id) => Some(Row::Separator((*id).to_owned())),
+            }));
         }
     }
     if show_remote && !remote.is_empty() {
@@ -368,6 +433,7 @@ mod tests {
             name: "Servers".into(),
             collapsed: false,
             places: vec!["vps".into()],
+            separator: None,
         }];
         let p = |id: &str| Row::Place(id.to_owned());
 
@@ -419,11 +485,13 @@ mod tests {
                 name: "Work".into(),
                 collapsed: false,
                 places: vec!["work-b".into(), "work-a".into(), "hidden".into()],
+                separator: None,
             },
             Group {
                 name: "Media".into(),
                 collapsed: true,
                 places: vec!["media".into()],
+                separator: None,
             },
         ];
         let p = |id: &str| Row::Place(id.to_owned());

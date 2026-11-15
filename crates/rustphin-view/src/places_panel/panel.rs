@@ -20,11 +20,11 @@ use rustphin_platform::{
 
 use super::{
     DEVICES_UNAVAILABLE, Row, can_remove, can_unmount, device_card, device_name, icon_for,
-    is_remote, is_shown, network_address, rows,
+    is_remote, is_shown, loose_slots, network_address, rows, shown_loose,
 };
 use crate::{
     commands::PlacesCommand,
-    groups::Groups,
+    groups::{Groups, SeparatorAt},
     menu::OpenMenu,
     place_menu::{self, PlaceCommand, Target},
     settings::PlacesChoice,
@@ -173,6 +173,8 @@ pub enum RowKind {
     Device,
     /// The Devices or Remote heading.
     Heading,
+    /// A separator (W-152).
+    Separator,
 }
 
 impl RowKind {
@@ -183,6 +185,7 @@ impl RowKind {
             Self::Group => "group",
             Self::Device => "device",
             Self::Heading => "heading",
+            Self::Separator => "separator",
         }
     }
 }
@@ -221,7 +224,7 @@ pub struct RowView {
     pub focused: bool,
     /// Its name is being edited.
     pub renaming: bool,
-    /// A place in a group.
+    /// A place or separator in a group.
     pub grouped: bool,
 }
 
@@ -369,7 +372,16 @@ impl PlacesPanel {
                         group.name.clone()
                     },
                     collapsed: group.collapsed,
-                    detail: group.places.len().to_string(),
+                    detail: group.place_count().to_string(),
+                    ..blank
+                }
+            }
+            Row::Separator(id) => {
+                let at = self.groups.find_separator(id)?;
+                RowView {
+                    kind: RowKind::Separator,
+                    title: "Separator".to_owned(),
+                    grouped: matches!(at, SeparatorAt::InGroup(..)),
                     ..blank
                 }
             }
@@ -584,17 +596,27 @@ impl PlacesPanel {
             return None;
         }
         let row = at.and_then(|at| self.rows.get(at)).cloned();
-        let names: Vec<String> = self.groups.groups.iter().map(|g| g.name.clone()).collect();
+        let names: Vec<(usize, String)> = self
+            .groups
+            .groups
+            .iter()
+            .enumerate()
+            .filter(|(_, group)| group.is_group())
+            .map(|(index, group)| (index, group.name.clone()))
+            .collect();
         let entries = match &row {
             Some(Row::Place(id)) => {
                 let place = self.place(id)?;
+                let group = self.groups.group_of(id);
                 place_menu::place_menu(Target::Place {
                     system: place.system,
                     hidden: place.hidden,
-                    group: self.groups.group_of(id),
+                    group,
                     groups: &names,
+                    separable: group.is_some() || !is_remote(place),
                 })
             }
+            Some(Row::Separator(_)) => place_menu::place_menu(Target::Separator),
             Some(Row::Group(index)) => place_menu::place_menu(Target::Group {
                 collapsed: self.groups.groups.get(*index)?.collapsed,
             }),
@@ -675,7 +697,10 @@ impl PlacesPanel {
                 })],
                 None => Vec::new(),
             },
-            PlaceCommand::Remove | PlaceCommand::DeleteGroup => self.remove_focused(),
+            PlaceCommand::Remove | PlaceCommand::DeleteGroup | PlaceCommand::RemoveSeparator => {
+                self.remove_focused()
+            }
+            PlaceCommand::AddSeparator => self.add_separator(row.as_ref()),
             PlaceCommand::Collapse | PlaceCommand::Expand => match &row {
                 Some(row @ Row::Group(_)) => self
                     .fold(row, command == PlaceCommand::Collapse)
@@ -752,7 +777,7 @@ impl PlacesPanel {
                         effects.push(Effect::SaveGroups);
                     }
                 }
-                Row::Device(_) | Row::Devices | Row::Remote => {}
+                Row::Device(_) | Row::Devices | Row::Remote | Row::Separator(_) => {}
             }
         }
         self.lay_out();
@@ -807,8 +832,15 @@ impl PlacesPanel {
             return Vec::new();
         };
         match from {
+            Row::Separator(id) => self.drop_separator(&id, &target),
             Row::Place(id) => match target {
                 Row::Group(index) => self.move_to_group(&id, Some(index), None),
+                Row::Separator(separator) => match self.groups.find_separator(&separator) {
+                    Some(SeparatorAt::InGroup(group, _)) => {
+                        self.move_to_group(&id, Some(group), Some(&separator))
+                    }
+                    _ => Vec::new(),
+                },
                 Row::Device(_) | Row::Devices | Row::Remote => Vec::new(),
                 Row::Place(other) if other == id => Vec::new(),
                 Row::Place(other) => match self.groups.group_of(&other) {
@@ -827,6 +859,12 @@ impl PlacesPanel {
                 let to = match &target {
                     Row::Group(index) => Some(*index),
                     Row::Place(id) => self.groups.group_of(id),
+                    Row::Separator(id) => match self.groups.find_separator(id) {
+                        Some(SeparatorAt::Between(index) | SeparatorAt::InGroup(index, _)) => {
+                            Some(index)
+                        }
+                        Some(SeparatorAt::Loose(_)) | None => None,
+                    },
                     Row::Device(_) | Row::Devices | Row::Remote => None,
                 };
                 let Some(to) = to.filter(|to| *to != from) else {
@@ -846,7 +884,7 @@ impl PlacesPanel {
     pub fn drop_folders(&mut self, folders: Vec<PathBuf>, to: Option<usize>) -> Vec<Effect> {
         let group = match to.and_then(|to| self.rows.get(to)) {
             Some(Row::Group(index)) => Some(*index),
-            Some(Row::Place(id)) => self.groups.group_of(id),
+            Some(Row::Place(id) | Row::Separator(id)) => self.groups.group_of(id),
             _ => None,
         };
         folders
@@ -975,6 +1013,7 @@ impl PlacesPanel {
                 let folded = self.groups.remote_folded;
                 return self.fold(row, !folded).unwrap_or_default();
             }
+            Row::Separator(_) => return Vec::new(),
         };
         vec![Effect::Open { opening, new_tab }]
     }
@@ -985,7 +1024,7 @@ impl PlacesPanel {
             Row::Group(index) => self.groups.set_collapsed(*index, collapse),
             Row::Devices => self.groups.devices_folded = collapse,
             Row::Remote => self.groups.remote_folded = collapse,
-            Row::Place(_) | Row::Device(_) => return None,
+            Row::Place(_) | Row::Device(_) | Row::Separator(_) => return None,
         }
         Some(self.changed(true))
     }
@@ -994,7 +1033,7 @@ impl PlacesPanel {
         let name = match &row {
             Row::Place(id) => self.place(id).map(|place| place.title.clone()),
             Row::Group(index) => self.groups.groups.get(*index).map(|g| g.name.clone()),
-            Row::Device(_) | Row::Devices | Row::Remote => None,
+            Row::Device(_) | Row::Devices | Row::Remote | Row::Separator(_) => None,
         };
         let Some(name) = name else {
             return Vec::new();
@@ -1024,6 +1063,21 @@ impl PlacesPanel {
                 self.focused = None;
                 self.changed(true)
             }
+            Some(row @ Row::Separator(_)) => {
+                let Row::Separator(id) = &row else {
+                    return Vec::new();
+                };
+                let at = self.at(&row);
+                if !self.groups.remove_separator(id) {
+                    return Vec::new();
+                }
+                // The keyboard stays where the separator was.
+                let effects = self.changed(true);
+                self.focused = at
+                    .and_then(|at| self.rows.get(at).or_else(|| self.rows.last()))
+                    .cloned();
+                effects
+            }
             Some(Row::Device(_) | Row::Devices | Row::Remote) | None => Vec::new(),
         }
     }
@@ -1045,16 +1099,13 @@ impl PlacesPanel {
                     Vec::new()
                 }
             }
+            Some(Row::Separator(id)) => self.shift_separator(&id, down),
             Some(Row::Place(id)) => {
-                let show_hidden = self.choice.show_hidden;
-                let shown: Vec<&str> = self
-                    .groups
-                    .layout(&self.places)
-                    .ungrouped
-                    .into_iter()
-                    .filter(|place| is_shown(place, show_hidden) && !is_remote(place))
-                    .map(|place| place.id.as_str())
-                    .collect();
+                let shown: Vec<&str> =
+                    shown_loose(&self.places, &self.groups, self.choice.show_hidden)
+                        .into_iter()
+                        .map(|place| place.id.as_str())
+                        .collect();
                 let Some(at) = shown.iter().position(|shown| *shown == id) else {
                     return Vec::new();
                 };
@@ -1094,12 +1145,15 @@ impl PlacesPanel {
         let Some(Row::Place(id)) = self.focused.clone() else {
             return Vec::new();
         };
-        let count = self.groups.groups.len();
+        let real: Vec<usize> = (0..self.groups.groups.len())
+            .filter(|index| self.groups.groups[*index].is_group())
+            .collect();
         let next = match self.groups.group_of(&id) {
-            None if count == 0 => return Vec::new(),
-            None => Some(0),
-            Some(index) if index + 1 < count => Some(index + 1),
-            Some(_) => None,
+            None => match real.first() {
+                Some(first) => Some(*first),
+                None => return Vec::new(),
+            },
+            Some(index) => real.iter().copied().find(|later| *later > index),
         };
         self.move_to_group(&id, next, None)
     }
@@ -1139,6 +1193,126 @@ impl PlacesPanel {
         let mut effects = self.set_busy(Some(device.id.clone()));
         effects.push(effect(device));
         effects
+    }
+
+    /// Adds a separator (W-152) below the place `row`, above the group
+    /// `row`, or after the last group from the empty space; it takes the
+    /// keyboard.
+    fn add_separator(&mut self, row: Option<&Row>) -> Vec<Effect> {
+        let id = match row {
+            Some(Row::Place(id)) => match self.groups.group_of(id) {
+                Some(group) => {
+                    let at = self.groups.groups[group]
+                        .places
+                        .iter()
+                        .position(|place| place == id)
+                        .map_or(usize::MAX, |at| at + 1);
+                    self.groups.add_separator_in(group, at)
+                }
+                None if self.place(id).is_some_and(|place| !is_remote(place)) => {
+                    Some(self.groups.add_loose_separator(Some(id)))
+                }
+                None => None,
+            },
+            Some(Row::Group(index)) => Some(self.groups.add_separator_between(*index)),
+            None => Some(self.groups.add_separator_between(usize::MAX)),
+            Some(Row::Separator(_) | Row::Device(_) | Row::Devices | Row::Remote) => None,
+        };
+        let Some(id) = id else {
+            return Vec::new();
+        };
+        self.focused = Some(Row::Separator(id));
+        self.changed(true)
+    }
+
+    /// Alt+Up/Down on a separator: one row up or down within its section.
+    /// Among the places outside groups it goes past one place; it does not
+    /// leave the section it is in.
+    fn shift_separator(&mut self, id: &str, down: bool) -> Vec<Effect> {
+        let moved = match self.groups.find_separator(id) {
+            Some(SeparatorAt::Between(index)) => {
+                let target = self.groups.shift(index, if down { 1 } else { -1 });
+                target != index
+            }
+            Some(SeparatorAt::InGroup(..)) => self.groups.shift_place(id, down),
+            Some(SeparatorAt::Loose(at)) => {
+                let shown = shown_loose(&self.places, &self.groups, self.choice.show_hidden);
+                let slots = loose_slots(&self.places, &shown, &self.groups);
+                let Some(slot) = slots.get(at).copied().flatten() else {
+                    return Vec::new();
+                };
+                let ids: Vec<String> = shown.iter().map(|place| place.id.clone()).collect();
+                if down {
+                    // Below the next place, above the separators already there.
+                    let Some(next) = ids.get(slot) else {
+                        return Vec::new();
+                    };
+                    let first_there = self
+                        .groups
+                        .separators
+                        .iter()
+                        .zip(&slots)
+                        .find(|(_, at)| **at == Some(slot + 1))
+                        .map(|(separator, _)| separator.id.clone());
+                    self.groups
+                        .move_separator_loose(id, Some(next), first_there.as_deref());
+                } else {
+                    // Below the place before the one above it, under the
+                    // separators already there.
+                    let Some(above) = slot.checked_sub(1) else {
+                        return Vec::new();
+                    };
+                    let after = above.checked_sub(1).map(|before| ids[before].clone());
+                    self.groups.move_separator_loose(id, after.as_deref(), None);
+                }
+                true
+            }
+            None => false,
+        };
+        if moved {
+            self.changed(true)
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// The separator `id` was dragged onto `target`: it goes above that row,
+    /// in that row's section.
+    fn drop_separator(&mut self, id: &str, target: &Row) -> Vec<Effect> {
+        match target {
+            Row::Separator(other) if other == id => return Vec::new(),
+            Row::Separator(other) => match self.groups.find_separator(other) {
+                Some(SeparatorAt::Loose(at)) => {
+                    let after = self.groups.separators[at].after.clone();
+                    self.groups
+                        .move_separator_loose(id, after.as_deref(), Some(other));
+                }
+                Some(SeparatorAt::Between(index)) => {
+                    self.groups.move_separator_between(id, index);
+                }
+                Some(SeparatorAt::InGroup(group, _)) => {
+                    self.groups.move_separator_in(id, group, Some(other));
+                }
+                None => return Vec::new(),
+            },
+            Row::Group(index) => {
+                self.groups.move_separator_between(id, *index);
+            }
+            Row::Place(other) => match self.groups.group_of(other) {
+                Some(group) => self.groups.move_separator_in(id, group, Some(other)),
+                None => {
+                    let shown = shown_loose(&self.places, &self.groups, self.choice.show_hidden);
+                    let Some(at) = shown.iter().position(|place| place.id == *other) else {
+                        return Vec::new();
+                    };
+                    let after = at.checked_sub(1).map(|before| shown[before].id.clone());
+                    self.groups.move_separator_loose(id, after.as_deref(), None);
+                }
+            },
+            Row::Device(_) | Row::Devices | Row::Remote => return Vec::new(),
+        }
+        self.focused = Some(Row::Separator(id.to_owned()));
+        self.changed(true)
     }
 
     fn set_show_hidden(&mut self, show: bool) -> Vec<Effect> {
@@ -1183,6 +1357,7 @@ mod tests {
             name: name.to_owned(),
             collapsed: false,
             places: places.iter().map(|id| (*id).to_owned()).collect(),
+            separator: None,
         }
     }
 
@@ -2292,5 +2467,242 @@ mod tests {
         world.carry_out(effects);
         assert!(!world.saved.as_ref().unwrap().groups[0].collapsed);
         assert!(world.panel.rows().contains(&p("x")));
+    }
+
+    // ----- Separators (W-152) -----
+
+    fn sep(number: u32) -> Row {
+        Row::Separator(format!("separator-{number}"))
+    }
+
+    fn choose_on_empty_space(world: &mut World, label: &str) {
+        let opened = world.panel.open_menu(None).unwrap();
+        let Some(Effect::Menu(json)) = opened.first() else {
+            panic!("no menu in {opened:?}");
+        };
+        let effects = world.panel.run_menu(&path_of(json, label));
+        world.carry_out(effects);
+    }
+
+    fn choose_and_carry_out(world: &mut World, row: &Row, label: &str) {
+        let effects = choose(world, row, label);
+        world.carry_out(effects);
+    }
+
+    /// The world with a separator below "a", one between the groups and
+    /// one between the places of Work.
+    fn separated() -> World {
+        let mut world = world();
+        choose_and_carry_out(&mut world, &p("a"), "Add separator below");
+        choose_and_carry_out(&mut world, &Row::Group(1), "Add separator above");
+        choose_and_carry_out(&mut world, &p("x"), "Add separator below");
+        world.effects.clear();
+        world
+    }
+
+    #[test]
+    fn a_separator_is_added_below_a_place_above_a_group_or_after_the_last_group() {
+        let mut world = separated();
+        assert_eq!(world.panel.focused(), Some(&sep(3)));
+        choose_on_empty_space(&mut world, "Add separator");
+        assert_eq!(
+            world.panel.rows(),
+            [
+                p("home"),
+                p("a"),
+                sep(1),
+                p("b"),
+                p("c"),
+                Row::Group(0),
+                p("x"),
+                sep(3),
+                p("y"),
+                sep(2),
+                Row::Group(2),
+                sep(4),
+            ]
+        );
+        assert_eq!(world.panel.focused(), Some(&sep(4)));
+        // Kept in Rustphin's own file, never in the shared one.
+        let saved = world.saved.clone().unwrap();
+        assert_eq!(saved.separators, world.panel.groups().separators);
+        assert_eq!(saved.groups, world.panel.groups().groups);
+        assert_eq!(world.ids_in_file(), ["home", "a", "b", "c", "x", "y"]);
+        // A separator is drawn as one, and inside a group indented with it.
+        let view = |row: &Row| world.panel.view(row).unwrap();
+        assert_eq!(view(&sep(1)).kind, RowKind::Separator);
+        assert!(view(&sep(3)).grouped && !view(&sep(1)).grouped && !view(&sep(2)).grouped);
+        // A group counts its places, not its separators.
+        assert_eq!(view(&Row::Group(0)).detail, "2");
+    }
+
+    #[test]
+    fn a_separator_has_its_own_menu_and_a_network_place_offers_none_below_it() {
+        let mut world = separated();
+        assert_eq!(
+            menu_labels(&mut world, &sep(1)),
+            ["Move up", "Move down", "", "Remove separator"]
+        );
+        let mut remote = World::new(&[("home", "/home/u", true)], Vec::new());
+        remote.file = remote.file.replace(
+            "</xbel>",
+            " <bookmark href=\"sftp://me@host/\">\n  <title>vps</title>\n  <info>\n   \
+             <metadata owner=\"http://www.kde.org\">\n    <ID>vps</ID>\n   </metadata>\n  \
+             </info>\n </bookmark>\n</xbel>",
+        );
+        remote.read_file();
+        assert!(!menu_labels(&mut remote, &p("vps")).contains(&"Add separator below".to_owned()));
+        assert!(menu_labels(&mut remote, &p("home")).contains(&"Add separator below".to_owned()));
+    }
+
+    #[test]
+    fn alt_up_and_down_move_a_separator_within_its_section() {
+        let mut world = separated();
+        let rows = |world: &World| world.panel.rows().to_vec();
+        // Outside groups it goes past one place at a time, and stops at
+        // the ends of the section.
+        world.focus(sep(1));
+        world.command(PlacesCommand::MoveDown);
+        assert_eq!(
+            rows(&world)[..5],
+            [p("home"), p("a"), p("b"), sep(1), p("c")]
+        );
+        world.command(PlacesCommand::MoveDown);
+        world.command(PlacesCommand::MoveDown);
+        assert_eq!(
+            rows(&world)[..5],
+            [p("home"), p("a"), p("b"), p("c"), sep(1)]
+        );
+        for _ in 0..5 {
+            world.command(PlacesCommand::MoveUp);
+        }
+        assert_eq!(rows(&world)[..2], [sep(1), p("home")]);
+        assert_eq!(world.panel.focused(), Some(&sep(1)));
+        // In a group, among its places.
+        world.focus(sep(3));
+        world.command(PlacesCommand::MoveDown);
+        assert_eq!(world.saved_group(0), ["x", "y", "separator-3"]);
+        // Between groups, past a group.
+        world.focus(sep(2));
+        world.command(PlacesCommand::MoveUp);
+        assert_eq!(
+            rows(&world)[5..],
+            [sep(2), Row::Group(1), p("x"), p("y"), sep(3), Row::Group(2)]
+        );
+        // The shared file never moved.
+        assert_eq!(world.ids_in_file(), ["home", "a", "b", "c", "x", "y"]);
+    }
+
+    #[test]
+    fn delete_takes_a_separator_away_and_the_keyboard_stays_there() {
+        let mut world = separated();
+        world.focus(sep(1));
+        world.command(PlacesCommand::Remove);
+        assert_eq!(world.panel.rows()[..3], [p("home"), p("a"), p("b")]);
+        assert_eq!(world.panel.focused(), Some(&p("b")));
+        assert!(world.saved.as_ref().unwrap().separators.is_empty());
+        choose_and_carry_out(&mut world, &sep(3), "Remove separator");
+        assert_eq!(world.saved_group(0), ["x", "y"]);
+        // No place left the shared file or its group.
+        assert_eq!(world.ids_in_file(), ["home", "a", "b", "c", "x", "y"]);
+        // Renaming, folding and opening do nothing to a separator.
+        world.focus(sep(2));
+        for command in [
+            PlacesCommand::Rename,
+            PlacesCommand::Collapse,
+            PlacesCommand::Open,
+        ] {
+            let effects = world.panel.run(command).unwrap_or_default();
+            assert!(
+                effects.iter().all(|effect| *effect == Effect::Focus),
+                "{command:?}: {effects:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_dragged_separator_goes_above_the_row_it_is_dropped_on() {
+        let mut world = separated();
+        let drop = |world: &mut World, from: Row, to: Row| {
+            let (from, to) = (world.at(&from), world.at(&to));
+            let effects = world.panel.drop_row(from, to);
+            world.carry_out(effects);
+        };
+        // Onto a group heading: between the groups, above it.
+        drop(&mut world, sep(1), Row::Group(0));
+        assert_eq!(
+            world.panel.rows()[..6],
+            [p("home"), p("a"), p("b"), p("c"), sep(1), Row::Group(1)]
+        );
+        // Onto a place in a group: into the group, above it.
+        drop(&mut world, sep(1), p("y"));
+        assert_eq!(
+            world.saved_group(0),
+            ["x", "separator-3", "separator-1", "y"]
+        );
+        // Onto a place outside groups: above it.
+        drop(&mut world, sep(1), p("b"));
+        assert_eq!(world.panel.rows()[..4], [p("home"), p("a"), sep(1), p("b")]);
+        // Onto another separator: above that one.
+        drop(&mut world, sep(2), sep(3));
+        assert_eq!(
+            world.saved_group(0),
+            ["x", "separator-2", "separator-3", "y"]
+        );
+        assert_eq!(world.panel.focused(), Some(&sep(2)));
+        // A place dropped on a separator in a group goes above it.
+        drop(&mut world, p("c"), sep(3));
+        assert_eq!(
+            world.saved_group(0),
+            ["x", "separator-2", "c", "separator-3", "y"]
+        );
+    }
+
+    #[test]
+    fn a_separator_below_a_place_goes_with_it_and_follows_it_out_of_sight() {
+        let mut world = separated();
+        // Hidden: the separator stays below the place shown before it.
+        world.focus(p("a"));
+        world.command(PlacesCommand::ToggleHide);
+        assert_eq!(world.panel.rows()[..3], [p("home"), sep(1), p("b")]);
+        // Removed from the places: the separator goes too.
+        world.focus(p("b"));
+        choose_and_carry_out(&mut world, &p("b"), "Add separator below");
+        assert_eq!(world.panel.rows()[..4], [p("home"), sep(1), p("b"), sep(4)]);
+        world.focus(p("b"));
+        world.command(PlacesCommand::Remove);
+        assert_eq!(world.panel.rows()[..3], [p("home"), sep(1), p("c")]);
+        assert!(!world.panel.rows().contains(&sep(4)));
+    }
+
+    #[test]
+    fn separators_between_groups_are_no_groups_to_sort_places_into() {
+        let mut world = separated();
+        let effects = choose(&mut world, &p("a"), "Media");
+        world.carry_out(effects);
+        assert_eq!(world.saved_group(2), ["a"]);
+        // G goes from Work straight to Media, past the separator.
+        world.focus(p("b"));
+        world.command(PlacesCommand::NextGroup);
+        assert_eq!(world.saved_group(0), ["x", "separator-3", "y", "b"]);
+        world.command(PlacesCommand::NextGroup);
+        assert_eq!(world.saved_group(2), ["a", "b"]);
+        assert!(
+            world.saved_group(1).is_empty(),
+            "the separator holds nothing"
+        );
+        // A folder dropped on a separator in a group joins that group.
+        let at = world.at(&sep(3));
+        let effects = world
+            .panel
+            .drop_folders(vec![PathBuf::from("/new")], Some(at));
+        assert!(
+            effects.contains(&Effect::EditPlaces(PlacesEdit::Add {
+                folder: PathBuf::from("/new"),
+                title: "new".to_owned(),
+                group: Some(0),
+            })),
+            "{effects:?}"
+        );
     }
 }

@@ -82,6 +82,9 @@ pub mod size {
     pub const DEVICE_CARD: f32 = 56.;
     /// Height of a place row and of a section heading in the places panel.
     pub const PLACE_ROW: f32 = 28.;
+    /// Height of a separator row in the places panel (W-152): a hairline
+    /// in the middle of 12 px, tall enough to point at and drag.
+    pub const PLACE_SEPARATOR: f32 = 12.;
     /// Place and device icons in the places panel.
     pub const PLACE_ICON: f32 = 16.;
     /// Small icon buttons: New group, close in a bar.

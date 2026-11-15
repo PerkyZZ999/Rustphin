@@ -706,13 +706,22 @@ Popup {
                     id: groupRow
 
                     required property int index
-                    readonly property string name: groupsColumn.list[index]?.name ?? ""
+                    readonly property bool separator: groupsColumn.list[index]?.separator ?? false
+                    readonly property string name: separator ? qsTr("Separator") : groupsColumn.list[index]?.name ?? ""
                     readonly property int count: groupsColumn.list[index]?.count ?? 0
 
                     Layout.fillWidth: true
                     spacing: Tokens.metrics.space_xs
 
+                    // A separator between groups (W-152): moved and deleted
+                    // here too, with nothing to name.
+                    Quiet {
+                        visible: groupRow.separator
+                        Layout.fillWidth: true
+                        text: qsTr("Separator")
+                    }
                     Field {
+                        visible: !groupRow.separator
                         Layout.fillWidth: true
                         text: groupRow.name
                         placeholderText: qsTr("Group name")
@@ -723,6 +732,7 @@ Popup {
                         }
                     }
                     Quiet {
+                        visible: !groupRow.separator
                         text: groupRow.count === 1 ? qsTr("1 place") : qsTr("%1 places").arg(groupRow.count)
                     }
                     IconButton {
@@ -745,7 +755,7 @@ Popup {
                     }
                     IconButton {
                         iconName: "trash"
-                        text: qsTr("Delete %1; its places stay").arg(groupRow.name)
+                        text: groupRow.separator ? qsTr("Delete separator") : qsTr("Delete %1; its places stay").arg(groupRow.name)
                         onClicked: {
                             dialog.places.deleteGroup(groupRow.index)
                             groupsColumn.list = JSON.parse(dialog.places.groupsJson())

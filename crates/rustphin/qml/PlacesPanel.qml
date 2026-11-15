@@ -198,11 +198,13 @@ FocusScope {
 
                 readonly property bool heading: kind === "group" || kind === "heading"
                 readonly property bool device: kind === "device"
+                // A separator (W-152): a hairline, moved and removed as a row.
+                readonly property bool separator: kind === "separator"
                 readonly property bool pointed: rowArea.containsMouse || drop.containsDrag
 
                 width: ListView.view.width
-                height: device ? Tokens.metrics.device_row : Tokens.metrics.place_row
-                Accessible.role: heading ? Accessible.Heading : Accessible.ListItem
+                height: device ? Tokens.metrics.device_row : separator ? Tokens.metrics.place_separator : Tokens.metrics.place_row
+                Accessible.role: heading ? Accessible.Heading : separator ? Accessible.Separator : Accessible.ListItem
                 Accessible.name: title
                 Accessible.selected: current
                 Accessible.focused: focused
@@ -235,6 +237,16 @@ FocusScope {
                         height: parent.height
                         color: Tokens.colors.accent
                     }
+                }
+                Rectangle {
+                    visible: row.separator
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: Tokens.metrics.space_md + (row.grouped ? Tokens.metrics.space_md : 0)
+                    anchors.rightMargin: Tokens.metrics.space_md
+                    height: Tokens.metrics.hairline
+                    color: Tokens.colors.border_strong
                 }
                 // A drive card (W-148): icon, name and figures; the usage
                 // bar; the filesystem and its traits, and how full it is.
@@ -328,7 +340,7 @@ FocusScope {
                     }
                 }
                 RowLayout {
-                    visible: !row.device
+                    visible: !row.device && !row.separator
                     anchors.fill: parent
                     anchors.leftMargin: Tokens.metrics.space_md + (row.grouped ? Tokens.metrics.space_md : 0)
                     anchors.rightMargin: Tokens.metrics.space_sm

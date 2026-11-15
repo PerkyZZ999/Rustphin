@@ -5,6 +5,13 @@
 //! (decision D-008). A place belongs to at most one group. Reading never
 //! fails: a missing or damaged file yields no groups, and a damaged, newer
 //! or unreadable file is kept rather than replaced ([`GroupsFile`]).
+//!
+//! The same file keeps the panel's separators (W-152): a hairline between
+//! groups (an entry of the group list that is a separator), between the
+//! places of a group (an entry of its places), or between the places outside
+//! groups ([`LooseSeparator`], below the place it follows, as those places
+//! keep the shared file's order). Each has an identifier of its own,
+//! `separator-N`, which no KDE bookmark identifier can be.
 
 use std::{collections::HashSet, io};
 
@@ -13,8 +20,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::saved_file::{self, FileIssue};
 
-/// The format version this build writes.
-const VERSION: u32 = 1;
+/// The format version this build writes. Version 2 added separators
+/// (W-152): an older Rustphin keeps such a file rather than losing them.
+const VERSION: u32 = 2;
+
+/// How every separator's identifier starts.
+const SEPARATOR_PREFIX: &str = "separator-";
+
+/// Whether `id` names a separator rather than a place.
+pub fn is_separator(id: &str) -> bool {
+    id.starts_with(SEPARATOR_PREFIX)
+}
 
 /// One group.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -24,8 +40,49 @@ pub struct Group {
     pub name: String,
     /// Whether its places are folded away.
     pub collapsed: bool,
-    /// Identifiers of its places, in the order shown.
+    /// Identifiers of its places, in the order shown; a separator's among
+    /// them is drawn as a hairline between them.
     pub places: Vec<String>,
+    /// Set when this entry is no group but a separator between groups:
+    /// its identifier. It then has no name and no places.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub separator: Option<String>,
+}
+
+impl Group {
+    /// Whether this entry is a group, not a separator between groups.
+    pub fn is_group(&self) -> bool {
+        self.separator.is_none()
+    }
+
+    /// How many places it holds, separators aside.
+    pub fn place_count(&self) -> usize {
+        self.places.iter().filter(|id| !is_separator(id)).count()
+    }
+}
+
+/// A separator among the places outside groups.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LooseSeparator {
+    /// Its identifier.
+    pub id: String,
+    /// The place it is drawn below; none: above them all. It goes when that
+    /// place leaves the shared file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+}
+
+/// Where a separator is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SeparatorAt {
+    /// Among the places outside groups, at this position of
+    /// [`Groups::separators`].
+    Loose(usize),
+    /// Between groups, at this position of the group list.
+    Between(usize),
+    /// In the group at the first position, at the second of its places.
+    InGroup(usize, usize),
 }
 
 /// All groups, in the order shown.
@@ -37,7 +94,11 @@ pub struct Groups {
     pub devices_folded: bool,
     /// Whether the Remote section is folded away.
     pub remote_folded: bool,
-    /// The groups, top to bottom. Last: TOML writes tables after values.
+    /// The separators among the places outside groups, in the order drawn
+    /// where two follow the same place.
+    pub separators: Vec<LooseSeparator>,
+    /// The groups and the separators between them, top to bottom. Last:
+    /// TOML writes tables after values.
     pub groups: Vec<Group>,
 }
 
@@ -87,8 +148,19 @@ impl GroupsFile {
 pub struct Layout<'a> {
     /// Places in no group, in the shared file's order.
     pub ungrouped: Vec<&'a Place>,
-    /// Each group with the places it holds that still exist.
-    pub groups: Vec<(&'a Group, Vec<&'a Place>)>,
+    /// Each entry of the group list with what it holds: a group's places
+    /// that still exist and its separators; nothing for a separator
+    /// between groups.
+    pub groups: Vec<(&'a Group, Vec<Member<'a>>)>,
+}
+
+/// One line inside a group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Member<'a> {
+    /// A place.
+    Place(&'a Place),
+    /// A separator, by its identifier.
+    Separator(&'a str),
 }
 
 impl Groups {
@@ -97,12 +169,23 @@ impl Groups {
         toml::from_str::<Self>(text).unwrap_or_default().tidied()
     }
 
-    /// A place listed twice keeps its first group.
+    /// A place listed twice keeps its first group; a separator listed twice
+    /// keeps its first position; a separator between groups holds nothing.
     fn tidied(mut self) -> Self {
         let mut seen = HashSet::new();
-        for group in &mut self.groups {
-            group.places.retain(|id| seen.insert(id.clone()));
-        }
+        self.separators
+            .retain(|separator| is_separator(&separator.id) && seen.insert(separator.id.clone()));
+        self.groups.retain_mut(|group| match &group.separator {
+            Some(id) => {
+                group.places.clear();
+                group.name.clear();
+                is_separator(id) && seen.insert(id.clone())
+            }
+            None => {
+                group.places.retain(|id| seen.insert(id.clone()));
+                true
+            }
+        });
         self
     }
 
@@ -112,6 +195,7 @@ impl Groups {
             version: VERSION,
             devices_folded: self.devices_folded,
             remote_folded: self.remote_folded,
+            separators: self.separators.clone(),
             groups: self.groups.clone(),
         };
         toml::to_string(&stored).unwrap_or_default()
@@ -122,7 +206,7 @@ impl Groups {
         self.version > VERSION
     }
 
-    /// The index of the group holding the place `id`.
+    /// The index of the group holding the place or separator `id`.
     pub fn group_of(&self, id: &str) -> Option<usize> {
         self.groups
             .iter()
@@ -132,7 +216,9 @@ impl Groups {
     /// A name for a new group that no group has yet.
     pub fn free_name(&self) -> String {
         crate::naming::free_name("New Group", |name| {
-            self.groups.iter().any(|group| group.name == name)
+            self.groups
+                .iter()
+                .any(|group| group.is_group() && group.name == name)
         })
     }
 
@@ -150,9 +236,10 @@ impl Groups {
         self.groups.len() - 1
     }
 
-    /// Renames a group. An empty name is ignored.
+    /// Renames a group. An empty name, or a separator, is ignored.
     pub fn rename(&mut self, index: usize, name: &str) {
-        if let (Some(group), false) = (self.groups.get_mut(index), name.trim().is_empty()) {
+        let group = self.groups.get_mut(index).filter(|group| group.is_group());
+        if let (Some(group), false) = (group, name.trim().is_empty()) {
             group.name = name.trim().to_owned();
         }
     }
@@ -199,7 +286,8 @@ impl Groups {
 
     /// Puts the place `id` into the group at `group`, before the place
     /// `before` or at its end; with `group` `None`, takes it out of its group.
-    /// It leaves whatever group it was in.
+    /// It leaves whatever group it was in. A separator between groups takes
+    /// nothing.
     pub fn assign(&mut self, id: &str, group: Option<usize>, before: Option<&str>) {
         if before == Some(id) {
             return;
@@ -207,7 +295,10 @@ impl Groups {
         for existing in &mut self.groups {
             existing.places.retain(|place| place != id);
         }
-        if let Some(target) = group.and_then(|index| self.groups.get_mut(index)) {
+        let target = group
+            .and_then(|index| self.groups.get_mut(index))
+            .filter(|target| target.is_group());
+        if let Some(target) = target {
             let at = before
                 .and_then(|before| target.places.iter().position(|place| place == before))
                 .unwrap_or(target.places.len());
@@ -240,15 +331,195 @@ impl Groups {
     ///
     /// Only call this with a list that was read successfully: an unreadable
     /// places file must not empty every group.
+    ///
+    /// A separator below a place outside groups goes with that place.
     pub fn forget_missing(&mut self, existing: &[Place]) -> bool {
         let known: HashSet<&str> = existing.iter().map(|place| place.id.as_str()).collect();
         let mut changed = false;
         for group in &mut self.groups {
             let before = group.places.len();
-            group.places.retain(|id| known.contains(id.as_str()));
+            group
+                .places
+                .retain(|id| is_separator(id) || known.contains(id.as_str()));
             changed |= group.places.len() != before;
         }
-        changed
+        let before = self.separators.len();
+        self.separators.retain(|separator| {
+            separator
+                .after
+                .as_deref()
+                .is_none_or(|after| known.contains(after))
+        });
+        changed | (self.separators.len() != before)
+    }
+
+    // ----- Separators (W-152) -----
+
+    /// Where the separator `id` is.
+    pub fn find_separator(&self, id: &str) -> Option<SeparatorAt> {
+        if let Some(at) = self.separators.iter().position(|loose| loose.id == id) {
+            return Some(SeparatorAt::Loose(at));
+        }
+        self.groups.iter().enumerate().find_map(|(index, group)| {
+            if group.separator.as_deref() == Some(id) {
+                return Some(SeparatorAt::Between(index));
+            }
+            group
+                .places
+                .iter()
+                .position(|place| place == id)
+                .map(|at| SeparatorAt::InGroup(index, at))
+        })
+    }
+
+    /// An identifier no separator has yet.
+    fn new_separator_id(&self) -> String {
+        let number = |id: &str| {
+            id.strip_prefix(SEPARATOR_PREFIX)
+                .and_then(|number| number.parse::<u64>().ok())
+        };
+        let highest = self
+            .separators
+            .iter()
+            .map(|loose| loose.id.as_str())
+            .chain(
+                self.groups
+                    .iter()
+                    .filter_map(|group| group.separator.as_deref()),
+            )
+            .chain(
+                self.groups
+                    .iter()
+                    .flat_map(|group| group.places.iter().map(String::as_str)),
+            )
+            .filter_map(number)
+            .max()
+            .unwrap_or(0);
+        format!("{SEPARATOR_PREFIX}{}", highest + 1)
+    }
+
+    /// Adds a separator between groups, above the entry at `index` (at the
+    /// end past the last), and returns its identifier.
+    pub fn add_separator_between(&mut self, index: usize) -> String {
+        let id = self.new_separator_id();
+        let separator = Group {
+            separator: Some(id.clone()),
+            ..Group::default()
+        };
+        self.groups.insert(index.min(self.groups.len()), separator);
+        id
+    }
+
+    /// Adds a separator in the group at `group`, at position `at` of its
+    /// places (at the end past the last); `None` for a separator between
+    /// groups or no such group.
+    pub fn add_separator_in(&mut self, group: usize, at: usize) -> Option<String> {
+        let id = self.new_separator_id();
+        let group = self
+            .groups
+            .get_mut(group)
+            .filter(|group| group.is_group())?;
+        group.places.insert(at.min(group.places.len()), id.clone());
+        Some(id)
+    }
+
+    /// Adds a separator among the places outside groups, below the place
+    /// `after` (none: above them all), drawn below any already there.
+    pub fn add_loose_separator(&mut self, after: Option<&str>) -> String {
+        let id = self.new_separator_id();
+        self.place_loose(id.clone(), after.map(str::to_owned), None);
+        id
+    }
+
+    /// Puts a loose separator below `after`, before the loose separator
+    /// `before` when it is one there, else after those already there.
+    fn place_loose(&mut self, id: String, after: Option<String>, before: Option<&str>) {
+        let at = before
+            .and_then(|before| {
+                self.separators
+                    .iter()
+                    .position(|loose| loose.id == before && loose.after == after)
+            })
+            .or_else(|| {
+                self.separators
+                    .iter()
+                    .rposition(|loose| loose.after == after)
+                    .map(|at| at + 1)
+            })
+            .unwrap_or(self.separators.len());
+        self.separators.insert(at, LooseSeparator { id, after });
+    }
+
+    /// Deletes the separator `id`. Returns whether there was one.
+    pub fn remove_separator(&mut self, id: &str) -> bool {
+        match self.find_separator(id) {
+            Some(SeparatorAt::Loose(at)) => {
+                self.separators.remove(at);
+            }
+            Some(SeparatorAt::Between(index)) => {
+                self.groups.remove(index);
+            }
+            Some(SeparatorAt::InGroup(group, at)) => {
+                self.groups[group].places.remove(at);
+            }
+            None => return false,
+        }
+        true
+    }
+
+    /// Moves the separator `id` among the places outside groups, below the
+    /// place `after`, before the loose separator `before` when that is one
+    /// there; it leaves wherever it was.
+    pub fn move_separator_loose(&mut self, id: &str, after: Option<&str>, before: Option<&str>) {
+        if before == Some(id) || !self.remove_separator(id) {
+            return;
+        }
+        self.place_loose(id.to_owned(), after.map(str::to_owned), before);
+    }
+
+    /// Moves the separator `id` between groups, above the entry at `index`
+    /// as counted before it moved; it leaves wherever it was. Returns where
+    /// it went.
+    pub fn move_separator_between(&mut self, id: &str, index: usize) -> Option<usize> {
+        let at = self.find_separator(id)?;
+        let index = match at {
+            SeparatorAt::Between(from) if from == index => return Some(from),
+            // Taken out above, it moves the entries below it up one.
+            SeparatorAt::Between(from) if from < index => index - 1,
+            _ => index,
+        };
+        self.remove_separator(id);
+        let index = index.min(self.groups.len());
+        self.groups.insert(
+            index,
+            Group {
+                separator: Some(id.to_owned()),
+                ..Group::default()
+            },
+        );
+        Some(index)
+    }
+
+    /// Moves the separator `id` into the group at `group`, before the place
+    /// or separator `before` or at its end; it leaves wherever it was.
+    pub fn move_separator_in(&mut self, id: &str, group: usize, before: Option<&str>) {
+        if before == Some(id)
+            || !self.groups.get(group).is_some_and(Group::is_group)
+            || self.find_separator(id).is_none()
+        {
+            return;
+        }
+        // Taking a separator between groups out moves the later groups up.
+        let group = match self.find_separator(id) {
+            Some(SeparatorAt::Between(index)) if index < group => group - 1,
+            _ => group,
+        };
+        self.remove_separator(id);
+        let target = &mut self.groups[group];
+        let at = before
+            .and_then(|before| target.places.iter().position(|place| place == before))
+            .unwrap_or(target.places.len());
+        target.places.insert(at, id.to_owned());
     }
 
     /// Arranges `places` for the panel.
@@ -270,7 +541,15 @@ impl Groups {
                     let members = group
                         .places
                         .iter()
-                        .filter_map(|id| places.iter().find(|place| place.id == *id))
+                        .filter_map(|id| {
+                            if is_separator(id) {
+                                return Some(Member::Separator(id));
+                            }
+                            places
+                                .iter()
+                                .find(|place| place.id == *id)
+                                .map(Member::Place)
+                        })
                         .collect();
                     (group, members)
                 })
@@ -280,6 +559,8 @@ impl Groups {
 }
 
 #[cfg(test)]
+// A test cannot go on without what it unwraps.
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -301,12 +582,14 @@ mod tests {
             version: VERSION,
             devices_folded: false,
             remote_folded: false,
+            separators: Vec::new(),
             groups: spec
                 .iter()
                 .map(|(name, places)| Group {
                     name: (*name).to_owned(),
                     collapsed: false,
                     places: places.iter().map(|id| (*id).to_owned()).collect(),
+                    separator: None,
                 })
                 .collect(),
         }
@@ -508,7 +791,10 @@ mod tests {
         let layout = g.layout(&places);
 
         assert_eq!(layout.ungrouped, [&places[0], &places[2]]);
-        assert_eq!(layout.groups[0].1, [&places[3], &places[1]]);
+        assert_eq!(
+            layout.groups[0].1,
+            [Member::Place(&places[3]), Member::Place(&places[1])]
+        );
         assert!(layout.groups[1].1.is_empty());
     }
 
@@ -518,5 +804,97 @@ mod tests {
         assert!(g.forget_missing(&[place("x"), place("y")]));
         assert_eq!(shape(&g), expected(&[("A", &["x"]), ("B", &["y"])]));
         assert!(!g.forget_missing(&[place("x"), place("y")]));
+    }
+
+    #[test]
+    fn separators_of_every_kind_survive_being_written_and_read_back() {
+        let mut g = groups(&[("A", &["x", "y"]), ("B", &[])]);
+        let loose = g.add_loose_separator(Some("p"));
+        let between = g.add_separator_between(1);
+        let inside = g.add_separator_in(0, 1).unwrap();
+        assert_eq!(
+            [loose.as_str(), &between, &inside],
+            ["separator-1", "separator-2", "separator-3"]
+        );
+        let text = g.to_toml();
+        assert!(text.starts_with("version = 2"), "{text}");
+        let again = Groups::parse(&text);
+        assert_eq!(again, g);
+        assert_eq!(again.find_separator(&loose), Some(SeparatorAt::Loose(0)));
+        assert_eq!(
+            again.find_separator(&between),
+            Some(SeparatorAt::Between(1))
+        );
+        assert_eq!(
+            again.find_separator(&inside),
+            Some(SeparatorAt::InGroup(0, 1))
+        );
+        // A separator is no place: a group counts its places only.
+        assert_eq!(again.groups[0].place_count(), 2);
+        assert!(!again.groups[1].is_group());
+    }
+
+    #[test]
+    fn a_separator_between_groups_takes_no_places_and_no_name() {
+        let mut g = groups(&[("A", &[]), ("B", &[])]);
+        g.add_separator_between(1);
+        g.assign("x", Some(1), None);
+        g.rename(1, "Named");
+        assert!(g.groups[1].places.is_empty() && g.groups[1].name.is_empty());
+        assert_eq!(g.group_of("x"), None);
+        assert_eq!(g.add_separator_in(1, 0), None);
+        // Even a hand-edited file cannot give it any.
+        let text = "version = 2\n[[groups]]\nseparator = \"separator-1\"\nname = \"S\"\nplaces = [\"x\"]\n";
+        let read = Groups::parse(text);
+        assert!(read.groups[0].places.is_empty() && read.groups[0].name.is_empty());
+    }
+
+    #[test]
+    fn a_separator_listed_twice_keeps_its_first_position_and_ids_stay_unique() {
+        let text = "version = 2\n[[separators]]\nid = \"separator-4\"\n[[groups]]\nseparator = \"separator-4\"\n[[groups]]\nname = \"A\"\nplaces = [\"separator-4\", \"separator-9\"]\n";
+        let mut g = Groups::parse(text);
+        assert_eq!(g.separators.len(), 1);
+        assert_eq!(g.groups.len(), 1, "the duplicate between groups went");
+        assert_eq!(g.groups[0].places, ["separator-9"]);
+        // A new one is numbered past the highest, even after one is deleted.
+        assert!(g.remove_separator("separator-9"));
+        assert!(!g.remove_separator("separator-9"));
+        assert_eq!(g.add_loose_separator(None), "separator-5");
+    }
+
+    #[test]
+    fn a_version_one_file_still_loads_and_a_loose_separator_goes_with_its_place() {
+        let mut g = Groups::parse("version = 1\n[[groups]]\nname = \"A\"\nplaces = [\"x\"]\n");
+        assert_eq!(g.groups[0].places, ["x"]);
+        assert!(!g.is_from_newer_version());
+        g.add_loose_separator(Some("x"));
+        g.add_loose_separator(None);
+        let inside = g.add_separator_in(0, 0).unwrap();
+        assert!(g.forget_missing(&[place("y")]));
+        // The one below x went with it; the one at the top and the one in
+        // the group are no places and stay.
+        assert_eq!(g.separators.len(), 1);
+        assert_eq!(g.separators[0].after, None);
+        assert_eq!(g.groups[0].places, [inside]);
+    }
+
+    #[test]
+    fn moving_a_separator_between_kinds_keeps_one_copy_in_the_right_spot() {
+        let mut g = groups(&[("A", &["x", "y"]), ("B", &["z"])]);
+        let id = g.add_separator_between(0);
+        // Into B, which moved up one when the separator left the list.
+        g.move_separator_in(&id, 2, Some("z"));
+        assert_eq!(g.groups.len(), 2);
+        assert_eq!(g.groups[1].places, [id.clone(), "z".to_owned()]);
+        // Out of the group, between A and B.
+        assert_eq!(g.move_separator_between(&id, 1), Some(1));
+        assert_eq!(g.groups[1].separator.as_deref(), Some(id.as_str()));
+        assert_eq!(g.groups[2].places, ["z"]);
+        // Down past B: counted before it moved, above the end.
+        assert_eq!(g.move_separator_between(&id, 3), Some(2));
+        // Out of the groups altogether.
+        g.move_separator_loose(&id, Some("p"), None);
+        assert_eq!(g.groups.len(), 2);
+        assert_eq!(g.find_separator(&id), Some(SeparatorAt::Loose(0)));
     }
 }

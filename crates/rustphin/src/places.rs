@@ -856,7 +856,13 @@ impl qobject::PlacesModel {
             .groups()
             .groups
             .iter()
-            .map(|group| serde_json::json!({ "name": group.name, "count": group.places.len() }))
+            .map(|group| {
+                serde_json::json!({
+                    "name": group.name,
+                    "count": group.place_count(),
+                    "separator": !group.is_group(),
+                })
+            })
             .collect();
         text(&serde_json::Value::Array(groups).to_string())
     }

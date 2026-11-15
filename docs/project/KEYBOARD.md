@@ -94,7 +94,8 @@ key handler, so they never fire while a name is being typed.
 ## Places panel (focused)
 
 Up/Down move, Enter opens (or mounts a device), F2 renames, Delete removes,
-H hides or shows, Alt+Up/Down reorder, Left/Right fold and unfold a section,
+H hides or shows, Alt+Up/Down reorder, Left/Right fold and unfold a section
+(Delete and Alt+Up/Down act on a separator too: W-152),
 G moves the place to the next group, the Menu key or
 Shift+F10 opens the places menu (on a drive card, the drive menu: Open, Open
 in new tab, Mount or Unmount, Safely remove, Copy location; W-148), Tab moves

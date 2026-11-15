@@ -16,6 +16,10 @@ S11 — Hardening for daily use (in progress). The interface is Qt 6 and QML sin
 
 ## Requested additions
 
+- [x] W-152 — Separators in the places panel (the maintainer, 2026-11-15: "between their groups or wherever they want"). A separator goes below a place (in its group, or among the places outside groups, where it follows that place and goes with it), above a group heading, or after the last group; Move up/down, Delete, drag; Settings › Places lists those between groups. Kept in `place-groups.toml`, now version 2, never in KDE's shared file (D-008). Scenarios SP1–SP6 (2026-11-15).
+- [ ] W-153 — Drive Properties (the maintainer, 2026-11-15): Properties in a drive's menu opens a dialog with the drive's details and a ring of used and free space.
+- [ ] W-154 — Toolbar (the maintainer, 2026-11-15): the Actions button gives way to a Settings button and a Command palette button, both icon buttons.
+
 - [x] W-080 — Open remote addresses through kio-fuse (D-004, D-018; requested by the maintainer 2026-11-08). Typing `sftp://`, `smb://` or another KIO address in the location bar asks kio-fuse (`org.kde.KIOFuse.VFS.mountUrl`, the interface Dolphin's terminal panel uses) to mount it and opens the returned folder; `file://` URIs open locally. Network bookmarks in user-places.xbel (sftp, fish, smb, ftp, ftps, webdav, webdavs, nfs) appear in Places and open the same way. A "Connecting…" notice shows while waiting; a missing kio-fuse, refused scheme or failed mount gives a readable error saying what to do. Passwords typed in an address are never shown or logged. Editing the location inside a folder Rustphin mounted shows its remote address. Rustphin itself makes no network connection. Out of scope here: remote-address breadcrumbs/history (follow-up), native protocols (L-008), Network browsing (`remote:/`).
 
 - [x] W-084 — Duplicate on Ctrl+D as in Dolphin (D-021): copy the selection in place as "name copy.ext", a free name when taken, through the operation engine, undoable; Add to Places moves to Ctrl+Shift+D. Copies are selected once listed; context menu and palette entries; scenario K18.

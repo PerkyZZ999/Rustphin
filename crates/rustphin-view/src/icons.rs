@@ -95,6 +95,7 @@ macro_rules! for_each_icon {
             Scissors,
             Search,
             SearchX,
+            SeparatorHorizontal,
             Server,
             Settings,
             Shield,

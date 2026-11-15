@@ -227,6 +227,9 @@ components:
     textColor: "{colors.text-muted}"
     typography: "{typography.label-sm}"
     height: 28px
+  place-separator:
+    backgroundColor: "{colors.border-strong}"
+    height: 12px
   device-card:
     backgroundColor: "{colors.chrome-raised-solid}"
     textColor: "{colors.text}"
@@ -1004,8 +1007,13 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   right when folded; a folded heading shows its count ("PHOTOS (3)", "DEVICES
   (2)", W-127). Places in a group are indented one step. Hidden places, when
   listed, are drawn at 60 % opacity. Network bookmarks use `server`.
+  Separators (W-152) are rows 12 px tall holding a 1 px `border-strong`
+  hairline across the panel's text column (indented with the places of a
+  group); they take the hover fill, the focus outline and the drag like any
+  row, and are read as "Separator". The user puts them between groups,
+  between the places of a group, or between the places outside groups.
   Rows can be dragged (the name follows the pointer as a `drag-chip`) to
-  reorder or regroup them; folders dropped from the list or another
+  reorder or regroup them, and a separator dropped on a row goes above it; folders dropped from the list or another
   application become places. With no places: "No places yet. Add the folder
   shown with Ctrl+Shift+D, or drag a folder here." If devices cannot be
   listed, a note under the panel says so.
@@ -1013,11 +1021,14 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   panel opens a menu with the context menu's look. On a place: Open
   (`square-arrow-out-up-right`), Open in new tab (`square-plus`); "Move to
   group ›" (`folder-input`: each group, the place's own unavailable, then
-  "New group…" and, for a grouped place, "Out of groups"), Move up, Move down;
-  Rename (F2), Hide or Show (H), Remove from places (Delete; not offered for
-  KDE's built-in places). On a group heading: Collapse or Expand; Move up,
-  Move down; Rename group (F2), Delete group (Delete; its places stay). On
-  empty space: New group (Ctrl+Shift+G), Add to places (the folder shown);
+  "New group…" and, for a grouped place, "Out of groups"), Move up, Move down,
+  Add separator below (`separator-horizontal`; not for a place in the Remote
+  section); Rename (F2), Hide or Show (H), Remove from places (Delete; not
+  offered for KDE's built-in places). On a group heading: Collapse or Expand;
+  Move up, Move down, Add separator above; Rename group (F2), Delete group
+  (Delete; its places stay). On a separator: Move up, Move down; Remove
+  separator (Delete, `circle-x`). On empty space: New group (Ctrl+Shift+G),
+  Add separator (after the last group), Add to places (the folder shown);
   Show or Hide hidden places. On a drive (W-148): Open (Enter), Open in new
   tab; Mount (`hard-drive`) when it is not mounted, or Unmount
   (`arrow-up-from-line`) when it is; Safely remove (`power`) for a
@@ -1325,7 +1336,8 @@ The interface is Qt 6 and QML through cxx-qt (D-034, W-114, switched
 values in `colors.rs` and `metrics.rs`. Built as described: the title bar
 and resize bands, the toolbar with Settings' items and `Toolbar::fit`, the
 location crumbs, the tab strip, split view with path bars, the places panel
-with groups, folded counts, Remote and Devices, its menu and drag and drop,
+with groups, separators (W-152), folded counts, Remote and Devices, its menu
+and drag and drop,
 the three views with the zoom table, selection, rubber band, rename in place
 and thumbnails, the status line, the filter bar, the in-place states, the
 re-read and trash banners, the administrator bar, the context, New, trash

@@ -1511,7 +1511,7 @@ mod tests {
                 .and_then(|command| palette(command.id));
             assert_eq!(row.shortcut(), palette_key, "menu {row:?}");
         }
-        let groups = ["Work".to_owned()];
+        let groups = [(0, "Work".to_owned())];
         let mut place_rows = Vec::new();
         for target in [
             Target::Place {
@@ -1519,15 +1519,18 @@ mod tests {
                 hidden: false,
                 group: Some(0),
                 groups: &groups,
+                separable: true,
             },
             Target::Place {
                 system: true,
                 hidden: true,
                 group: None,
                 groups: &groups,
+                separable: false,
             },
             Target::Group { collapsed: false },
             Target::Group { collapsed: true },
+            Target::Separator,
             Target::Panel {
                 can_add_shown: true,
                 showing_hidden: false,

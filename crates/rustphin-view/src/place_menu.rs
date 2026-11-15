@@ -1,6 +1,7 @@
 //! What a right-click offers in the places panel (W-102).
 //!
-//! Places, groups, drives (W-148) and the panel's empty space each get their own list,
+//! Places, groups, separators (W-152), drives (W-148) and the panel's empty
+//! space each get their own list,
 //! decided here away from drawing so a missing choice fails a test. Every
 //! row has a key that does the same while the panel has the focus, and the
 //! row shows it.
@@ -58,6 +59,11 @@ pub enum PlaceCommand {
     SafelyRemove,
     /// Put the drive's mount point on the clipboard.
     CopyLocation,
+    /// Add a separator: below the place, above the group, or after the
+    /// last group from the empty space (W-152).
+    AddSeparator,
+    /// Delete the separator.
+    RemoveSeparator,
 }
 
 impl PlaceCommand {
@@ -69,7 +75,7 @@ impl PlaceCommand {
             Self::Open => Action::Places(P::Open),
             Self::Rename => Action::Places(P::Rename),
             Self::Hide | Self::Show => Action::Places(P::ToggleHide),
-            Self::Remove | Self::DeleteGroup => Action::Places(P::Remove),
+            Self::Remove | Self::DeleteGroup | Self::RemoveSeparator => Action::Places(P::Remove),
             Self::MoveUp => Action::Places(P::MoveUp),
             Self::MoveDown => Action::Places(P::MoveDown),
             Self::Collapse => Action::Places(P::Collapse),
@@ -85,7 +91,8 @@ impl PlaceCommand {
             | Self::LeaveGroup
             | Self::Mount
             | Self::Unmount
-            | Self::CopyLocation => {
+            | Self::CopyLocation
+            | Self::AddSeparator => {
                 return None;
             }
         })
@@ -119,6 +126,8 @@ impl Command for PlaceCommand {
             Self::Unmount => IconName::ArrowUpFromLine,
             Self::SafelyRemove => IconName::Power,
             Self::CopyLocation => IconName::Link,
+            Self::AddSeparator => IconName::SeparatorHorizontal,
+            Self::RemoveSeparator => IconName::CircleX,
         })
     }
 }
@@ -135,14 +144,20 @@ pub enum Target<'a> {
         hidden: bool,
         /// The group it is in.
         group: Option<usize>,
-        /// Every group's name, in order.
-        groups: &'a [String],
+        /// Each group's position in the group list and its name, in order
+        /// (separators between groups are not groups).
+        groups: &'a [(usize, String)],
+        /// A separator can go below it: it is in a group or among the local
+        /// places outside groups, not in the Remote section.
+        separable: bool,
     },
     /// A group heading.
     Group {
         /// Its places are folded away.
         collapsed: bool,
     },
+    /// A separator (W-152).
+    Separator,
     /// A drive (W-148).
     Device {
         /// It is mounted.
@@ -182,12 +197,16 @@ pub fn place_menu(target: Target<'_>) -> Vec<MenuEntry<PlaceCommand>> {
             hidden,
             group,
             groups,
+            separable,
         } => {
             let mut sort: Vec<MenuEntry<PlaceCommand>> = groups
                 .iter()
-                .enumerate()
                 .map(|(index, name)| {
-                    item(name, PlaceCommand::MoveToGroup(index), group != Some(index))
+                    item(
+                        name,
+                        PlaceCommand::MoveToGroup(*index),
+                        group != Some(*index),
+                    )
                 })
                 .collect();
             if !sort.is_empty() {
@@ -208,9 +227,16 @@ pub fn place_menu(target: Target<'_>) -> Vec<MenuEntry<PlaceCommand>> {
                 },
                 item("Move up", PlaceCommand::MoveUp, true),
                 item("Move down", PlaceCommand::MoveDown, true),
-                MenuEntry::Separator,
-                item("Rename", PlaceCommand::Rename, true),
             ];
+            if separable {
+                entries.push(item(
+                    "Add separator below",
+                    PlaceCommand::AddSeparator,
+                    true,
+                ));
+            }
+            entries.push(MenuEntry::Separator);
+            entries.push(item("Rename", PlaceCommand::Rename, true));
             entries.push(if hidden {
                 item("Show", PlaceCommand::Show, true)
             } else {
@@ -230,9 +256,16 @@ pub fn place_menu(target: Target<'_>) -> Vec<MenuEntry<PlaceCommand>> {
             MenuEntry::Separator,
             item("Move up", PlaceCommand::MoveUp, true),
             item("Move down", PlaceCommand::MoveDown, true),
+            item("Add separator above", PlaceCommand::AddSeparator, true),
             MenuEntry::Separator,
             item("Rename group", PlaceCommand::Rename, true),
             item("Delete group", PlaceCommand::DeleteGroup, true),
+        ],
+        Target::Separator => vec![
+            item("Move up", PlaceCommand::MoveUp, true),
+            item("Move down", PlaceCommand::MoveDown, true),
+            MenuEntry::Separator,
+            item("Remove separator", PlaceCommand::RemoveSeparator, true),
         ],
         Target::Device {
             mounted,
@@ -267,6 +300,7 @@ pub fn place_menu(target: Target<'_>) -> Vec<MenuEntry<PlaceCommand>> {
             showing_hidden,
         } => vec![
             item("New group", PlaceCommand::NewGroup, true),
+            item("Add separator", PlaceCommand::AddSeparator, true),
             item("Add to places", PlaceCommand::AddShownFolder, can_add_shown),
             MenuEntry::Separator,
             item(
@@ -288,13 +322,21 @@ mod tests {
     use super::*;
     use crate::menu::labels;
 
-    fn place(group: Option<usize>, groups: &[String]) -> Target<'_> {
+    fn place(group: Option<usize>, groups: &[(usize, String)]) -> Target<'_> {
         Target::Place {
             system: false,
             hidden: false,
             group,
             groups,
+            separable: true,
         }
+    }
+
+    fn named(names: &[(usize, &str)]) -> Vec<(usize, String)> {
+        names
+            .iter()
+            .map(|(index, name)| (*index, (*name).to_owned()))
+            .collect()
     }
 
     fn submenu(entries: &[MenuEntry<PlaceCommand>]) -> &[MenuEntry<PlaceCommand>] {
@@ -311,16 +353,18 @@ mod tests {
 
     #[test]
     fn a_place_can_be_sorted_into_any_group_or_a_new_one() {
-        let groups = ["Work".to_owned(), "Photos".to_owned()];
+        // A separator between the two groups is not offered, and Photos
+        // is sorted into by its position in the group list.
+        let groups = named(&[(0, "Work"), (2, "Photos")]);
         let entries = place_menu(place(None, &groups));
         let sort = submenu(&entries);
         assert_eq!(labels(sort), ["Work", "Photos", "", "New group…"]);
-        assert!(sort.contains(&item("Photos", PlaceCommand::MoveToGroup(1), true)));
+        assert!(sort.contains(&item("Photos", PlaceCommand::MoveToGroup(2), true)));
     }
 
     #[test]
     fn a_grouped_place_can_leave_its_group_and_its_own_group_is_not_offered() {
-        let groups = ["Work".to_owned(), "Photos".to_owned()];
+        let groups = named(&[(0, "Work"), (1, "Photos")]);
         let entries = place_menu(place(Some(0), &groups));
         let sort = submenu(&entries);
         assert_eq!(
@@ -343,6 +387,7 @@ mod tests {
             hidden: false,
             group: None,
             groups: &[],
+            separable: true,
         });
         assert!(labels(&system).contains(&"Hide"));
         assert!(!labels(&system).contains(&"Remove from places"));
@@ -351,6 +396,7 @@ mod tests {
             hidden: true,
             group: None,
             groups: &[],
+            separable: true,
         });
         assert!(labels(&hidden).contains(&"Show"));
         assert!(labels(&hidden).contains(&"Remove from places"));
@@ -366,6 +412,7 @@ mod tests {
                 "",
                 "Move up",
                 "Move down",
+                "Add separator above",
                 "",
                 "Rename group",
                 "Delete group"
@@ -383,9 +430,42 @@ mod tests {
         });
         assert_eq!(
             labels(&entries),
-            ["New group", "Add to places", "", "Hide hidden places"]
+            [
+                "New group",
+                "Add separator",
+                "Add to places",
+                "",
+                "Hide hidden places"
+            ]
         );
         assert!(entries.contains(&item("Add to places", PlaceCommand::AddShownFolder, false)));
+    }
+
+    #[test]
+    fn a_separator_moves_or_goes_and_a_place_can_have_one_below_it() {
+        assert_eq!(
+            labels(&place_menu(Target::Separator)),
+            ["Move up", "Move down", "", "Remove separator"]
+        );
+        assert_eq!(
+            PlaceCommand::RemoveSeparator.shortcut().as_deref(),
+            Some("Delete")
+        );
+        let local = place_menu(place(None, &[]));
+        assert!(local.contains(&item(
+            "Add separator below",
+            PlaceCommand::AddSeparator,
+            true
+        )));
+        // A network place in the Remote section has no separator below it.
+        let remote = place_menu(Target::Place {
+            system: false,
+            hidden: false,
+            group: None,
+            groups: &[],
+            separable: false,
+        });
+        assert!(!labels(&remote).contains(&"Add separator below"));
     }
 
     fn drive(mounted: bool, can_unmount: bool, can_remove: bool) -> Vec<MenuEntry<PlaceCommand>> {

@@ -546,6 +546,19 @@ both run at once.
 | DL4 | Select a folder and two files, Shift+Del | The list shows a folder icon for the folder, file icons and sizes for the files |
 | DL5 | Fold Devices, quit, start again | Devices is still folded ("DEVICES (n)"); `place-groups.toml` has `devices_folded = true` |
 
+## Separators in the places panel (W-152)
+
+Isolated home with Home and three folders (A, B, C) outside groups, and two groups, Work (X, Y) and Media (Z).
+
+| ID | Steps | Expected |
+|---|---|---|
+| SP1 | Right-click A, Add separator below; right-click the Media heading, Add separator above; right-click X, Add separator below; right-click empty space, Add separator | Hairlines below A, between Work and Media, between X and Y (indented with them) and after Media; the last one added has the focus outline. `place-groups.toml` says `version = 2` and lists four separators; `user-places.xbel` is unchanged |
+| SP2 | Right-click a separator | Move up (Alt+Up), Move down (Alt+Down), then Remove separator (Delete), in the context menu's look |
+| SP3 | Focus the separator below A; Alt+Down twice, Alt+Up three times | It goes below B, below C, then back up to above Home; it never enters a group |
+| SP4 | Drag the separator between the groups onto the Y row (waypoints with pauses) | A "Separator" chip follows the pointer; the separator now sits above Y in Work |
+| SP5 | Focus a separator; Delete. Open Settings › Places | The separator goes and the keyboard stays on the row below; no place moved. Settings lists the separators between groups as "Separator" rows with move and delete buttons, without a name field or count |
+| SP6 | Collapse Work | Its separators fold away with its places; the heading says "WORK (2)" |
+
 ## Reordering groups (W-105)
 
 Isolated home with three places, each in its own group: Work, Music, Photos.
