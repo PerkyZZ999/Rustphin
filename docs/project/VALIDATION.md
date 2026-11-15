@@ -1,5 +1,14 @@
 # Validation evidence
 
+### 2026-11-15 — W-150 R-101 and R-102 on the Qt interface
+- **Build and place:** release build after W-115 and W-076t, isolated KWin session at 60 Hz, isolated home, opaque, the 500,000-entry benchmark folder.
+- **Scrolling (`RUSTPHIN_SCROLL_BENCH=1`, D-019: at most 5% of intervals over 1.5 × the median):** details 0 of 1,200 dropped (max 17.87 ms); icons (Ctrl+1) 2 of 1,200 (0.17%, max 31.43 ms) in the interval holding the switch, then 0 (max 17.78 ms); compact (Ctrl+2) 1 of 1,200 (0.08%, max 25.21 ms) with the switch, then 0 (max 18.23 ms), scrolling sideways. Screenshots showed the icon grid and the compact columns moving. PASS in every view.
+- **Memory (R-102: under 400 MB with the folder open; within 50 MB of the start after closing its tab):** VmRSS 247,976 KiB on a small folder; 302,640 KiB with the 500,000-entry folder in a second tab in details (sizes and dates loaded); 290,948 KiB 6 s after Ctrl+W, 42.9 MiB above the start (RssAnon 79,548 → 134,084 → 122,392 KiB). PASS, with less room than the GPUI build's 19.3 MiB (W-073b); the allocator keeps freed memory in its two arenas (W-115) rather than returning it.
+- **First entries:** 109.7 ms to the frame showing 65,536 rows (`RUSTPHIN_FRAME_LOG`), as before.
+- **Not measured:** per-task times on the Qt thread (only through dropped frames); a physical display; a real wheel in the compact view.
+- **Tests:** no code changed.
+- **Waiver:** none
+
 ### 2026-11-15 — W-076t Keyboard-only pass of the Qt interface
 - **Pass (isolated KWin session, isolated home, debug build, opaque, the UI fixture):** K20 and K21, keyboard only.
 - **Found and fixed:**
