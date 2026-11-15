@@ -1143,7 +1143,9 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   all three are outlined, since a filled button would claim Enter.
   Move or copy: Cancel (Esc), Copy here (C), Move here (Enter).
 - **Problems dialog** (`ProblemsDialog.qml`): opened by Details on the
-  notice line after an operation left entries out: "<operation>: what was
+  notice line after an operation left entries out, or from the keyboard by
+  the palette's "Files: Show what the last operation left out" (which says
+  "The last operation left nothing out." when that is so): "<operation>: what was
   left out" in `headline-sm`; one row per entry with its path in `data-md`
   and the reason in `body-sm` `text-muted`, scrolling past 384 px; an
   outlined Close.

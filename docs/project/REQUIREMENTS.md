@@ -45,7 +45,7 @@ Conventions:
 - **Acceptance:**
   - [x] Click, Ctrl+click, Shift+click, rubber-band, select all and invert selection work. (W-078: W-020, W-022 S2/S3, W-024, W-073e.)
   - [x] Arrow keys, Home/End, Page Up/Down move focus; typing letters jumps to the next matching name. (W-078: W-020, K10, K14 Page Down/Shift+Page Down.)
-  - [ ] Every action in R-001 to R-016 has a keyboard path, and the default shortcuts match Dolphin's where an equivalent exists. (Shortcuts: one command table in `rustphin_view::commands`, tested against KEYBOARD.md and for clashes (W-123); every KEYBOARD.md key replayed on Qt in W-114h and W-123. Keyboard-only pass on Qt, Shift+Tab included, W-076t (K20, K21); open: the transfer and problems dialogs, the View menu and context menus not replayed keyboard-only.)
+  - [ ] Every action in R-001 to R-016 has a keyboard path, and the default shortcuts match Dolphin's where an equivalent exists. (Shortcuts: one command table in `rustphin_view::commands`, tested against KEYBOARD.md and for clashes (W-123); every KEYBOARD.md key replayed on Qt in W-114h and W-123. Keyboard-only pass on Qt, Shift+Tab included, W-076t (K20, K21); W-076u gave the problems dialog a keyboard path (the palette's "Files: Show what the last operation left out"); open: the transfer dialog not seen keyboard-only.)
 - **Validation:** ui-test, manual (keyboard-only checklist)
 
 ### R-005 — Tabs
@@ -255,7 +255,7 @@ Conventions:
 ### R-107 — Accessibility baseline
 - **Priority:** should
 - **Acceptance:**
-  - [ ] Keyboard-complete operation (R-004) with a visible focus indicator everywhere. (Keyboard-only pass on Qt, W-076t, 2026-11-15: the window and the Settings, Properties, question, batch rename, Compress dialogs and the palette, K20, K21, Q1; found and fixed a pane without a visible focus, Shift+Tab going forward, the Settings page list out of Tab's reach, checkboxes in the desktop's colours. Open: the transfer and problems dialogs, the View menu and context menus not replayed keyboard-only.)
+  - [ ] Keyboard-complete operation (R-004) with a visible focus indicator everywhere. (Keyboard-only pass on Qt, W-076t, 2026-11-15: the window and the Settings, Properties, question, batch rename, Compress dialogs and the palette, K20, K21, Q1; found and fixed a pane without a visible focus, Shift+Tab going forward, the Settings page list out of Tab's reach, checkboxes in the desktop's colours. K22 (W-076u) added a keyboard path to the problems dialog and replayed it and the context menu; the View menu's entries all have keys. Open: the transfer dialog not seen keyboard-only, since copies on the test volume finish at once.)
   - [x] The entry list, places panel, tabs and dialogs expose names and roles to assistive technology (AT-SPI), with gaps listed. (Qt interface, W-114h: entries are list items by name and report "selected", toolbar buttons are named with a Press action, the places panel is a named panel with a "Places" list and a named width separator, a question is a dialog by its title with pressable buttons. Gaps: some buttons are unnamed (W-116b, W-117); tabs and the palette were not re-checked on Qt. The GPUI interface was checked through AccessKit in W-074a–i. The Orca pass was dropped by D-023.)
 - **Validation:** manual
 

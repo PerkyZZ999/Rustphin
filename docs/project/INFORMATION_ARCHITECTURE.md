@@ -252,7 +252,8 @@ groups separated by hairlines:
    "Do the same for all other conflicts").
 5. An entry fails → *Failed entry* (Skip, Try again, Stop).
 6. The notice line says what was done, with Undo.
-   - Some entries were left out → the notice offers Details → *Problems*.
+   - Some entries were left out → the notice offers Details, or "Files: Show
+     what the last operation left out" in the palette → *Problems*.
 
 ### Clean up the trash
 

@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-15 — W-076u The problems dialog by keyboard
+- **Found:** the problems dialog (what an operation left out) opened only by a click on the notice line's Details: the notice's buttons are not Tab stops and no command opened it (R-004). And when it was open, Tab never showed a ring on its one button: focus given on opening is not Tab focus, and with a single stop Tab moved nothing.
+- **Change:** DESIGN.md and INFORMATION_ARCHITECTURE.md first. Command `show-problems`, "Files: Show what the last operation left out" (no key), run in Main.qml: the dialog when something was left out, else the status line says "The last operation left nothing out."; Tab and Shift+Tab on the dialog's Close mark it as reached by Tab (`focusReason`), so its ring shows.
+- **On screen (isolated KWin session, isolated home, debug build; six 1 GB files and one unreadable file under `target/`, removed afterwards):** K22: the copy asked about `secret.txt` with a white ring on Try again (Enter); S skipped it; the notice said one entry was left out; the palette command opened "Copying 7 items to “dst3”: what was left out" with the path and "Permission denied"; after the change Tab ringed Close (before it, neither the palette nor a click on Details gave a ring); Escape closed it. The Menu key with nothing selected opened the folder's menu at the focused entry, Down moving its highlight. The View menu needs no keyboard route of its own: view modes and zoom have keys.
+- **Not verified:** the transfer dialog keyboard only (XFS cloned the 6 GB at once, so no copy ran long enough); "The last operation left nothing out." on screen.
+- **Tests:** `desktop::main_qml_runs_every_window_command` covers the new command (fails with its case renamed); `rust-tc doctor` PASS, 997 tests (3 skipped).
+- **Waiver:** none
+
 ### 2026-11-15 — W-151 Thumbnails and Properties on screen
 - **Place:** isolated KWin session, isolated home (deleted afterwards), release build, opaque; two folders of generated pictures (a 640 × 400 JPEG, a 300 × 500 GIF, a 500 × 500 WebP, an 800 × 300 PNG), the UI fixture.
 - **H3:** Rustphin's icon view showed all four pictures, each in its proportions.

@@ -15,11 +15,11 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-15 — W-151 thumbnails and Properties on screen
+- Latest validation entry: VALIDATION.md, 2026-11-15 — W-076u problems dialog by keyboard
 - Acceptance: ACCEPTANCE.md lists every open criterion and who can close it (re-mapped 2026-11-14 for the Qt interface).
 
 ## Open loops
-- Task: the keyboard-only pass (W-076t) did not replay the transfer and problems dialogs, the View menu or context menus.
+- Task: the transfer dialog not seen keyboard-only (W-076u; copies on the test volume finish at once).
 - Task: the blur status line and the theme following blur (W-146c) were not seen on a compositor without blur: UI_SCENARIOS AP6 needs a desktop with KWin's Blur effect switched off (R-109 unticked on that).
 - Task: R-101 on Qt: per-task times on the Qt thread are not measured separately (only through dropped frames, all views now measured, W-150); nothing measured on a physical display.
 - Task: `rust-tc fuzz` could not run after W-129 and W-133: the installed nightly (1.97) is below the 1.100 minimum. The fuzz harness checks in `rust-tc doctor` pass.

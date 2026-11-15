@@ -99,6 +99,9 @@ Popup {
             Layout.alignment: Qt.AlignRight
             text: qsTr("Close")
             onClicked: problemsDialog.close()
+            // The only stop: Tab stays here, and shows the ring.
+            Keys.onTabPressed: focusReason = Qt.TabFocusReason
+            Keys.onBacktabPressed: focusReason = Qt.BacktabFocusReason
         }
     }
 }

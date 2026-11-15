@@ -225,6 +225,13 @@ Window {
         case "show-operations":
             noticeBar.transferDialog.open()
             break
+        // The notice line's Details, for the keyboard.
+        case "show-problems":
+            if (Operations.problems.length > 0)
+                noticeBar.problemsDialog.open()
+            else if (root.folder)
+                root.folder.say(qsTr("The last operation left nothing out."))
+            break
         case "dismiss-notice":
             Operations.dismissNotice()
             break

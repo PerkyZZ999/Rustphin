@@ -168,6 +168,8 @@ pub enum WindowCommand {
     StopOperations,
     /// Show every running operation (the transfer dialog).
     ShowOperations,
+    /// Show what the last operation left out (the problems dialog).
+    ShowProblems,
     /// Dismiss the operation message.
     DismissNotice,
     /// Show the trash's menu.
@@ -818,6 +820,12 @@ pub const COMMANDS: &[Command] = &[
         id: "show-operations",
         label: "Files: Show running operations",
         action: Action::Window(WindowCommand::ShowOperations),
+        keys: &[],
+    },
+    Command {
+        id: "show-problems",
+        label: "Files: Show what the last operation left out",
+        action: Action::Window(WindowCommand::ShowProblems),
         keys: &[],
     },
     Command {
