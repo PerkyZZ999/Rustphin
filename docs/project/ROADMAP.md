@@ -121,7 +121,10 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Plan:** [`QT_MIGRATION_PLAN.md`](QT_MIGRATION_PLAN.md). Gains are maturity and KDE integration (cold start, blur, file exchange with other applications, focus, text input, accessibility); speed targets are already met on GPUI. Recommended: a measured spike first (W-114a) with go/no-go criteria, cxx-qt as the bridge with QtBridge tried alongside, the Qt interface built beside the GPUI one until parity, then the switch (D-033, superseding D-001). Five decisions for the maintainer.
 - **Status:** A–D approved (D-033). Spike W-114a done 2026-11-13: cxx-qt passes 1–4 and 6–9 (startup 0.3–0.4 s against about 10 s); blur confirmed on the maintainer's desktop with the spike. Switch decided (D-034, cxx-qt) and made 2026-11-14 (W-114i): GPUI, GPUI-Kit and `rustphin-ui` removed. W-116 (Qt quality pass: `qmllint` with the BestPractices plugin and `qmlformat` in `rust-tc doctor`, the qt-qml-review findings, 36 scenarios replayed) done 2026-11-14. Then W-118–W-144: libarchive (D-036), interface logic moved into `rustphin-view` (commands, pane state, operation board, selection actions, places panel, workspace, menus), byte-safe paths to QML, test audits and the bugs they found, the GitHub repository (D-037).
 
-## Next — Slice S12: Charcoal colour scheme and UI completion (W-147, W-148, W-149, W-146, W-117)
+## Done — Slice S12: Charcoal colour scheme and UI completion (W-147, W-148, W-149, W-146, W-117)
+
+Done 2026-11-15, but for KWin's window menu on a right-click of the title
+bar, which waits on the maintainer's choice of how (STATE.md).
 
 **Goal:** Rustphin's look moves from navy to dark charcoal, and everything the
 documents describe but the interface does not yet do is built. Asked for by the
@@ -202,7 +205,7 @@ are replayed on screen.
 
 ## What remains
 
-- **Next:** Slice S12 above: W-146 and W-117 (the charcoal colour scheme W-147, the drive cards W-148 and the transfer details W-149 are done).
+- **Next:** plan the v0.2.0 roadmap with the maintainer. Slice S12 is done but for the title bar's window menu.
 - **Also open:** W-115 (memory grows on each reload of a very large folder).
 - **S11 acceptance:** a keyboard-only pass of the Qt interface (R-004, R-107, R-019); the maintainer's real-desktop and hardware checks (R-013, R-105, R-020 focus, W-098e administrator mode).
 - **Then:** the two-week daily-driver trial (the MVP success signal), and phase 7 (release).

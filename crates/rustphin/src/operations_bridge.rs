@@ -28,6 +28,7 @@ pub mod qobject {
         #[qproperty(QString, notice)]
         #[qproperty(bool, notice_error, cxx_name = "noticeError")]
         #[qproperty(bool, notice_undo, cxx_name = "noticeUndo")]
+        #[qproperty(QString, notice_icon, cxx_name = "noticeIcon")]
         #[qproperty(QString, problems)]
         #[qproperty(bool, can_paste, cxx_name = "canPaste")]
         #[qproperty(i32, revision)]

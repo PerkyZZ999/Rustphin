@@ -93,8 +93,10 @@ ColumnLayout {
             spacing: Tokens.metrics.space_sm
 
             Lucide {
-                name: Operations.noticeError ? "triangle-alert" : "circle-check"
-                colour: Operations.noticeError ? Tokens.colors.danger : Tokens.colors.success
+                // Information, something done, or a problem: the icon
+                // says which, not only its colour.
+                name: Operations.noticeIcon.length > 0 ? Operations.noticeIcon : "info"
+                colour: Operations.noticeError ? Tokens.colors.danger : Operations.noticeIcon === "circle-check" ? Tokens.colors.success : Tokens.colors.text_muted
             }
             Text {
                 textFormat: Text.PlainText

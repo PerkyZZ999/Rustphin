@@ -179,7 +179,15 @@ impl Default for PlacesModelRust {
             groups_file: GroupsFile::default(),
             places_load: 0,
             places_notice: None,
-            panel: PlacesPanel::new(choice, xdg::home()),
+            panel: {
+                let mut panel = PlacesPanel::new(choice, xdg::home());
+                // The Trash place is marked while its folder is shown.
+                panel.set_trash_folder(
+                    crate::hub::with(|hub| hub.trash())
+                        .map(|trash| trash.home_trash().join("files")),
+                );
+                panel
+            },
             shown: Vec::new(),
             device_service: Arc::new(NoDevices),
             _watch: None,

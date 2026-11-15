@@ -237,6 +237,9 @@ pub struct PlacesPanel {
     usage: HashMap<String, (u64, u64)>,
     busy: Option<String>,
     current: Option<PathBuf>,
+    /// The folder that holds the home trash's contents: the Trash place
+    /// leads there, though its address is `trash:/`.
+    trash_folder: Option<PathBuf>,
     rows: Vec<Row>,
     focused: Option<Row>,
     renaming: Option<Row>,
@@ -260,6 +263,7 @@ impl PlacesPanel {
             usage: HashMap::new(),
             busy: None,
             current: None,
+            trash_folder: None,
             rows: Vec::new(),
             focused: None,
             renaming: None,
@@ -344,7 +348,12 @@ impl PlacesPanel {
                     kind: RowKind::Place,
                     title: place.title.clone(),
                     icon: icon_for(place),
-                    current: place.path.is_some() && place.path == self.current,
+                    current: self.current.is_some()
+                        && if place.href.starts_with("trash:") {
+                            self.trash_folder == self.current
+                        } else {
+                            place.path == self.current
+                        },
                     hidden: place.hidden,
                     grouped: self.groups.group_of(id).is_some(),
                     ..blank
@@ -460,6 +469,12 @@ impl PlacesPanel {
     pub fn set_busy(&mut self, id: Option<String>) -> Vec<Effect> {
         self.busy = id;
         self.changed(false)
+    }
+
+    /// Where the home trash keeps its contents, so the Trash place is
+    /// marked while that folder is shown.
+    pub fn set_trash_folder(&mut self, folder: Option<PathBuf>) {
+        self.trash_folder = folder;
     }
 
     /// The folder the active pane shows. Returns whether it changed.
@@ -1768,6 +1783,37 @@ mod tests {
         // Neither the stick (no mount) nor any other is current.
         assert!(!world.panel.view(&d("stick")).unwrap().current);
         assert!(!world.panel.view(&d("data")).unwrap().current);
+    }
+
+    #[test]
+    fn the_trash_place_is_marked_while_the_trash_is_shown() {
+        let mut world = world();
+        let mut places = world.panel.places().to_vec();
+        places.push(Place {
+            id: "trash".into(),
+            title: "Trash".into(),
+            href: "trash:/".into(),
+            path: None,
+            icon: None,
+            hidden: false,
+            system: true,
+            only_in_app: None,
+        });
+        let effects = world.panel.set_places(places);
+        world.carry_out(effects);
+        let files = PathBuf::from("/home/u/.local/share/Trash/files");
+        world.panel.set_trash_folder(Some(files.clone()));
+
+        world.panel.set_current(Some(files));
+        assert!(world.panel.view(&p("trash")).unwrap().current);
+        assert!(!world.panel.view(&p("a")).unwrap().current);
+
+        world.panel.set_current(Some(PathBuf::from("/a")));
+        assert!(!world.panel.view(&p("trash")).unwrap().current);
+        // No folder shown is not the trash, even before its folder is known.
+        world.panel.set_trash_folder(None);
+        world.panel.set_current(None);
+        assert!(!world.panel.view(&p("trash")).unwrap().current);
     }
 
     #[test]

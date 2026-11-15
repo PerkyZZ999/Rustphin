@@ -104,11 +104,14 @@ impl qobject::PropertiesModel {
                     .map_err(std::io::Error::from),
                 None => properties::read(&path),
             };
-            let _ = thread.queue(move |model| model.facts_read(read));
+            // A link is drawn as what it points to; following it is a read.
+            let target_is_folder = read.as_ref().is_ok_and(|facts| facts.kind == Kind::Symlink)
+                && std::fs::metadata(&path).is_ok_and(|target| target.is_dir());
+            let _ = thread.queue(move |model| model.facts_read(read, target_is_folder));
         });
     }
 
-    fn facts_read(mut self: Pin<&mut Self>, read: std::io::Result<Facts>) {
+    fn facts_read(mut self: Pin<&mut Self>, read: std::io::Result<Facts>, target_is_folder: bool) {
         self.as_mut().set_loading(false);
         let facts = match read {
             Ok(facts) => facts,
@@ -119,13 +122,10 @@ impl qobject::PropertiesModel {
         };
         let path = self.rust().path.clone();
         let types = crate::types::when_ready_now();
-        let directory = facts.kind == Kind::Directory;
+        let (name, directory) =
+            rustphin_view::properties::icon_subject(&path, &facts, target_is_folder);
         let (description, picture, theme_icon) =
             types.map_or((String::new(), false, String::new()), |types| {
-                let name = path
-                    .file_name()
-                    .map(|name| name.as_encoded_bytes())
-                    .unwrap_or_default();
                 let mime = types.mimes.mime_type(name, directory);
                 // The type's icon from the theme, as the pane draws it.
                 let icon = crate::folder::icon_id(&types.mimes.icon_names(mime), directory);
@@ -137,7 +137,7 @@ impl qobject::PropertiesModel {
             });
         self.as_mut().set_theme_icon(QString::from(&theme_icon));
         let icon = match facts.kind {
-            Kind::Directory => "folder",
+            _ if directory => "folder",
             _ if picture => "image",
             _ => "file",
         };

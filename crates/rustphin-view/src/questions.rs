@@ -266,7 +266,9 @@ pub fn launch(name: &str, location: &str, program: bool) -> Shown {
     if program {
         buttons.push(button(Answer::Open, "Open (O)", "file-text", Style::Plain));
     }
-    buttons.push(button(Answer::Run, "Run (R)", "play", Style::Primary));
+    // Cancel is the Enter default, so nothing here is filled as a default
+    // button would be: a filled Run would promise that Enter runs it.
+    buttons.push(button(Answer::Run, "Run (R)", "play", Style::Plain));
     Shown {
         icon: if program { "terminal" } else { "app-window" },
         title: format!("Run \u{201c}{name}\u{201d}?"),

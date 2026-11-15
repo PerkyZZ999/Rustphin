@@ -13,7 +13,7 @@ that was in flight, and what the maintainer asked for next.
   branch `main`, public (D-037). The last pushed commit is `e8c0e92`
   (W-148b). Push only when the maintainer asks, and only commits that passed
   `rust-tc doctor`. No hosted CI.
-- **Gate:** `rust-tc doctor` passes with 973 tests and 3 skipped (W-149).
+- **Gate:** `rust-tc doctor` passes with 988 tests and 3 skipped (W-117).
 - **Installed build:** `~/.local/bin/rustphin` is the build from before W-147.
   After installing a new one, the maintainer runs `rustphin --quit` once.
 - **Public repository:** never write the maintainer's personal name, home
@@ -21,37 +21,26 @@ that was in flight, and what the maintainer asked for next.
   maintainer", `~`, or sibling-relative paths. The whole history was
   rewritten once to remove them.
 
-## Done but not pushed: W-149, transfer details
+## Done but not pushed: W-149, W-146, W-117 (Slice S12)
 
-Committed locally after the last push (`e8c0e92`, W-148b). The activity
-line shows a smoothed speed and the time remaining and has a Details button;
-Details (or the palette's "Files: Show running operations") opens the
-transfer dialog with one card per running operation. The measuring and the
-wording are `transfer` in rustphin-view; VALIDATION.md has the evidence
-(UI_SCENARIOS TD1–TD7 replayed on screen).
+Committed locally after the last push (`e8c0e92`, W-148b), each with `rust-tc
+doctor` passing; VALIDATION.md has the evidence of each:
 
-Still open from W-148: `docs/screenshots/rustphin.png` does not show the
-drive cards, and real drives were not tried (R-013).
+- W-149 transfer details: time remaining, Details, the transfer dialog.
+- W-146a–e: tooltips and scrollbars from the tokens; Settings that did
+  nothing (toolbar words, narrow Settings, live text size); the blur status
+  line, Look and Title bar; administrator mode per window; the volume name,
+  read-only Extract, a panicking operation reported.
+- W-117: the Qt leftovers.
 
-## Then
+Found on the way and worth knowing: Rustphin always started opaque (it asked
+KWin about blur too early); isolated KWin sessions do offer blur.
 
-- **Slice S12:**
-  - W-146: each item is a defect against the documents. Examples are the
-    Appearance › Look and Title bar settings, which do nothing; the blur
-    notice; administrator mode per window as D-028 says; and a notice when
-    UDisks2 is missing.
-  - W-117: the Qt leftovers.
-- **Also open:** W-115 (memory on reloading a huge folder), the keyboard
-  pass, and the maintainer's real-desktop checks (see STATE.md).
-- **Before release work:** push when asked, reinstall
-  (`rust-tc build`, `install -m 755 target/release/rustphin
-  ~/.local/bin/rustphin`, tell the maintainer to run `rustphin --quit`), then
-  **plan the v0.2.0 roadmap with the maintainer**. They asked for that
-  discussion. Come with:
-  - what is still open;
-  - the "Later" list in REQUIREMENTS.md: search, information panel, quick
-    preview, service menus, packaging, translations;
-  - a suggested grouping for 0.2.0, for them to reshape.
+## Waiting on the maintainer
+
+- KWin's window menu on a right-click of the title bar (the last W-146 item):
+  Qt Wayland's private API, or KWin's shortcut over D-Bus (STATE.md).
+- The v0.2.0 roadmap discussion.
 
 ## Practical notes
 

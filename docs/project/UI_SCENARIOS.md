@@ -89,7 +89,7 @@ Details view, name order, hidden files off: folders Documents, empty, locked, on
 | T2 | Ctrl+Tab, then Ctrl+Shift+Tab | The "Documents" tab is shown (one item, window title "Documents — Rustphin"), then the first tab again |
 | T3 | On the second tab, Ctrl+Shift+PageUp | "Documents" moves to the first position and stays active |
 | T4 | Ctrl+T, then Ctrl+W | A third tab opens on the same folder and is closed again |
-| T5 | Ctrl+W until one tab is left; then Ctrl+W once more | The strip keeps showing the last tab and "+" (the Qt interface always shows it; hiding it at one tab, as the GPUI one did, is open since W-116b). Closing the only tab closes the window ("Workspace: Close tab or window"); saved state still names the last folder |
+| T5 | Ctrl+W until one tab is left; then Ctrl+W once more | The strip keeps showing the last tab and "+" (DESIGN.md has shown the strip at one tab since W-096b; W-117 settled this scenario on it). Closing the only tab closes the window ("Workspace: Close tab or window"); saved state still names the last folder |
 | T6 | With two tabs, click the other tab; click its × | The clicked tab becomes active; the × closes that tab |
 | T7 | Drag the active second tab onto the first, using several waypoints paused for about 100 ms | The active folder moves to the first position; selected state, visible underline and saved session order agree |
 | D1 | F3 | Two panes side by side on the same folder, a thin divider between them, an accent line above the pane that has keyboard focus; narrow panes keep Name; Size appears at 360 px per pane (DESIGN.md breakpoints) |
@@ -250,9 +250,9 @@ filename contains a build hash. The child is an ignored test, so run it with
 |---|---|---|
 | BR0 | (D-020) Launch Rustphin on that fixture, or with no argument when the fixture is in the saved tabs or recent folders, with no other Rustphin running; then repeat with another Rustphin already running | The original names come back at startup and a notice "Restored the original names in “…” after an interrupted rename." stays until dismissed. With another Rustphin running, the journal and staged entries are left alone and the log says so |
 | BR1 | Start Rustphin in another folder first, then interrupt a batch in the fixture and open it; Ctrl+Shift+P, query `recover original`, inspect the result, Enter | Browsing leaves the journal/staged entries alone. The named recovery command restores `a` = `A`, `b` = `B`; the list updates and journal/staging files are gone |
-| BR2 | Add a generated `.rustphin-rename-journal` containing invalid text, repeat the command | Visible error explaining that recovery could not finish and the record/temporary entries must be kept; the invalid record and both files are unchanged. Remove only this generated invalid record before BR3 |
+| BR2 | Add a generated `.rustphin-rename-journal` containing invalid text, repeat the command | The error notice is the recovery's own explanation alone ("Recovery could not finish: …. Nothing was replaced. Keep any recovery record and temporary entries, resolve the problem, then retry recovery."); the invalid record and both files are unchanged. Remove only this generated invalid record before BR3 |
 | BR3 | Select both files, F2; find `a`, replace with `b`; then change replacement to `c`, Enter; Ctrl+Z | Conflict text blocks Rename for `b`; `c` enables it. Applying leaves `b` = `B`, `c` = `A`, with no journal. Undo restores `a` = `A`, `b` = `B`, with no journal |
-| BR4 | Restart in the same fixture with no journal; run the recovery command again | Neutral "Checked rename recovery in “…”." completion notice (W-116b saw the same words after a real recovery in BR1, an open wording issue); both files stay unchanged and no journal is created |
+| BR4 | Restart in the same fixture with no journal; run the recovery command again | "Left no interrupted rename in “…”." with the check mark, the same words BR1 ends with; both files stay unchanged and no journal is created |
 
 ## Mockup comparison (W-087)
 

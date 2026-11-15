@@ -60,12 +60,26 @@ Popup {
     }
 
     contentItem: ColumnLayout {
+        // Takes the keyboard when the dialog opens, so Enter and the
+        // scrolling keys below reach it.
+        focus: true
         spacing: 0
         Accessible.role: Accessible.Dialog
         Accessible.name: qsTr("Properties: %1").arg(info.title)
         Accessible.description: qsTr("File properties and permissions. Apply saves permission changes; Close or Escape discards unapplied changes.")
         Keys.onReturnPressed: info.apply()
         Keys.onEnterPressed: info.apply()
+        // The facts scroll from the keyboard, wherever the focus is in the
+        // dialog (a small window shows only part of them).
+        Keys.onPressed: event => {
+            const page = factsView.height - Tokens.metrics.row
+            const step = event.key === Qt.Key_Home ? -factsView.contentHeight : event.key === Qt.Key_End ? factsView.contentHeight : event.key === Qt.Key_PageUp ? -page : event.key === Qt.Key_PageDown ? page : event.key === Qt.Key_Up ? -Tokens.metrics.row : event.key === Qt.Key_Down ? Tokens.metrics.row : 0
+            if (step === 0)
+                return
+            const bottom = Math.max(0, factsView.contentHeight - factsView.height)
+            factsView.contentY = Math.max(0, Math.min(bottom, factsView.contentY + step))
+            event.accepted = true
+        }
 
         RowLayout {
             Layout.fillWidth: true
@@ -95,6 +109,8 @@ Popup {
             }
         }
         Flickable {
+            id: factsView
+
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredHeight: body.implicitHeight + 2 * Tokens.metrics.space_lg

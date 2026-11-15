@@ -33,6 +33,7 @@ pub struct OperationsRust {
     notice: QString,
     notice_error: bool,
     notice_undo: bool,
+    notice_icon: QString,
     problems: QString,
     can_paste: bool,
     revision: i32,
@@ -56,6 +57,7 @@ impl Default for OperationsRust {
             notice: QString::default(),
             notice_error: false,
             notice_undo: false,
+            notice_icon: QString::default(),
             problems: QString::default(),
             can_paste: false,
             revision: 0,
@@ -120,6 +122,11 @@ impl qobject::Operations {
         ));
         self.as_mut()
             .set_notice_error(notice.as_ref().is_some_and(|notice| notice.is_error));
+        self.as_mut().set_notice_icon(QString::from(
+            notice
+                .as_ref()
+                .map_or("", rustphin_view::operations::Notice::icon),
+        ));
         self.as_mut()
             .set_notice_undo(notice.as_ref().is_some_and(|notice| notice.offers_undo));
         self.as_mut()

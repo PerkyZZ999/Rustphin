@@ -84,6 +84,26 @@ pub fn time_text(seconds: Option<i64>, zone: &TimeZone) -> String {
         .unwrap_or_else(|| "Unknown".to_owned())
 }
 
+/// Whose type icon an entry's Properties shows: the entry itself, or for
+/// a symbolic link what it points to, as the list draws links. Returns the
+/// name to tell the type by and whether to draw a folder; `target_is_folder`
+/// is what following the link found.
+pub fn icon_subject<'a>(
+    path: &'a Path,
+    facts: &'a Facts,
+    target_is_folder: bool,
+) -> (&'a [u8], bool) {
+    let name = |path: &'a Path| {
+        path.file_name()
+            .map(|name| name.as_encoded_bytes())
+            .unwrap_or_default()
+    };
+    match (&facts.kind, &facts.target) {
+        (Kind::Symlink, Some(target)) => (name(target), target_is_folder),
+        (kind, _) => (name(path), *kind == Kind::Directory),
+    }
+}
+
 /// The size line a freshly read entry starts with.
 pub fn first_size(facts: &Facts) -> SizeLine {
     match (facts.kind, facts.size) {
@@ -213,6 +233,30 @@ mod tests {
             owner: "ana".into(),
             group: "staff".into(),
         }
+    }
+
+    #[test]
+    fn a_link_shows_the_icon_of_what_it_points_to() {
+        let mut link = facts(Kind::Symlink);
+        link.target = Some("/data/photos/cat.jpg".into());
+        assert_eq!(
+            icon_subject(Path::new("/a/shortcut"), &link, false),
+            (b"cat.jpg".as_slice(), false)
+        );
+        link.target = Some("/data/photos".into());
+        assert_eq!(
+            icon_subject(Path::new("/a/shortcut"), &link, true),
+            (b"photos".as_slice(), true)
+        );
+        // Anything else is itself.
+        assert_eq!(
+            icon_subject(Path::new("/a/notes.txt"), &facts(Kind::File), false),
+            (b"notes.txt".as_slice(), false)
+        );
+        assert_eq!(
+            icon_subject(Path::new("/a/docs"), &facts(Kind::Directory), false),
+            (b"docs".as_slice(), true)
+        );
     }
 
     #[test]

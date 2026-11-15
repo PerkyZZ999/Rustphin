@@ -5,7 +5,7 @@
 - **Artifact root:** docs/project/
 - **Workflow profile:** product — intended as a real, daily-usable file manager; file operations touch user data, so full gates and automated validation apply. Not regulated, so not high-risk.
 - **Current phase:** 6 (Vertical-slice implementation) — S1–S10 done; S11 (hardening) in progress; the interface is Qt 6 and QML through cxx-qt since W-114i (D-033, D-034)
-- **Status:** active — W-114 (the switch from GPUI), W-116 (Qt quality pass) and W-118–W-144 (refactoring into `rustphin-view`, libarchive, byte-safe paths, test audits and their fixes, the GitHub repository) W-147 (charcoal colours, S12), W-148 (drive cards and the drive menu, S12) and W-149 (transfer details, S12) done 2026-11-14; open: W-117, W-115, the Qt keyboard pass, the blur notice, and the maintainer's real-desktop checks
+- **Status:** active — Slice S12 done but for KWin's window menu on the title bar (a choice for the maintainer): W-147 charcoal colours, W-148 drive cards, W-149 transfer details (2026-11-14), W-146 UI completion and W-117 Qt leftovers (2026-11-15); open: W-115, the Qt keyboard pass, the maintainer's real-desktop checks, then the v0.2.0 roadmap
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
 - **Last updated:** 2026-11-15
 
@@ -15,11 +15,11 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-15 — W-146e Volume name, read-only Extract, a panicking operation
+- Latest validation entry: VALIDATION.md, 2026-11-15 — W-117 Qt leftovers
 - Acceptance: ACCEPTANCE.md lists every open criterion and who can close it (re-mapped 2026-11-14 for the Qt interface).
 
 ## Open loops
-- Task: W-117, the Qt leftovers W-116b saw (one-tab strip vs T5, Ctrl+0 zoom default, Trash place highlight, notice icons, recovery wording, Run prompt default styling, unnamed AT-SPI buttons, a link's Properties icon, J7).
+- Decision for the maintainer: KWin's window menu on a right-click of Rustphin's own title bar (the one W-146 item left): Qt Wayland's private API (follows the pointer; ties the build to one Qt version's private headers) or KWin's "Window Operations Menu" shortcut over D-Bus (public, but the menu opens at the window's corner).
 - Task: W-115, memory grows by about 25 MB on each reload of a 500,000-entry folder (below the interface).
 - Task: keyboard-only pass of the Qt interface with Shift+Tab and visible focus on every surface, Settings controls included (R-004, R-107, R-019; W-076). The GPUI focus blocker W-076e no longer applies.
 - Task: the blur status line and the theme following blur (W-146c) were not seen on a compositor without blur: UI_SCENARIOS AP6 needs a desktop with KWin's Blur effect switched off (R-109 unticked on that).
@@ -39,7 +39,7 @@
 - None for the agent. The real-desktop and hardware checks above wait on the maintainer.
 
 ## Next action
-- Slice S12 (ROADMAP.md): the charcoal colour scheme (W-147, D-038), the drive cards (W-148, D-039) and the transfer details (W-149) are done; next the UI completion items (W-146) and the Qt leftovers (W-117). Change `docs/DESIGN.md` first, then the tokens in `crates/rustphin-view/src/colors.rs` and `metrics.rs`, with their contrast tests.
+- Slice S12 is done but for the title bar's window menu (a choice for the maintainer). Next: the v0.2.0 roadmap with the maintainer (ROADMAP.md).
 - Also open: W-115 (memory on reloading a very large folder) and the Qt keyboard pass (W-076).
 - For the maintainer on the real desktop: after installing a build, run `rustphin --quit` once so the new build answers launches; then the checks under "Manual" above.
 - Then: the two-week daily-driver trial, and phase 7 (release).

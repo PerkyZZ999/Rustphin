@@ -23,6 +23,9 @@ Button {
     leftPadding: Tokens.metrics.space_md
     rightPadding: Tokens.metrics.space_md
     Accessible.name: text
+    // A hidden button (the Go back of a folder that opened) is not offered
+    // to screen readers.
+    Accessible.ignored: !visible
     Accessible.description: tip
 
     Tip {

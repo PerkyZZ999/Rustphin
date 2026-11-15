@@ -994,7 +994,7 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   emptied." in `body-sm` `text-muted`.
 - **Places panel:** place rows with a 16 px icon in `text-muted` and the name
   in `body-md` `text`; hover fills `hover`; the current place (the folder the
-  active pane shows) is filled `selection` with `on-selection` icon and name
+  active pane shows; the Trash place while the home trash is shown) is filled `selection` with `on-selection` icon and name
   and a 2 px `primary-bright` edge on its left; the focused row has a 1 px
   `primary-bright` outline while the panel has the keyboard. Section headings (groups, "Devices", "Remote") in `label-sm`
   capitals `text-muted` after a 12 px chevron that points down when open and
@@ -1106,12 +1106,15 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   Properties" with a Close icon button. Header: a 96 × 64 thumbnail (or the
   48 px type icon), the name and the type. Facts as label (`text-muted`,
   128 px column) and value (`data-md`): Location, Size (with exact bytes),
-  Modified, Accessed, Created when known, and a link's target. A folder's
+  Modified, Accessed, Created when known, and a link's target; a link's
+  icon is that of what it points to, as in the list. A folder's
   size reads "Calculating size…", then "Calculating… 1,204 items so far",
   until known. "Permissions" with the mode in words and octal, then OWNER,
   GROUP and OTHERS columns in `label-sm`, each with Read, Write and Execute
   checkboxes. Close (Esc) and Apply (Enter), which stays unavailable until a
-  box changes.
+  box changes. The facts scroll when the window is small, by the scrollbar
+  or by Home, End, Page Up, Page Down and the arrows wherever the keyboard
+  is in the dialog; title and buttons stay in view.
 - **Batch rename** (`BatchDialog.qml`, mockups 15–16): 640 px, title row with
   `pencil`. Three modes (Replace, Pattern, Case) as a segmented row, the
   chosen one in `selection` with its `primary-bright` edge; the rule fields (Text to find and Replace with,
@@ -1132,7 +1135,8 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   a field has the keyboard. The name conflict: Stop (Esc), Skip (S), Replace
   or Merge (R), Keep both (Enter), and "Do the same for all other conflicts
   (A)". A failed entry: Stop (Esc), Skip (S), Try again (Enter). "Run …?":
-  Cancel is the Enter default (Dolphin focuses Cancel), Open (O) and Run (R).
+  Cancel is the Enter default (Dolphin focuses Cancel), Open (O) and Run (R);
+  all three are outlined, since a filled button would claim Enter.
   Move or copy: Cancel (Esc), Copy here (C), Move here (Enter).
 - **Problems dialog** (`ProblemsDialog.qml`): opened by Details on the
   notice line after an operation left entries out: "<operation>: what was
@@ -1193,8 +1197,11 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   runs, it says "No operation is running. A copy, move or other operation
   that takes a while is shown here."
 - **Notice line:** 44 px after an operation ends, or while connecting to a
-  remote folder: an emerald `circle-check`, the sentence ("Copied 12 items to
-  “Pictures”."), an outlined "Undo (Ctrl+Z)" when it can be undone, Details
+  remote folder: an icon that says the kind of message (`operations::Notice::
+  icon`): an emerald `circle-check` for something done as asked, `info` in
+  `text-muted` for information ("The clipboard holds no files.", "Stopped
+  before anything changed."), `triangle-alert` for a problem; then the
+  sentence ("Copied 12 items to “Pictures”."), an outlined "Undo (Ctrl+Z)" when it can be undone, Details
   when entries were left out, and a dismiss icon button (tooltip "Dismiss
   this message"). It leaves after 6 seconds (`NOTICE_TIME`), unless it
   reports a problem or is waiting on something: a problem uses
@@ -1331,10 +1338,8 @@ Where the build differs from this document today:
 - **Error banner:** the pane's re-read banner has no "Details…" or dismiss
   button; Details is on the notice line, since operation results are
   window-level, and the problems dialog has no "Copy list".
-- **Open leftovers (W-117):** the strip with one tab (T5), Ctrl+0's zoom
-  default, the Trash place's highlight, notice icons by kind, recovery notice
-  wording, the Run question's default styling, unnamed AT-SPI buttons and the
-  link icon in Properties.
+- **Title bar menu:** right-clicking Rustphin's own title bar does not
+  offer KWin's window menu (T5 of the title bar); waiting on a choice of how.
 
 Carried over and implemented: the palette's **Recover original names after
 interruption** for the current folder (browsing never starts recovery; an

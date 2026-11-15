@@ -38,6 +38,23 @@ pub struct Notice {
     /// Whether it reports an operation that can be undone, so an undo
     /// button belongs beside it.
     pub offers_undo: bool,
+    /// Whether it reports something that was done as asked (the check
+    /// mark); otherwise, when nothing went wrong, it only informs.
+    pub success: bool,
+}
+
+impl Notice {
+    /// The Lucide icon beside the message: what kind of message it is,
+    /// never told by colour alone.
+    pub fn icon(&self) -> &'static str {
+        if self.is_error {
+            "triangle-alert"
+        } else if self.success {
+            "circle-check"
+        } else {
+            "info"
+        }
+    }
 }
 
 /// What an operation left out, for the error details dialog.
@@ -177,6 +194,11 @@ pub fn activity(request: &Request, undo: bool) -> String {
     }
 }
 
+/// How what a rename recovery did begins. It reports no count, so the
+/// words fit both a recovery that restored names and one that found
+/// nothing to restore.
+const RECOVERED: &str = "left no interrupted rename in";
+
 /// What a request did, in lower case: "copied 3 items to “x”".
 pub fn past(request: &Request) -> String {
     match request {
@@ -193,7 +215,7 @@ pub fn past(request: &Request) -> String {
             plural(pairs.len(), "item", "items")
         ),
         Request::RecoverRenameBatch { directory } => {
-            format!("checked rename recovery in {}", folder_name(directory))
+            format!("{RECOVERED} {}", folder_name(directory))
         }
         Request::Copy { sources, into } => {
             format!("copied {} to {}", what(sources), folder_name(into))
@@ -233,21 +255,25 @@ pub fn result_notice(done: &str, undo: bool, result: &Finished) -> Option<Notice
             text: format!("Not done: {reason}."),
             is_error: true,
             offers_undo: false,
+            success: false,
         }),
         Finished::Undone => Some(Notice {
             text: format!("Undid: {done}."),
             is_error: false,
             offers_undo: false,
+            success: true,
         }),
         Finished::UndoFailed(reason) if undo => Some(Notice {
             text: format!("Could not undo ({done}): {reason}."),
             is_error: true,
             offers_undo: false,
+            success: false,
         }),
         Finished::UndoFailed(reason) => Some(Notice {
             text: format!("Could not undo: {reason}."),
             is_error: true,
             offers_undo: false,
+            success: false,
         }),
     }
 }
@@ -301,6 +327,19 @@ pub fn outcome_notice(done: &str, outcome: &Outcome) -> Option<Notice> {
                     .changes
                     .iter()
                     .all(rustphin_core::ops::Change::is_reversible),
+            success: true,
+        });
+    }
+    // A recovery that could not finish says so itself, in full sentences.
+    if done.starts_with(RECOVERED)
+        && !outcome.completed
+        && let Some(failed) = outcome.skipped.first()
+    {
+        return Some(Notice {
+            text: failed.reason.clone(),
+            is_error: true,
+            offers_undo: false,
+            success: false,
         });
     }
     let mut text = if outcome.completed {
@@ -329,6 +368,7 @@ pub fn outcome_notice(done: &str, outcome: &Outcome) -> Option<Notice> {
         text,
         is_error: left_out > 0,
         offers_undo: false,
+        success: false,
     })
 }
 
@@ -471,6 +511,67 @@ mod tests {
     }
 
     #[test]
+    fn a_notice_shows_its_kind_by_its_icon() {
+        let notice = |is_error, success| Notice {
+            text: String::new(),
+            is_error,
+            offers_undo: false,
+            success,
+        };
+        assert_eq!(notice(false, true).icon(), "circle-check");
+        assert_eq!(notice(false, false).icon(), "info");
+        assert_eq!(notice(true, false).icon(), "triangle-alert");
+        // What was stopped or refused is not a success.
+        let stopped = Finished::Done(Outcome {
+            completed: false,
+            changes: Vec::new(),
+            skipped: Vec::new(),
+        });
+        assert_eq!(
+            result_notice("copied x", false, &stopped).unwrap().icon(),
+            "info"
+        );
+        let refused = Finished::Refused("no".to_owned());
+        assert_eq!(
+            result_notice("copied x", false, &refused).unwrap().icon(),
+            "triangle-alert"
+        );
+    }
+
+    #[test]
+    fn a_rename_recovery_says_what_is_true_whether_or_not_it_restored_names() {
+        let request = Request::RecoverRenameBatch {
+            directory: "/a/docs".into(),
+        };
+        let done = past(&request);
+        let finished = Finished::Done(Outcome {
+            completed: true,
+            changes: Vec::new(),
+            skipped: Vec::new(),
+        });
+        assert_eq!(
+            result_notice(&done, false, &finished).unwrap().text,
+            "Left no interrupted rename in “docs”."
+        );
+        // One that could not finish gives its own explanation, alone.
+        let failed = Finished::Done(Outcome {
+            completed: false,
+            changes: Vec::new(),
+            skipped: vec![rustphin_core::ops::Skipped {
+                path: "/a/docs".into(),
+                reason: "Recovery could not finish: the record is damaged. Nothing was replaced."
+                    .to_owned(),
+            }],
+        });
+        let notice = result_notice(&done, false, &failed).unwrap();
+        assert_eq!(
+            notice.text,
+            "Recovery could not finish: the record is damaged. Nothing was replaced."
+        );
+        assert!(notice.is_error);
+    }
+
+    #[test]
     fn a_finished_copy_is_confirmed_and_an_undo_is_named() {
         assert_eq!(
             result_notice("copied 3 items to “x”", false, &done(true, &[])),
@@ -478,6 +579,7 @@ mod tests {
                 text: "Copied 3 items to “x”.".into(),
                 is_error: false,
                 offers_undo: false,
+                success: true,
             })
         );
         assert_eq!(
@@ -486,6 +588,7 @@ mod tests {
                 text: "Undid: moved 3 items to “x”.".into(),
                 is_error: false,
                 offers_undo: false,
+                success: true,
             })
         );
     }

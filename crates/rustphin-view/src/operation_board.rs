@@ -301,6 +301,7 @@ impl OperationBoard {
                 text,
                 is_error,
                 offers_undo: false,
+                success: false,
             },
             !is_error,
         )
@@ -314,6 +315,7 @@ impl OperationBoard {
                 text,
                 is_error: false,
                 offers_undo: false,
+                success: false,
             },
             false,
         );
