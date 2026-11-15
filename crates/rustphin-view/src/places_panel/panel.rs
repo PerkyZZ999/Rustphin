@@ -105,8 +105,9 @@ pub enum Opening {
     /// A network folder made in Dolphin (`remote:/NAME`), whose address is
     /// looked up in KDE's file of its own.
     NetworkFolder(String),
-    /// A volume that is not mounted: mount it, then open it.
-    Mount(Device),
+    /// A volume that is not mounted: mount it, then open it. Boxed: a
+    /// volume's details make it far larger than the other openings.
+    Mount(Box<Device>),
 }
 
 impl fmt::Debug for Opening {
@@ -156,6 +157,9 @@ pub enum Effect {
     SafelyRemove(Device),
     /// Put this location on the clipboard as text.
     CopyLocation(PathBuf),
+    /// Measure the volume's filesystem and show its Properties (W-153,
+    /// [`crate::drive_properties::drive_sheet`]).
+    DriveProperties(Device),
     /// Keep in Settings whether hidden places are shown.
     ShowHidden(bool),
     /// Tell the user something (not an error).
@@ -731,6 +735,10 @@ impl PlacesPanel {
                 }
                 _ => Vec::new(),
             },
+            PlaceCommand::DriveProperties => match device {
+                Some(device) => vec![Effect::DriveProperties(device)],
+                None => Vec::new(),
+            },
             PlaceCommand::CopyLocation => match device {
                 Some(device) => match device.mount_point.clone() {
                     Some(path) => vec![
@@ -990,7 +998,7 @@ impl PlacesPanel {
                     None => {
                         let mut effects = self.set_busy(Some(device.id.clone()));
                         effects.push(Effect::Open {
-                            opening: Opening::Mount(device),
+                            opening: Opening::Mount(Box::new(device)),
                             new_tab,
                         });
                         return effects;
@@ -1836,6 +1844,7 @@ mod tests {
             power_off: Some("/drive".into()),
             filesystem: None,
             encrypted: false,
+            details: Default::default(),
         };
         let effects = world.panel.set_devices(vec![stick.clone()], HashMap::new());
         world.carry_out(effects);
@@ -1854,7 +1863,7 @@ mod tests {
         assert_eq!(
             effects.last(),
             Some(&Effect::Open {
-                opening: Opening::Mount(stick),
+                opening: Opening::Mount(Box::new(stick)),
                 new_tab: true
             })
         );
@@ -1870,6 +1879,7 @@ mod tests {
             power_off: removable.then(|| "/drive".to_owned()),
             filesystem: Some("ext4".to_owned()),
             encrypted: false,
+            details: Default::default(),
         }
     }
 
@@ -2185,11 +2195,19 @@ mod tests {
         let mut world = with_devices();
         assert_eq!(
             menu_labels(&mut world, &d("stick")),
-            ["Open", "Open in new tab", "", "Mount", "Safely remove"]
+            [
+                "Open",
+                "Open in new tab",
+                "",
+                "Mount",
+                "Safely remove",
+                "",
+                "Properties"
+            ]
         );
         assert_eq!(
             menu_labels(&mut world, &d("root")),
-            ["Open", "Open in new tab", "", "Copy location"]
+            ["Open", "Open in new tab", "", "Copy location", "Properties"]
         );
         assert_eq!(
             menu_labels(&mut world, &d("data")),
@@ -2199,11 +2217,20 @@ mod tests {
                 "",
                 "Unmount",
                 "",
-                "Copy location"
+                "Copy location",
+                "Properties"
             ]
         );
         // The menu takes the keyboard to the drive it was opened on.
         assert_eq!(world.panel.focused(), Some(&d("data")));
+    }
+
+    #[test]
+    fn properties_in_a_drive_menu_asks_for_that_drive_s_sheet() {
+        let mut world = with_devices();
+        let stick = world.panel.device("stick").cloned().unwrap();
+        let effects = choose(&mut world, &d("stick"), "Properties");
+        assert_eq!(effects.last(), Some(&Effect::DriveProperties(stick)));
     }
 
     #[test]
@@ -2257,7 +2284,7 @@ mod tests {
         assert_eq!(
             effects.last(),
             Some(&Effect::Open {
-                opening: Opening::Mount(device("stick", None, true)),
+                opening: Opening::Mount(Box::new(device("stick", None, true))),
                 new_tab: false
             })
         );

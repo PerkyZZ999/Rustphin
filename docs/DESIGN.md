@@ -254,6 +254,14 @@ components:
   usage-track:
     backgroundColor: "{colors.track}"
     height: 4px
+  drive-ring:
+    backgroundColor: "{colors.track}"
+    size: 112px
+    width: 12px
+  drive-ring-used:
+    backgroundColor: "{colors.progress}"
+  drive-ring-full:
+    backgroundColor: "{colors.error}"
   column-heading:
     textColor: "{colors.text-muted}"
     typography: "{typography.body-sm}"
@@ -1033,8 +1041,8 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   tab; Mount (`hard-drive`) when it is not mounted, or Unmount
   (`arrow-up-from-line`) when it is; Safely remove (`power`) for a
   removable or power-off capable drive; Copy location (`link`) when it is
-  mounted. The volumes the system and the home folder run from offer neither
-  Unmount nor Safely remove.
+  mounted; then Properties (`info`, W-153). The volumes the system and the
+  home folder run from offer neither Unmount nor Safely remove.
 - **Drive cards (W-148):** each volume under Devices is a card 56 px tall on
   `chrome-raised`, 2 px corners, 8 px padding, 4 px apart. First line: a 16 px
   `hard-drive` or `usb` icon and the name in `body-md-strong` `text` on the
@@ -1116,6 +1124,23 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   button; questions and the problems list start with their title. The body
   scrolls between title and actions; the action row is on `chrome`. Text fields (`input`) are 32 px on `content` with a
   `border-strong` outline, `primary-bright` while focused.
+- **Drive Properties** (`DriveDialog.qml`, W-153): title "<name> —
+  Properties" with the drive's `usb` or `hard-drive` icon and a Close icon
+  button. Header: the 48 px icon, the name in `body-md-strong` and the
+  card's traits ("exFAT · Removable", or "Not mounted") in `body-sm`
+  `text-muted`. For a mounted volume, a ring 112 px across with a 12 px
+  stroke: the free part in `track`, the used part from the top, clockwise,
+  in `progress` (`error` from 90 % used, as the card's bar), "43%" in
+  `headline-md` and "used" in `body-sm` `text-muted` in its middle; beside
+  it a legend of Used, Free and Total, each a 12 px swatch (none for Total),
+  the label in `body-sm` `text-muted` and the size with exact bytes in
+  `data-md`. Without a ring, one sentence says why: "Not mounted. Mount it
+  to see how full it is." or "Its free space could not be read." A
+  hairline, then the facts as in Properties, only those the device service
+  told: Mounted at, Size (not mounted), Device, Filesystem, UUID, Access
+  ("Read and write" or "Read only"), Encrypted, Drive (maker and model),
+  Kind ("Solid-state drive" or "Hard disk"), Connection ("USB", "SD card
+  reader"…), Removable. Close (Esc), the primary button; Enter closes too.
 - **Properties** (`PropertiesDialog.qml`, mockups 13–14): title "<name> —
   Properties" with a Close icon button. Header: a 96 × 64 thumbnail (or the
   48 px type icon), the name and the type. Facts as label (`text-muted`,
@@ -1337,7 +1362,7 @@ values in `colors.rs` and `metrics.rs`. Built as described: the title bar
 and resize bands, the toolbar with Settings' items and `Toolbar::fit`, the
 location crumbs, the tab strip, split view with path bars, the places panel
 with groups, separators (W-152), folded counts, Remote and Devices, its menu
-and drag and drop,
+and drag and drop, a drive's Properties with its ring (W-153),
 the three views with the zoom table, selection, rubber band, rename in place
 and thumbnails, the status line, the filter bar, the in-place states, the
 re-read and trash banners, the administrator bar, the context, New, trash

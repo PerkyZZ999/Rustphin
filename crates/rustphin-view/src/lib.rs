@@ -8,6 +8,7 @@ pub mod archives;
 pub mod colors;
 pub mod commands;
 pub mod dialogs;
+pub mod drive_properties;
 pub mod folder_views;
 pub mod format;
 pub mod groups;

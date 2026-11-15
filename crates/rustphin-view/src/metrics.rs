@@ -95,6 +95,13 @@ pub mod size {
     pub const CHECK_ROW: f32 = 28.;
     /// Height of a usage bar under a volume's name.
     pub const USAGE: f32 = 4.;
+    /// Diameter of the ring of used and free space in a drive's Properties
+    /// (W-153).
+    pub const DRIVE_RING: f32 = 112.;
+    /// Width of that ring's stroke.
+    pub const DRIVE_RING_STROKE: f32 = 12.;
+    /// Side of a colour swatch in the ring's legend.
+    pub const SWATCH: f32 = 12.;
     /// Width of the places panel, by default.
     pub const SIDEBAR: f32 = 240.;
     /// The narrowest the location field is drawn before toolbar items

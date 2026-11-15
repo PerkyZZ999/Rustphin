@@ -497,11 +497,13 @@ stand-in and nothing else:
 | ID | Steps | Expected |
 |---|---|---|
 | DV1 | Look at Devices | Five cards. Data: `hard-drive`, "Data" semibold, "used / total" on the right, a blue bar, "Btrfs · Encrypted" and "NN% used". STICK: `usb`, "exFAT · Removable". BACKUP: its size on the right, no bar, "Not mounted". FULL: a red bar and "100% used". No eject buttons |
-| DV2 | Right-click Data; Escape. Right-click System; Escape | Data: Open (Enter), Open in new tab, then Unmount, then Copy location, each with an icon. System: Open, Open in new tab, then Copy location only (no Unmount, no Safely remove) |
-| DV3 | Right-click STICK, Safely remove | The menu has Open, Open in new tab, Unmount, Safely remove, Copy location (no row shows a key but Open's Enter); the stand-in prints Unmount then PowerOff for STICK; "“STICK” can be unplugged now."; the card says "Not mounted" |
+| DV2 | Right-click Data; Escape. Right-click System; Escape | Data: Open (Enter), Open in new tab, then Unmount, then Copy location and Properties, each with an icon. System: Open, Open in new tab, then Copy location and Properties only (no Unmount, no Safely remove) |
+| DV3 | Right-click STICK, Safely remove | The menu has Open, Open in new tab, Unmount, Safely remove, Copy location, Properties (no row shows a key but Open's Enter); the stand-in prints Unmount then PowerOff for STICK; "“STICK” can be unplugged now."; the card says "Not mounted" |
 | DV4 | Focus BACKUP with the keyboard (Ctrl+P, Down…), Shift+F10, choose Mount | The menu has Open, Open in new tab, Mount, Safely remove (no Copy location); the stand-in prints Mount for BACKUP; "“BACKUP” was mounted."; the card shows its usage |
 | DV5 | On Data: Menu key, Copy location; paste into the location field (Ctrl+L, Ctrl+V) | "Copied the location of “Data”."; the field holds `<home>/drives/Data` |
 | DV6 | On Data (focused in the panel): E; then right-click Data, Unmount; then Mount | E does nothing (drive actions have no key); the stand-in prints Unmount for Data (no PowerOff: it is fixed), then Mount |
+| DV7 | Right-click STICK, Properties; Escape (W-153) | "STICK — Properties": the `usb` icon, "exFAT · Removable"; a ring with "NN%" and "used", the used arc in the progress colour; Used, Free and Total with exact bytes; Mounted at `<home>/drives/STICK`, Device `/dev/sdb1`, Filesystem exFAT, UUID 1A2B-3C4D, Access "Read and write", Encrypted No, Drive "Example Flash Drive", Kind "Solid-state drive", Connection USB, Removable Yes. Escape closes it; the stand-in prints nothing (no request) |
+| DV8 | Right-click BACKUP, Properties; Close | No ring; "Not mounted. Mount it to see how full it is."; Mounted at "Not mounted", Size "1.8 TiB (2,000,000,000,000 bytes)", Kind "Hard disk". FULL's Properties say Access "Read only" and draw the arc red with "100%" when its squashfs is mounted (DV4's setup) |
 
 ## Transfer details (W-149)
 

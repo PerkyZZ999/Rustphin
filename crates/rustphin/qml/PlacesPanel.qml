@@ -573,6 +573,18 @@ FocusScope {
         menuAt(places.focusRow, item ? item : list, 0, item ? item.height : Tokens.metrics.place_row)
     }
 
+    // A drive's Properties (W-153), while the model holds its sheet.
+    Loader {
+        active: places.drive.length > 0
+        sourceComponent: DriveDialog {
+            json: places.drive
+            onClosed: {
+                places.closeDrive()
+                list.forceActiveFocus()
+            }
+        }
+    }
+
     JsonMenu {
         id: menu
 

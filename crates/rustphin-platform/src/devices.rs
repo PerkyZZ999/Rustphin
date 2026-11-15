@@ -44,6 +44,28 @@ pub struct Device {
     pub filesystem: Option<String>,
     /// Whether the volume is unlocked from an encrypted container (LUKS).
     pub encrypted: bool,
+    /// What else the service says about it, for its Properties (W-153).
+    pub details: DriveDetails,
+}
+
+/// What the device service says about a volume and its drive beyond what
+/// its card shows, for its Properties (W-153).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DriveDetails {
+    /// The device file (`/dev/sdb1`), when known.
+    pub device_file: Option<PathBuf>,
+    /// The filesystem's UUID, when it has one.
+    pub uuid: Option<String>,
+    /// Whether the volume can only be read.
+    pub read_only: bool,
+    /// The drive's maker and model ("Samsung SSD 980"), when known.
+    pub model: Option<String>,
+    /// How the drive is connected, as the service names it (`usb`, `sdio`,
+    /// `ieee1394`); none for a drive inside the machine.
+    pub connection: Option<String>,
+    /// Whether the drive spins (`Some(true)`, a hard disk) or not
+    /// (`Some(false)`, solid state); none when the service does not say.
+    pub rotational: Option<bool>,
 }
 
 impl Device {
@@ -165,6 +187,43 @@ fn object_path(properties: &Properties, name: &str) -> Option<String> {
         .filter(|path| !path.is_empty() && path != "/")
 }
 
+/// A path property sent as bytes ending in a NUL, as the service sends
+/// device files and mount points.
+fn bytes_path(properties: &Properties, name: &str) -> Option<PathBuf> {
+    let mut bytes = Vec::<u8>::try_from(properties.get(name)?.try_clone().ok()?).ok()?;
+    while bytes.last() == Some(&0) {
+        bytes.pop();
+    }
+    let path = PathBuf::from(OsString::from_vec(bytes));
+    path.is_absolute().then_some(path)
+}
+
+/// The details of a volume from its block and drive properties.
+fn details(block: &Properties, drive: Option<&Properties>) -> DriveDetails {
+    let model = drive.and_then(|drive| {
+        let parts: Vec<String> = ["Vendor", "Model"]
+            .iter()
+            .filter_map(|name| text(drive, name))
+            .map(|part| part.trim().to_owned())
+            .filter(|part| !part.is_empty())
+            .collect();
+        (!parts.is_empty()).then(|| parts.join(" "))
+    });
+    DriveDetails {
+        device_file: bytes_path(block, "PreferredDevice").or_else(|| bytes_path(block, "Device")),
+        uuid: text(block, "IdUUID"),
+        read_only: flag(block, "ReadOnly"),
+        model,
+        connection: drive.and_then(|drive| text(drive, "ConnectionBus")),
+        // 0 is a drive that does not spin; -1 one that spins at a rate
+        // it does not tell.
+        rotational: drive
+            .and_then(|drive| drive.get("RotationRate"))
+            .and_then(|value| i32::try_from(value).ok())
+            .map(|rate| rate != 0),
+    }
+}
+
 fn flag(properties: &Properties, name: &str) -> bool {
     properties
         .get(name)
@@ -270,6 +329,7 @@ impl Devices for UDisks2 {
                 // The cleartext volume of an unlocked LUKS container names
                 // the container it comes from.
                 encrypted: object_path(block, "CryptoBackingDevice").is_some(),
+                details: details(block, drive),
             });
         }
         devices.sort_by(|a, b| (a.removable, &a.label, &a.id).cmp(&(b.removable, &b.label, &b.id)));
@@ -383,6 +443,9 @@ mod tests {
         ignore: bool,
         id_type: &'static str,
         crypto_backing: &'static str,
+        device: &'static str,
+        uuid: &'static str,
+        read_only: bool,
     }
 
     #[interface(name = "org.freedesktop.UDisks2.Block")]
@@ -414,6 +477,18 @@ mod tests {
         #[zbus(property)]
         fn crypto_backing_device(&self) -> OwnedObjectPath {
             ObjectPath::try_from(self.crypto_backing).unwrap().into()
+        }
+        #[zbus(property)]
+        fn preferred_device(&self) -> Vec<u8> {
+            [self.device.as_bytes(), b"\0"].concat()
+        }
+        #[zbus(property, name = "IdUUID")]
+        fn id_uuid(&self) -> String {
+            self.uuid.to_owned()
+        }
+        #[zbus(property)]
+        fn read_only(&self) -> bool {
+            self.read_only
         }
     }
 
@@ -473,6 +548,10 @@ mod tests {
         removable: bool,
         can_power_off: bool,
         powered_off: Arc<Mutex<bool>>,
+        vendor: &'static str,
+        model: &'static str,
+        bus: &'static str,
+        rotation: i32,
     }
 
     #[interface(name = "org.freedesktop.UDisks2.Drive")]
@@ -488,6 +567,22 @@ mod tests {
         #[zbus(property)]
         fn can_power_off(&self) -> bool {
             self.can_power_off
+        }
+        #[zbus(property)]
+        fn vendor(&self) -> String {
+            self.vendor.to_owned()
+        }
+        #[zbus(property)]
+        fn model(&self) -> String {
+            self.model.to_owned()
+        }
+        #[zbus(property)]
+        fn connection_bus(&self) -> String {
+            self.bus.to_owned()
+        }
+        #[zbus(property)]
+        fn rotation_rate(&self) -> i32 {
+            self.rotation
         }
         fn power_off(&self, _options: HashMap<String, OwnedValue>) {
             *self.powered_off.lock().unwrap() = true;
@@ -523,6 +618,9 @@ mod tests {
             ignore,
             id_type: "",
             crypto_backing: "/",
+            device: "",
+            uuid: "",
+            read_only: false,
         };
         let guid = zbus::Guid::generate();
         let builder = Builder::async_io_unix_stream(theirs)
@@ -535,6 +633,9 @@ mod tests {
                 format!("{ROOT}/block_devices/sdb1"),
                 MockBlock {
                     id_type: "exfat",
+                    device: "/dev/sdb1",
+                    uuid: "1A2B-3C4D",
+                    read_only: true,
                     ..block("STICK", "", "/org/freedesktop/UDisks2/drives/usb", false)
                 },
             )
@@ -575,6 +676,10 @@ mod tests {
                     removable: true,
                     can_power_off: true,
                     powered_off: Arc::clone(&powered_off),
+                    vendor: "SanDisk ",
+                    model: "Ultra",
+                    bus: "usb",
+                    rotation: 0,
                 },
             )
             .unwrap()
@@ -584,6 +689,10 @@ mod tests {
                     removable: false,
                     can_power_off: false,
                     powered_off: Arc::default(),
+                    vendor: "",
+                    model: "",
+                    bus: "",
+                    rotation: -1,
                 },
             )
             .unwrap();
@@ -700,6 +809,34 @@ mod tests {
     }
 
     #[test]
+    fn a_volume_tells_its_device_file_uuid_access_and_its_drive_s_model_bus_and_kind() {
+        let mock = mock();
+        let stick = stick(&mock).details;
+        assert_eq!(stick.device_file.as_deref(), Some(Path::new("/dev/sdb1")));
+        assert_eq!(stick.uuid.as_deref(), Some("1A2B-3C4D"));
+        assert!(stick.read_only);
+        // The maker's padding is trimmed.
+        assert_eq!(stick.model.as_deref(), Some("SanDisk Ultra"));
+        assert_eq!(stick.connection.as_deref(), Some("usb"));
+        assert_eq!(stick.rotational, Some(false));
+        let data = mock
+            .client
+            .list()
+            .unwrap()
+            .into_iter()
+            .find(|device| device.label.as_deref() == Some("Data"))
+            .unwrap()
+            .details;
+        // Nothing said is nothing shown; -1 is a disk that spins.
+        assert_eq!(data.device_file, None);
+        assert_eq!(data.uuid, None);
+        assert_eq!(data.model, None);
+        assert_eq!(data.connection, None);
+        assert_eq!(data.rotational, Some(true));
+        assert!(!data.read_only);
+    }
+
+    #[test]
     fn mounting_returns_the_mount_point_and_the_list_then_shows_it() {
         let mock = mock();
 
@@ -775,6 +912,9 @@ mod tests {
                     ignore: false,
                     id_type: "",
                     crypto_backing: "/",
+                    device: "/dev/sdc1",
+                    uuid: "",
+                    read_only: false,
                 },
             )
             .unwrap();

@@ -529,6 +529,7 @@ mod tests {
             power_off: power_off.then(|| "/drive".to_owned()),
             filesystem: None,
             encrypted: false,
+            details: Default::default(),
         }
     }
 

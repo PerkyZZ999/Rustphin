@@ -41,6 +41,9 @@ pub mod qobject {
         #[qproperty(QString, devices_note, cxx_name = "devicesNote")]
         #[qproperty(QString, menu)]
         #[qproperty(i32, width)]
+        // A drive's Properties shown, as JSON
+        // (`rustphin_view::drive_properties::DriveSheet`); empty when none.
+        #[qproperty(QString, drive)]
         type PlacesModel = super::PlacesModelRust;
     }
 
@@ -162,6 +165,10 @@ pub mod qobject {
         /// The panel was dragged to `width` pixels; Settings keeps it.
         #[qinvokable]
         fn resize(self: Pin<&mut PlacesModel>, width: f64);
+        /// The drive's Properties were closed.
+        #[qinvokable]
+        #[cxx_name = "closeDrive"]
+        fn close_drive(self: Pin<&mut PlacesModel>);
         /// Takes up changed settings (which sections show).
         #[qinvokable]
         #[cxx_name = "adoptSettings"]

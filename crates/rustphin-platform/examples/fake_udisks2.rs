@@ -60,6 +60,10 @@ struct Block {
     drive: &'static str,
     id_type: &'static str,
     crypto_backing: &'static str,
+    /// The device file, for Properties (W-153).
+    device: &'static str,
+    uuid: &'static str,
+    read_only: bool,
 }
 
 #[interface(name = "org.freedesktop.UDisks2.Block")]
@@ -91,6 +95,18 @@ impl Block {
     #[zbus(property)]
     fn crypto_backing_device(&self) -> zbus::fdo::Result<OwnedObjectPath> {
         object_path(self.crypto_backing)
+    }
+    #[zbus(property)]
+    fn preferred_device(&self) -> Vec<u8> {
+        [self.device.as_bytes(), b"\0"].concat()
+    }
+    #[zbus(property, name = "IdUUID")]
+    fn id_uuid(&self) -> String {
+        self.uuid.to_owned()
+    }
+    #[zbus(property)]
+    fn read_only(&self) -> bool {
+        self.read_only
     }
 }
 
@@ -166,6 +182,10 @@ struct Drive {
     name: &'static str,
     removable: bool,
     can_power_off: bool,
+    vendor: &'static str,
+    model: &'static str,
+    bus: &'static str,
+    rotation: i32,
 }
 
 #[interface(name = "org.freedesktop.UDisks2.Drive")]
@@ -181,6 +201,22 @@ impl Drive {
     #[zbus(property)]
     fn can_power_off(&self) -> bool {
         self.can_power_off
+    }
+    #[zbus(property)]
+    fn vendor(&self) -> String {
+        self.vendor.to_owned()
+    }
+    #[zbus(property)]
+    fn model(&self) -> String {
+        self.model.to_owned()
+    }
+    #[zbus(property)]
+    fn connection_bus(&self) -> String {
+        self.bus.to_owned()
+    }
+    #[zbus(property)]
+    fn rotation_rate(&self) -> i32 {
+        self.rotation
     }
     fn power_off(&self, _options: HashMap<String, OwnedValue>) -> Result<(), Refusal> {
         log(&format!("PowerOff {}", self.name));
@@ -206,17 +242,27 @@ const STICK: &str = "/org/freedesktop/UDisks2/drives/usb_stick";
 const DISK: &str = "/org/freedesktop/UDisks2/drives/usb_disk";
 
 fn specs() -> Vec<Spec> {
-    let block = |label, size, drive, id_type| Block {
+    let block = |label, size, drive, id_type, device, uuid| Block {
         label,
         size,
         drive,
         id_type,
         crypto_backing: "/",
+        device,
+        uuid,
+        read_only: false,
     };
     vec![
         Spec {
             object: "nvme0n1p2",
-            block: block("", 1_000_000_000_000, NVME, "btrfs"),
+            block: block(
+                "",
+                1_000_000_000_000,
+                NVME,
+                "btrfs",
+                "/dev/nvme0n1p2",
+                "0f6a3c1e-5b7d-4e2a-9c8b-1d2e3f4a5b6c",
+            ),
             mounted: true,
             system: true,
         },
@@ -224,26 +270,57 @@ fn specs() -> Vec<Spec> {
             object: "dm_2d0",
             block: Block {
                 crypto_backing: "/org/freedesktop/UDisks2/block_devices/nvme0n1p3",
-                ..block("Data", 512_000_000_000, NVME, "btrfs")
+                ..block(
+                    "Data",
+                    512_000_000_000,
+                    NVME,
+                    "btrfs",
+                    "/dev/dm-0",
+                    "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
+                )
             },
             mounted: true,
             system: false,
         },
         Spec {
             object: "sdb1",
-            block: block("STICK", 64_000_000_000, STICK, "exfat"),
+            block: block(
+                "STICK",
+                64_000_000_000,
+                STICK,
+                "exfat",
+                "/dev/sdb1",
+                "1A2B-3C4D",
+            ),
             mounted: true,
             system: false,
         },
         Spec {
             object: "sdc1",
-            block: block("BACKUP", 2_000_000_000_000, DISK, "ext4"),
+            block: block(
+                "BACKUP",
+                2_000_000_000_000,
+                DISK,
+                "ext4",
+                "/dev/sdc1",
+                "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+            ),
             mounted: false,
             system: false,
         },
         Spec {
             object: "nvme0n1p4",
-            block: block("FULL", 8_000_000_000, NVME, "squashfs"),
+            block: Block {
+                read_only: true,
+                ..block(
+                    "FULL",
+                    8_000_000_000,
+                    NVME,
+                    "squashfs",
+                    "/dev/nvme0n1p4",
+                    "",
+                )
+            },
             mounted: true,
             system: false,
         },
@@ -278,10 +355,28 @@ fn serve(root: &Path) -> Result<zbus::blocking::Connection, Box<dyn std::error::
             .serve_at(path.clone(), spec.block)?
             .serve_at(path, Filesystem(volume))?;
     }
-    for (path, name, removable, can_power_off) in [
-        (NVME, "nvme", false, false),
-        (STICK, "usb_stick", true, true),
-        (DISK, "usb_disk", true, true),
+    for (path, name, removable, can_power_off, vendor, model, bus, rotation) in [
+        (NVME, "nvme", false, false, "", "Example NVMe SSD", "", 0),
+        (
+            STICK,
+            "usb_stick",
+            true,
+            true,
+            "Example",
+            "Flash Drive",
+            "usb",
+            0,
+        ),
+        (
+            DISK,
+            "usb_disk",
+            true,
+            true,
+            "Example",
+            "Portable Disk",
+            "usb",
+            5400,
+        ),
     ] {
         builder = builder.serve_at(
             path,
@@ -289,6 +384,10 @@ fn serve(root: &Path) -> Result<zbus::blocking::Connection, Box<dyn std::error::
                 name,
                 removable,
                 can_power_off,
+                vendor,
+                model,
+                bus,
+                rotation,
             },
         )?;
     }

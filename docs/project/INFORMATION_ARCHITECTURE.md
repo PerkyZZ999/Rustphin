@@ -163,6 +163,17 @@ groups separated by hairlines:
    power-off capable drives). Neither Unmount nor Safely remove for the
    volumes the system and the home folder run from.
 3. Copy location (mounted)
+4. Properties (W-153)
+
+### Drive Properties dialog (W-153)
+
+1. Title row: "<name> — Properties", close.
+2. Header: drive icon, name, filesystem and traits.
+3. A ring of used and free space with its legend (Used, Free, Total), or the
+   sentence saying why there is none.
+4. Facts: mounted at, size when not mounted, device, filesystem, UUID,
+   access, encrypted, drive, kind, connection, removable (only those known).
+5. Action row: Close (Esc).
 
 ### Properties dialog
 

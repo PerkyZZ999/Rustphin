@@ -34,6 +34,7 @@ use rustphin_platform::{
 };
 use rustphin_view::{
     commands::{self, Action},
+    drive_properties,
     groups::GroupsFile,
     places_panel::{
         Effect, Opening, PlacesEdit, PlacesPanel, Row, device_name, icon_for, is_shown,
@@ -144,6 +145,8 @@ pub struct PlacesModelRust {
     devices_note: QString,
     menu: QString,
     width: i32,
+    /// A drive's Properties shown, as JSON; empty when none (W-153).
+    drive: QString,
 
     started: bool,
     places_path: Option<PathBuf>,
@@ -170,6 +173,7 @@ impl Default for PlacesModelRust {
             devices_note: QString::default(),
             menu: QString::default(),
             width: i32::try_from(choice.width).unwrap_or(240),
+            drive: QString::default(),
             started: false,
             places_path: xdg::data_dirs()
                 .into_iter()
@@ -300,6 +304,7 @@ impl qobject::PlacesModel {
                     });
                     crate::preferences::changed();
                 }
+                Effect::DriveProperties(device) => self.as_mut().show_drive(device),
                 Effect::Say(words) => hub::say(words, false),
             }
         }
@@ -608,6 +613,22 @@ impl qobject::PlacesModel {
         });
     }
 
+    /// Measures the drive's filesystem off the Qt thread (a slow or
+    /// stalled one would block it), then shows its Properties (W-153).
+    fn show_drive(self: Pin<&mut Self>, device: Device) {
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let usage = device.mount_point.as_deref().and_then(devices::usage);
+            let sheet = drive_properties::drive_sheet(&device, usage);
+            let json = serde_json::to_string(&sheet).unwrap_or_default();
+            let _ = thread.queue(move |model| model.set_drive(text(&json)));
+        });
+    }
+
+    fn close_drive(self: Pin<&mut Self>) {
+        self.set_drive(QString::default());
+    }
+
     fn devices_failed(mut self: Pin<&mut Self>) {
         VOLUMES.with(|volumes| volumes.borrow_mut().clear());
         let effects = self.as_mut().rust_mut().panel.devices_failed();
@@ -688,7 +709,7 @@ impl qobject::PlacesModel {
                     });
                 });
             }
-            Opening::Mount(device) => self.mount_device(device, Some(new_tab)),
+            Opening::Mount(device) => self.mount_device(*device, Some(new_tab)),
         }
     }
 

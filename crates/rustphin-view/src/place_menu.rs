@@ -64,6 +64,8 @@ pub enum PlaceCommand {
     AddSeparator,
     /// Delete the separator.
     RemoveSeparator,
+    /// Show the drive's Properties (W-153).
+    DriveProperties,
 }
 
 impl PlaceCommand {
@@ -92,7 +94,8 @@ impl PlaceCommand {
             | Self::Mount
             | Self::Unmount
             | Self::CopyLocation
-            | Self::AddSeparator => {
+            | Self::AddSeparator
+            | Self::DriveProperties => {
                 return None;
             }
         })
@@ -128,6 +131,7 @@ impl Command for PlaceCommand {
             Self::CopyLocation => IconName::Link,
             Self::AddSeparator => IconName::SeparatorHorizontal,
             Self::RemoveSeparator => IconName::CircleX,
+            Self::DriveProperties => IconName::Info,
         })
     }
 }
@@ -289,10 +293,11 @@ pub fn place_menu(target: Target<'_>) -> Vec<MenuEntry<PlaceCommand>> {
                 entries.push(MenuEntry::Separator);
                 entries.extend(removal);
             }
+            entries.push(MenuEntry::Separator);
             if mounted {
-                entries.push(MenuEntry::Separator);
                 entries.push(item("Copy location", PlaceCommand::CopyLocation, true));
             }
+            entries.push(item("Properties", PlaceCommand::DriveProperties, true));
             entries
         }
         Target::Panel {
@@ -487,7 +492,8 @@ mod tests {
                 "Unmount",
                 "Safely remove",
                 "",
-                "Copy location"
+                "Copy location",
+                "Properties"
             ]
         );
     }
@@ -496,11 +502,19 @@ mod tests {
     fn an_unmounted_drive_offers_to_mount_and_has_no_location_to_copy() {
         assert_eq!(
             labels(&drive(false, false, true)),
-            ["Open", "Open in new tab", "", "Mount", "Safely remove"]
+            [
+                "Open",
+                "Open in new tab",
+                "",
+                "Mount",
+                "Safely remove",
+                "",
+                "Properties"
+            ]
         );
         assert_eq!(
             labels(&drive(false, false, false)),
-            ["Open", "Open in new tab", "", "Mount"]
+            ["Open", "Open in new tab", "", "Mount", "", "Properties"]
         );
     }
 
@@ -508,7 +522,7 @@ mod tests {
     fn the_systems_own_volume_is_only_opened_or_its_location_copied() {
         assert_eq!(
             labels(&drive(true, false, false)),
-            ["Open", "Open in new tab", "", "Copy location"]
+            ["Open", "Open in new tab", "", "Copy location", "Properties"]
         );
         // A fixed data disk unmounts but is not removed.
         assert_eq!(
@@ -519,7 +533,8 @@ mod tests {
                 "",
                 "Unmount",
                 "",
-                "Copy location"
+                "Copy location",
+                "Properties"
             ]
         );
     }
