@@ -366,3 +366,16 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Reopen criteria:** The maintainer wants the bars neutral again.
 - **Confirmed by / date:** The maintainer, 2026-11-14 ("The usage bars should be royal-blue please.")
 - **Supersedes / superseded by:** supersedes D-038's neutral device usage bars
+
+## D-040 — Release v0.1.0, then v0.2.0 "Daily driver"
+- **Status:** locked
+- **Date:** 2026-11-15
+- **Context:** Slices S1–S12 and the maintainer's requests W-152–W-160 are done. The MVP's success signal (two weeks of daily use) and the maintainer's real-desktop checks are still open, and the maintainer reported that renaming no longer works.
+- **Decision:** v0.1.0 is released now, on GitHub, as a tag and a release page, after rename is fixed (W-161), every document is brought up to date (W-162) and the README is made public-facing with screenshots (W-163). The two-week trial and the real-desktop checks move into v0.2.0. v0.2.0 "Daily driver" holds: fixes, hardening and improvements (S13), an Arch `PKGBUILD` in the repository (S14, L-012; the AUR and Flatpak are not in it), KDE service menus (S15, L-003) and quick preview with Space (S16, L-007), in that order (ROADMAP.md).
+- **Rationale:** The build is used daily by the maintainer already; a tagged release gives later work a fixed point. Packaging, service menus and quick preview are what a daily file manager is missed for most; finding things (search, information panel, tags) is a release of its own.
+- **Evidence:** The maintainer's answers of 2026-11-15; ROADMAP.md, "Release v0.1.0" and "v0.2.0".
+- **Consequences:** Phase 7 (release) runs for v0.1.0 before the MVP signal is met; STATE.md says so. File-name search stays in v0.3.0.
+- **Alternatives:** Hold v0.1.0 until the trial ends; add file-name search to v0.2.0; Arch and Flatpak packages together.
+- **Reopen criteria:** The trial finds a problem that must block the release; the maintainer reshapes v0.2.0.
+- **Confirmed by / date:** The maintainer, 2026-11-15 ("Fixes, Hardening and Improvements should be included into v0.2.0", packaging as a PKGBUILD in the repository, service menus, quick preview; "Tag v0.1.0 and release it on Github")
+- **Supersedes / superseded by:** —

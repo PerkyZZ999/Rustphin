@@ -203,12 +203,72 @@ maintainer on 2026-11-14.
 other documents describe exactly what is built, and the UI scenarios they touch
 are replayed on screen.
 
-## What remains
+## Release v0.1.0 (D-040)
 
-- **Next:** plan the v0.2.0 roadmap with the maintainer. Slice S12 is done.
-- **Also open:** W-115 (memory grows on each reload of a very large folder).
-- **S11 acceptance:** a keyboard-only pass of the Qt interface (R-004, R-107, R-019); the maintainer's real-desktop and hardware checks (R-013, R-105, R-020 focus, W-098e administrator mode).
-- **Then:** the two-week daily-driver trial (the MVP success signal), and phase 7 (release).
+Planned with the maintainer on 2026-11-15. v0.1.0 is the work up to here, released
+on GitHub once three things are done, in this order:
+
+1. **Rename works again (W-161).** The maintainer reported on 2026-11-15 that
+   renaming a file or folder no longer works. It is fixed first, with a regression
+   test, because a release must rename.
+2. **The documents describe the release (W-162).** Every document in `docs/` is
+   checked against the build: what is built, what was verified and what is open.
+3. **A public README (W-163).** What Rustphin is, its features, screenshots of the
+   current interface taken in an isolated session with test files, how to build,
+   install and run it, and its licence.
+
+Then the commit is tagged `v0.1.0` and a GitHub release is published with notes
+the maintainer approves (W-164). Nothing is pushed or published without the
+maintainer's go-ahead (D-037).
+
+## v0.2.0 — Daily driver (D-040)
+
+**Goal:** Rustphin is easy to install, to keep updated and to live in every day:
+what was left open in v0.1.0 is closed, and the three things a daily file manager
+is missed for most are added.
+
+**Slice S13 — Fixes, hardening and improvements.** First, because the rest builds
+on a sound base:
+- the maintainer's real-desktop and hardware checks: the blur look and contrast,
+  a real USB drive, focus from other applications, start at login, KDE's folder
+  portal, administrator mode with the real helper (ACCEPTANCE.md);
+- the two-week daily-driver trial (the MVP success signal), with each problem it
+  finds as a work item here;
+- remote folders against a real sftp or smb server;
+- fuzzing run again once a nightly at or above the minimum Rust version is
+  installed;
+- undo of the reversible parts of an operation that also replaced or deleted
+  something (`UndoError::Replaced`);
+- the open loops in STATE.md, and the maintainer's further requests.
+
+**Slice S14 — Packaging (L-012).** A `PKGBUILD` in the repository, built with
+`makepkg`, installs Rustphin to `/usr` with its desktop file, icon, D-Bus service
+file, licence and the run-time dependencies named (Qt 6, KF6 WindowSystem,
+libarchive; kio-fuse, kio-admin, 7-Zip and unrar optional). Publishing it to the
+AUR stays the maintainer's step. Flatpak is not in v0.2.0.
+
+**Slice S15 — KDE service menus (L-003).** The actions other applications
+install as service menus (`kio/servicemenus/*.desktop`) appear in the context
+menu as in Dolphin: matched by MIME type and the number of entries selected,
+grouped in submenus as they ask, and run with the selected files. Untrusted
+`.desktop` files are parsed under the R-104 rules (bounded, fuzzed); a service
+menu that is not executable is not offered, as KDE requires.
+
+**Slice S16 — Quick preview (L-007).** Space shows a large preview of the focused
+entry without opening an application: pictures, text and source, a PDF's first
+page, and a video's or audio file's thumbnail; the arrows move through the folder,
+Space or Escape closes it, Enter opens the file. Previews come from worker
+threads, bounded in size and time, like thumbnails (R-014, R-104).
+
+**Order:** S13 first, then S14, S15 and S16. Each slice gets its requirements with
+acceptance criteria and, for S15 and S16, a plan and mockup for the maintainer to
+approve before it is built.
+
+**Later (v0.3.0 and after, as suggested on 2026-11-15, not yet planned):** search
+by name then by content through Baloo, the information panel, tags, ratings and
+comments (v0.3.0); translations, the light theme, browsing inside archives, native
+network protocols (v0.4.0); the embedded terminal, Miller columns and
+version-control overlays after that.
 
 ## Traceability
 
