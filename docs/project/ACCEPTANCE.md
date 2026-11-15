@@ -45,7 +45,7 @@ REQUIREMENTS.md says per criterion what was and was not repeated on Qt.
 | Requirement · criterion | What the code does | Needed |
 |---|---|---|
 | R-019 · each page's settings do what SETTINGS_PLAN.md describes | Appearance › Look and Title bar are saved but the Qt interface ignores them (only `RUSTPHIN_OPAQUE` turns the glass off; the window is always frameless) | Wire them into the Qt interface, or a decision to drop them (W-117) |
-| R-109 · a missing optional service degrades with a visible notice | UDisks2 and data-control say so; without blur the Qt interface is opaque from the start without a notice, and does not follow blur appearing or going while it runs | The blur notice of DESIGN.md (and live switching), or a decision (W-076) |
+| R-109 · a missing optional service degrades with a visible notice | UDisks2 and data-control say so; without blur the Qt interface is opaque and says so on a status line, and follows blur appearing or going (W-146c; the decision is unit-tested, the line was seen only when forced) | A look on a desktop with KWin\'s Blur effect switched off (UI_SCENARIOS AP6) |
 
 ## Needs the maintainer: real desktop or hardware
 

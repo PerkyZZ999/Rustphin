@@ -1,4 +1,5 @@
 #include "app.h"
+#include "window.h"
 
 #include <malloc.h>
 
@@ -222,6 +223,10 @@ void rustphin_shell_start(bool keep_running, const QString& home)
     }
     QGuiApplication::setQuitOnLastWindowClosed(false);
     QObject::connect(qGuiApp, &QGuiApplication::lastWindowClosed, qGuiApp, &lastWindowClosed);
+    // KWindowSystem learns whether KWin offers blur one turn of the event
+    // loop after it is first asked. Ask now, so the answer is there when the
+    // first window, opened from the loop, chooses its theme.
+    (void)rustphin_blur_available();
 }
 
 void rustphin_shell_open(const QStringList& folders, const QString& activation)

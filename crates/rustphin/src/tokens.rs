@@ -17,7 +17,7 @@ use rustphin_view::{
     colors::Colors,
     layout::{DEFAULT_ZOOM, ViewMode},
     metrics::{size, space, text},
-    settings::TextSize,
+    settings::{TextSize, Theme},
 };
 
 /// The Rust side of `Tokens`.
@@ -25,29 +25,48 @@ pub struct TokensRust {
     colors: QMap<QMapPair_QString_QVariant>,
     metrics: QMap<QMapPair_QString_QVariant>,
     translucent: bool,
+    blur_missing: bool,
     /// The text size `metrics` was made for.
     text_size: TextSize,
 }
 
 impl Default for TokensRust {
     fn default() -> Self {
-        let translucent = glass_wanted(std::env::var_os("RUSTPHIN_OPAQUE").as_deref())
-            && qobject::rustphin_blur_available();
-        let mut colors = QMap::default();
-        for (name, color) in Colors::charcoal(translucent).named() {
-            colors.insert(
-                QString::from(name),
-                QVariant::from(&QString::from(color.qml().as_str())),
-            );
-        }
+        let theme = theme_now();
+        tracing::info!(
+            glass = theme.glass,
+            blur_missing = theme.blur_missing,
+            "theme chosen"
+        );
         let text_size = crate::prefs::settings().text_size();
         Self {
-            colors,
+            colors: colors_map(theme.glass),
             metrics: metrics_map(text_size),
-            translucent,
+            translucent: theme.glass,
+            blur_missing: theme.blur_missing,
             text_size,
         }
     }
+}
+
+/// The theme the settings, the run and the desktop give at this moment.
+fn theme_now() -> Theme {
+    let forced_opaque = !glass_wanted(std::env::var_os("RUSTPHIN_OPAQUE").as_deref());
+    crate::prefs::settings()
+        .look()
+        .theme(forced_opaque, qobject::rustphin_blur_available())
+}
+
+/// Every colour as QML reads it, for the glass or the opaque theme.
+fn colors_map(glass: bool) -> QMap<QMapPair_QString_QVariant> {
+    let mut colors = QMap::default();
+    for (name, color) in Colors::charcoal(glass).named() {
+        colors.insert(
+            QString::from(name),
+            QVariant::from(&QString::from(color.qml().as_str())),
+        );
+    }
+    colors
 }
 
 /// Every size and font family as QML reads them, at `text_size`.
@@ -65,18 +84,34 @@ fn metrics_map(text_size: TextSize) -> QMap<QMapPair_QString_QVariant> {
 impl qobject::Tokens {
     fn refresh(mut self: std::pin::Pin<&mut Self>) {
         let text_size = crate::prefs::settings().text_size();
-        if text_size == self.text_size {
-            return;
+        if text_size != self.text_size {
+            self.as_mut().rust_mut().text_size = text_size;
+            self.as_mut().rust_mut().metrics = metrics_map(text_size);
+            self.as_mut().metrics_changed();
         }
-        self.as_mut().rust_mut().text_size = text_size;
-        self.as_mut().rust_mut().metrics = metrics_map(text_size);
-        self.metrics_changed();
+        let theme = theme_now();
+        if theme.glass != self.translucent || theme.blur_missing != self.blur_missing {
+            tracing::info!(
+                glass = theme.glass,
+                blur_missing = theme.blur_missing,
+                "theme changed"
+            );
+        }
+        if theme.blur_missing != self.blur_missing {
+            self.as_mut().rust_mut().blur_missing = theme.blur_missing;
+            self.as_mut().blur_missing_changed();
+        }
+        if theme.glass != self.translucent {
+            self.as_mut().rust_mut().translucent = theme.glass;
+            self.as_mut().rust_mut().colors = colors_map(theme.glass);
+            self.as_mut().colors_changed();
+            self.as_mut().translucent_changed();
+            qobject::rustphin_blur_windows(theme.glass);
+        }
     }
 
     fn blur_windows(&self) {
-        if *self.translucent() {
-            qobject::rustphin_blur_windows();
-        }
+        qobject::rustphin_blur_windows(*self.translucent());
     }
 }
 
@@ -160,6 +195,7 @@ fn metric_values(scale: f32) -> Vec<(&'static str, f32)> {
         ("palette_icon", size::PALETTE_ICON),
         ("progress", size::PROGRESS),
         ("progress_min", size::PROGRESS_MIN),
+        ("blur_status", size::BLUR_STATUS),
         ("speed_graph", size::SPEED_GRAPH),
         ("control_line", size::LINE),
         ("button", size::BUTTON),

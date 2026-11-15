@@ -138,6 +138,10 @@ impl qobject::Shell {
         prefs::settings().confirmations().close_tabs
     }
 
+    fn own_title_bar(&self) -> bool {
+        prefs::settings().title_bar() == rustphin_view::settings::TitleBar::Rustphin
+    }
+
     fn close_question(&self, count: i32) -> QString {
         let shown = questions::close_window(usize::try_from(count).unwrap_or(0));
         QString::from(&serde_json::to_string(&shown).unwrap_or_default())

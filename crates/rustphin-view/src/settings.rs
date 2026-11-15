@@ -194,6 +194,30 @@ pub enum Look {
     Opaque,
 }
 
+/// The theme a window is drawn in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Theme {
+    /// Translucent surfaces over the blurred desktop; solid ones otherwise.
+    pub glass: bool,
+    /// Glass was wanted but the desktop offers no blur: the user is told
+    /// why the window is solid (R-109).
+    pub blur_missing: bool,
+}
+
+impl Look {
+    /// The theme this look gives: glass only where it is wanted, not
+    /// switched off for the run (`forced_opaque`, `RUSTPHIN_OPAQUE`) and
+    /// the desktop offers blur. Missing blur is reported only when nothing
+    /// else turned the glass off.
+    pub fn theme(self, forced_opaque: bool, blur_offered: bool) -> Theme {
+        let wanted = self == Self::Glass && !forced_opaque;
+        Theme {
+            glass: wanted && blur_offered,
+            blur_missing: wanted && !blur_offered,
+        }
+    }
+}
+
 /// Who draws the title bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -810,6 +834,29 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn glass_needs_the_look_the_run_and_the_desktop_to_agree() {
+        let glass = Theme {
+            glass: true,
+            blur_missing: false,
+        };
+        let solid = Theme {
+            glass: false,
+            blur_missing: false,
+        };
+        let told = Theme {
+            glass: false,
+            blur_missing: true,
+        };
+        assert_eq!(Look::Glass.theme(false, true), glass);
+        assert_eq!(Look::Glass.theme(false, false), told);
+        // Switched off, by the setting or for the run: nothing to explain.
+        assert_eq!(Look::Glass.theme(true, true), solid);
+        assert_eq!(Look::Glass.theme(true, false), solid);
+        assert_eq!(Look::Opaque.theme(false, true), solid);
+        assert_eq!(Look::Opaque.theme(false, false), solid);
+    }
 
     #[test]
     fn rustphin_keeps_running_by_default_and_starts_at_login_only_when_asked() {

@@ -629,10 +629,14 @@ boxes. Zooming out reaches 24-pixel rows.
   `window-glass`; it is the backdrop for the others. The tints carry no hue
   (D-038): `#111213` list, `#18191B` chrome and places, `#202124` tab strip.
 - **Solid surfaces** (`window-solid`, `chrome-solid`, `chrome-raised-solid`,
-  `content-solid`) replace the glass in opaque mode: when KWin does not offer
-  blur, or `RUSTPHIN_OPAQUE` is set to anything but `0`. The choice is made
-  once, when the `Tokens` singleton is created. Every rule in this document
-  holds in both modes.
+  `content-solid`) replace the glass in opaque mode: when Settings,
+  Appearance, Look is Opaque, when `RUSTPHIN_OPAQUE` is set to anything but
+  `0`, or when KWin does not offer blur (`settings::Look::theme`). The choice
+  is made again whenever the settings change and whenever a window becomes
+  the active one, so blur that appears or goes while Rustphin runs is
+  followed. Every rule in this document holds in both modes. When glass is
+  wanted but blur is unavailable (not when it is switched off), a status
+  line says so (see Blur status).
 - **Chrome raised** (`chrome-raised-*`) is the window lines at the bottom
   (activity and result) and the active side's path bar in split view: one
   step lighter than the chrome, so they stand out from the status lines.
@@ -1191,6 +1195,17 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   reports a problem or is waiting on something: a problem uses
   `error-surface` with an `error-border` outline and `triangle-alert` in
   `error`, and stays until dismissed.
+- **Blur status** (Main.qml): a 32 px `chrome` line over the activity and
+  notice lines, shown only when the Look is Glass, `RUSTPHIN_OPAQUE` is not
+  set and KWin offers no blur: an `info` icon in `text-muted`, "Background
+  blur unavailable; using the opaque theme." in `body-md` `text-muted`, and
+  a dismiss icon button (tooltip "Dismiss this message") that hides it in
+  that window until blur changes again. Choosing Opaque in Settings removes
+  it for good.
+- **Title bar setting:** with Settings, Appearance, Title bar set to KDE's, a
+  new window is an ordinary framed one: KWin draws the title bar and the
+  resize edges, and Rustphin's own title bar, edge hairline and resize bands
+  are left out. Windows already open keep what they have.
 - **Filter bar:** a 16 px `funnel` icon, a 32 px field (at most 360 px)
   labelled "Filter by name", and a close icon button (tooltip "Close the
   filter (Esc)").
@@ -1300,12 +1315,6 @@ pages.
 
 Where the build differs from this document today:
 
-- **Settings that are stored but not applied:** Appearance's Look (Glass or
-  Opaque) and Title bar (Rustphin's own or KDE's). The theme is chosen only
-  by whether KWin offers blur and by `RUSTPHIN_OPAQUE`, and the window always
-  draws its own title bar.
-- **Blur status:** no line says that blur is unavailable; the opaque theme
-  is used silently (`size::BLUR_STATUS` is not used).
 - **Settings in a narrow window:** below 720 px (`size::SETTINGS_NARROW`)
   the page list is a row of tabs over the page (icon and name, the chosen
   one with the accent edge under it); Left and Right move between them and

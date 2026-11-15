@@ -24,6 +24,8 @@ Window {
     // The home folder's `file:` URI.
     required property string home
     readonly property bool maximised: visibility === Window.Maximized || visibility === Window.FullScreen
+    // Whether Rustphin draws the window's edge and resizes it itself.
+    readonly property bool framed: ownTitleBar && !maximised
     readonly property TabPage page: pages.count > tabList.active ? pages.itemAt(tabList.active) as TabPage : null
     readonly property Pane activePane: page ? page.activeItem : null
     readonly property FolderModel folder: activePane ? activePane.listing : null
@@ -77,7 +79,17 @@ Window {
     minimumWidth: 480
     minimumHeight: 320
     visible: true
-    flags: Qt.Window | Qt.FramelessWindowHint
+    // Rustphin's own title bar or the desktop's, as Settings said when the
+    // window was made.
+    readonly property bool ownTitleBar: Shell.ownTitleBar()
+    // The blur status line was dismissed in this window.
+    property bool blurNoticeDismissed: false
+    flags: ownTitleBar ? Qt.Window | Qt.FramelessWindowHint : Qt.Window
+    // Blur may have come or gone while another window was in front.
+    onActiveChanged: {
+        if (active)
+            Tokens.refresh()
+    }
     color: Tokens.translucent ? "transparent" : Tokens.colors.window
     title: qsTr("%1 — Rustphin").arg(folder ? folder.title : "")
 
@@ -113,7 +125,15 @@ Window {
         Qt.callLater(focusActive)
     }
 
-    // A text size chosen in Settings shows at once.
+    // The blur status line comes back when blur goes missing again.
+    Connections {
+        target: Tokens
+        function onBlurMissingChanged() {
+            root.blurNoticeDismissed = false
+        }
+    }
+
+    // A text size or a look chosen in Settings shows at once.
     Connections {
         target: Preferences
         function onRevisionChanged() {
@@ -337,17 +357,18 @@ Window {
         anchors.fill: parent
         color: Tokens.colors.window
         // Without the compositor's frame, a hairline marks the window's edge.
-        border.width: root.maximised ? 0 : 1
+        border.width: root.framed ? 1 : 0
         border.color: Tokens.colors.border_strong
     }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: root.maximised ? 0 : 1
+        anchors.margins: root.framed ? 1 : 0
         spacing: 0
 
         TitleBar {
             Layout.fillWidth: true
+            visible: root.ownTitleBar
             window: root
         }
         Toolbar {
@@ -458,6 +479,45 @@ Window {
                             onOtherPane: root.otherPane()
                         }
                     }
+                }
+            }
+        }
+        // Glass was wanted but the desktop offers no blur (R-109).
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Tokens.metrics.blur_status
+            visible: Tokens.blurMissing && !root.blurNoticeDismissed
+            color: Tokens.colors.chrome
+            Accessible.role: Accessible.StaticText
+            Accessible.name: blurText.text
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Tokens.metrics.space_md
+                anchors.rightMargin: Tokens.metrics.space_xs
+                spacing: Tokens.metrics.space_sm
+
+                Lucide {
+                    name: "info"
+                    colour: Tokens.colors.text_muted
+                }
+                Text {
+                    id: blurText
+
+                    textFormat: Text.PlainText
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                    color: Tokens.colors.text_muted
+                    font.family: Tokens.metrics.family_body
+                    font.pixelSize: Tokens.metrics.body_text
+                    text: qsTr("Background blur unavailable; using the opaque theme.")
+                }
+                IconButton {
+                    side: Tokens.metrics.small_button
+                    iconName: "x"
+                    text: qsTr("Dismiss")
+                    tip: qsTr("Dismiss this message")
+                    onClicked: root.blurNoticeDismissed = true
                 }
             }
         }
@@ -720,7 +780,7 @@ Window {
         required property real w
         required property real h
 
-        visible: !root.maximised
+        visible: root.framed
         x: l < 0 ? root.width + l : l
         y: t < 0 ? root.height + t : t
         width: w <= 0 ? root.width + w : w

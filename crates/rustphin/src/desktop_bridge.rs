@@ -38,6 +38,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "askBeforeClosingTabs"]
         fn ask_before_closing_tabs(self: &Shell) -> bool;
+        /// Whether a new window draws Rustphin's own title bar, not the
+        /// desktop's (Settings, Appearance).
+        #[qinvokable]
+        #[cxx_name = "ownTitleBar"]
+        fn own_title_bar(self: &Shell) -> bool;
         /// The question before closing a window with `count` tabs, as JSON.
         #[qinvokable]
         #[cxx_name = "closeQuestion"]

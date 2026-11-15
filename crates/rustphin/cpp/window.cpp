@@ -9,9 +9,9 @@ bool rustphin_blur_available()
     return KWindowEffects::isEffectAvailable(KWindowEffects::BlurBehind);
 }
 
-void rustphin_blur_windows()
+void rustphin_blur_windows(bool blur)
 {
     for (QWindow* window : QGuiApplication::topLevelWindows()) {
-        KWindowEffects::enableBlurBehind(window, true);
+        KWindowEffects::enableBlurBehind(window, blur);
     }
 }

@@ -15,14 +15,14 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-14 — W-146b Settings that did nothing
+- Latest validation entry: VALIDATION.md, 2026-11-14 — W-146c Blur status and the Appearance settings
 - Acceptance: ACCEPTANCE.md lists every open criterion and who can close it (re-mapped 2026-11-14 for the Qt interface).
 
 ## Open loops
-- Task: W-117, the Qt leftovers W-116b saw (one-tab strip vs T5, Ctrl+0 zoom default, Trash place highlight, notice icons, recovery wording, Run prompt default styling, unnamed AT-SPI buttons, a link's Properties icon, J7), plus Settings › Appearance's Look and Title bar choices, which the Qt interface stores but ignores (R-019 unticked on that).
+- Task: W-117, the Qt leftovers W-116b saw (one-tab strip vs T5, Ctrl+0 zoom default, Trash place highlight, notice icons, recovery wording, Run prompt default styling, unnamed AT-SPI buttons, a link's Properties icon, J7).
 - Task: W-115, memory grows by about 25 MB on each reload of a 500,000-entry folder (below the interface).
 - Task: keyboard-only pass of the Qt interface with Shift+Tab and visible focus on every surface, Settings controls included (R-004, R-107, R-019; W-076). The GPUI focus blocker W-076e no longer applies.
-- Task: without blur the Qt interface is opaque from the start but says nothing, and does not follow blur appearing or going while it runs; DESIGN.md's "Background blur unavailable" line is not built (R-109 unticked on that; W-076).
+- Task: the blur status line and the theme following blur (W-146c) were not seen on a compositor without blur: UI_SCENARIOS AP6 needs a desktop with KWin's Blur effect switched off (R-109 unticked on that).
 - Task: R-101 on Qt: first entries, re-sort and details-view scrolling re-measured (W-114d, W-114h); icons and compact scrolling, the closing-tab memory figure of R-102 and per-task times on the Qt thread were not; nothing measured on a physical display.
 - Task: administrator mode in the Qt interface is one state for the whole process (every window), the title is not marked, and batch rename is offered there although `AdminFs` has no directory lock (ADMIN_MODE.md "Differences from the design"); D-028 says per window.
 - Task: `rust-tc fuzz` could not run after W-129 and W-133: the installed nightly (1.97) is below the 1.100 minimum. The fuzz harness checks in `rust-tc doctor` pass.
