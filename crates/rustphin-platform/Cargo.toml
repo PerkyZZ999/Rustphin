@@ -24,6 +24,7 @@ image.workspace = true
 md-5.workspace = true
 png.workspace = true
 jiff.workspace = true
+libc.workspace = true
 rustix = { workspace = true, features = ["process", "fs", "net", "event", "thread"] }
 rustphin-core.workspace = true
 roxmltree.workspace = true

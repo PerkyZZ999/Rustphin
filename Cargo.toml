@@ -30,6 +30,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tempfile = "3"
 proptest = { version = "1", default-features = false, features = ["std"] }
 rustix = { version = "1", features = ["fs"] }
+# The allocator's arena limit (W-115); MIT or Apache-2.0.
+libc = "0.2"
 wl-clipboard-rs = "0.9"
 roxmltree = "0.21"
 zbus = "5"

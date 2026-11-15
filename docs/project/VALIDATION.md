@@ -1,5 +1,15 @@
 # Validation evidence
 
+### 2026-11-15 — W-115 Memory on reloading a very large folder
+- **Found:** a headless probe (the core's `DirectoryModel` on the 500,000-entry benchmark folder, reloaded after each complete snapshot, RssAnon read from `/proc/self/status`) grew about 11 MB per reload with glibc's defaults, levelling off at about 175 MB after 20 reloads on 16 cores, also with 1.5 s pauses between reloads. With `MALLOC_ARENA_MAX=1` it stayed at 32 MB, with 2 at 42 MB, with 4 at 60 MB. So no listing is kept: freed listings stay spread over the allocator's per-thread arenas (the listing threads and the CPU pool build them, the Qt thread frees them).
+- **Speed with two arenas:** `bench_listing` worst of 5: first entries 42.6 ms, sorted listing 211.8 ms, slowest re-sort 66.5 ms, against 42.9, 206.7 and 64.5 ms with the defaults (limits 200, 500 and 500 ms).
+- **Change:** `rustphin_platform::memory::limit_arenas` (glibc's `mallopt(M_ARENA_MAX, 2)`, nothing elsewhere), called first in `main`; a warning is logged if the allocator refuses. `libc` becomes a direct dependency of the platform crate (MIT or Apache-2.0; already in the lock through other crates).
+- **Tests:** `memory::many_threads_allocating_at_once_share_two_arenas` (16 threads holding memory at once; arenas counted from `malloc_info`), proved by passing 0 instead of the limit, when it failed.
+- **On screen (isolated KWin session, isolated home, release build, the 500,000-entry folder, F5 every 3 s):** the fixed build went 125 → 139 → 162 → 174 → 153 → 167 → 179 → 156 → 167 → 179 → 154 MB RssAnon over 10 reloads; the build installed before the fix went 122 → 137 → 161 → 186 → 211 → 236 → 235 MB over 6.
+- **Not verified:** a long day of use on the real desktop.
+- **Tests:** `rust-tc doctor` PASS, 991 tests (3 skipped).
+- **Waiver:** none
+
 ### 2026-11-15 — W-146f KWin's window menu on the title bar
 - **Decision:** the maintainer chose KWin's "Window Operations Menu" global shortcut over D-Bus rather than Qt Wayland's private API (2026-11-15).
 - **Change:** DESIGN.md, UI_SCENARIOS.md (T5), PRIVACY.md, ARCHITECTURE.md and AGENTS.md first. Platform: `window_menu::open` calls `invokeShortcut("Window Operations Menu")` on `org.kde.kglobalaccel`, `/component/kwin`, on the session bus (the method and the name were read from the running KWin by introspection). Interface: `Shell.windowMenu()` makes the call on its own thread and logs a failure; TitleBar.qml activates the window and calls it on a right-click.

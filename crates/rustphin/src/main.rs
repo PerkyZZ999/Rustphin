@@ -119,6 +119,9 @@ fn folder_tab(path: PathBuf) -> PathBuf {
 }
 
 fn main() -> ExitCode {
+    // Before any thread starts: freed listings otherwise stay spread over
+    // many arenas (W-115).
+    let arenas_limited = rustphin_platform::memory::limit_arenas();
     // Logs go to stderr; RUSTPHIN_LOG sets the level (AGENTS.md).
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -127,6 +130,9 @@ fn main() -> ExitCode {
         )
         .with_writer(std::io::stderr)
         .init();
+    if !arenas_limited {
+        tracing::warn!("the allocator kept its default arenas");
+    }
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
     let mut launch = parse_launch(std::env::args_os(), &cwd);
     launch.targets = launch.targets.into_iter().map(folder_tab).collect();

@@ -16,6 +16,7 @@ pub mod icons;
 pub mod instance;
 pub mod kdeglobals;
 pub mod libarchive;
+pub mod memory;
 pub mod mime;
 pub mod places;
 pub mod process;
