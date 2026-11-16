@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-15 — W-164 Release v0.1.0
+- **Phase:** 7 Release (v0.1.0)
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` passed and `npx @google/design.md lint docs/DESIGN.md` reported no errors on the release commit; the release notes `docs/releases/v0.1.0.md` were approved by the maintainer ("release 0.1.0 please with the release notes"). The commit also takes in the local leftovers: `fuzz/Cargo.lock` (libc for the fuzz harness), mockup 38 (devices, mixed design, now in the mockup index) and the source of the maintainer's Settings mockup `docs/mockup/SettingsDialog_Refined` without its node modules, its example home path replaced by `~/Projects`; the design skills' local receipts are ignored. `main` pushed, the annotated tag `v0.1.0` pushed and the GitHub release "Rustphin 0.1.0" created from the notes.
+- **Not verified:** how GitHub renders the release page and its picture (the picture's raw URL points at the tag).
+- **Waiver:** none
+- **Follow-up:** v0.2.0, Slice S13 (W-165 onwards).
+
 ### 2026-11-15 — W-163 Public README
 - **Phase:** 7 Release (v0.1.0)
 - **Result:** pass

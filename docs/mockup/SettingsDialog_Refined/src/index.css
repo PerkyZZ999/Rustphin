@@ -1,0 +1,37 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600&display=swap");
+@import 'tailwindcss';
+
+@theme {
+  --font-ui: Inter, "Noto Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-head: "Space Grotesk", Inter, system-ui, sans-serif;
+
+  --color-backdrop: #0b0c0f;
+  --color-dialog: #18191d;
+  --color-side: #141518;
+  --color-panel: #1f2026;
+  --color-field: #121317;
+  --color-raised: #2a2c34;
+  --color-hover: rgba(255, 255, 255, 0.05);
+  --color-edge: rgba(255, 255, 255, 0.07);
+  --color-edge-strong: rgba(255, 255, 255, 0.14);
+  --color-accent: #8193f2;
+  --color-accent-fill: #4b5fd6;
+  --color-accent-soft: rgba(129, 147, 242, 0.14);
+  --color-accent-dim: rgba(129, 147, 242, 0.4);
+  --color-ok: #4fc28f;
+  --color-danger: #f08a8a;
+  --color-ink: #e7e8ec;
+  --color-ink-muted: #a2a6b0;
+  --color-ink-faint: #737882;
+  --color-scroll: #43464e;
+
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--color-backdrop); font-family: var(--font-ui); -webkit-font-smoothing: antialiased; }
+
+.thin-scroll { scrollbar-width: thin; scrollbar-color: var(--color-scroll) transparent; }
+
+input[type='range'] { accent-color: var(--color-accent-fill); }

@@ -1510,8 +1510,8 @@ and View menus with submenu icons (W-118), the palette, the activity and
 notice lines, the transfer dialog (W-149), Properties, batch rename,
 Compress to…, the questions, the problems dialog and Settings with all eight
 pages, with drives drawn in three styles (W-159), and Settings restyled after the maintainer's refined mockup (W-155:
-`docs/mockup/SettingsDialog_Refined`, a React project kept out of the
-repository) with its search, page headings, section panels, switches,
+`docs/mockup/SettingsDialog_Refined`, a React project, its source kept
+without its node modules) with its search, page headings, section panels, switches,
 segments, sliders, chips and look tiles; the mockup's 6–8 px corners, larger
 type and drop shadow were not taken, by the maintainer's choice, so the
 dialog keeps this document's 2 px corners, type scale and flat depth.

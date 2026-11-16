@@ -6,3 +6,6 @@
 /spikes/qt-bridge/shim/
 /spikes/*/.qmlls.ini
 /crates/*/.qmlls.ini
+
+# Local receipts of the design skills' checks
+/.ds-receipts/

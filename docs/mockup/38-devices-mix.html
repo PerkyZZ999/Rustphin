@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devices, mixed design</title>
+<!-- Mockup for the Devices section of the places panel (2026-11-15), mixing
+     the maintainer's three drafts: the ring of mockup 2 as each drive's icon,
+     the free space and filesystem line of mockups 2 and 3, the details of
+     mockup 1 when a drive is chosen, and the Removable group with Eject and
+     Mount of mockup 3. Colours, type and sizes are docs/DESIGN.md's charcoal
+     tokens (D-038), with the drive usage in `progress` (D-039). -->
+<style>
+  :root {
+    --window: #141516;
+    --chrome: #18191B;
+    --chrome-raised: #202124;
+    --content: #111213;
+    --raised: #1D1E21;
+    --text: #ECECED;
+    --text-muted: #AEB1B8;
+    --text-disabled: #7D8087;
+    --progress: #7B98F2;
+    --accent: #7B98F2;
+    --selection: #3B3D42;
+    --current: #2A2C30;
+    --hover: rgba(255, 255, 255, 0.06);
+    --error: #FF9B9B;
+    --tertiary: #10B981;
+    --border: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --track: #34363B;
+    --radius: 2px;
+    --f-ui: Inter, "Noto Sans", system-ui, sans-serif;
+    --f-mono: "JetBrains Mono", "Noto Sans Mono", ui-monospace, monospace;
+    --f-head: "Space Grotesk", Inter, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0B0C0D;
+    color: var(--text);
+    font: 400 12px/16px var(--f-ui);
+    -webkit-font-smoothing: antialiased;
+    padding: 32px 16px 48px;
+  }
+  h1 { font: 600 15px/20px var(--f-head); margin: 0 0 4px; }
+  .lead { color: var(--text-muted); max-width: 760px; margin: 0 0 24px; }
+  .states { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { color: var(--text-muted); margin-top: 8px; max-width: 240px; }
+  figcaption b { color: var(--text); font-weight: 600; }
+
+  /* The places panel, 240 px as by default. */
+  .panel {
+    width: 240px;
+    background: var(--chrome);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 4px 12px;
+  }
+  .head {
+    display: flex; align-items: center; gap: 4px;
+    height: 28px; padding: 0 8px;
+    color: var(--text-muted);
+    font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .head svg { width: 12px; height: 12px; }
+  .sub { margin-top: 8px; }
+  .place {
+    display: flex; align-items: center; gap: 8px;
+    height: 28px; padding: 0 8px; border-radius: var(--radius);
+  }
+  .place svg { width: 16px; height: 16px; color: var(--text-muted); }
+
+  /* A drive: the ring around its icon, its name, then what is free. */
+  .drive {
+    position: relative;
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 8px;
+    min-height: 44px;
+    padding: 6px 8px;
+    border-radius: var(--radius);
+  }
+  .drive.hover { background: var(--hover); }
+  .drive.chosen { background: var(--selection); }
+  .drive.chosen::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 2px; background: var(--accent);
+  }
+  .ring { position: relative; width: 32px; height: 32px; }
+  .ring svg.arc { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .ring .glyph {
+    position: absolute; left: 9px; top: 9px; width: 14px; height: 14px;
+    color: var(--text-muted);
+  }
+  .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Inter (`body-sm`) rather than JetBrains Mono: the line is read, not
+     compared down a column, and the warning fits at 240 px. */
+  .fig {
+    font: 400 11px/16px var(--f-ui); color: var(--text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .fig .warn { color: var(--error); }
+  .unmounted .name { color: var(--text-muted); }
+
+  .eject, .mount {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 24px; border-radius: var(--radius); color: var(--text);
+    background: transparent; border: 0; font: inherit;
+  }
+  .eject { width: 24px; }
+  .eject svg { width: 16px; height: 16px; }
+  .eject.shown { background: var(--hover); }
+  .mount { padding: 0 8px; border: 1px solid var(--border-strong); }
+
+  /* The chosen drive's details, under it (mockup 1). */
+  .details {
+    margin: 0 4px 4px 48px;
+    padding: 4px 0 4px;
+    display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 2px;
+  }
+  .details dt { color: var(--text-muted); }
+  .details dd { margin: 0; font: 400 11px/16px var(--f-mono); text-align: right; }
+  .details .actions { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 6px; }
+  .details .actions span {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius);
+  }
+
+  .tip {
+    display: inline-block; margin: 4px 0 0 48px;
+    background: var(--raised); border: 1px solid var(--border-strong);
+    border-radius: var(--radius); padding: 8px; max-width: 200px;
+  }
+  .notes { margin-top: 32px; max-width: 760px; color: var(--text-muted); }
+  .notes h2 { font: 600 12px/16px var(--f-ui); color: var(--text); margin: 0 0 8px; }
+  .notes li { margin-bottom: 6px; }
+  .notes b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Devices: the three drafts in one</h1>
+<p class="lead">The places panel at its default 240 px, in four states. Each drive's icon sits inside a ring of its used space (draft 2); beside it the name and what is free with the filesystem (drafts 2 and 3); choosing a drive opens its details under it (draft 1); removable drives have their own group with Eject and Mount on the row (draft 3).</p>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-drive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></symbol>
+    <symbol id="i-usb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="7" r="1"/><circle cx="4" cy="20" r="1"/><path d="M4.7 19.3 19 5"/><path d="m21 3-3 1 2 2Z"/><path d="M9.26 7.68 5 12l2 5"/><path d="m10 14 5 2 3.5-3.5"/><path d="m18 12 1-1 1 1-1 1Z"/></symbol>
+    <symbol id="i-eject" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 9-6-6-6 6"/><path d="M12 3v14"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  </defs>
+</svg>
+
+<!-- A ring: r = 14, circumference 87.96; `used` is its share. -->
+<div class="states">
+
+<figure>
+  <div class="panel">
+    <div class="place"><svg><use href="#i-house"/></svg>Home</div>
+    <div class="place"><svg><use href="#i-folder"/></svg>Documents</div>
+    <div class="head"><svg><use href="#i-chev"/></svg>Devices</div>
+    <div class="drive">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#7B98F2" stroke-width="3" stroke-dasharray="63.33 87.96"/></svg><svg class="glyph"><use href="#i-drive"/></svg></div>
+      <div><div class="name">System</div><div class="fig">261.2 GiB free · Btrfs</div></div>
+    </div>
+    <div class="drive">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#FF9B9B" stroke-width="3" stroke-dasharray="80.92 87.96"/></svg><svg class="glyph"><use href="#i-drive"/></svg></div>
+      <div><div class="name">data-y</div><div class="fig"><span class="warn">Almost full</span> · 8.1 GiB free</div></div>
+    </div>
+    <div class="drive">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#7B98F2" stroke-width="3" stroke-dasharray="52.78 87.96"/></svg><svg class="glyph"><use href="#i-drive"/></svg></div>
+      <div><div class="name">data-z</div><div class="fig">192.8 GiB free · XFS</div></div>
+    </div>
+    <div class="head sub">Removable</div>
+    <div class="drive">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#7B98F2" stroke-width="3" stroke-dasharray="37.82 87.96"/></svg><svg class="glyph"><use href="#i-usb"/></svg></div>
+      <div><div class="name">KINGSTON</div><div class="fig">16.4 GiB free · exFAT</div></div>
+      <button class="eject" title="Eject KINGSTON"><svg><use href="#i-eject"/></svg></button>
+    </div>
+    <div class="drive unmounted">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3" stroke-dasharray="3 3"/></svg><svg class="glyph"><use href="#i-drive"/></svg></div>
+      <div title="Windows: not mounted, 237.9 GiB, NTFS"><div class="name">Windows</div><div class="fig">Not mounted · NTFS</div></div>
+      <button class="mount">Mount</button>
+    </div>
+  </div>
+  <figcaption><b>A. At rest.</b> One two-line row per drive. The ring fills with the used share; from 90 % it turns <code>error</code> red and the line says "Almost full", so the warning is not colour alone. An unmounted drive has a dashed, empty ring and Mount.</figcaption>
+</figure>
+
+<figure>
+  <div class="panel">
+    <div class="head"><svg><use href="#i-chev"/></svg>Devices</div>
+    <div class="drive">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#7B98F2" stroke-width="3" stroke-dasharray="63.33 87.96"/></svg><svg class="glyph"><use href="#i-drive"/></svg></div>
+      <div><div class="name">System</div><div class="fig">261.2 GiB free · Btrfs</div></div>
+    </div>
+    <div class="drive chosen">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#FF9B9B" stroke-width="3" stroke-dasharray="80.92 87.96"/></svg><svg class="glyph"><use href="#i-drive"/></svg></div>
+      <div><div class="name">data-y</div><div class="fig"><span class="warn">Almost full</span> · 8.1 GiB free</div></div>
+    </div>
+    <dl class="details">
+      <dt>Used</dt><dd>929.7 GiB · 92%</dd>
+      <dt>Free</dt><dd>8.1 GiB</dd>
+      <dt>Size</dt><dd>937.8 GiB</dd>
+      <dt>Mounted at</dt><dd>/mnt/data-y</dd>
+      <div class="actions"><span>Open</span><span>Properties</span></div>
+    </dl>
+    <div class="drive">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#7B98F2" stroke-width="3" stroke-dasharray="52.78 87.96"/></svg><svg class="glyph"><use href="#i-drive"/></svg></div>
+      <div><div class="name">data-z</div><div class="fig">192.8 GiB free · XFS</div></div>
+    </div>
+  </div>
+  <figcaption><b>B. A drive chosen.</b> Its row takes the selection fill and edge, and its details open under it: used with the percentage, free, size and where it is mounted, then Open and Properties (W-153's dialog). Choosing another drive, or the same one again, closes them; the folder is opened by a click on the row as today.</figcaption>
+</figure>
+
+<figure>
+  <div class="panel">
+    <div class="head"><svg><use href="#i-chev"/></svg>Devices</div>
+    <div class="drive">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#7B98F2" stroke-width="3" stroke-dasharray="63.33 87.96"/></svg><svg class="glyph"><use href="#i-drive"/></svg></div>
+      <div><div class="name">System</div><div class="fig">261.2 GiB free · Btrfs</div></div>
+    </div>
+    <div class="head sub">Removable</div>
+    <div class="drive hover">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#7B98F2" stroke-width="3" stroke-dasharray="37.82 87.96"/></svg><svg class="glyph"><use href="#i-usb"/></svg></div>
+      <div><div class="name">KINGSTON</div><div class="fig">16.4 GiB free · exFAT</div></div>
+      <button class="eject shown" title="Eject KINGSTON"><svg><use href="#i-eject"/></svg></button>
+    </div>
+    <div class="tip">KINGSTON: 12.4 of 28.8 GiB used (43%), exFAT, removable</div>
+  </div>
+  <figcaption><b>C. Under the pointer.</b> The row takes the <code>hover</code> fill; its tooltip gives the figures in one sentence, as screen readers hear them. Eject is always on a removable drive's row, so it is found without hovering.</figcaption>
+</figure>
+
+<figure>
+  <div class="panel" style="width: 200px">
+    <div class="head"><svg><use href="#i-chev"/></svg>Devices</div>
+    <div class="drive">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#7B98F2" stroke-width="3" stroke-dasharray="63.33 87.96"/></svg><svg class="glyph"><use href="#i-drive"/></svg></div>
+      <div><div class="name">System</div><div class="fig">261.2 GiB free · Btrfs</div></div>
+    </div>
+    <div class="drive">
+      <div class="ring"><svg class="arc" width="32" height="32"><circle cx="16" cy="16" r="14" fill="none" stroke="#34363B" stroke-width="3"/><circle cx="16" cy="16" r="14" fill="none" stroke="#7B98F2" stroke-width="3" stroke-dasharray="37.82 87.96"/></svg><svg class="glyph"><use href="#i-usb"/></svg></div>
+      <div><div class="name">A long volume label</div><div class="fig">16.4 GiB free · exFAT</div></div>
+      <button class="eject" title="Eject"><svg><use href="#i-eject"/></svg></button>
+    </div>
+  </div>
+  <figcaption><b>D. The narrowest panel (200 px).</b> Names and figures end in an ellipsis; the ring and Eject keep their room.</figcaption>
+</figure>
+
+</div>
+
+<div class="notes">
+  <h2>What this changes from today's drive cards</h2>
+  <ul>
+    <li><b>Smaller:</b> 44 px rows instead of 56 px cards; the bar and the "used / total" figures move into the ring and the details.</li>
+    <li><b>What is free first:</b> the line under the name says what is free and the filesystem, which is what deciding where to copy needs.</li>
+    <li><b>Removable apart:</b> USB sticks, cards and phones in their own group under the fixed drives, with Eject on the row; unmounted volumes show Mount on the row instead of only in the menu.</li>
+    <li><b>Details on demand:</b> choosing a drive shows its details in place, without opening the Properties dialog.</li>
+    <li><b>Kept:</b> 2 px corners, the <code>progress</code> colour for usage (D-039) and the red from 90 % used, the drive menu, and Units from Settings, Views.</li>
+  </ul>
+</div>
+</body>
+</html>

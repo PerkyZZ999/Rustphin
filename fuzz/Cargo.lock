@@ -1360,6 +1360,7 @@ dependencies = [
  "flume",
  "image",
  "jiff",
+ "libc",
  "md-5",
  "png",
  "roxmltree",

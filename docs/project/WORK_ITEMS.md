@@ -27,7 +27,7 @@ S11 — Hardening for daily use (in progress). The interface is Qt 6 and QML sin
 - [x] W-161 — Rename works again (the maintainer, 2026-11-15: "Renaming a file/folder isn't working anymore so this should be priority"). Rename from the context menu or the palette opened the name field, then the closing menu handed the keyboard back to the list, and the field, losing focus, ended the rename unchanged; F2 was not affected. The list now leaves an open name field alone (`Pane.focusList`). Regression test, scenario F2b (2026-11-15).
 - [x] W-162 — Every document in `docs/` checked against the build for the release: module lists in AGENTS.md and ARCHITECTURE.md gained `window_size`; ROADMAP's S11 status and STATE's phase say where v0.1.0 stands; the stale HANDOFF.md of 2026-11-14 removed (its content is in STATE, ROADMAP and VALIDATION) (2026-11-15).
 - [x] W-163 — A public README: what Rustphin is, features (drive styles, the Settings window, the remembered window size, transfer details added), five screenshots of the current interface taken in an isolated session with the mockup scene and the stand-in UDisks2 (no real drive or file shown): icons view, command palette, batch rename, Settings, the three drive styles; the status and roadmap section now gives v0.2.0's plan (2026-11-15).
-- [ ] W-164 — Tag `v0.1.0` and publish the GitHub release, with notes the maintainer approves.
+- [x] W-164 — Tag `v0.1.0` and publish the GitHub release "Rustphin 0.1.0" with the notes in `docs/releases/v0.1.0.md`, approved by the maintainer; the local leftovers (fuzz lock file, mockup 38, the Settings mockup's source) committed with it (2026-11-15).
 
 ## v0.2.0, Slice S13 — Fixes, hardening and improvements (D-040)
 
