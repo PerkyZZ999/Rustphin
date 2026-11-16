@@ -25,7 +25,7 @@ S11 — Hardening for daily use (in progress). The interface is Qt 6 and QML sin
 ## Release v0.1.0 (D-040)
 
 - [x] W-161 — Rename works again (the maintainer, 2026-11-15: "Renaming a file/folder isn't working anymore so this should be priority"). Rename from the context menu or the palette opened the name field, then the closing menu handed the keyboard back to the list, and the field, losing focus, ended the rename unchanged; F2 was not affected. The list now leaves an open name field alone (`Pane.focusList`). Regression test, scenario F2b (2026-11-15).
-- [ ] W-162 — Every document in `docs/` checked against the build for the release.
+- [x] W-162 — Every document in `docs/` checked against the build for the release: module lists in AGENTS.md and ARCHITECTURE.md gained `window_size`; ROADMAP's S11 status and STATE's phase say where v0.1.0 stands; the stale HANDOFF.md of 2026-11-14 removed (its content is in STATE, ROADMAP and VALIDATION) (2026-11-15).
 - [ ] W-163 — A public README: what Rustphin is, features, screenshots of the current interface (isolated session, test files), build, install and run, licence.
 - [ ] W-164 — Tag `v0.1.0` and publish the GitHub release, with notes the maintainer approves.
 - [x] W-157 — Settings in a window of its own (the maintainer, 2026-11-15: "so that way user can move and resize"): a popup cannot leave or outgrow the main window, so Settings is a window kept above the one that opened it, not blocking it, opening at 800 × 576 and resizable to 480 × 360, following the Title bar setting (its own frame and resize bands, or KWin's). Scenarios ST1, RS11, RS12 (2026-11-15).

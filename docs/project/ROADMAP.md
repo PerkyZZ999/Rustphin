@@ -85,7 +85,7 @@ Each slice ends with something the author can run and use, and with its acceptan
 - **Acceptance:** Contrast checks pass in both surface modes; keyboard-only checklist passes; parser fuzzing has run without findings; dependency audit shows no application network use and compatible licences (D-018's toolkit exception is no longer used: `deny.toml` bans every network crate since W-114i).
 - **Requirements:** R-104 (parsers), R-105 (contrast), R-107, R-108 (no Orca pass: D-023)
 - **Validation:** test, manual
-- **Status:** in progress since 2026-10-20 (W-069 assessment, W-070–W-078 queue). Done: contrast tests in both modes, parser fuzzing (W-075; later targets `admin_entry` and `archive_entry`), licences and privacy (W-077, R-108). Open (ACCEPTANCE.md): the keyboard-only pass on the Qt interface (R-004, R-107), the blur notice (R-109), and the maintainer's real-desktop and hardware checks (R-013, R-105).
+- **Status:** in progress since 2026-10-20 (W-069 assessment, W-070–W-078 queue). Done: contrast tests in both modes, parser fuzzing (W-075; later targets `admin_entry` and `archive_entry`), licences and privacy (W-077, R-108). The keyboard-only pass on the Qt interface was done in W-076t and W-076u (2026-11-15). Open (ACCEPTANCE.md): the transfer dialog keyboard only, the blur notice on a desktop without blur (R-109), and the maintainer's real-desktop and hardware checks (R-013, R-105); these move into v0.2.0's Slice S13 (D-040).
 
 ## After S11 — Mockup-aligned UI/UX and design (W-079)
 

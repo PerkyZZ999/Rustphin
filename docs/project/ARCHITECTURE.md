@@ -67,7 +67,7 @@ flowchart LR
 | `drive_properties` | A drive's Properties (W-153): the ring's figures, its legend and the facts the device service told, from a listed volume and its filesystem's size and free space. |
 | `menu`, `archives` | The context menu for the selection, and `OpenMenu`, which numbers the open menu's paths so a stale or disabled choice never runs (W-131); which Extract and Compress entries apply. |
 | `palette`, `history` | The palette's results and their selection; the recent folders, read and written on their own thread. |
-| `settings`, `settings_form`, `preferences`, `folder_views`, `saved_file` | The settings (D-029) and Settings pages as data; one store for every window, written in the background; each folder's own view; the policy for a saved file that cannot be used (W-140, W-143). |
+| `settings`, `settings_form`, `preferences`, `folder_views`, `window_size`, `saved_file` | The settings (D-029) and Settings pages as data; one store for every window, written in the background; each folder's own view; the size new windows open at (W-160); the policy for a saved file that cannot be used (W-140, W-143). |
 | `toolbar_items`, `dialogs`, `properties`, `remote`, `launch`, `location`, `naming` | Toolbar items and what fits; Compress to… and batch rename dialog state; Properties wording; remote-folder names and errors; command-line parsing; a folder as saved (local path or remote address); free names. |
 | `layout`, `format`, `icons`, `colors`, `metrics` | View geometry at each zoom, numbers, sizes and dates, Lucide icon names, and the design tokens of `docs/DESIGN.md` with their contrast tests (D-017). |
 

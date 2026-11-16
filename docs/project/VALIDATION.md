@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-15 — W-162 Documents checked for v0.1.0
+- **Phase:** 7 Release (v0.1.0)
+- **Result:** pass
+- **Evidence:** every `rustphin-core`, `rustphin-platform`, `rustphin-view` and `rustphin` module compared by script with AGENTS.md's crate table and ARCHITECTURE.md: `window_size` (W-160) was missing from both and was added; other modules are named there by what they do. REQUIREMENTS.md and ACCEPTANCE.md already recorded the keyboard pass (W-076t, W-076u) and the open checks; ROADMAP.md's S11 status still called the keyboard pass open and was corrected; STATE.md's phase moved to 7 (Release) for v0.1.0. HANDOFF.md (2026-11-14) described work since finished and was removed. `npx @google/design.md lint docs/DESIGN.md`: no errors. `rust-tc doctor` PASS (see the commit).
+- **Not verified:** the prose of the older plans (SETTINGS_PLAN, ARCHIVE_PLAN, BACKGROUND_PLAN, QT_MIGRATION_PLAN) is history and was not rewritten.
+- **Waiver:** none
+- **Follow-up:** W-163, the public README.
+
 ### 2026-11-15 — W-161 Rename works again
 - **Phase:** 6 Implement (bug fix, release v0.1.0)
 - **Result:** pass
