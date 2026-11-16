@@ -239,6 +239,8 @@ on a sound base:
   installed;
 - undo of the reversible parts of an operation that also replaced or deleted
   something (`UndoError::Replaced`);
+- a click on empty space takes the focus off the focused item, in the places
+  panel and in every view (W-167);
 - the open loops in STATE.md, and the maintainer's further requests.
 
 **Slice S14 — Packaging (L-012).** A `PKGBUILD` in the repository, built with
