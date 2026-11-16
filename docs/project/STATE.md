@@ -15,7 +15,7 @@
 
 ## Current evidence
 - Latest passed gate: 5 Architecture (2026-10-12)
-- Latest validation entry: VALIDATION.md, 2026-11-15 — W-162 Documents checked for v0.1.0
+- Latest validation entry: VALIDATION.md, 2026-11-15 — W-163 Public README
 - Acceptance: ACCEPTANCE.md lists every open criterion and who can close it (re-mapped 2026-11-14 for the Qt interface).
 
 ## Open loops
@@ -37,7 +37,7 @@
 - None for the agent. The real-desktop and hardware checks above wait on the maintainer.
 
 ## Next action
-- Release v0.1.0 (D-040, ROADMAP.md): W-161 rename works again (done), W-162 documents (done), then W-163 public README, W-164 tag and GitHub release with notes the maintainer approves.
+- Release v0.1.0 (D-040, ROADMAP.md): W-161 rename works again (done), W-162 documents (done), W-163 public README (done), then W-164 tag and GitHub release with notes the maintainer approves.
 - Then v0.2.0 "Daily driver": S13 fixes and hardening (the trial and the real-desktop checks move here), S14 the PKGBUILD, S15 service menus, S16 quick preview.
 - For the maintainer on the real desktop: after installing a build, run `rustphin --quit` once so the new build answers launches; then the checks under "Manual" above.
 

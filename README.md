@@ -16,12 +16,12 @@ a command palette and safe batch rename.
 
 </div>
 
-![Rustphin's details view: the places panel on the left, a folder of files with two selected, and the location bar showing Documents › Work › Launch](docs/screenshots/rustphin.png)
+![Rustphin showing a Pictures folder in the icons view, with photo thumbnails and two photos selected; on the left the places panel lists the usual folders and the drives with their free space](docs/screenshots/rustphin.png)
 
-> **Status: 0.1.0, early.** Everything below is implemented and tested, and the
-> maintainer is trialling Rustphin as their everyday file manager. Expect rough
-> edges: see [what is still open](#status-and-roadmap) before relying on it for
-> important work.
+> **Status: 0.1.0, the first release.** Everything below is implemented and
+> tested, and the maintainer uses Rustphin as their everyday file manager.
+> Expect rough edges: see [what is still open](#status-and-roadmap) before
+> relying on it for important work.
 
 ## Why Rustphin
 
@@ -55,7 +55,10 @@ a command palette and safe batch rename.
 **Places**
 - KDE's places, shared with Dolphin, plus **place groups** of your own to
   organise them; fold a group to tidy the panel
-- Drives and removable media with their free space; mount, unmount and eject
+- Drives and removable media with their free space, drawn as bars, compact
+  lines or rings (your choice); removable drives in their own group with Mount
+  and Eject on the row, and a drive's Properties with a ring of used space
+- Separators between places, wherever you want them
 - Remote folders (`sftp://`, `smb://`…) through KDE's kio-fuse
 
 **Files**
@@ -79,7 +82,11 @@ a command palette and safe batch rename.
   Rustphin with the file selected
 - Keeps running in the background after its last window closes, so the next
   window opens instantly (optional)
-- A settings window: general behaviour, views, places and confirmations
+- A Settings window you can move, resize and search: start-up, appearance,
+  views, a toolbar you arrange yourself, places, confirmations and shortcuts
+- New windows open at the size you last gave one
+- A transfer line with speed and time left, and a Details window with a card
+  and speed graph for each running copy or move
 
 <p align="center">
   <img src="docs/screenshots/palette.png" alt="The command palette open over a folder, listing the view commands that match &quot;view&quot; with their shortcuts" width="720">
@@ -87,8 +94,27 @@ a command palette and safe batch rename.
   <em>The command palette: every action, place, tab and recent folder, a few letters away.</em>
 </p>
 
-The screenshots show the opaque theme. On the desktop, the window's background
-is frosted glass over whatever is behind it.
+<p align="center">
+  <img src="docs/screenshots/batch-rename.png" alt="The batch rename dialog renaming five photos with the pattern &quot;Dusk ##.jpg&quot;; the preview lists each current name beside its new name, Dusk 01.jpg to Dusk 05.jpg" width="720">
+  <br>
+  <em>Batch rename: every new name is previewed before anything changes.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="The Settings window on its Places page: switches for the Devices and Remote sections, the hidden places choice, the drive style (Bars, Compact or Rings) and the panel width" width="720">
+  <br>
+  <em>Settings: every page searchable, every change applied at once.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/drives.png" alt="The places panel's drives in the three styles side by side: bars with free space and filesystem, compact lines with a small bar and the percentage used, and rings of used space around each drive's icon" width="600">
+  <br>
+  <em>Drives three ways: bars (the default), compact or rings.</em>
+</p>
+
+The screenshots show the opaque theme, with made-up drives from a test
+service. On the desktop, the window's background is frosted glass over
+whatever is behind it.
 
 ## Requirements
 
@@ -175,21 +201,26 @@ it writes and how to clear them.
 
 ## Status and roadmap
 
-Version 0.1.0 covers browsing, tabs, split view, places and devices, file
-operations with undo, trash, drag and drop, thumbnails, the command palette,
-batch rename, compress and extract, properties, settings, administrator mode
-and desktop integration.
+Version 0.1.0 covers browsing, tabs, split view, places, place groups and
+devices, file operations with undo, trash, drag and drop, thumbnails, the
+command palette, batch rename, compress and extract, properties, settings,
+administrator mode and desktop integration.
 
-Still open before it can be called a Dolphin replacement:
+**Next: 0.2.0, "Daily driver"**
+- Fixes, hardening and improvements, including the checks that need real
+  hardware (USB drives, the frosted glass on a real desktop) and a two-week
+  trial as the maintainer's only file manager.
+- An Arch Linux package (`PKGBUILD`) in the repository.
+- KDE's service menus (the extra actions other applications add to Dolphin's
+  context menu) in Rustphin's context menu.
+- Quick preview: <kbd>Space</kbd> shows a large preview of the file without
+  opening an application.
 
-- a few checks that need real hardware (USB drives, a physical high-refresh
-  display) and a full accessibility pass with a screen reader;
-- search, an information panel, a quick preview and KDE's service menus;
-- packaging and translations.
+**Later:** search (names, then contents through Baloo), an information panel,
+tags and ratings, translations, a light theme, browsing inside archives.
 
-The current state, open items and next steps are tracked in
-[`docs/project/STATE.md`](docs/project/STATE.md) and
-[`docs/project/WORK_ITEMS.md`](docs/project/WORK_ITEMS.md).
+The full plan is in [`docs/project/ROADMAP.md`](docs/project/ROADMAP.md); the
+current state and open items in [`docs/project/STATE.md`](docs/project/STATE.md).
 
 ## How it is built
 
@@ -204,7 +235,7 @@ below it:
 | `rustphin` | The application: Qt 6 Quick and QML through [cxx-qt](https://github.com/KDAB/cxx-qt), and a small C++ shell. |
 
 Almost all behaviour lives in the first three crates, where it is tested
-without a display: about 930 tests, fault injection for every file operation,
+without a display: more than 1,000 tests, fault injection for every file operation,
 property tests, fuzzing of the parsers and mutation testing. The design is in
 [`docs/project/ARCHITECTURE.md`](docs/project/ARCHITECTURE.md), the decisions
 behind it in [`docs/project/DECISIONS.md`](docs/project/DECISIONS.md), and the

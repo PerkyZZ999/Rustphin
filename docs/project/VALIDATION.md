@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-15 — W-163 Public README
+- **Phase:** 7 Release (v0.1.0)
+- **Result:** pass
+- **Evidence:** five screenshots taken in an isolated KWin session with an isolated home filled by `tests/ui/make-mockup-home.sh` and drives from the stand-in UDisks2 on a private bus, opaque theme, window 1200 × 760 (set through `window.toml`): `rustphin.png` (icons view, thumbnails, two photos selected), `palette.png`, `batch-rename.png` (five photos, pattern "Dusk ##.jpg"), `settings.png` (Places page with Drives › Style), `drives.png` (Bars, Compact and Rings side by side). Each frame was kept only when its accent pixel read `#7B98F2` (the isolated session swaps red and blue in some frames); none shows the maintainer's drives, files or name. README.md describes v0.1.0's features as built and v0.2.0's plan (ROADMAP.md, D-040); its build and install commands name files that exist (`assets/rustphin.desktop`, `assets/icons/hicolor`, `assets/rustphin.svg`).
+- **Not verified:** how GitHub renders the README (seen only as Markdown); the System drive in the pictures is the test machine's root filesystem as the stand-in reports it.
+- **Waiver:** none
+- **Follow-up:** W-165 and W-166, found while taking the pictures.
+
 ### 2026-11-15 — W-162 Documents checked for v0.1.0
 - **Phase:** 7 Release (v0.1.0)
 - **Result:** pass
