@@ -1,5 +1,16 @@
 # Validation evidence
 
+### 2026-11-15 — W-161 Rename works again
+- **Phase:** 6 Implement (bug fix, release v0.1.0)
+- **Result:** pass
+- **Evidence:**
+  - Reproduced in an isolated KWin session with an isolated home and test files: F2 then Enter renamed `notes.txt` to `memo.txt`, but Rename from a folder's context menu showed no name field and changed nothing. Cause: the menu's `onClosed` hands the keyboard to the list (`focusActive` → `Pane.focusList`), which took it from the name field just opened; the field keeps the name it shows when it loses focus, so the rename ended unchanged.
+  - Regression test `folder::tests::handing_the_keyboard_back_leaves_an_open_name_field_alone` (a QML contract read from Pane.qml) failed before the fix and passes after it. `rust-tc doctor` PASS (see the commit).
+  - After the fix, on screen: the context menu's Rename kept the field open and Return renamed `Folder` to `Archive`; F2, typing and a click on an empty part of the view renamed `memo.txt` to `diary.txt`; the palette's "Rename selection" opened the field with the stem selected and Escape left the name as it was (F2b). No QML warning in the log.
+- **Not verified:** the icons and compact views were not tried with the menu's Rename (they use the same field and `focusList`).
+- **Waiver:** none
+- **Follow-up:** none.
+
 ### 2026-11-15 — W-160 The window keeps its size
 - **Phase:** 6 Implement (requested addition)
 - **Result:** pass

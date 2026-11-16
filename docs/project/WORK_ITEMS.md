@@ -24,7 +24,7 @@ S11 — Hardening for daily use (in progress). The interface is Qt 6 and QML sin
 
 ## Release v0.1.0 (D-040)
 
-- [ ] W-161 — Rename works again (the maintainer, 2026-11-15: "Renaming a file/folder isn't working anymore so this should be priority"). Find the cause, start with a failing regression test, replay the rename scenarios.
+- [x] W-161 — Rename works again (the maintainer, 2026-11-15: "Renaming a file/folder isn't working anymore so this should be priority"). Rename from the context menu or the palette opened the name field, then the closing menu handed the keyboard back to the list, and the field, losing focus, ended the rename unchanged; F2 was not affected. The list now leaves an open name field alone (`Pane.focusList`). Regression test, scenario F2b (2026-11-15).
 - [ ] W-162 — Every document in `docs/` checked against the build for the release.
 - [ ] W-163 — A public README: what Rustphin is, features, screenshots of the current interface (isolated session, test files), build, install and run, licence.
 - [ ] W-164 — Tag `v0.1.0` and publish the GitHub release, with notes the maintainer approves.

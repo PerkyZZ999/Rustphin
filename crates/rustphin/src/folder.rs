@@ -2446,4 +2446,25 @@ mod tests {
         assert!(!has_thumbnail("image/svg+xml"));
         assert!(!has_thumbnail("video/mp4"));
     }
+
+    /// W-161: Rename from the context menu ended at once, unchanged: the
+    /// closing menu handed the keyboard back to the list (`focusList`),
+    /// taking it from the name field, whose losing focus keeps the name.
+    /// While an entry is being renamed the list must leave the field alone.
+    #[test]
+    fn handing_the_keyboard_back_leaves_an_open_name_field_alone() {
+        let pane = include_str!("../qml/Pane.qml");
+        let body = pane
+            .split_once("function focusList()")
+            .and_then(|(_, rest)| rest.split_once("\n    }"))
+            .map(|(body, _)| body)
+            .unwrap_or_default();
+        assert!(!body.is_empty(), "Pane.qml has no focusList()");
+        let guard = body.find("folder.renamingRow >= 0");
+        let take = body.find("forceActiveFocus");
+        assert!(
+            matches!((guard, take), (Some(guard), Some(take)) if guard < take),
+            "focusList() must return while renaming, before taking focus:{body}"
+        );
+    }
 }

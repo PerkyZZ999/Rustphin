@@ -121,6 +121,10 @@ FocusScope {
     }
 
     function focusList() {
+        // An open name field keeps the keyboard: taking it would end the
+        // rename unchanged (a menu's Rename, W-161).
+        if (folder.renamingRow >= 0)
+            return
         keys.forceActiveFocus()
     }
 
