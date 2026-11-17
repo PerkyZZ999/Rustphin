@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote drives</title>
+<!-- Proposal (2026-11-17, the maintainer: "a way to see my Remote's drives
+     space"): the places panel's Remote section shows the drives of each
+     remote machine, as Devices shows the local ones. Colours, type and sizes
+     are docs/DESIGN.md's charcoal tokens (D-038), usage in `progress`
+     (D-039), the drives in the Bars style (W-159). Machines and figures are
+     made up. -->
+<style>
+  :root {
+    --window: #141516;
+    --chrome: #18191B;
+    --chrome-raised: #202124;
+    --content: #111213;
+    --raised: #1D1E21;
+    --text: #ECECED;
+    --text-muted: #AEB1B8;
+    --text-disabled: #7D8087;
+    --progress: #7B98F2;
+    --accent: #7B98F2;
+    --selection: #3B3D42;
+    --hover: rgba(255, 255, 255, 0.06);
+    --error: #FF9B9B;
+    --border: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --track: #34363B;
+    --radius: 2px;
+    --f-ui: Inter, "Noto Sans", system-ui, sans-serif;
+    --f-mono: "JetBrains Mono", "Noto Sans Mono", ui-monospace, monospace;
+    --f-head: "Space Grotesk", Inter, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0B0C0D;
+    color: var(--text);
+    font: 400 12px/16px var(--f-ui);
+    -webkit-font-smoothing: antialiased;
+    padding: 32px 16px 48px;
+  }
+  h1 { font: 600 15px/20px var(--f-head); margin: 0 0 4px; }
+  .lead { color: var(--text-muted); max-width: 820px; margin: 0 0 24px; }
+  .states { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { color: var(--text-muted); margin-top: 8px; max-width: 240px; }
+  figcaption b { color: var(--text); font-weight: 600; }
+  code { font: 400 11px/16px var(--f-mono); }
+
+  /* The places panel, 240 px as by default. */
+  .panel {
+    width: 240px;
+    background: var(--chrome);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 4px 12px;
+  }
+  .head {
+    display: flex; align-items: center; gap: 4px;
+    height: 28px; padding: 0 8px;
+    color: var(--text-muted);
+    font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  svg.i { width: 16px; height: 16px; flex: none; color: var(--text-muted); }
+  .head svg.i { width: 12px; height: 12px; }
+  .place {
+    display: flex; align-items: center; gap: 8px;
+    height: 28px; padding: 0 8px; border-radius: var(--radius);
+  }
+
+  /* A machine: chevron, icon, name, then a strip with one segment per
+     drive and a line saying what is free on each. */
+  .machine {
+    position: relative;
+    display: grid;
+    grid-template-columns: 12px 16px minmax(0, 1fr) auto;
+    column-gap: 6px; row-gap: 4px;
+    align-items: center;
+    padding: 6px 8px 7px 4px;
+    border-radius: var(--radius);
+  }
+  .machine.hover { background: var(--hover); }
+  .machine.chosen { background: var(--selection); }
+  .machine.chosen::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 2px; background: var(--accent);
+  }
+  .machine .chev { width: 12px; height: 12px; color: var(--text-muted); }
+  .machine .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .machine .side { font: 400 11px/16px var(--f-mono); color: var(--text-muted); }
+  .machine .strip, .machine .cap { grid-column: 3 / -1; }
+  .strip { display: flex; gap: 2px; height: 4px; }
+  .seg { flex: 1; background: var(--track); border-radius: 1px; overflow: hidden; }
+  .seg > i { display: block; height: 100%; background: var(--progress); }
+  .seg.full > i { background: var(--error); }
+  .strip.stale { opacity: 0.45; }
+  .strip.checking .seg {
+    background: repeating-linear-gradient(90deg, var(--track) 0 6px, transparent 6px 10px);
+  }
+  .cap {
+    font: 400 11px/16px var(--f-ui); color: var(--text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cap .warn { color: var(--error); }
+  .cap svg.i { width: 12px; height: 12px; vertical-align: -2px; margin-right: 2px; }
+  .off .name { color: var(--text-muted); }
+
+  .iconbtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: var(--radius);
+    background: var(--hover); color: var(--text);
+  }
+  .iconbtn svg.i { color: var(--text); }
+
+  /* A machine's drives, open under it, in the Bars style (W-159). */
+  .drive {
+    position: relative;
+    margin-left: 22px;
+    padding: 6px 8px; height: 56px;
+    display: grid; grid-template-columns: 16px minmax(0, 1fr) auto;
+    column-gap: 8px; row-gap: 4px; align-items: center;
+    border-radius: var(--radius);
+  }
+  .drive.hover { background: var(--hover); }
+  .drive .name { font-weight: 600; font-family: var(--f-mono); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .drive .free { font: 400 11px/16px var(--f-mono); color: var(--text-muted); }
+  .drive .free.warn { color: var(--error); }
+  .drive .bar { grid-column: 1 / -1; height: 4px; background: var(--track); border-radius: 1px; overflow: hidden; }
+  .drive .bar > i { display: block; height: 100%; background: var(--progress); }
+  .drive .bar.full > i { background: var(--error); }
+  .drive .fs { grid-column: 1 / -1; font: 400 11px/16px var(--f-ui); color: var(--text-muted); }
+  .checked {
+    margin: 2px 0 6px 30px; padding: 0 8px;
+    display: flex; align-items: center; gap: 6px;
+    color: var(--text-muted); font-size: 11px;
+  }
+  .checked .link { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+
+  .tip {
+    display: inline-block; margin: 4px 0 0 30px;
+    background: var(--raised); border: 1px solid var(--border-strong);
+    border-radius: var(--radius); padding: 8px; max-width: 200px;
+  }
+
+  /* The dialog that sets up a machine's drives. */
+  .dialog {
+    width: 440px;
+    background: var(--raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+  }
+  .dialog .title {
+    display: flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 12px; border-bottom: 1px solid var(--border);
+    font: 600 13px/16px var(--f-ui);
+  }
+  .dialog .title .x { margin-left: auto; }
+  .dialog .body { padding: 12px 16px 4px; }
+  .row { display: grid; grid-template-columns: 96px 1fr; column-gap: 12px; align-items: center; margin-bottom: 12px; }
+  .row > label { color: var(--text-muted); }
+  .field {
+    height: 28px; padding: 0 8px; display: flex; align-items: center; gap: 6px;
+    background: var(--content); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  }
+  .field.mono { font: 400 11px/16px var(--f-mono); }
+  .hint { grid-column: 2; color: var(--text-muted); font-size: 11px; margin-top: 4px; }
+  .paths { border: 1px solid var(--border); border-radius: var(--radius); }
+  .path {
+    display: grid; grid-template-columns: 16px 1fr auto; column-gap: 8px; align-items: center;
+    height: 32px; padding: 0 8px; border-bottom: 1px solid var(--border);
+  }
+  .path:last-child { border-bottom: 0; }
+  .path .m { font: 400 11px/16px var(--f-mono); }
+  .path .s { color: var(--text-muted); font-size: 11px; }
+  .check {
+    width: 16px; height: 16px; border-radius: var(--radius);
+    border: 1px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center;
+  }
+  .check.on { background: var(--accent); border-color: var(--accent); color: #111213; }
+  .check.on svg { width: 12px; height: 12px; }
+  .seg-ctl { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius); }
+  .seg-ctl span { padding: 4px 10px; }
+  .seg-ctl span.on { background: var(--selection); box-shadow: inset 0 -2px 0 var(--accent); }
+  .dialog .foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+  .btn { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #111213; font-weight: 600; }
+
+  .notes { margin-top: 32px; max-width: 820px; color: var(--text-muted); }
+  .notes h2 { font: 600 12px/16px var(--f-ui); color: var(--text); margin: 24px 0 8px; }
+  .notes li { margin-bottom: 6px; }
+  .notes b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Remote drives: what is free on your other machines</h1>
+<p class="lead">The places panel at its default 240 px. Under <b>Remote</b>, each machine you reach through a remote folder (<code>sftp://homelab</code>) can also show its drives. Folded, a machine is one row: a strip with one segment per drive, and a line saying what is free on each. Unfolded, its drives are drawn as the local ones under Devices, and clicking one opens that folder on the machine.</p>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-drive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
+    <symbol id="i-laptop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z"/><path d="M20.054 15.987H3.946"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+    <symbol id="i-loader" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+    <symbol id="i-wifi-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></symbol>
+    <symbol id="i-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  </defs>
+</svg>
+
+<div class="states">
+
+<!-- A: folded -->
+<figure>
+  <div class="panel">
+    <div class="place"><svg class="i"><use href="#i-house"/></svg>Home</div>
+    <div class="head"><svg class="i"><use href="#i-down"/></svg>Devices</div>
+    <div class="place"><svg class="i"><use href="#i-drive"/></svg>System</div>
+    <div class="head"><svg class="i"><use href="#i-down"/></svg>Remote</div>
+    <div class="machine">
+      <svg class="chev"><use href="#i-right"/></svg><svg class="i"><use href="#i-server"/></svg>
+      <div class="name">Homelab</div><div class="side">2</div>
+      <div class="strip"><div class="seg"><i style="width:34%"></i></div><div class="seg"><i style="width:71%"></i></div></div>
+      <div class="cap">/ 152 GiB · storage 2.1 TiB free</div>
+    </div>
+    <div class="machine">
+      <svg class="chev"><use href="#i-right"/></svg><svg class="i"><use href="#i-cloud"/></svg>
+      <div class="name">VPS</div><div class="side">1</div>
+      <div class="strip"><div class="seg full"><i style="width:93%"></i></div></div>
+      <div class="cap"><span class="warn">Almost full</span> · / 5.4 GiB free</div>
+    </div>
+    <div class="machine">
+      <svg class="chev"><use href="#i-right"/></svg><svg class="i"><use href="#i-laptop"/></svg>
+      <div class="name">Laptop</div><div class="side">1</div>
+      <div class="strip"><div class="seg"><i style="width:58%"></i></div></div>
+      <div class="cap">/ 198 GiB free</div>
+    </div>
+  </div>
+  <figcaption><b>A. Folded.</b> One row per machine. The strip has one segment per drive, all the same width so a small system drive is as easy to read as a large storage one. Each segment fills with its used share and turns <code>error</code> red from 90 %, with "Almost full" in the words. The number on the right counts the drives.</figcaption>
+</figure>
+
+<!-- B: unfolded -->
+<figure>
+  <div class="panel">
+    <div class="head"><svg class="i"><use href="#i-down"/></svg>Remote</div>
+    <div class="machine chosen">
+      <svg class="chev"><use href="#i-down"/></svg><svg class="i"><use href="#i-server"/></svg>
+      <div class="name">Homelab</div><div class="side">2</div>
+      <div class="strip"><div class="seg"><i style="width:34%"></i></div><div class="seg"><i style="width:71%"></i></div></div>
+      <div class="cap">/ 152 GiB · storage 2.1 TiB free</div>
+    </div>
+    <div class="drive">
+      <svg class="i"><use href="#i-drive"/></svg><div class="name">/</div><div class="free">152.3 GiB free</div>
+      <div class="bar"><i style="width:34%"></i></div>
+      <div class="fs">ext4 · 231.0 GiB</div>
+    </div>
+    <div class="drive hover">
+      <svg class="i"><use href="#i-drive"/></svg><div class="name">/mnt/storage</div><div class="free">2.1 TiB free</div>
+      <div class="bar"><i style="width:71%"></i></div>
+      <div class="fs">Btrfs · 7.3 TiB</div>
+    </div>
+    <div class="checked">Checked 2 min ago · <span class="link">Refresh</span></div>
+    <div class="machine">
+      <svg class="chev"><use href="#i-right"/></svg><svg class="i"><use href="#i-cloud"/></svg>
+      <div class="name">VPS</div><div class="side">1</div>
+      <div class="strip"><div class="seg full"><i style="width:93%"></i></div></div>
+      <div class="cap"><span class="warn">Almost full</span> · / 5.4 GiB free</div>
+    </div>
+  </div>
+  <figcaption><b>B. Unfolded.</b> Clicking the machine opens its home folder, as the remote place does today. The chevron, or Right and Left on the keyboard, unfolds it. Its drives are in the Bars style, named by where they are mounted. Clicking a drive opens <code>sftp://homelab/mnt/storage</code>. A line under them says when the figures were read.</figcaption>
+</figure>
+
+<!-- C: states -->
+<figure>
+  <div class="panel">
+    <div class="head"><svg class="i"><use href="#i-down"/></svg>Remote</div>
+    <div class="machine">
+      <svg class="chev"><use href="#i-right"/></svg><svg class="i"><use href="#i-server"/></svg>
+      <div class="name">Homelab</div><div class="side">2</div>
+      <div class="strip checking"><div class="seg"></div><div class="seg"></div></div>
+      <div class="cap"><svg class="i"><use href="#i-loader"/></svg>Checking…</div>
+    </div>
+    <div class="machine off">
+      <svg class="chev"><use href="#i-right"/></svg><svg class="i"><use href="#i-laptop"/></svg>
+      <div class="name">Laptop</div><div class="side">1</div>
+      <div class="strip stale"><div class="seg"><i style="width:58%"></i></div></div>
+      <div class="cap"><svg class="i"><use href="#i-wifi-off"/></svg>Away · 198 GiB free yesterday</div>
+    </div>
+    <div class="machine off hover">
+      <svg class="chev"><use href="#i-right"/></svg><svg class="i"><use href="#i-cloud"/></svg>
+      <div class="name">VPS</div><span class="iconbtn" title="Check VPS again"><svg class="i"><use href="#i-refresh"/></svg></span>
+      <div class="strip checking"><div class="seg"></div></div>
+      <div class="cap"><svg class="i"><use href="#i-key"/></svg>Needs your SSH key unlocked</div>
+    </div>
+    <div class="tip">Laptop could not be reached at 14:02. Last read yesterday at 18:40: / had 198.0 of 476.9 GiB free.</div>
+  </div>
+  <figcaption><b>C. While reading, and when it can't.</b> A dashed strip and "Checking…" while the figures are read. A machine that is asleep or away keeps its last figures, faded, with when they were read. One that needs an unlocked key says so. Under the pointer, the count gives way to Refresh. Rustphin never asks for a password.</figcaption>
+</figure>
+
+<!-- D: set-up dialog -->
+<figure>
+  <div class="dialog">
+    <div class="title"><svg class="i"><use href="#i-server"/></svg>Drives on Homelab<span class="iconbtn x" title="Close"><svg class="i"><use href="#i-x"/></svg></span></div>
+    <div class="body">
+      <div class="row"><label>Machine</label><div class="field mono">sftp://homelab</div></div>
+      <div class="row"><label>Icon</label><div class="seg-ctl"><span class="on">Server</span><span>Cloud</span><span>Laptop</span><span>Desktop</span></div></div>
+      <div class="row" style="align-items:start"><label style="padding-top:8px">Drives</label>
+        <div>
+          <div class="paths">
+            <div class="path"><span class="check on"><svg><use href="#i-check"/></svg></span><span class="m">/</span><span class="s">ext4 · 231.0 GiB</span></div>
+            <div class="path"><span class="check on"><svg><use href="#i-check"/></svg></span><span class="m">/mnt/storage</span><span class="s">Btrfs · 7.3 TiB</span></div>
+            <div class="path"><span class="check"></span><span class="m">/boot</span><span class="s">vfat · 1.0 GiB</span></div>
+          </div>
+          <div class="hint">Found on Homelab just now. Virtual filesystems (tmpfs, proc, overlays) are left out.</div>
+        </div>
+      </div>
+      <div class="row"><label>Read them</label><div class="seg-ctl"><span class="on">When shown</span><span>Every 5 min</span><span>Only on Refresh</span></div></div>
+    </div>
+    <div class="foot"><span class="btn">Stop showing drives</span><span class="btn">Cancel</span><span class="btn primary">Show drives</span></div>
+  </div>
+  <figcaption style="max-width:440px"><b>D. Setting it up.</b> "Show drives…" in a remote place's menu. Rustphin lists the real filesystems it finds on the machine, ticks <code>/</code> and the largest ones, and lets you choose. The icon tells the machines apart at a glance. "When shown" reads the figures when the Remote section is open, at most once a minute.</figcaption>
+</figure>
+
+</div>
+
+<div class="notes">
+  <h2>Why it looks like this</h2>
+  <ul>
+    <li><b>Where you already go:</b> the machines are the remote places you already open, so there's no second list of machines to keep. A remote place without drives looks as it does today.</li>
+    <li><b>One row, every drive:</b> the strip answers "is anything filling up?" for all your machines in one glance. The words under it give the figures, so it never relies on colour alone.</li>
+    <li><b>Same drawing as local drives:</b> unfolded, a remote drive is drawn like one under Devices, with the same bar, the same red from 90 %, the same units from Settings.</li>
+    <li><b>Honest about age:</b> the figures always say when they were read. An unreachable machine keeps its last ones, faded, rather than a blank.</li>
+  </ul>
+
+  <h2>How the figures would be read (a decision for the maintainer)</h2>
+  <ul>
+    <li><b>Today:</b> remote folders are kio-fuse mounts (D-004), and Rustphin itself opens no network connection (R-108, D-018). Not checked yet: whether a kio-fuse mount passes on the remote drive's size. If it does, Rustphin can read it as it reads a local drive's, and nothing below is needed. If it doesn't, the figures need another way.</li>
+    <li><b>Proposed: the machine's own <code>ssh</code>.</b> Rustphin would run <code>ssh -o BatchMode=yes homelab df …</code> for the chosen drives, and <code>findmnt</code> once for the set-up list. Your <code>~/.ssh/config</code>, keys and agent are used as they are; BatchMode means it never asks for a password and fails instead. The connection is made by ssh, not Rustphin, as with kio-fuse. Still, it is a feature that reaches the network, which D-018 says reopens the decision, so it needs your go-ahead and a new decision record.</li>
+    <li><b>Alternative: KDE's KIO.</b> KIO's sftp worker can report a remote drive's free space. That needs Rustphin to link KF6 KIO, a new dependency, and still makes a connection on Rustphin's behalf.</li>
+    <li><b>Kept local:</b> the chosen drives and the last figures read would be stored in Rustphin's own config, never in KDE's places file (D-008), and listed in PRIVACY.md.</li>
+  </ul>
+</div>
+</body>
+</html>
