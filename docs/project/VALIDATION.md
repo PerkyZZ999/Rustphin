@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-19 — W-168 Reload says it reloaded; a re-read keeps the focus cleared
+- **Phase:** 6 Implement (v0.2.0, S13)
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` passed. Diagnosis in an isolated KWin session with `RUSTPHIN_FRAME_LOG=1`: F5 and a click on the toolbar's Reload each logged a new listing ("first entries (navigate)", 12.3 ms and 6.1 ms, 12 rows), so reload worked and only feedback was missing. New tests in `rustphin-view`: `pane_state` reports a reload the user asked for once it is listed in full and never for the watcher's re-read, and forgets it when another folder is entered; `pane` writes "Reloaded: 7 items (150.0 MiB), 2 hidden"; `pane_state` shows the focus after a listing only when owed (a new folder, or rows after the keyboard found none), not after a re-read once the user cleared it. Mutations through `rust-tc quick` (never reporting a reload, dropping the prefix, keeping a reload across folders, ignoring whether focus is owed) each failed the matching test. Scenarios replayed on the new build: F5 after a click on empty space turned the Reload icon (seen mid-turn at 150 ms, at rest at 3.5 s), the status line read "Reloaded: 12 items (7.4 MiB)" then "12 items (7.4 MiB)", and no entry was outlined (P10); at start the first entry showed the focus (R-107); a file created from outside in an empty folder appeared outlined (P11).
+- **Not verified:** the toolbar button's turn seen on a click (the same signal as F5's, logged earlier as a reload); the note with the Reload button removed from the toolbar (the status line alone then).
+- **Waiver:** none
+- **Follow-up:** none.
+
 ### 2026-11-19 — W-167 A click on empty space leaves no item focused
 - **Phase:** 6 Implement (v0.2.0, S13)
 - **Result:** pass

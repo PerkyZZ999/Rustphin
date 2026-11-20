@@ -151,6 +151,8 @@ pub struct StatusFacts<'a> {
     pub selected_size: Option<u64>,
     /// The name being edited in place, if any.
     pub renaming: Option<&'a str>,
+    /// The folder was just reloaded at the user's request (W-168).
+    pub reloaded: bool,
 }
 
 /// The status line's words: the selection, when there is one, and the
@@ -204,6 +206,9 @@ pub fn status_parts(facts: &StatusFacts<'_>) -> StatusParts {
     }
     if facts.loading {
         total.push_str(" \u{2014} loading\u{2026}");
+    }
+    if facts.reloaded {
+        total.insert_str(0, "Reloaded: ");
     }
     StatusParts { selection, total }
 }
@@ -880,6 +885,16 @@ mod tests {
             ..facts(1, 1, 1, 0, None)
         };
         assert_eq!(parts(&loading).1, "1 item \u{2014} loading\u{2026}");
+        // W-168: a reload the user asked for says so before the totals.
+        let reloaded = StatusFacts {
+            reloaded: true,
+            shown_size: Some(150 * MIB),
+            ..facts(7, 7, 9, 0, None)
+        };
+        assert_eq!(
+            parts(&reloaded).1,
+            "Reloaded: 7 items (150.0 MiB), 2 hidden"
+        );
         let renaming = StatusFacts {
             renaming: Some("a.jpg"),
             ..facts(1, 1, 1, 1, None)

@@ -249,6 +249,9 @@ pub struct FolderModelRust {
     usage: Option<(PathBuf, u64, u64, Option<PathBuf>)>,
     /// The folder shown was found not to be writable.
     read_only: bool,
+    /// The status line says the folder was reloaded, until the pane's
+    /// timer ends the note (W-168).
+    reloaded_note: bool,
     frame_log: bool,
     menu: QString,
     scroll_bench: bool,
@@ -355,6 +358,7 @@ impl Default for FolderModelRust {
             width: 1000.,
             usage: None,
             read_only: false,
+            reloaded_note: false,
             menu: QString::default(),
             frame_log: std::env::var_os("RUSTPHIN_FRAME_LOG").is_some()
                 || std::env::var_os("RUSTPHIN_SCROLL_BENCH").is_some(),
@@ -827,6 +831,12 @@ impl qobject::FolderModel {
             self.as_mut().measure_free_space(snapshot.path().to_owned());
             self.as_mut().adopt_folder_view();
         }
+        if arrival.new_folder || arrival.reloaded {
+            self.as_mut().rust_mut().reloaded_note = arrival.reloaded;
+        }
+        if arrival.reloaded {
+            self.as_mut().reloaded();
+        }
         if arrival.visited {
             crate::history::visit(snapshot.path());
             self.as_mut().visited(qml_path::to_qml(snapshot.path()));
@@ -892,6 +902,7 @@ impl qobject::FolderModel {
             shown_size: pane::total_size(&snapshot, 0..snapshot.len()),
             selected_size: pane::total_size(&snapshot, selected_rows.iter().copied()),
             renaming: renaming.as_deref(),
+            reloaded: rust.reloaded_note,
         };
         let parts = pane::status_parts(&facts);
         let zones = pane::StatusZones::for_width(rust.width, parts.selection.is_some());
@@ -1118,7 +1129,10 @@ impl qobject::FolderModel {
     }
 
     /// Runs one of the model's navigation steps.
-    fn navigate(mut self: Pin<&mut Self>, step: fn(&mut DirectoryModel) -> Option<u64>) {
+    fn navigate(
+        mut self: Pin<&mut Self>,
+        step: fn(&mut DirectoryModel) -> Option<u64>,
+    ) -> Option<u64> {
         let generation = self.as_mut().rust_mut().model.as_mut().and_then(step);
         if let Some(generation) = generation {
             self.as_mut().rust_mut().pane.asked(generation);
@@ -1134,6 +1148,7 @@ impl qobject::FolderModel {
             self.as_mut().set_failure(None);
         }
         self.update_navigation();
+        generation
     }
 
     fn back(self: Pin<&mut Self>) {
@@ -1167,8 +1182,20 @@ impl qobject::FolderModel {
         self.navigate(DirectoryModel::up);
     }
 
-    fn reload(self: Pin<&mut Self>) {
-        self.navigate(DirectoryModel::reload);
+    /// Reads the folder again at the user's request (F5, Reload): the
+    /// Reload button turns at once, and the status line says "Reloaded"
+    /// once the listing is complete (W-168).
+    fn reload(mut self: Pin<&mut Self>) {
+        if let Some(generation) = self.as_mut().navigate(DirectoryModel::reload) {
+            self.as_mut().rust_mut().pane.reload_asked(generation);
+            self.reload_asked();
+        }
+    }
+
+    fn end_reload_note(mut self: Pin<&mut Self>) {
+        if std::mem::take(&mut self.as_mut().rust_mut().reloaded_note) {
+            self.update_status();
+        }
     }
 
     fn home(self: Pin<&mut Self>) {
@@ -1691,6 +1718,13 @@ impl qobject::FolderModel {
     fn keyboard_arrived(mut self: Pin<&mut Self>, first_shown: i32) {
         let first_shown = usize::try_from(first_shown).unwrap_or(0);
         if self.as_mut().rust_mut().pane.keyboard_arrived(first_shown) {
+            self.selection_changed();
+        }
+    }
+
+    fn listing_arrived(mut self: Pin<&mut Self>, first_shown: i32) {
+        let first_shown = usize::try_from(first_shown).unwrap_or(0);
+        if self.as_mut().rust_mut().pane.listing_arrived(first_shown) {
             self.selection_changed();
         }
     }

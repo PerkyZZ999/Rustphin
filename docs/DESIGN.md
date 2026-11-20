@@ -932,7 +932,10 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   notice replaces them in `error`), and on the right the free space ("Free:
   1.8 TiB of 3.6 TiB (Data)") for the volume holding the folder. Below 600 px
   of pane width the free space leaves; below 440 px, while entries are
-  selected, only the selection shows.
+  selected, only the selection shows. After a reload the user asked for (F5,
+  Reload) the totals start with "Reloaded: " for 2.5 s, and the toolbar's
+  Reload icon turns once round (600 ms, ease-out) as soon as it is asked
+  (W-168).
 - **Dialogs:** centred over the scrim, at most the window's width less 16 px
   on each side; a 48 px title row; the body scrolls; the action row on
   `chrome`, right-aligned. Widths: 480 px (questions, Properties, the

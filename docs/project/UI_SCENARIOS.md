@@ -348,6 +348,8 @@ Qt build logs.
 | P6 | From the small folder request a missing child; then Home, Shift+F10, F5, Ctrl+L | Failed navigation restores the folder/selection and explains the error. Refresh closes the menu and Ctrl+L still opens the path editor |
 | P7 | F2 on a generated entry, Escape; navigate to another folder | Editor cancels without changing the fixture; old-folder rename/menu state is absent after arrival. ShowItems/reveal selection still uses its explicit arrival request |
 | P8 | On the completed 500,000-entry fixture, Ctrl+A, F5; wait for the replacement event and inspect status/logs | All 500,000 selections remain; name matching is off the UI thread. Retain model/selection-schedule/selection-apply maxima |
+| P10 | In the mockup scene, click empty space below the rows, then F5; then click the toolbar's Reload | The Reload icon turns once at each; the status line reads "Reloaded: 12 items (7.4 MiB)" and goes back to "12 items (7.4 MiB)" within 3 s; no entry is outlined after the reload (W-168, W-167) |
+| P11 | Open an empty folder, then create a file in it from outside | The file appears with the focus outline (the keyboard was waiting for rows) |
 | P9 | F5 then Home before completion; wait for the replacement; repeat while navigating away | The later single selection survives refresh; a superseded result never changes the new folder's selection. A scripted ordering check does not prove every concurrent interleaving |
 
 ## Accessibility (S11 / W-074)

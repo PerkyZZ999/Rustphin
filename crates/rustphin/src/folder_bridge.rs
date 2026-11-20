@@ -138,6 +138,15 @@ pub mod qobject {
         /// requested.
         #[qsignal]
         fn visited(self: Pin<&mut FolderModel>, uri: QString);
+        /// The user asked to reload the folder (F5, Reload): the Reload
+        /// button turns (W-168).
+        #[qsignal]
+        #[cxx_name = "reloadAsked"]
+        fn reload_asked(self: Pin<&mut FolderModel>);
+        /// The reload the user asked for is listed in full; the status line
+        /// says so until `endReloadNote` (W-168).
+        #[qsignal]
+        fn reloaded(self: Pin<&mut FolderModel>);
 
         /// Shows the folder at the `file:` URI `uri`.
         #[qinvokable]
@@ -165,6 +174,10 @@ pub mod qobject {
         /// Lists the folder again.
         #[qinvokable]
         fn reload(self: Pin<&mut FolderModel>);
+        /// Ends the status line's "Reloaded" note.
+        #[qinvokable]
+        #[cxx_name = "endReloadNote"]
+        fn end_reload_note(self: Pin<&mut FolderModel>);
         /// Opens the entry at `row`: a folder here, a file through the window.
         #[qinvokable]
         fn activate(self: Pin<&mut FolderModel>, row: i32);
@@ -229,6 +242,12 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "keyboardArrived"]
         fn keyboard_arrived(self: Pin<&mut FolderModel>, first_shown: i32);
+        /// A listing arrived while the pane has the keyboard: the focus is
+        /// shown as by `keyboardArrived` only for a new folder or rows the
+        /// keyboard waited for, never after a re-read (W-167).
+        #[qinvokable]
+        #[cxx_name = "listingArrived"]
+        fn listing_arrived(self: Pin<&mut FolderModel>, first_shown: i32);
         /// Selects nothing.
         #[qinvokable]
         #[cxx_name = "clearSelection"]

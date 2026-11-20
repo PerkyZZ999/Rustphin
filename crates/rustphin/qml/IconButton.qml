@@ -22,6 +22,11 @@ ToolButton {
     // Room kept after the icon and the words, for a menu button's chevron.
     property real extra: 0
 
+    // Turns the icon once round (Reload's acknowledgement, W-168).
+    function turn() {
+        turning.restart()
+    }
+
     display: AbstractButton.IconOnly
     padding: 0
     focusPolicy: Qt.TabFocus
@@ -41,11 +46,23 @@ ToolButton {
         // The icon in the middle; with words, in the middle of the leading
         // square, the words after it.
         Image {
+            id: glyph
+
             x: ((button.worded ? button.side : parent.width) - button.iconSide) / 2
             anchors.verticalCenter: parent.verticalCenter
             source: "image://lucide/" + button.iconName + "/" + button.iconColour.toString().slice(1)
             sourceSize.width: button.iconSide
             sourceSize.height: button.iconSide
+
+            RotationAnimation on rotation {
+                id: turning
+
+                running: false
+                from: 0
+                to: 360
+                duration: 600
+                easing.type: Easing.OutCubic
+            }
         }
         Text {
             id: label

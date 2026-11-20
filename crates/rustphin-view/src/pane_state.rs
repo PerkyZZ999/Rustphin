@@ -44,6 +44,11 @@ pub struct PaneState {
     failure: Option<Failure>,
     /// The folder last recorded in the history of visited folders.
     visited: Option<PathBuf>,
+    /// The listing a reload the user asked for (F5, Reload) will bring.
+    reloading: Option<u64>,
+    /// The first entry is to show the focus once a listing has rows: a new
+    /// folder was entered, or the keyboard came while there were none.
+    focus_owed: bool,
 }
 
 /// What a new snapshot changed, for the view to act on.
@@ -62,6 +67,9 @@ pub struct Arrival {
     /// The folder is listed in full for the first time since it was
     /// entered: it goes in the history of visited folders.
     pub visited: bool,
+    /// The reload the user asked for is done: the folder is listed in full
+    /// again, and the user is told so (W-168).
+    pub reloaded: bool,
 }
 
 /// A re-read of the folder shown, whose selection is carried over to the
@@ -159,6 +167,14 @@ impl PaneState {
         self.generation = generation;
     }
 
+    /// Notes that the user asked to reload the folder (F5, Reload) and the
+    /// model will bring it as listing `generation`; its arrival in full
+    /// reports [`Arrival::reloaded`].
+    pub fn reload_asked(&mut self, generation: u64) {
+        self.asked(generation);
+        self.reloading = Some(generation);
+    }
+
     /// Whether a snapshot or event of `generation` is still wanted.
     pub fn is_current(&self, generation: u64) -> bool {
         generation >= self.generation
@@ -226,7 +242,15 @@ impl PaneState {
             }
             _ => self.selection.sync(&snapshot),
         }
+        let reloaded = !new_folder
+            && !snapshot.is_loading()
+            && self
+                .reloading
+                .take_if(|asked| snapshot.generation() >= *asked)
+                .is_some();
         if new_folder {
+            self.focus_owed = true;
+            self.reloading = None;
             self.renaming = None;
             self.select_when_seen = None;
             self.select_all_when_seen.clear();
@@ -276,6 +300,7 @@ impl PaneState {
             rename,
             failure_cleared: failure_cleared.is_some(),
             visited,
+            reloaded,
         })
     }
 
@@ -284,15 +309,30 @@ impl PaneState {
     /// focus without being selected, so the focus can be seen (R-107).
     /// `true` when the focus moved.
     pub fn keyboard_arrived(&mut self, first_shown: usize) -> bool {
-        let Some(snapshot) = self.snapshot.clone() else {
+        let Some(snapshot) = self
+            .snapshot
+            .clone()
+            .filter(|snapshot| !snapshot.is_empty())
+        else {
+            self.focus_owed = true;
             return false;
         };
-        if self.selection.focus_row(&snapshot).is_some() || snapshot.is_empty() {
+        self.focus_owed = false;
+        if self.selection.focus_row(&snapshot).is_some() {
             return false;
         }
         self.selection
             .focus_only(&snapshot, first_shown.min(snapshot.len() - 1));
         true
+    }
+
+    /// A listing arrived while the pane has the keyboard: as
+    /// [`Self::keyboard_arrived`], but only when the focus is owed (a new
+    /// folder, or rows the keyboard was waiting for). A re-read of the
+    /// folder shown leaves the focus as the user left it, none after a
+    /// click on empty space (W-167).
+    pub fn listing_arrived(&mut self, first_shown: usize) -> bool {
+        self.focus_owed && self.keyboard_arrived(first_shown)
     }
 
     /// Forgets the folder and its listing, as when the pane starts listing
@@ -303,6 +343,7 @@ impl PaneState {
         self.snapshot = None;
         self.visited = None;
         self.selection = Selection::default();
+        self.focus_owed = true;
     }
 }
 
@@ -503,6 +544,43 @@ mod tests {
         assert_eq!(harness.pane.selection().focus_row(&snapshot), Some(2));
     }
 
+    /// W-167: a click on empty space leaves no entry focused, and a re-read
+    /// of the folder (F5, the watcher) must not bring the focus back; a
+    /// new folder, or rows arriving after the keyboard found none, do.
+    #[test]
+    fn a_listing_shows_the_focus_only_when_one_is_owed() {
+        let mut harness = Harness::new();
+        harness.fs.put(Path::new("/a"), &[b"a", b"b"]);
+        harness.fs.put(Path::new("/b"), &[b"c"]);
+        harness.open(Path::new("/a"));
+        // A new folder with the keyboard in the pane focuses its first entry.
+        assert!(harness.pane.listing_arrived(0));
+        // The user clicks empty space: nothing is focused.
+        harness.pane.selection_mut().clear();
+        harness.reread();
+        assert!(!harness.pane.listing_arrived(0), "a re-read refocused");
+        let snapshot = harness.pane.snapshot().unwrap().clone();
+        assert_eq!(harness.pane.selection().focus_row(&snapshot), None);
+        // The keyboard arriving again (Tab) still shows it (R-107).
+        assert!(harness.pane.keyboard_arrived(0));
+        // Another folder owes the focus again.
+        harness.open(Path::new("/b"));
+        assert!(harness.pane.listing_arrived(0));
+    }
+
+    #[test]
+    fn rows_arriving_after_the_keyboard_found_none_take_the_focus() {
+        let mut harness = Harness::new();
+        harness.fs.put(Path::new("/a"), &[]);
+        harness.open(Path::new("/a"));
+        // Nothing to focus yet: the focus stays owed.
+        assert!(!harness.pane.listing_arrived(0));
+        assert!(!harness.pane.keyboard_arrived(0));
+        harness.fs.put(Path::new("/a"), &[b"new"]);
+        harness.reread();
+        assert!(harness.pane.listing_arrived(0));
+    }
+
     #[test]
     fn a_selection_without_focus_is_kept_when_the_keyboard_arrives() {
         let mut harness = Harness::new();
@@ -634,6 +712,36 @@ mod tests {
         let arrival = harness.reread();
         assert!(arrival.reread && !arrival.new_folder && !arrival.visited);
         assert_eq!(harness.selected(), names(&[b"two"]));
+    }
+
+    #[test]
+    fn a_reload_the_user_asked_for_is_reported_once_listed_in_full() {
+        let mut harness = Harness::new();
+        harness.fs.put(Path::new("/a"), &[b"one", b"two"]);
+        harness.open(Path::new("/a"));
+        // The watcher's re-read is not the user's reload.
+        assert!(!harness.reread().reloaded);
+        let generation = harness.model.reload().unwrap();
+        harness.pane.reload_asked(generation);
+        let arrival = harness
+            .pane
+            .arrive(harness.listed(generation), None)
+            .unwrap();
+        assert!(arrival.reloaded && arrival.reread);
+        // Said once: the next re-read is the watcher's again.
+        assert!(!harness.reread().reloaded);
+    }
+
+    #[test]
+    fn a_reload_overtaken_by_another_folder_is_not_reported() {
+        let mut harness = Harness::new();
+        harness.fs.put(Path::new("/a"), &[b"one"]);
+        harness.fs.put(Path::new("/b"), &[b"two"]);
+        harness.open(Path::new("/a"));
+        let generation = harness.model.reload().unwrap();
+        harness.pane.reload_asked(generation);
+        assert!(!harness.open(Path::new("/b")).reloaded);
+        assert!(!harness.reread().reloaded, "the reload of /a is forgotten");
     }
 
     #[test]

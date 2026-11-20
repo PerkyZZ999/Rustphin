@@ -170,6 +170,18 @@ FocusScope {
             folder.keyboardArrived(firstShown())
     }
 
+    function showListingFocus() {
+        if (activeFocus)
+            folder.listingArrived(firstShown())
+    }
+
+    Timer {
+        id: reloadNote
+
+        interval: 2500
+        onTriggered: folder.endReloadNote()
+    }
+
     FolderModel {
         id: folder
 
@@ -184,6 +196,8 @@ FocusScope {
                 ticket: ticket,
                 uri: uri
             })
+        // The status line says "Reloaded" for a moment (W-168).
+        onReloaded: reloadNote.restart()
         onRevealRow: row => {
             if (pane.listView)
                 pane.listView.positionViewAtIndex(row, ListView.Contain)
@@ -203,8 +217,9 @@ FocusScope {
             pane.shownLocation = folder.locationUri
             if (same)
                 Qt.callLater(pane.restoreScroll)
-            // A listing that arrives after the pane took the keyboard.
-            Qt.callLater(pane.showKeyboardFocus)
+            // A listing that arrives after the pane took the keyboard: a new
+            // folder, or rows the keyboard waited for (W-167).
+            Qt.callLater(pane.showListingFocus)
         }
         onTitleChanged: pane.reported()
         onTrashChanged: pane.reported()

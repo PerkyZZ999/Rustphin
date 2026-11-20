@@ -121,6 +121,15 @@ Rectangle {
                                 bar.pane.focusList()
                         }
 
+                        // Reload turns its icon whenever the folder is
+                        // reloaded, by F5 too (W-168).
+                        Connections {
+                            target: entry.itemId === "reload" ? bar.folder : null
+                            function onReloadAsked() {
+                                tool.turn()
+                            }
+                        }
+
                         // A menu button shows a 12-pixel chevron after its icon.
                         Lucide {
                             visible: entry.kind === "menu"
