@@ -739,15 +739,7 @@ pub fn free_duplicate_name(name: &OsStr, is_taken: impl Fn(&OsStr) -> bool) -> O
 /// `name` with `suffix` inserted before its extension; a compound `.tar.*`
 /// extension stays whole and a leading dot is not an extension.
 fn with_suffix(bytes: &[u8], suffix: &[u8]) -> OsString {
-    let last_dot = bytes
-        .iter()
-        .rposition(|&byte| byte == b'.')
-        .filter(|&dot| dot > 0);
-    let split = match last_dot {
-        Some(dot) if bytes[..dot].ends_with(b".tar") && dot > 4 => dot - 4,
-        Some(dot) => dot,
-        None => bytes.len(),
-    };
+    let split = crate::rename::extension_start(bytes);
     let mut out = bytes[..split].to_vec();
     out.extend_from_slice(suffix);
     out.extend_from_slice(&bytes[split..]);

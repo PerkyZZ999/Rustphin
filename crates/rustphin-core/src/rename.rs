@@ -130,9 +130,10 @@ impl RenameRules {
     ///
     /// A run of `#` is the counter for that file, padded with zeros to the
     /// length of the run. The first file receives `start`; each later file
-    /// adds `step`. `@` is the file's current name. `\#`, `\@` and `\\` are
-    /// those characters literally. The pattern replaces the whole name,
-    /// including its extension.
+    /// adds `step`. `@` is the file's current name without its extension.
+    /// `\#`, `\@` and `\\` are those characters literally. The pattern
+    /// replaces the name's stem; each file keeps its extension (see
+    /// [`extension_start`]), as in Dolphin.
     pub fn pattern(pattern: impl Into<String>, start: i64, step: i64) -> Self {
         Self {
             transform: Transform::Pattern {
@@ -307,20 +308,41 @@ fn parse_pattern(pattern: &str) -> Result<Vec<Piece>, String> {
     Ok(pieces)
 }
 
+/// Where the extension of `name` starts, as Dolphin keeps it when it renames
+/// or duplicates: at the last dot, or at `.tar` for a compound `.tar.*`
+/// ending; a leading dot (`.bashrc`) is not an extension. `name.len()` when
+/// there is none.
+pub fn extension_start(name: &[u8]) -> usize {
+    match name
+        .iter()
+        .rposition(|&byte| byte == b'.')
+        .filter(|&dot| dot > 0)
+    {
+        Some(dot) if dot > 4 && name[..dot].ends_with(b".tar") => dot - 4,
+        Some(dot) => dot,
+        None => name.len(),
+    }
+}
+
+/// Fills the pattern for each row. `@` and the counters make the name's stem;
+/// each file keeps its own extension, as Dolphin's batch rename does.
 fn fill_pattern(pieces: &[Piece], start: i64, step: i64, rows: &mut [PreviewRow]) {
     let mut counter = start;
     let last = rows.len().saturating_sub(1);
     for (index, row) in rows.iter_mut().enumerate() {
+        let from = row.from.as_bytes();
+        let (stem, extension) = from.split_at(extension_start(from));
         let mut name = Vec::new();
         for piece in pieces {
             match piece {
                 Piece::Literal(bytes) => name.extend_from_slice(bytes),
-                Piece::Original => name.extend_from_slice(row.from.as_bytes()),
+                Piece::Original => name.extend_from_slice(stem),
                 Piece::Counter { width } => {
                     name.extend_from_slice(format_counter(counter, *width).as_bytes());
                 }
             }
         }
+        name.extend_from_slice(extension);
         row.to = OsStr::from_bytes(&name).to_owned();
         if index == last {
             break;
@@ -488,6 +510,33 @@ mod tests {
     fn the_pattern_keeps_the_current_name_and_a_literal_hash() {
         let preview = RenameRules::pattern(r"\@-@-#", 1, 1).preview(&names(&["cat"]), &[]);
         assert_eq!(row(&preview, 0).to, "@-cat-1");
+    }
+
+    #[test]
+    fn the_pattern_names_the_stem_and_each_file_keeps_its_extension() {
+        let preview = RenameRules::pattern("@-#", 1, 1).preview(
+            &names(&[
+                "IMG_4819.jpg",
+                "notes.tar.gz",
+                ".bashrc",
+                "README",
+                "a.b.PNG",
+            ]),
+            &[],
+        );
+        assert_eq!(row(&preview, 0).to, "IMG_4819-1.jpg");
+        assert_eq!(row(&preview, 1).to, "notes-2.tar.gz");
+        assert_eq!(row(&preview, 2).to, ".bashrc-3");
+        assert_eq!(row(&preview, 3).to, "README-4");
+        assert_eq!(row(&preview, 4).to, "a.b-5.PNG");
+    }
+
+    #[test]
+    fn a_pattern_without_the_name_still_keeps_the_extension() {
+        let preview =
+            RenameRules::pattern("holiday ##", 1, 1).preview(&names(&["x.jpg", "y.mp4"]), &[]);
+        assert_eq!(row(&preview, 0).to, "holiday 01.jpg");
+        assert_eq!(row(&preview, 1).to, "holiday 02.mp4");
     }
 
     #[test]

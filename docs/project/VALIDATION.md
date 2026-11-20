@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-19 — W-165, W-166 Batch rename's Pattern keeps the extension; labelled fields
+- **Phase:** 6 Implement (v0.2.0, S13)
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` passed. New tests in `rustphin-core` `rename`: the pattern makes the stem and each file keeps its extension (`.jpg`, `.tar.gz` whole, `.bashrc` and `README` without one, `a.b.PNG` keeping `.PNG`), and a pattern without `@` keeps the extension; the view test of the Pattern mode now expects `photo-01.jpg`. Mutation through `rust-tc quick`: dropping the kept extension failed all three. The duplicate-name rule in `ops` now uses the same `rename::extension_start`, its tests unchanged and passing. Scenario B5 in an isolated KWin session with the mockup scene: Pattern, Start and Step labelled; `@-#` previewed `IMG_4819-1.jpg` to `IMG_4823-5.jpg`; `Dusk ##` and Enter renamed the five files on disk to `Dusk 01.jpg` … `Dusk 05.jpg`.
+- **Not verified:** folders: a folder named like `v1.2` is treated as having the extension `.2`, as the duplicate names already do (the plan does not know which entries are folders).
+- **Waiver:** none
+- **Follow-up:** the README's batch-rename screenshot shows the pattern `Dusk ##.jpg`, which now gives `Dusk 01.jpg.jpg`; retake it with `Dusk ##` before the v0.2.0 release.
+
 ### 2026-11-15 — W-164 Release v0.1.0
 - **Phase:** 7 Release (v0.1.0)
 - **Result:** pass

@@ -207,6 +207,7 @@ Use two or more files in the fixture. Do not activate a device.
 | B2 | Find `note`, replace with `other` | The preview shows `note` becoming `other`, a sentence that the name is already used, and Rename still disabled |
 | B3 | Change the replacement to `photo`, Enter | `note` is now `photo` on disk and in the list; `other` is unchanged; the dialog is gone |
 | B4 | Select the two files again, F2, Escape | The dialog closes and both names stay as they are |
+| B5 | In the mockup scene, select the five `IMG_*.jpg`, F2, Pattern; then type `Dusk ##`, Enter | Pattern, Start and Step each have a visible label; the default `@-#` previews `IMG_4819-1.jpg` … `IMG_4823-5.jpg`; the files become `Dusk 01.jpg` … `Dusk 05.jpg` (W-165, W-166) |
 
 ## Desktop integration (S10)
 

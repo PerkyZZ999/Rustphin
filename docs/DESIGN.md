@@ -1297,7 +1297,8 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
 - **Batch rename** (`BatchDialog.qml`, mockups 15–16): 640 px, title row with
   `pencil`. Three modes (Replace, Pattern, Case) as a segmented row, the
   chosen one in `selection` with its `primary-bright` edge; the rule fields (Text to find and Replace with,
-  Regular expression; Pattern with Start and Step, "# is the counter…"; Lower
+  Regular expression; Pattern with labelled Start and Step fields and "# is the
+  counter… Each file keeps its extension."; Lower
   case, Upper case, Capitalise words); the preview as two `data-md` columns,
   Current name and New name; names that cannot be used are in `error`, with
   one problem note above the preview. "Nothing would change. Edit the rule to

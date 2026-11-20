@@ -78,6 +78,14 @@ Popup {
         Keys.onEnterPressed: batch.accept()
     }
 
+    // The visible name of a field whose placeholder is hidden by its value.
+    component FieldLabel: Text {
+        textFormat: Text.PlainText
+        color: Tokens.colors.text_muted
+        font.family: Tokens.metrics.family_body
+        font.pixelSize: Tokens.metrics.body_text
+    }
+
     component Segment: AbstractButton {
         id: segment
 
@@ -205,10 +213,17 @@ Popup {
                 visible: batch.mode === 1
                 Layout.fillWidth: true
 
-                Field {
-                    field: "pattern"
-                    label: qsTr("Pattern")
-                    text: "@-#"
+                RowLayout {
+                    spacing: Tokens.metrics.space_md
+
+                    FieldLabel {
+                        text: qsTr("Pattern")
+                    }
+                    Field {
+                        field: "pattern"
+                        label: qsTr("Pattern")
+                        text: "@-#"
+                    }
                 }
                 Text {
                     textFormat: Text.PlainText
@@ -219,13 +234,21 @@ Popup {
                     color: Tokens.colors.text_muted
                     font.family: Tokens.metrics.family_body
                     font.pixelSize: Tokens.metrics.small_text
-                    text: qsTr("# is the counter. The number of # signs is how many digits it has. @ is the file's current name.")
+                    text: qsTr("# is the counter. The number of # signs is how many digits it has. @ is the file's current name. Each file keeps its extension.")
                 }
                 RowLayout {
+                    spacing: Tokens.metrics.space_md
+
+                    FieldLabel {
+                        text: qsTr("Start")
+                    }
                     Field {
                         field: "start"
                         label: qsTr("Start")
                         text: "1"
+                    }
+                    FieldLabel {
+                        text: qsTr("Step")
                     }
                     Field {
                         field: "step"

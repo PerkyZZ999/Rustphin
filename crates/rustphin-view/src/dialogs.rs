@@ -432,14 +432,14 @@ mod tests {
         batch.pattern = "photo-##".into();
         let view = batch.view();
         assert!(view.ready);
-        assert_eq!(view.rows[0].to, "photo-01");
+        assert_eq!(view.rows[0].to, "photo-01.jpg");
         assert_eq!(
             batch.request(),
             Some(Request::RenameBatch {
                 directory: "/srv".into(),
                 pairs: vec![
-                    ("b.jpg".into(), "photo-01".into()),
-                    ("a.jpg".into(), "photo-02".into()),
+                    ("b.jpg".into(), "photo-01.jpg".into()),
+                    ("a.jpg".into(), "photo-02.jpg".into()),
                 ],
             })
         );
