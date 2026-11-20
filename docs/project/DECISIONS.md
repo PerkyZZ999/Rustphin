@@ -379,3 +379,16 @@ W-076e (patching the locked toolkit's focus registration) was not approved on 20
 - **Reopen criteria:** The trial finds a problem that must block the release; the maintainer reshapes v0.2.0.
 - **Confirmed by / date:** The maintainer, 2026-11-15 ("Fixes, Hardening and Improvements should be included into v0.2.0", packaging as a PKGBUILD in the repository, service menus, quick preview; "Tag v0.1.0 and release it on Github")
 - **Supersedes / superseded by:** —
+
+## D-041 — Properties in a window of its own, with Dolphin's four tabs less the metadata
+- **Status:** locked
+- **Date:** 2026-11-19
+- **Context:** The maintainer asked, from the daily-driver trial, for Properties to gain Dolphin's tabs (General, Permissions, Checksums, Details), laid out as carefully as the Settings window (W-170). Properties is a 480 px popup over the main window with one page and a 3 × 3 permission grid.
+- **Decision:** Properties becomes a window of its own, like Settings (W-157), with four tabs. General: icon, name, type, Open with and Change… (the W-169 chooser, its box ticked), location, size and size on disk, created, modified, accessed. Permissions: Owner, Group and Others as Dolphin's choices (Can view & modify, Can only view, Forbidden) and an Execute box, with Advanced showing the Read/Write/Execute grid; Ownership shows the owner and lets the user change the group to one they belong to, as a new operation of the engine. Checksums: MD5, SHA1, SHA256 and SHA512, each calculated on demand off the Qt thread and cancellable, and a pasted checksum compared. Details: what Rustphin reads from the file itself, such as a picture's dimensions. Tags, rating and comment are never shown, now or later. A mockup (`docs/mockup/40-properties-tabs.html`) is approved by the maintainer before it is built.
+- **Rationale:** The maintainer's choices of 2026-11-19; a window can be moved beside the files and several can be open, as in Dolphin.
+- **Evidence:** The maintainer's answers of 2026-11-19 and their four Dolphin screenshots.
+- **Consequences:** New dependencies `sha1` and `sha2` (RustCrypto, MIT or Apache-2.0); a group change in the operation engine with its fault-injection tests (D-011); R-018's permission criterion is met again through the new tab. ROADMAP's "Later" list loses tags and ratings.
+- **Alternatives:** A popup with tabs; today's grid alone; MD5 only; read-only tags, rating and comment.
+- **Reopen criteria:** The maintainer changes their mind on the mockup.
+- **Confirmed by / date:** The maintainer, 2026-11-19 (own window; Dolphin's choices; change the group; SHA1/SHA256/SHA512; tags and rating "I just don't want that in our app"; HTML mockup first)
+- **Supersedes / superseded by:** —

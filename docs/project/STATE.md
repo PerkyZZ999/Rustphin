@@ -37,7 +37,7 @@
 - None for the agent. The real-desktop and hardware checks above wait on the maintainer.
 
 ## Next action
-- v0.2.0, Slice S13 (ROADMAP.md, WORK_ITEMS.md): W-170, Properties in tabs: plan and mockup for the maintainer first (W-165 to W-169 done 2026-11-19) (W-168–W-170 are the maintainer's first daily-driver findings, 2026-11-19: Reload's feedback, Open With missing, Properties in tabs).
+- v0.2.0, Slice S13 (ROADMAP.md, WORK_ITEMS.md): W-170, Properties in tabs: decided (D-041), mockup 40 drawn, waiting for the maintainer's approval before it is built (W-165 to W-169 done 2026-11-19) (W-168–W-170 are the maintainer's first daily-driver findings, 2026-11-19: Reload's feedback, Open With missing, Properties in tabs).
 - Then v0.2.0 "Daily driver": S13 fixes and hardening (the trial and the real-desktop checks move here), S14 the PKGBUILD, S15 service menus, S16 quick preview.
 - For the maintainer on the real desktop: after installing a build, run `rustphin --quit` once so the new build answers launches; then the checks under "Manual" above.
 

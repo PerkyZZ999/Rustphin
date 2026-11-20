@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-19 — W-170 Properties in tabs: decision and mockup
+- **Phase:** 6 Implement (v0.2.0, S13), design
+- **Result:** pass (a proposal; nothing built)
+- **Evidence:** the maintainer's answers recorded as D-041. `docs/mockup/40-properties-tabs.html` rendered headless at 1250 × 1720 and looked over: the four tabs in windows of 560 × 680 on the charcoal tokens, the Permissions tab with Advanced open fitting, the SHA1 progress bar drawn. `rust-tc doctor` passed.
+- **Not verified:** nothing of W-170 is built yet.
+- **Waiver:** none
+- **Follow-up:** the maintainer reviews mockup 40; then W-170 is built.
+
 ### 2026-11-19 — W-169 Open with always offers another application
 - **Phase:** 6 Implement (v0.2.0, S13)
 - **Result:** pass

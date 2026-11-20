@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Properties in tabs</title>
+<!-- Proposal (W-170, D-041; the maintainer, 2026-11-19, with Dolphin's four
+     tabs as the reference): Properties as a window of its own, laid out like
+     the Settings window (W-155): sections with a heading, rows in panels
+     split by hairlines. Colours, type and sizes are docs/DESIGN.md's
+     charcoal tokens (D-038); the accent marks the current tab, the focused
+     field and the default button only. The file and figures are made up. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400&family=Space+Grotesk:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --window: #141516;
+    --chrome: #18191B;
+    --chrome-raised: #202124;
+    --content: #111213;
+    --panel: #1D1E21;
+    --text: #ECECED;
+    --text-muted: #AEB1B8;
+    --text-disabled: #7D8087;
+    --primary: #4169E1;
+    --accent: #7B98F2;
+    --progress: #7B98F2;
+    --selection: #3B3D42;
+    --hover: rgba(255, 255, 255, 0.06);
+    --tertiary: #10B981;
+    --error: #FF9B9B;
+    --border: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --track: #34363B;
+    --radius: 2px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0b0c0d;
+    color: var(--text);
+    font: 400 12px/16px Inter, sans-serif;
+    padding: 32px;
+  }
+  h1 { font: 600 20px/28px "Space Grotesk", sans-serif; margin: 0 0 4px; }
+  .lede { color: var(--text-muted); max-width: 1100px; margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 560px); gap: 32px; }
+  .caption { color: var(--text-muted); margin: 8px 0 0; max-width: 560px; }
+  .caption b { color: var(--text); font-weight: 600; }
+
+  /* The window: KWin draws no frame here; Rustphin's own title bar (W-096a). */
+  .win {
+    width: 560px; height: 680px; display: flex; flex-direction: column;
+    background: var(--window); border: 1px solid var(--border-strong);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .titlebar {
+    height: 36px; flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 0 4px 0 12px; background: var(--chrome); color: var(--text-muted);
+  }
+  .titlebar .t { flex: 1; text-align: center; }
+  .tbtn { width: 28px; height: 28px; display: grid; place-items: center; color: var(--text-muted); }
+
+  /* Tabs: a segmented row, as Settings' segments and batch rename's modes. */
+  .tabs {
+    flex: none; display: flex; gap: 0; padding: 12px 16px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 8px;
+    color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tab .ic { color: inherit; }
+
+  .body { flex: 1; overflow: hidden; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  .hero { display: flex; gap: 16px; align-items: center; }
+  .thumb {
+    width: 64px; height: 48px; border-radius: var(--radius);
+    background: linear-gradient(180deg, #4a5d8a 0%, #b9796a 60%, #2a2a3a 100%);
+  }
+  .hero .name { font: 600 15px/20px "Space Grotesk", sans-serif; }
+  .hero .type { color: var(--text-muted); }
+
+  .section h2 { font: 600 12px/16px Inter, sans-serif; margin: 0 0 8px; color: var(--text); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+  .row {
+    min-height: 40px; display: flex; align-items: center; gap: 12px;
+    padding: 8px 12px; border-top: 1px solid var(--border);
+  }
+  .row:first-child { border-top: 0; }
+  .row .k { width: 120px; flex: none; color: var(--text-muted); }
+  .row .v { flex: 1; min-width: 0; }
+  .row .sub { display: block; color: var(--text-muted); }
+  .mono { font: 400 11px/16px "JetBrains Mono", monospace; }
+  .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .btn {
+    height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius);
+    color: var(--text); background: transparent; font: inherit; flex: none;
+  }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.dis { color: var(--text-disabled); border-color: var(--border); background: transparent; }
+  .icon-btn { width: 32px; height: 32px; display: grid; place-items: center; color: var(--text-muted); flex: none; border-radius: var(--radius); }
+  .select {
+    height: 32px; min-width: 200px; padding: 0 8px 0 12px; display: inline-flex;
+    align-items: center; justify-content: space-between; gap: 8px;
+    background: var(--content); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  }
+  .select.changed { border-color: var(--accent); }
+  .field {
+    flex: 1; height: 32px; padding: 0 12px; display: flex; align-items: center;
+    background: var(--content); border: 1px solid var(--border-strong); border-radius: var(--radius);
+    min-width: 0;
+  }
+  .field.focus { border: 2px solid var(--accent); padding: 0 11px; }
+  .check { width: 16px; height: 16px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--content); display: grid; place-items: center; flex: none; }
+  .check.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .bar { display: block; height: 4px; background: var(--track); border-radius: 2px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--progress); }
+  .ok { color: var(--tertiary); display: flex; gap: 8px; align-items: center; }
+  .note { color: var(--text-muted); }
+  .grid3 { display: grid; grid-template-columns: 96px repeat(3, 1fr); row-gap: 4px; align-items: center; padding: 12px; }
+  .grid3 .h { color: var(--text-muted); font-size: 11px; }
+  .grid3 label { display: flex; align-items: center; gap: 8px; }
+
+  .foot {
+    height: 52px; flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 0 12px 0 16px; background: var(--chrome); border-top: 1px solid var(--border);
+  }
+  .foot .note { flex: 1; }
+
+  /* Lucide outlines, drawn in currentColor. */
+  .ic { width: 16px; height: 16px; flex: none; display: inline-block; vertical-align: middle; }
+  .ic svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ic.s12 { width: 12px; height: 12px; }
+  .appicon { width: 16px; height: 16px; border-radius: 4px; background: linear-gradient(135deg, #5aa0f0, #2f6bd0); flex: none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></symbol>
+  <symbol id="list" viewBox="0 0 24 24"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></symbol>
+  <symbol id="image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="square" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="1"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="chev-r" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="paste" viewBox="0 0 24 24"><path d="M15 2H9a1 1 0 0 0-1 1v2c0 .6.4 1 1 1h6c.6 0 1-.4 1-1V3c0-.6-.4-1-1-1Z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2M16 4h2a2 2 0 0 1 2 2v2M11 14h10"/><path d="m17 10 4 4-4 4"/></symbol>
+  <symbol id="ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="folder-open" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></symbol>
+</svg>
+
+<h1>Properties in tabs</h1>
+<p class="lede">Properties opens as a window of its own (D-041), 560 × 680 and resizable down to 440 × 480, like Settings: Rustphin's title bar, or KWin's when Settings › Appearance › Title bar says so. One window per file; several can be open. The tabs are a row of segments with Lucide icons; Ctrl+Tab and Ctrl+Shift+Tab move between them, and the current one has the accent edge besides its brighter words. A folder has General and Permissions only; Checksums and Details are for files.</p>
+
+<div class="grid">
+
+<!-- 1 · General ------------------------------------------------------- -->
+<div>
+<div class="win">
+  <div class="titlebar"><span class="ic"><svg><use href="#image"/></svg></span><span class="t">Dusk 01.jpg — Properties</span><span class="tbtn"><span class="ic"><svg><use href="#minus"/></svg></span></span><span class="tbtn"><span class="ic"><svg><use href="#square"/></svg></span></span><span class="tbtn"><span class="ic"><svg><use href="#x"/></svg></span></span></div>
+  <div class="tabs">
+    <span class="tab on"><span class="ic"><svg><use href="#info"/></svg></span>General</span>
+    <span class="tab"><span class="ic"><svg><use href="#lock"/></svg></span>Permissions</span>
+    <span class="tab"><span class="ic"><svg><use href="#hash"/></svg></span>Checksums</span>
+    <span class="tab"><span class="ic"><svg><use href="#list"/></svg></span>Details</span>
+  </div>
+  <div class="body">
+    <div class="hero">
+      <div class="thumb"></div>
+      <div><div class="name">Dusk 01.jpg</div><div class="type">JPEG image</div></div>
+    </div>
+    <div class="section">
+      <h2>Opening</h2>
+      <div class="panel">
+        <div class="row"><span class="k">Opens with</span><span class="v" style="display:flex;gap:8px;align-items:center"><span class="appicon"></span>Gwenview</span><span class="btn">Change…</span></div>
+        <div class="row"><span class="k">Location</span><span class="v mono ell">~/Pictures</span><span class="icon-btn" title="Open the folder"><span class="ic"><svg><use href="#folder-open"/></svg></span></span></div>
+      </div>
+    </div>
+    <div class="section">
+      <h2>Size</h2>
+      <div class="panel">
+        <div class="row"><span class="k">Size</span><span class="v">1.5 MiB <span class="mono note">(1,572,864 bytes)</span></span></div>
+        <div class="row"><span class="k">On disk</span><span class="v">1.5 MiB <span class="mono note">(1,576,960 bytes)</span></span></div>
+      </div>
+    </div>
+    <div class="section">
+      <h2>Dates</h2>
+      <div class="panel">
+        <div class="row"><span class="k">Created</span><span class="v mono">2026-10-27 16:41:08</span></div>
+        <div class="row"><span class="k">Modified</span><span class="v mono">2026-10-27 16:41:08</span></div>
+        <div class="row"><span class="k">Accessed</span><span class="v mono">2026-11-19 20:31:55</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span class="note"></span><span class="btn">Close (Esc)</span><span class="btn dis">Apply (Enter)</span></div>
+</div>
+<p class="caption"><b>General.</b> Change… opens the application chooser of Open with (W-169) with "Always open “JPEG image” files with it" ticked. The folder button opens the location in a new tab. A folder shows "Contains 1,204 files, 38 folders" and its size grows while it is measured ("Measuring… 3.2 GiB so far", with a Stop button), as today.</p>
+</div>
+
+<!-- 2 · Permissions -------------------------------------------------- -->
+<div>
+<div class="win">
+  <div class="titlebar"><span class="ic"><svg><use href="#image"/></svg></span><span class="t">Dusk 01.jpg — Properties</span><span class="tbtn"><span class="ic"><svg><use href="#minus"/></svg></span></span><span class="tbtn"><span class="ic"><svg><use href="#square"/></svg></span></span><span class="tbtn"><span class="ic"><svg><use href="#x"/></svg></span></span></div>
+  <div class="tabs">
+    <span class="tab"><span class="ic"><svg><use href="#info"/></svg></span>General</span>
+    <span class="tab on"><span class="ic"><svg><use href="#lock"/></svg></span>Permissions</span>
+    <span class="tab"><span class="ic"><svg><use href="#hash"/></svg></span>Checksums</span>
+    <span class="tab"><span class="ic"><svg><use href="#list"/></svg></span>Details</span>
+  </div>
+  <div class="body">
+    <div class="section">
+      <h2>Access</h2>
+      <div class="panel">
+        <div class="row"><span class="k">Owner<span class="sub">alex</span></span><span class="v"></span><span class="select">Can view &amp; modify<span class="ic"><svg><use href="#chev"/></svg></span></span></div>
+        <div class="row"><span class="k">Group<span class="sub">photos</span></span><span class="v"></span><span class="select">Can only view<span class="ic"><svg><use href="#chev"/></svg></span></span></div>
+        <div class="row"><span class="k">Others</span><span class="v"></span><span class="select changed">Forbidden<span class="ic"><svg><use href="#chev"/></svg></span></span></div>
+        <div class="row"><span class="check"></span><span class="v">Allow running the file as a program</span></div>
+        <div class="row"><span class="ic s12" style="color:var(--text-muted)"><svg><use href="#chev"/></svg></span><span class="v">Advanced</span><span class="mono note">rw-r----- (0640)</span></div>
+        <div class="grid3" style="border-top:1px solid var(--border)">
+          <span></span><span class="h">Read</span><span class="h">Write</span><span class="h">Run / enter</span>
+          <span>Owner</span><label><span class="check on"><span class="ic s12"><svg><use href="#check"/></svg></span></span></label><label><span class="check on"><span class="ic s12"><svg><use href="#check"/></svg></span></span></label><label><span class="check"></span></label>
+          <span>Group</span><label><span class="check on"><span class="ic s12"><svg><use href="#check"/></svg></span></span></label><label><span class="check"></span></label><label><span class="check"></span></label>
+          <span>Others</span><label><span class="check"></span></label><label><span class="check"></span></label><label><span class="check"></span></label>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <h2>Ownership</h2>
+      <div class="panel">
+        <div class="row"><span class="k">Owner</span><span class="v">alex<span class="sub">Only an administrator can give the file to another user.</span></span></div>
+        <div class="row"><span class="k">Group</span><span class="v"></span><span class="select">photos<span class="ic"><svg><use href="#chev"/></svg></span></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span class="note">1 change waits for Apply.</span><span class="btn">Close (Esc)</span><span class="btn primary"><span class="ic"><svg><use href="#check"/></svg></span>Apply (Enter)</span></div>
+</div>
+<p class="caption"><b>Permissions,</b> its page scrolling when the window is shorter, with Others just set to Forbidden (accent outline until applied) and Advanced open. Each choice sets Read and Write together; a mix the choices cannot say (write without read) reads "Custom" and shows Advanced open. The Group list holds the groups the user belongs to. Apply runs the changes through the operation engine, undoable like any operation; the footer says how many wait. On a folder, Execute reads "Allow entering the folder", plus "Apply to everything inside".</p>
+</div>
+
+<!-- 3 · Checksums ---------------------------------------------------- -->
+<div>
+<div class="win">
+  <div class="titlebar"><span class="ic"><svg><use href="#image"/></svg></span><span class="t">Dusk 01.jpg — Properties</span><span class="tbtn"><span class="ic"><svg><use href="#minus"/></svg></span></span><span class="tbtn"><span class="ic"><svg><use href="#square"/></svg></span></span><span class="tbtn"><span class="ic"><svg><use href="#x"/></svg></span></span></div>
+  <div class="tabs">
+    <span class="tab"><span class="ic"><svg><use href="#info"/></svg></span>General</span>
+    <span class="tab"><span class="ic"><svg><use href="#lock"/></svg></span>Permissions</span>
+    <span class="tab on"><span class="ic"><svg><use href="#hash"/></svg></span>Checksums</span>
+    <span class="tab"><span class="ic"><svg><use href="#list"/></svg></span>Details</span>
+  </div>
+  <div class="body">
+    <div class="section">
+      <h2>Check a download</h2>
+      <p class="note" style="margin:0 0 8px">Paste the checksum the website gives for this file. Rustphin finds which kind it is and calculates that one.</p>
+      <div style="display:flex;gap:8px">
+        <span class="field focus mono ell">9f2c4e1b7a03d85e6c1f0b42a97d3e58c6b10f9a2e74d531b8c06a9e4f7d2c1b</span>
+        <span class="btn"><span class="ic"><svg><use href="#paste"/></svg></span>Paste</span>
+      </div>
+      <div class="ok" style="margin-top:8px"><span class="ic"><svg><use href="#ok"/></svg></span>Matches the SHA256 checksum: the file arrived intact.</div>
+    </div>
+    <div class="section">
+      <h2>Checksums</h2>
+      <div class="panel">
+        <div class="row"><span class="k">MD5</span><span class="v mono ell">5d41402abc4b2a76b9719d911017c592</span><span class="icon-btn" title="Copy MD5"><span class="ic"><svg><use href="#copy"/></svg></span></span></div>
+        <div class="row"><span class="k">SHA1</span><span class="v"><span class="bar"><i style="width:42%"></i></span><span class="sub" style="margin-top:4px">Calculating… 42%</span></span><span class="btn">Stop</span></div>
+        <div class="row"><span class="k">SHA256</span><span class="v mono ell">9f2c4e1b7a03d85e6c1f0b42a97d3e58c6b10f9a2e74d531b8c06a9e4f7d2c1b</span><span class="icon-btn" title="Copy SHA256"><span class="ic"><svg><use href="#copy"/></svg></span></span></div>
+        <div class="row"><span class="k">SHA512</span><span class="v"></span><span class="btn">Calculate</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span class="note"></span><span class="btn">Close (Esc)</span><span class="btn dis">Apply (Enter)</span></div>
+</div>
+<p class="caption"><b>Checksums.</b> Each is calculated only when asked, on a worker thread, with its progress and Stop; closing the window stops it. A pasted value of 32, 40, 64 or 128 hexadecimal digits picks MD5, SHA1, SHA256 or SHA512 and calculates it. A match is said in words with a check icon; a mismatch in `error` with an alert icon: "Does not match the SHA256 checksum: the file differs from the one the website describes. Download it again." Anything else pasted: "This is not a checksum Rustphin knows (MD5, SHA1, SHA256 or SHA512)."</p>
+</div>
+
+<!-- 4 · Details ------------------------------------------------------ -->
+<div>
+<div class="win">
+  <div class="titlebar"><span class="ic"><svg><use href="#image"/></svg></span><span class="t">Dusk 01.jpg — Properties</span><span class="tbtn"><span class="ic"><svg><use href="#minus"/></svg></span></span><span class="tbtn"><span class="ic"><svg><use href="#square"/></svg></span></span><span class="tbtn"><span class="ic"><svg><use href="#x"/></svg></span></span></div>
+  <div class="tabs">
+    <span class="tab"><span class="ic"><svg><use href="#info"/></svg></span>General</span>
+    <span class="tab"><span class="ic"><svg><use href="#lock"/></svg></span>Permissions</span>
+    <span class="tab"><span class="ic"><svg><use href="#hash"/></svg></span>Checksums</span>
+    <span class="tab on"><span class="ic"><svg><use href="#list"/></svg></span>Details</span>
+  </div>
+  <div class="body">
+    <div class="section">
+      <h2>Picture</h2>
+      <div class="panel">
+        <div class="row"><span class="k">Dimensions</span><span class="v">4032 × 3024 pixels <span class="note">(12.2 megapixels)</span></span></div>
+        <div class="row"><span class="k">Format</span><span class="v">JPEG, colour, 8 bits per channel</span></div>
+      </div>
+    </div>
+    <div class="section">
+      <h2>File</h2>
+      <div class="panel">
+        <div class="row"><span class="k">Type</span><span class="v">JPEG image <span class="mono note">image/jpeg</span></span></div>
+        <div class="row"><span class="k">Size</span><span class="v">1.5 MiB</span></div>
+        <div class="row"><span class="k">Modified</span><span class="v mono">2026-10-27 16:41:08</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span class="note"></span><span class="btn">Close (Esc)</span><span class="btn dis">Apply (Enter)</span></div>
+</div>
+<p class="caption"><b>Details:</b> what Rustphin reads from the file itself, read off the Qt thread. A picture (PNG, JPEG, GIF, WebP, BMP) gains its dimensions and format from its header, never decoding the whole image. Other files show the File section only; a symbolic link adds "Points to". No tags, rating or comment (D-041).</p>
+</div>
+
+</div>
+</body>
+</html>

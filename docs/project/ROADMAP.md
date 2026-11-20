@@ -272,8 +272,8 @@ acceptance criteria and, for S15 and S16, a plan and mockup for the maintainer t
 approve before it is built.
 
 **Later (v0.3.0 and after, as suggested on 2026-11-15, not yet planned):** search
-by name then by content through Baloo, the information panel, tags, ratings and
-comments (v0.3.0); translations, the light theme, browsing inside archives, native
+by name then by content through Baloo and the information panel (v0.3.0; tags,
+ratings and comments are not wanted, D-041); translations, the light theme, browsing inside archives, native
 network protocols (v0.4.0); the embedded terminal, Miller columns and
 version-control overlays after that.
 
