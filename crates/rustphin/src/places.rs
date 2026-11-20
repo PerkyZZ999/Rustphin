@@ -968,4 +968,26 @@ mod tests {
         names.dedup();
         assert_eq!(names.len(), Role::ALL.len());
     }
+
+    /// W-167: a click on the panel's empty space below its rows leaves no
+    /// row focused (the maintainer, 2026-11-15); before, that space took only
+    /// the right button and the last row clicked kept its outline.
+    #[test]
+    fn a_click_on_the_empty_space_takes_the_focus_off_every_row() {
+        let panel = include_str!("../qml/PlacesPanel.qml");
+        let area = panel
+            .split_once("// The empty space:")
+            .and_then(|(_, rest)| rest.split_once("DropArea"))
+            .map(|(area, _)| area)
+            .unwrap_or_default();
+        assert!(!area.is_empty(), "PlacesPanel.qml has no empty-space area");
+        assert!(
+            area.contains("Qt.LeftButton"),
+            "the empty space must take a left click:{area}"
+        );
+        assert!(
+            area.contains("places.focusOn(-1)"),
+            "a press on the empty space must leave no row focused:{area}"
+        );
+    }
 }

@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-19 — W-167 A click on empty space leaves no item focused
+- **Phase:** 6 Implement (v0.2.0, S13)
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` passed. Seen first in an isolated KWin session with the mockup scene: in the details view a click on empty space below the rows already left no entry outlined, whether the keyboard was in the list or in the places panel, and Down then selected the first entry; in the places panel, Pictures kept its focus outline after a click below the drives (the bug). New test in `rustphin` `places`: the panel's empty-space area takes the left button and calls `places.focusOn(-1)`; it failed before the QML change and passes after. The view-side rule (`focus_on(None)` leaves no row focused, then Down starts at the top) was already tested. Scenario SP7 replayed on the new build: no outline after the click on empty space, Down outlined Home.
+- **Not verified:** the icons and compact views on screen (they share the details view's pointer area in `Pane.qml`, read but not clicked).
+- **Waiver:** none
+- **Follow-up:** none.
+
 ### 2026-11-19 — W-165, W-166 Batch rename's Pattern keeps the extension; labelled fields
 - **Phase:** 6 Implement (v0.2.0, S13)
 - **Result:** pass

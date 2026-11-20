@@ -677,7 +677,8 @@ FocusScope {
                 }
             }
 
-            // The empty space: the panel's own menu, and drops at the end.
+            // The empty space: a click leaves no row focused (W-167), a
+            // right click opens the panel's own menu; drops at the end.
             MouseArea {
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -685,8 +686,13 @@ FocusScope {
                 // last row, down to the bottom of the visible part.
                 y: list.originY + list.contentHeight
                 height: Math.max(0, list.contentY + list.height - y)
-                acceptedButtons: Qt.RightButton
-                onPressed: mouse => panel.menuAt(-1, this, mouse.x, mouse.y)
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                onPressed: mouse => {
+                    list.forceActiveFocus()
+                    places.focusOn(-1)
+                    if (mouse.button === Qt.RightButton)
+                        panel.menuAt(-1, this, mouse.x, mouse.y)
+                }
             }
             DropArea {
                 anchors.left: parent.left

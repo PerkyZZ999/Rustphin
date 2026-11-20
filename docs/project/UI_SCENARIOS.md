@@ -566,6 +566,7 @@ Isolated home with Home and three folders (A, B, C) outside groups, and two grou
 | SP4 | Drag the separator between the groups onto the Y row (waypoints with pauses) | A "Separator" chip follows the pointer; the separator now sits above Y in Work |
 | SP5 | Focus a separator; Delete. Open Settings › Places | The separator goes and the keyboard stays on the row below; no place moved. Settings lists the separators between groups as "Separator" rows with move and delete buttons, without a name field or count |
 | SP6 | Collapse Work | Its separators fold away with its places; the heading says "WORK (2)" |
+| SP7 | Click Pictures in the places panel, then the empty space below the drives; Down | After the click on empty space no row has the focus outline (Pictures keeps only its current-place fill); Down puts the focus on the first row, Home. In the list, a click on empty space after a selected row leaves no entry outlined and Down selects the first entry (W-167) |
 
 ## Reordering groups (W-105)
 
