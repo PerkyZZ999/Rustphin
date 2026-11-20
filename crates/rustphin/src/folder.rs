@@ -2260,6 +2260,13 @@ impl qobject::FolderModel {
                     });
                 }
             }
+            MenuCommand::ChooseApplication => {
+                let (paths, _) = self.listed_selection();
+                if let [path] = paths.as_slice() {
+                    let uri = qml_path::to_qml(path);
+                    self.as_mut().choose_application(uri);
+                }
+            }
             MenuCommand::OpenTrash(files) => self.go_to(files),
             MenuCommand::NewFromTemplate { index, .. } => self.create_from_template(index),
             // Every other row runs its pane command above.

@@ -134,7 +134,8 @@ impl Associations {
 
     /// Applications for `mime`, the default first, then added associations,
     /// then other applications that list the type, then the same for parent
-    /// types. Removed associations are left out.
+    /// types (`text/plain` for every `text/*` type). Removed associations
+    /// are left out.
     pub fn for_type(&self, mime: &str) -> Vec<Application> {
         let mut ids = Vec::new();
         let mut seen_types = HashSet::new();
@@ -147,6 +148,10 @@ impl Associations {
             ids.extend(self.ids_for(&mime));
             if let Some(parents) = self.parents.get(&mime) {
                 queue.extend(parents.iter().cloned());
+            }
+            // Every text type is also plain text (shared MIME-info).
+            if mime.starts_with("text/") && mime != "text/plain" {
+                queue.push_back("text/plain".to_owned());
             }
         }
         let mut seen = HashSet::new();
@@ -940,6 +945,22 @@ mod tests {
         write(&data.join("mime"), "subclasses", "text/x-rust text/plain\n");
         let index = Associations::load(&[], &[data]);
         assert_eq!(index.for_type("text/x-rust")[0].name, "Editor");
+    }
+
+    /// W-169: every `text/*` type is a kind of `text/plain`, as the shared
+    /// MIME-info specification says, even when no subclasses file says so.
+    #[test]
+    fn any_text_type_is_offered_the_plain_text_applications() {
+        let root = tempfile::tempdir().unwrap();
+        let data = root.path().join("data");
+        write(
+            &data.join("applications"),
+            "editor.desktop",
+            &desktop("Editor", "editor %f", "text/plain"),
+        );
+        let index = Associations::load(&[], &[data]);
+        assert_eq!(index.for_type("text/x-unlisted")[0].name, "Editor");
+        assert!(index.for_type("image/x-unlisted").is_empty());
     }
 
     #[test]

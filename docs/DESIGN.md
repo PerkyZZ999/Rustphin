@@ -1235,7 +1235,21 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   "Open with ›" `app-window`, "Extract ›" `archive-restore`, "Compress ›"
   `archive`, the places menu's "Move to group ›" `folder-input`; its 12 px
   `chevron-right` is on the right. The menu opens below the point, or above
-  the entry when it does not fit below.
+  the entry when it does not fit below. Open with › lists the type's
+  applications, then a hairline and `layout-grid` "Other application…",
+  always there, even for a type no application lists (W-169).
+- **Application chooser** (`AppChooserDialog.qml`, W-169): Dolphin's "Other
+  Application…". 640 px like batch rename, title row with `app-window`
+  ("Open “name” with"); a 32 px search field with a `search` icon, which has
+  the keyboard (Up and Down move the choice, Enter opens); the list on
+  `content` in 32 px rows (the application's own icon or `app-window`, its
+  name in `body-md`), grouped under `small` `text-muted` headings: For
+  “type” (the type's applications, the default first and chosen), then
+  Other applications by name. The chosen row has the `selection` fill and its
+  `primary-bright` 2 px edge. Below, a checkbox "Always open “type” files
+  with it" (makes the choice the type's default in `mimeapps.list`); Cancel
+  and Open (primary, disabled until a shown row is chosen). An empty search
+  says what matched nothing and to clear the search.
 - **Compress and extract (W-111, D-032, mockup 37):** Extract › holds
   `package-open` Extract here, `folder-archive` Extract into "name/" (or
   "Extract each into its own folder" for several), `archive-x` Extract and

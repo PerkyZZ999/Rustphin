@@ -6,7 +6,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     path::Path,
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use rustphin_platform::{
@@ -29,6 +29,9 @@ pub struct Types {
     pub mimes: MimeDb,
     apps: Associations,
     app_icons: HashMap<String, Arc<Path>>,
+    /// Defaults the user set during this run (W-169), type to desktop id:
+    /// the desktop files are not read again for them.
+    chosen_defaults: Mutex<HashMap<String, String>>,
 }
 
 impl Types {
@@ -50,18 +53,54 @@ impl Types {
             mimes: MimeDb::load(&data_dirs),
             apps,
             app_icons,
+            chosen_defaults: Mutex::default(),
         }
     }
 
     /// The applications registered for `mime`, the default first.
     pub fn applications(&self, mime: &str) -> Vec<Application> {
-        self.apps.for_type(mime)
+        let mut apps = self.apps.for_type(mime);
+        let chosen = self
+            .chosen_defaults
+            .lock()
+            .ok()
+            .and_then(|chosen| chosen.get(mime).cloned());
+        if let Some(chosen) = chosen {
+            put_first(&mut apps, self.apps.get(&chosen), &chosen);
+        }
+        apps
+    }
+
+    /// Every installed application, in no particular order.
+    pub fn all_applications(&self) -> Vec<Application> {
+        self.apps.all().cloned().collect()
+    }
+
+    /// Notes that `id` is now the default for `mime` (written to the
+    /// user's `mimeapps.list` by the caller).
+    pub fn chose_default(&self, mime: &str, id: &str) {
+        if let Ok(mut chosen) = self.chosen_defaults.lock() {
+            chosen.insert(mime.to_owned(), id.to_owned());
+        }
     }
 
     /// An application's icon file.
     pub fn app_icon(&self, id: &str) -> Option<Arc<Path>> {
         self.app_icons.get(id).cloned()
     }
+}
+
+/// Moves the application `id` to the front of `apps`, adding `installed`
+/// when the type did not list it.
+fn put_first(apps: &mut Vec<Application>, installed: Option<&Application>, id: &str) {
+    let app = match apps.iter().position(|app| app.id == id) {
+        Some(at) => apps.remove(at),
+        None => match installed {
+            Some(app) => app.clone(),
+            None => return,
+        },
+    };
+    apps.insert(0, app);
 }
 
 static TYPES: OnceLock<Arc<Types>> = OnceLock::new();
@@ -101,4 +140,30 @@ pub fn when_ready(ready: impl FnOnce(Arc<Types>) + 'static) {
 /// The database if it is loaded already.
 pub fn when_ready_now() -> Option<Arc<Types>> {
     TYPES.get().cloned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn app(id: &str) -> Application {
+        Application {
+            id: id.to_owned(),
+            name: id.to_owned(),
+            icon: None,
+        }
+    }
+
+    /// W-169: an application made the default in the chooser leads Open
+    /// with at once, listed for the type or not.
+    #[test]
+    fn a_default_chosen_now_leads_the_list() {
+        let mut apps = vec![app("a"), app("b")];
+        put_first(&mut apps, Some(&app("b")), "b");
+        assert_eq!(apps, [app("b"), app("a")]);
+        put_first(&mut apps, Some(&app("c")), "c");
+        assert_eq!(apps, [app("c"), app("b"), app("a")]);
+        put_first(&mut apps, None, "gone");
+        assert_eq!(apps.len(), 3, "an uninstalled default is left out");
+    }
 }

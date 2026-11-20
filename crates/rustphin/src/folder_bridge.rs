@@ -138,6 +138,11 @@ pub mod qobject {
         /// requested.
         #[qsignal]
         fn visited(self: Pin<&mut FolderModel>, uri: QString);
+        /// Open with › Other application… for the file at the `file://`
+        /// URI `uri` (W-169).
+        #[qsignal]
+        #[cxx_name = "chooseApplication"]
+        fn choose_application(self: Pin<&mut FolderModel>, uri: QString);
         /// The user asked to reload the folder (F5, Reload): the Reload
         /// button turns (W-168).
         #[qsignal]

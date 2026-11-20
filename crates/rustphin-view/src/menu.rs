@@ -35,6 +35,9 @@ pub enum MenuCommand {
     Open,
     /// Open the file with this application.
     OpenWith(AppChoice),
+    /// Choose any installed application to open the file with (Dolphin's
+    /// "Other Application…", W-169).
+    ChooseApplication,
     /// Copy the selection to the clipboard.
     Copy,
     /// Cut the selection.
@@ -182,7 +185,10 @@ impl MenuCommand {
             Self::Compress(how) => P::Compress(*how),
             Self::Restore => P::RestoreTrash,
             Self::EmptyTrash => P::EmptyTrash,
-            Self::OpenWith(_) | Self::OpenTrash(_) | Self::NewFromTemplate { .. } => return None,
+            Self::OpenWith(_)
+            | Self::ChooseApplication
+            | Self::OpenTrash(_)
+            | Self::NewFromTemplate { .. } => return None,
         })
     }
 
@@ -210,6 +216,7 @@ impl MenuCommand {
         match self {
             Self::Open => I::SquareArrowOutUpRight,
             Self::OpenWith(_) => I::AppWindow,
+            Self::ChooseApplication => I::LayoutGrid,
             Self::Cut => I::Scissors,
             Self::Copy => I::Copy,
             Self::Paste => I::ClipboardPaste,
@@ -599,25 +606,39 @@ fn archive_menus(facts: &MenuFacts) -> Vec<MenuEntry> {
     menus
 }
 
+/// The applications registered for the file's type, then "Other
+/// application…" to choose any installed one: always there, so a file of a
+/// type no application lists (an AppImage, an unknown type) can still be
+/// opened with one, as in Dolphin (W-169).
 fn open_with(facts: &MenuFacts) -> MenuEntry {
+    let mut items: Vec<MenuEntry> = facts
+        .applications
+        .iter()
+        .cloned()
+        .map(|app| {
+            let name = app.name.clone();
+            item(&name, MenuCommand::OpenWith(app), true)
+        })
+        .collect();
     if !facts.types_ready {
-        return item("Looking up applications…", MenuCommand::Open, false);
+        items.push(item(
+            "Looking up applications\u{2026}",
+            MenuCommand::ChooseApplication,
+            false,
+        ));
     }
-    if facts.applications.is_empty() {
-        return item("No application for this type", MenuCommand::Open, false);
+    if !items.is_empty() {
+        items.push(MenuEntry::Separator);
     }
+    items.push(item(
+        "Other application\u{2026}",
+        MenuCommand::ChooseApplication,
+        facts.types_ready,
+    ));
     MenuEntry::Submenu {
         label: "Open with".to_owned(),
         icon: crate::icons::Icon::AppWindow,
-        items: facts
-            .applications
-            .iter()
-            .cloned()
-            .map(|app| {
-                let name = app.name.clone();
-                item(&name, MenuCommand::OpenWith(app), true)
-            })
-            .collect(),
+        items,
     }
 }
 
@@ -1124,6 +1145,64 @@ mod tests {
         }
     }
 
+    fn open_with_rows(facts: &MenuFacts) -> Vec<(String, bool)> {
+        let entries = context_menu(facts);
+        let Some(MenuEntry::Submenu { items, .. }) = entries.iter().find(
+            |entry| matches!(entry, MenuEntry::Submenu { label, .. } if label == "Open with"),
+        ) else {
+            panic!("no Open with in {:?}", labels(&entries));
+        };
+        items
+            .iter()
+            .map(|entry| match entry {
+                MenuEntry::Item { label, enabled, .. } => (label.clone(), *enabled),
+                MenuEntry::Separator => (String::new(), false),
+                MenuEntry::Submenu { label, .. } => (label.clone(), true),
+            })
+            .collect()
+    }
+
+    /// W-169: a type no application lists (an AppImage, an unknown file)
+    /// still offers Open with, ending in "Other application…".
+    #[test]
+    fn open_with_always_ends_with_another_application() {
+        let other = ("Other application\u{2026}".to_owned(), true);
+        let none = facts(|facts| facts.applications.clear());
+        assert_eq!(open_with_rows(&none), std::slice::from_ref(&other));
+        let listed = open_with_rows(&facts(|_| {}));
+        assert_eq!(listed.first().map(|row| row.0.as_str()), Some("Kate"));
+        assert_eq!(listed[listed.len() - 2], (String::new(), false));
+        assert_eq!(listed.last(), Some(&other));
+        let entries = context_menu(&none);
+        let choose = entries.iter().find_map(|entry| match entry {
+            MenuEntry::Submenu { items, .. } => items.last(),
+            _ => None,
+        });
+        assert!(matches!(
+            choose,
+            Some(MenuEntry::Item {
+                command: MenuCommand::ChooseApplication,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn while_applications_are_looked_up_the_choice_waits() {
+        let waiting = facts(|facts| {
+            facts.types_ready = false;
+            facts.applications.clear();
+        });
+        assert_eq!(
+            open_with_rows(&waiting),
+            [
+                ("Looking up applications\u{2026}".to_owned(), false),
+                (String::new(), false),
+                ("Other application\u{2026}".to_owned(), false),
+            ]
+        );
+    }
+
     #[test]
     fn several_files_cannot_be_opened_or_renamed_as_one() {
         let entries = context_menu(&facts(|facts| facts.count = 3));
@@ -1250,19 +1329,6 @@ mod tests {
         let labels = labels(&entries);
         assert!(!labels.contains(&"Move to trash"), "{labels:?}");
         assert!(labels.contains(&"Delete…"), "{labels:?}");
-    }
-
-    #[test]
-    fn no_registered_application_is_said_in_words() {
-        let entries = context_menu(&facts(|facts| facts.applications.clear()));
-        assert!(entries.iter().any(|entry| matches!(
-            entry,
-            MenuEntry::Item {
-                label,
-                enabled: false,
-                ..
-            } if label == "No application for this type"
-        )));
     }
 
     #[test]

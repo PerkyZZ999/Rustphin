@@ -8,6 +8,7 @@
 //! over the session bus and exit.
 
 mod admin;
+mod chooser;
 mod desktop;
 mod dialogs;
 mod folder;

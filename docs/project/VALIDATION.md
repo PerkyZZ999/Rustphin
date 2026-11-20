@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-19 — W-169 Open with always offers another application
+- **Phase:** 6 Implement (v0.2.0, S13)
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` passed. Seen first in an isolated KWin session: `data.bin` (unknown type) showed a disabled "No application for this type" with no way to choose; `Tool.AppImage` showed Shelly, the application this machine registers for AppImages (a desktop without one is the maintainer's case). New tests: `menu` (Open with always ends with "Other application…", alone for a type with no application; it waits while applications are looked up), `app_chooser` (the type's applications first then the rest by name, the default chosen; nothing chosen for an unlisted type; the search narrows by every word and says when nothing matches; Open only for a chosen, shown application; the box's words), `apps` (`text/*` falls back to `text/plain`), `types` (a default chosen now leads the list). The old test of the disabled row was removed with the behaviour it pinned. Mutations through `rust-tc quick` in the four places each failed their tests. Scenarios I14 and I15 replayed: Other application… opened the chooser over every installed application with icons; `kat` and Down chose Kate; with the box ticked Open started Kate on `data.bin`, the isolated `mimeapps.list` read `application/octet-stream=org.kde.kate.desktop;`, and Open with then listed Kate above Other application….
+- **Not verified:** the chooser's keyboard focus moving off the search field (Tab to the list, box and buttons) seen on screen; an application whose launch fails, reported through the notice bar (the same path as Open with's).
+- **Waiver:** none
+- **Follow-up:** W-170 reuses the chooser for Properties' Change… (the box ticked).
+
 ### 2026-11-19 — W-168 Reload says it reloaded; a re-read keeps the focus cleared
 - **Phase:** 6 Implement (v0.2.0, S13)
 - **Result:** pass

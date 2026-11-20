@@ -190,6 +190,7 @@ FocusScope {
         onOpenInNewTab: uri => pane.openInNewTab(uri)
         onCopyText: words => pane.copyText(words)
         onPropertiesRequested: paths => pane.dialogRequested("properties", paths)
+        onChooseApplication: uri => pane.dialogRequested("openWith", uri)
         onCompressRequested: ticket => pane.dialogRequested("compress", ticket)
         onBatchRenameRequested: ticket => pane.dialogRequested("batch", ticket)
         onExtractToRequested: (ticket, uri) => pane.dialogRequested("extractTo", {

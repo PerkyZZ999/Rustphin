@@ -4,6 +4,7 @@
 //!
 //! Nothing here may depend on Qt or a display (`rust-tc layers`).
 
+pub mod app_chooser;
 pub mod archives;
 pub mod colors;
 pub mod commands;

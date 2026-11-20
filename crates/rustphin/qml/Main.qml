@@ -328,6 +328,11 @@ Window {
         } else if (kind === "compress") {
             compressLoader.ticket = data
             compressLoader.active = true
+        } else if (kind === "openWith") {
+            chooserLoader.uri = data
+            chooserLoader.remember = false
+            // Opened once the menu that asked is gone.
+            Qt.callLater(() => chooserLoader.active = true)
         } else if (kind === "batch") {
             batchLoader.ticket = data
             batchLoader.active = true
@@ -681,6 +686,24 @@ Window {
             ticket: compressLoader.ticket
             onClosed: {
                 compressLoader.active = false
+                root.focusActive()
+            }
+        }
+    }
+    Loader {
+        id: chooserLoader
+
+        // The file to open, as its `file://` URI.
+        property string uri: ""
+        // The "always" box starts ticked (Properties' Change…).
+        property bool remember: false
+
+        active: false
+        sourceComponent: AppChooserDialog {
+            uri: chooserLoader.uri
+            remember: chooserLoader.remember
+            onClosed: {
+                chooserLoader.active = false
                 root.focusActive()
             }
         }
