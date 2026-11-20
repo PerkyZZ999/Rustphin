@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-19 — W-171 An inactive tab's close button; W-172 New › Markdown File
+- **Phase:** 6 Implement (v0.2.0, S13)
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` passed. W-171: new test in `rustphin` `tabs` reads `TabStrip.qml`: the close button's showing must not follow the press area (which stops short of the button) but the whole tab's `HoverHandler`; it failed before the fix and passes after. Scenario T9 in an isolated session: with Pictures current, pointing at Documents then at its X kept the X shown and lit; the click closed Documents. W-172: `templates` tests now expect "Markdown File" after "Text File", an empty `Markdown File.md`; `menu` tests give it the `file-type` icon. Scenario NT4: New › Markdown File…, Return made an empty `Markdown File.md`, listed as "Markdown document", its name offered with the stem selected.
+- **Not verified:** —
+- **Waiver:** none
+- **Follow-up:** seen in passing: the New button's tooltip ("New") stays over the first row of its open menu; not fixed here.
+
 ### 2026-11-19 — W-170 Properties in tabs: decision and mockup
 - **Phase:** 6 Implement (v0.2.0, S13), design
 - **Result:** pass (a proposal; nothing built)

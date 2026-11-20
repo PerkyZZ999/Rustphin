@@ -245,7 +245,9 @@ on a sound base:
   F5 and the Reload button give no sign that the folder was read again (W-168);
   some files, an AppImage among them, have no Open With in their context menu
   (W-169); Properties gains Dolphin's tabs, General, Permissions, Checksums and
-  Details, laid out with the same care as the Settings window (W-170);
+  Details, laid out with the same care as the Settings window (W-170); an
+  inactive tab's close button vanishes under the pointer (W-171); New offers a
+  Markdown document (W-172);
 - the open loops in STATE.md, and the maintainer's further requests.
 
 **Slice S14 — Packaging (L-012).** A `PKGBUILD` in the repository, built with

@@ -61,9 +61,14 @@ Rectangle {
                 Accessible.name: title
                 Accessible.selected: current
 
+                // The whole tab, its close button included (W-171): the
+                // press area below stops short of the button.
+                HoverHandler {
+                    id: tabHover
+                }
                 Rectangle {
                     anchors.fill: parent
-                    color: tab.current ? Tokens.colors.content : tabArea.containsMouse ? Tokens.colors.hover : "transparent"
+                    color: tab.current ? Tokens.colors.content : tabHover.hovered ? Tokens.colors.hover : "transparent"
                 }
                 Rectangle {
                     visible: tab.current
@@ -97,7 +102,7 @@ Rectangle {
                         text: tab.title
                     }
                     IconButton {
-                        visible: strip.tabWidth >= Tokens.metrics.tab_close_shown && (tab.current || tabArea.containsMouse)
+                        visible: strip.tabWidth >= Tokens.metrics.tab_close_shown && (tab.current || tabHover.hovered)
                         iconName: "x"
                         text: qsTr("Close tab")
                         tip: qsTr("Close tab (Ctrl+W)")

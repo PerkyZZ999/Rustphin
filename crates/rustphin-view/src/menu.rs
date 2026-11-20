@@ -110,6 +110,8 @@ pub enum CompressHow {
 pub enum TemplateKind {
     /// A text file.
     Text,
+    /// A Markdown document.
+    Markdown,
     /// An empty file.
     Empty,
     /// An HTML page.
@@ -238,6 +240,7 @@ impl MenuCommand {
             Self::NewFromTemplate { kind, .. } => match kind {
                 TemplateKind::Text => I::FileText,
                 TemplateKind::Html => I::FileCode,
+                TemplateKind::Markdown => I::FileType,
                 TemplateKind::Empty | TemplateKind::Other => I::File,
             },
         }
@@ -1298,6 +1301,7 @@ mod tests {
             ("Text File".into(), TemplateKind::Text),
             ("HTML File".into(), TemplateKind::Html),
             ("Letter".into(), TemplateKind::Other),
+            ("Markdown File".into(), TemplateKind::Markdown),
         ]);
         assert_eq!(
             labels(&entries),
@@ -1306,9 +1310,14 @@ mod tests {
                 "",
                 "Text File\u{2026}",
                 "HTML File\u{2026}",
-                "Letter\u{2026}"
+                "Letter\u{2026}",
+                "Markdown File\u{2026}"
             ]
         );
+        let MenuEntry::Item { command, .. } = &entries[5] else {
+            panic!("an item");
+        };
+        assert_eq!(command.icon(), crate::icons::Icon::FileType);
         let MenuEntry::Item { command, .. } = &entries[3] else {
             panic!("an item");
         };

@@ -2190,6 +2190,7 @@ impl qobject::FolderModel {
                         use rustphin_platform::templates::BuiltIn;
                         let kind = match file.built_in {
                             Some(BuiltIn::Text) => TemplateKind::Text,
+                            Some(BuiltIn::Markdown) => TemplateKind::Markdown,
                             Some(BuiltIn::Empty) => TemplateKind::Empty,
                             Some(BuiltIn::Html) => TemplateKind::Html,
                             None => TemplateKind::Other,

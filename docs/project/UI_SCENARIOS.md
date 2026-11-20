@@ -290,6 +290,7 @@ filename contains a build hash. The child is an ignored test, so run it with
 | T5 | Right-click the title bar, Escape | KWin's window menu (Maximize, Minimize, Keep Above Others, More Actions, Close) opens at the window's top-left corner, not under the pointer (KWin's "Window Operations Menu" shortcut, asked for over D-Bus); Escape closes it and nothing else changes. Where KWin does not answer, a right-click does nothing and the log says why |
 | T6 | Click Close | The window closes and the session is saved, as with Ctrl+Q |
 | T7 | In an isolated home, resize the window from its corner (T3), close it, end Rustphin, start it again | `window.toml` in the state folder holds the new size within a second of the resize, and the window opens at it (W-160) |
+| T9 | With two tabs, point at the inactive one, then move onto its X and click | The X shows on the hovered tab and stays while the pointer is on it, lit as a button; the click closes that tab (W-171) |
 | T8 | Maximise, end Rustphin, start it again, then click Restore | It opens maximised; Restore brings the size of T7 back; `window.toml` says `maximised = true`, then `false` |
 
 ## Toolbar across the window (W-096b/c)
@@ -599,7 +600,8 @@ Isolated home with `~/Templates/Letter.odt` and, as the terminal in `~/.config/k
 
 | ID | Steps | Expected |
 |---|---|---|
-| NT1 | Look at the toolbar; click New | "+ ⌄" and a terminal icon replace New folder; the menu opens under the button: Folder… F10, a hairline, Text File…, Empty File…, HTML File…, Letter… with their icons |
+| NT1 | Look at the toolbar; click New | "+ ⌄" and a terminal icon replace New folder; the menu opens under the button: Folder… F10, a hairline, Text File…, Markdown File…, Empty File…, HTML File…, Letter… with their icons |
+| NT4 | New › Markdown File…, Return | An empty `Markdown File.md`, typed "Markdown document"; its name was offered with "Markdown File" selected (W-172) |
 | NT2 | Choose HTML File…, type `index`, Return | `index.html` holds the page skeleton (101 bytes), `rw-r--r--`; the name is offered for editing with "HTML File" selected |
 | NT3 | New › Letter…, Return; New › Text File… twice, Return each | `Letter.odt` is a copy of the template; `Text File.txt` and `Text File 2.txt` |
 | NT4 | Click the terminal button in a folder whose name has a space | The terminal starts in that folder, with its configured options |

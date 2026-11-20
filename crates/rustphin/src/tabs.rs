@@ -549,4 +549,26 @@ mod tests {
         names.dedup();
         assert_eq!(names.len(), Role::ALL.len());
     }
+
+    /// W-171: the press area of a tab stops short of its close button, so
+    /// the button's showing must follow a hover of the whole tab, or it
+    /// hides as the pointer reaches it on an inactive tab.
+    #[test]
+    fn a_tabs_close_button_shows_while_the_pointer_is_anywhere_on_the_tab() {
+        let strip = include_str!("../qml/TabStrip.qml");
+        let button = strip
+            .split_once("iconName: \"x\"")
+            .map(|(before, _)| &before[before.rfind("IconButton {").unwrap_or(0)..])
+            .unwrap_or_default();
+        assert!(!button.is_empty(), "TabStrip.qml has no close button");
+        assert!(
+            !button.contains("tabArea.containsMouse"),
+            "the close button must not follow the press area:{button}"
+        );
+        assert!(
+            button.contains("tabHover.hovered"),
+            "the close button follows the whole tab's hover:{button}"
+        );
+        assert!(strip.contains("HoverHandler {\n                    id: tabHover"));
+    }
 }

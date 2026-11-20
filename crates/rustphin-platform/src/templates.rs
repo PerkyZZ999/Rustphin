@@ -33,6 +33,8 @@ pub struct NewFile {
 pub enum BuiltIn {
     /// A plain text file.
     Text,
+    /// A Markdown document (W-172; not one of KDE's).
+    Markdown,
     /// A file with nothing in it.
     Empty,
     /// An HTML page.
@@ -42,7 +44,8 @@ pub enum BuiltIn {
 /// What a new HTML file holds: a minimal valid page.
 const HTML: &str = "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title></title>\n</head>\n<body>\n\n</body>\n</html>\n";
 
-/// KDE's built-in entries, in its order.
+/// KDE's built-in entries, in its order, with a Markdown document after
+/// the text file (W-172).
 pub fn built_in() -> Vec<NewFile> {
     vec![
         NewFile {
@@ -50,6 +53,12 @@ pub fn built_in() -> Vec<NewFile> {
             file_name: "Text File.txt".into(),
             template: Template::Contents(Vec::new()),
             built_in: Some(BuiltIn::Text),
+        },
+        NewFile {
+            label: "Markdown File".into(),
+            file_name: "Markdown File.md".into(),
+            template: Template::Contents(Vec::new()),
+            built_in: Some(BuiltIn::Markdown),
         },
         NewFile {
             label: "Empty File".into(),
@@ -219,9 +228,15 @@ mod tests {
     #[test]
     fn kdes_own_entries_come_first_and_the_html_one_is_a_page() {
         let entries = built_in();
-        assert_eq!(labels(&entries), ["Text File", "Empty File", "HTML File"]);
+        assert_eq!(
+            labels(&entries),
+            ["Text File", "Markdown File", "Empty File", "HTML File"]
+        );
         assert_eq!(entries[0].file_name, "Text File.txt");
-        let Template::Contents(html) = &entries[2].template else {
+        // W-172: a Markdown document, empty, named to open as Markdown.
+        assert_eq!(entries[1].file_name, "Markdown File.md");
+        assert_eq!(entries[1].template, Template::Contents(Vec::new()));
+        let Template::Contents(html) = &entries[3].template else {
             panic!("built in");
         };
         assert!(String::from_utf8_lossy(html).starts_with("<!DOCTYPE html>"));
@@ -259,18 +274,19 @@ mod tests {
             labels(&entries),
             [
                 "Text File",
+                "Markdown File",
                 "Empty File",
                 "HTML File",
                 "Letter",
                 "Spreadsheet"
             ]
         );
-        assert_eq!(entries[3].file_name, "Letter.odt");
+        assert_eq!(entries[4].file_name, "Letter.odt");
         assert_eq!(
-            entries[3].template,
+            entries[4].template,
             Template::File(templates.join("Letter.odt"))
         );
-        assert_eq!(entries[4].file_name, "Sheet.ods");
+        assert_eq!(entries[5].file_name, "Sheet.ods");
     }
 
     #[test]

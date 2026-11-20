@@ -917,7 +917,7 @@ Everything sits on a 4-pixel grid; use only the `spacing` tokens.
   the size buttons apply at once; Escape or a click elsewhere closes it.
 - **New menu (W-108):** as Dolphin's "Create New", the context menu opened
   under the New button: Folder… (`folder-plus`); a hairline; Text File…
-  (`file-text`), Empty File… (`file`), HTML File… (`file-code`), then the
+  (`file-text`), Markdown File… (`file-type`, W-172), Empty File… (`file`), HTML File… (`file-code`), then the
   user's templates (the files in `XDG_TEMPLATES_DIR` or `~/Templates`, and
   KDE template entries) by name with `file`. Choosing one creates it with a
   free name ("Text File.txt", "Text File 2.txt") and opens the name for
