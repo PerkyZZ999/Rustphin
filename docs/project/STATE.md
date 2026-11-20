@@ -7,7 +7,7 @@
 - **Current phase:** 6 (Implement) for v0.2.0 "Daily driver", Slice S13 — v0.1.0 released 2026-11-15 (tag `v0.1.0`, GitHub release); S1–S10 and S12 done, S11's remaining checks moved into v0.2.0 (D-040); the interface is Qt 6 and QML through cxx-qt since W-114i (D-033, D-034)
 - **Status:** active — Slice S12 done: W-147 charcoal colours, W-148 drive cards, W-149 transfer details (2026-11-14), W-146 UI completion, W-117 Qt leftovers and W-146f KWin's window menu on the title bar (2026-11-15); W-115 memory on reload, W-076t keyboard pass, W-152 separators in the places panel, W-153 drive Properties, W-154 Settings and Command palette buttons, W-155 Settings restyled after the maintainer's mockup, W-156 toolbar order, centred rows and tooltips below, W-157 Settings window, W-158 every Settings option working, W-159 drives in three styles, W-160 the window keeps its size (2026-11-15); v0.2.0 planned (D-040); v0.1.0 released: W-161 rename works again, W-162 documents, W-163 public README, W-164 tag and GitHub release (2026-11-15)
 - **MVP success signal:** author uses Rustphin instead of Dolphin as default for two consecutive weeks; a 500,000-entry directory opens, sorts and scrolls without visible stalls (agreed 2026-10-12)
-- **Last updated:** 2026-11-15
+- **Last updated:** 2026-11-19
 
 ## Authority boundaries
 - Agent may decide: stack-local, reversible implementation details consistent with locked decisions; document structure; disposable spike code.
@@ -37,7 +37,7 @@
 - None for the agent. The real-desktop and hardware checks above wait on the maintainer.
 
 ## Next action
-- v0.2.0, Slice S13 (ROADMAP.md, WORK_ITEMS.md): W-165, batch rename's Pattern keeping the extension, then W-166.
+- v0.2.0, Slice S13 (ROADMAP.md, WORK_ITEMS.md): W-165, batch rename's Pattern keeping the extension, then W-166 to W-170 (W-168–W-170 are the maintainer's first daily-driver findings, 2026-11-19: Reload's feedback, Open With missing, Properties in tabs).
 - Then v0.2.0 "Daily driver": S13 fixes and hardening (the trial and the real-desktop checks move here), S14 the PKGBUILD, S15 service menus, S16 quick preview.
 - For the maintainer on the real desktop: after installing a build, run `rustphin --quit` once so the new build answers launches; then the checks under "Manual" above.
 

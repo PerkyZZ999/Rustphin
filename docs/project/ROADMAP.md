@@ -241,6 +241,11 @@ on a sound base:
   something (`UndoError::Replaced`);
 - a click on empty space takes the focus off the focused item, in the places
   panel and in every view (W-167);
+- the first problems from the daily-driver trial (the maintainer, 2026-11-19):
+  F5 and the Reload button give no sign that the folder was read again (W-168);
+  some files, an AppImage among them, have no Open With in their context menu
+  (W-169); Properties gains Dolphin's tabs, General, Permissions, Checksums and
+  Details, laid out with the same care as the Settings window (W-170);
 - the open loops in STATE.md, and the maintainer's further requests.
 
 **Slice S14 — Packaging (L-012).** A `PKGBUILD` in the repository, built with
