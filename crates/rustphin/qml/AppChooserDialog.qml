@@ -15,6 +15,9 @@ Popup {
     required property string uri
     // The "always" box starts ticked.
     property bool remember: false
+    // Only give the type a default (Properties' Change…): no file opened.
+    property bool chooseOnly: false
+    property bool choosing: false
 
     // The list Rust sends as JSON, read once per change into typed parts.
     property string title: ""
@@ -36,6 +39,7 @@ Popup {
         empty = view ? view.empty : ""
         rememberLabel = view ? view.rememberLabel : ""
         ready = view !== null && view.ready === true
+        choosing = view !== null && view.chooseOnly === true
         rows = view ? view.rows : []
         if (chosenIndex >= 0)
             list.positionViewAtIndex(chosenIndex, ListView.Contain)
@@ -63,7 +67,7 @@ Popup {
         color: Tokens.colors.scrim
     }
     background: FloatingSurface {}
-    Component.onCompleted: chooser.start(dialog.uri, dialog.remember)
+    Component.onCompleted: chooser.start(dialog.uri, dialog.remember, dialog.chooseOnly)
     onClosed: chooser.cancel()
 
     ChooserModel {
@@ -268,6 +272,7 @@ Popup {
         Check {
             id: always
 
+            visible: !dialog.choosing
             Layout.leftMargin: Tokens.metrics.space_lg
             Layout.rightMargin: Tokens.metrics.space_lg
             text: dialog.rememberLabel
@@ -301,8 +306,8 @@ Popup {
                     onClicked: dialog.close()
                 }
                 OutlinedButton {
-                    text: qsTr("Open (Enter)")
-                    iconName: "square-arrow-out-up-right"
+                    text: dialog.choosing ? qsTr("Use (Enter)") : qsTr("Open (Enter)")
+                    iconName: dialog.choosing ? "check" : "square-arrow-out-up-right"
                     primary: true
                     enabled: dialog.ready
                     onClicked: chooser.accept()

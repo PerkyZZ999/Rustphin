@@ -232,6 +232,9 @@ mod tests {
             mode: 0o4755,
             owner: "ana".into(),
             group: "staff".into(),
+            group_id: 50,
+            owned_by_user: true,
+            on_disk: Some(4096),
         }
     }
 

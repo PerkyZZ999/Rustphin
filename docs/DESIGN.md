@@ -1249,7 +1249,9 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   `primary-bright` 2 px edge. Below, a checkbox "Always open “type” files
   with it" (makes the choice the type's default in `mimeapps.list`); Cancel
   and Open (primary, disabled until a shown row is chosen). An empty search
-  says what matched nothing and to clear the search.
+  says what matched nothing and to clear the search. From Properties'
+  Change… it only gives the type a default: titled "Open “type” files
+  with", no box (the choice is always kept), and Use (`check`) for Open.
 - **Compress and extract (W-111, D-032, mockup 37):** Extract › holds
   `package-open` Extract here, `folder-archive` Extract into "name/" (or
   "Extract each into its own folder" for several), `archive-x` Extract and
@@ -1297,20 +1299,47 @@ maintainer, 2026-10-12) stands. There are no pills and no circles.
   ("Read and write" or "Read only"), Encrypted, Drive (maker and model),
   Kind ("Solid-state drive" or "Hard disk"), Connection ("USB", "SD card
   reader"…), Removable. Close (Esc), the primary button; Enter closes too.
-- **Properties** (`PropertiesDialog.qml`, mockups 13–14): title "<name> —
-  Properties" with a Close icon button. Header: a 96 × 64 thumbnail (or the
-  48 px type icon), the name and the type. Facts as label (`text-muted`,
-  128 px column) and value (`data-md`, wrapping between words, and inside
-  a long path only where it must): Location, Size (with exact bytes),
-  Modified, Accessed, Created when known, and a link's target; a link's
-  icon is that of what it points to, as in the list. A folder's
-  size reads "Calculating size…", then "Calculating… 1,204 items so far",
-  until known. "Permissions" with the mode in words and octal, then OWNER,
-  GROUP and OTHERS columns in `label-sm`, each with Read, Write and Execute
-  checkboxes. Close (Esc) and Apply (Enter), which stays unavailable until a
-  box changes. The facts scroll when the window is small, by the scrollbar
-  or by Home, End, Page Up, Page Down and the arrows wherever the keyboard
-  is in the dialog; title and buttons stay in view.
+- **Properties** (`PropertiesWindow.qml`, mockup 40, W-170, D-041): a
+  window of its own like Settings, one per entry, opening at 560 × 680 and
+  resizable to 440 × 480, kept above the window that opened it, with
+  Rustphin's title row ("<name> — Properties", the entry's outline icon,
+  Close) or KWin's as Settings, Appearance says. Under it the tabs, each an
+  outline icon and its name: General, Permissions, Checksums, Details (a
+  folder has the first two). The current tab's words are `text` and
+  semibold, with a 2 px `primary-bright` edge under it (not colour alone);
+  the others `text-muted`; Ctrl+Tab and Ctrl+Shift+Tab move between them.
+  Each tab's sections are Settings' panels (`SettingsSection`): a heading in
+  `body-md-strong`, then rows split by hairlines, the label in `text-muted`
+  in a 120 px column. **General**: a 96 × 64 thumbnail (or the 48 px type
+  icon) beside the name in `headline-sm` and the type; Opening (a folder:
+  Location) with "Opens with" (the application's icon and name, Change…,
+  which opens the application chooser to give the type a default without
+  opening the file) and Location (`data-md`, a `folder-open` button that
+  shows the entry in its folder in a new tab); Size (size and, quieter, the
+  exact bytes; On disk for a file); Dates (Created, Modified, Accessed in
+  `data-md`). A folder's size reads "Calculating size…", then "Calculating…
+  1,204 items so far", until known. **Permissions**: Access, one row per
+  class with its user or group under the label and Dolphin's choice in a
+  drop-down (Can view & modify, Can only view, Forbidden; "content" for a
+  folder, whose choices also allow entering it; a mix none can say shows as
+  "Custom"); "Allow running the file as a program" for a file; Advanced
+  (`chevron-right`/`chevron-down`, the mode in words and octal) opens the
+  Read, Write and Run grid. Ownership: the owner with a note that only an
+  administrator can change it, and the group as a drop-down of the user's
+  groups (only the file's owner may change it). A change not yet applied
+  keeps a 2 px `primary-bright` outline on its drop-down, and the footer
+  counts what waits ("1 change waits for Apply."). **Checksums**: "Check a
+  download" with an expected-checksum field (`data-md`) and Paste; a
+  pasted MD5, SHA1, SHA256 or SHA512 is recognised by its length and
+  calculated; the verdict follows in words with `circle-check` in
+  `success` or `triangle-alert` in `danger`. Then each checksum's row:
+  Calculate; while calculating, an `ActivityBar` with "Calculating… 42%"
+  and Stop; when known, the value in `data-md` with a Copy button.
+  **Details**: Picture (dimensions with megapixels, format and colour) for
+  PNG, JPEG, GIF, WebP and BMP, then File (type with its MIME name, size,
+  modified, a link's target). Never tags, rating or comment (D-041). The
+  footer on `chrome`: the waiting changes, Close (Esc) and Apply (Enter),
+  primary, available only while something waits.
 - **Batch rename** (`BatchDialog.qml`, mockups 15–16): 640 px, title row with
   `pencil`. Three modes (Replace, Pattern, Case) as a segmented row, the
   chosen one in `selection` with its `primary-bright` edge; the rule fields (Text to find and Replace with,

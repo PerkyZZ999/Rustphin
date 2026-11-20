@@ -166,7 +166,7 @@ Conventions:
 - **Acceptance:**
   - [x] Right-click offers the operations of R-007 to R-011 relevant to the selection, plus "Open with" listing applications registered for the MIME type.
   - [x] A properties view shows name, type, size (computed in the background for folders), times and permissions, and can change permissions.
-- **Validation:** isolated desktop scenarios I2–I9, I11 and I13; observed in W-068 (2026-10-19), with limits in VALIDATION.md; replayed on the Qt interface in W-114h and W-116b (I2–I9, I13).
+- **Validation:** isolated desktop scenarios I2–I9, I11 and I13; observed in W-068 (2026-10-19), with limits in VALIDATION.md; replayed on the Qt interface in W-114h and W-116b (I2–I9, I13); Properties as a window with tabs, the group and checksums, W-170 (PR1–PR9).
 
 ### R-019 — Settings window (after the MVP, D-029)
 - **Priority:** could (requested by the maintainer on 2026-11-12, beyond the MVP)

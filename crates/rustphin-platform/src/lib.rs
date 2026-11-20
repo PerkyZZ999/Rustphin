@@ -8,6 +8,7 @@ pub mod admin;
 pub mod apps;
 pub mod archive_tool;
 pub mod autostart;
+pub mod checksum;
 pub mod clipboard;
 pub mod config;
 pub mod devices;

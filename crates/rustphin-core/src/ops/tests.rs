@@ -1854,6 +1854,73 @@ fn permissions_change_and_come_back_and_a_failure_changes_nothing() {
     assert_eq!(mode_of(&path), 0o644);
 }
 
+/// W-170: a file's group changes to another of the user's groups, comes
+/// back on undo, and a failed change leaves it as it was. Skipped where the
+/// user belongs to only one group (nothing to change to).
+#[test]
+fn the_group_changes_and_comes_back_and_a_failure_changes_nothing() {
+    let d = dirs();
+    let path = d.src.join("note");
+    file(&path, "hi");
+    let before = group_of(&path);
+    // The same group is no change at all.
+    let same = go(
+        &Request::SetGroup {
+            path: path.clone(),
+            group: before,
+        },
+        &mut Script::default(),
+    );
+    assert!(same.changes.is_empty());
+    let Some(other) = own_groups().into_iter().find(|&group| group != before) else {
+        return;
+    };
+    let outcome = go(
+        &Request::SetGroup {
+            path: path.clone(),
+            group: other,
+        },
+        &mut Script::default(),
+    );
+    assert_eq!(group_of(&path), other);
+    super::undo::undo(&RealFs, &NoTrash, &outcome.changes, &mut Script::default()).unwrap();
+    assert_eq!(group_of(&path), before);
+
+    let fs = FaultFs::failing_at(0, faults::Fault::Error);
+    let failed = run(
+        &fs,
+        &NoTrash,
+        &NoForeignReader,
+        &Request::SetGroup {
+            path: path.clone(),
+            group: other,
+        },
+        &mut Script::default(),
+    );
+    assert!(failed.is_err());
+    assert!(fs.hit());
+    assert_eq!(group_of(&path), before);
+}
+
+fn group_of(path: &Path) -> u32 {
+    fs::symlink_metadata(path).unwrap().gid()
+}
+
+/// The groups this process belongs to, from `/proc/self/status`.
+fn own_groups() -> Vec<u32> {
+    fs::read_to_string("/proc/self/status")
+        .unwrap()
+        .lines()
+        .find_map(|line| line.strip_prefix("Groups:"))
+        .map(|groups| {
+            groups
+                .split_whitespace()
+                .filter_map(|g| g.parse().ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn mode_of(path: &Path) -> u32 {
     fs::symlink_metadata(path).unwrap().mode() & 0o777
 }

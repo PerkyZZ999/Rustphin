@@ -30,6 +30,7 @@ pub mod place_menu;
 pub mod places_panel;
 pub mod preferences;
 pub mod properties;
+pub mod properties_window;
 pub mod questions;
 pub mod remote;
 pub mod saved_file;

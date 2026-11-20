@@ -25,6 +25,9 @@ pub struct AppChooser {
     chosen: Option<String>,
     /// Make the choice the type's default.
     pub remember: bool,
+    /// Only choose the type's default (Properties' Change…): no file is
+    /// opened, and the choice is always kept.
+    choose_only: bool,
 }
 
 /// One row of the list.
@@ -47,7 +50,7 @@ pub struct ChooserRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChooserView {
-    /// The title: which file is opened.
+    /// The title: which file is opened, or which type is given a default.
     pub title: String,
     /// The rows, grouped.
     pub rows: Vec<ChooserRow>,
@@ -57,6 +60,9 @@ pub struct ChooserView {
     pub remember_label: String,
     /// Open can be pressed.
     pub ready: bool,
+    /// Only the type's default is chosen: no "remember" box, "Use", not
+    /// "Open".
+    pub choose_only: bool,
 }
 
 impl AppChooser {
@@ -87,7 +93,21 @@ impl AppChooser {
             search: String::new(),
             chosen,
             remember,
+            choose_only: false,
         }
+    }
+
+    /// The chooser of Properties' Change… (W-170): it gives the type a
+    /// default application and opens nothing.
+    pub fn choosing_default(mut self) -> Self {
+        self.choose_only = true;
+        self.remember = true;
+        self
+    }
+
+    /// The file is opened when the choice is accepted.
+    pub fn opens_file(&self) -> bool {
+        !self.choose_only
     }
 
     /// The search typed. The choice stays, even when the search hides it;
@@ -160,7 +180,12 @@ impl AppChooser {
             String::new()
         };
         ChooserView {
-            title: format!("Open \u{201c}{}\u{201d} with", self.file_name),
+            title: if self.choose_only {
+                format!("Open \u{201c}{}\u{201d} files with", self.type_name)
+            } else {
+                format!("Open \u{201c}{}\u{201d} with", self.file_name)
+            },
+            choose_only: self.choose_only,
             ready: rows.iter().any(|row| row.chosen),
             rows,
             empty,
@@ -177,7 +202,7 @@ impl AppChooser {
         let chosen = self.chosen.as_deref()?;
         self.all()
             .any(|app| app.id == chosen && self.matches(app))
-            .then(|| (chosen.to_owned(), self.remember))
+            .then(|| (chosen.to_owned(), self.remember || self.choose_only))
     }
 }
 
@@ -279,6 +304,26 @@ mod tests {
         assert!(!chooser.view().ready);
         chooser.set_search("");
         assert!(chooser.view().ready);
+    }
+
+    /// W-170: Properties' Change… gives the type a default and keeps it,
+    /// whatever the box said; it opens nothing.
+    #[test]
+    fn choosing_a_default_keeps_the_choice_and_opens_nothing() {
+        let mut chooser = chooser(&[("gwenview.desktop", "Gwenview")], &ALL).choosing_default();
+        assert!(!chooser.opens_file());
+        chooser.remember = false;
+        assert_eq!(
+            chooser.accept(),
+            Some(("gwenview.desktop".to_owned(), true))
+        );
+        let view = chooser.view();
+        assert!(view.choose_only);
+        assert_eq!(view.title, "Open \u{201c}JPEG image\u{201d} files with");
+        assert!(
+            super::AppChooser::new(String::new(), String::new(), vec![], vec![], false)
+                .opens_file()
+        );
     }
 
     #[test]

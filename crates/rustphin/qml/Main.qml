@@ -321,9 +321,19 @@ Window {
     // Opens a dialog a pane asked for.
     function openDialog(kind: string, data) {
         if (kind === "properties") {
+            // A window of its own for each entry (W-170).
             if (data.length > 0) {
-                propertiesLoader.path = data[0]
-                propertiesLoader.active = true
+                // Parented to this window, so the JavaScript collector
+                // never takes it while it is open; it goes when it closes.
+                const shown = propertiesWindow.createObject(root, {
+                    owner: root,
+                    windowId: root.windowId,
+                    path: data[0]
+                }) as Window
+                shown.width = Tokens.metrics.properties_width
+                shown.height = Tokens.metrics.properties_height
+                shown.show()
+                shown.requestActivate()
             }
         } else if (kind === "compress") {
             compressLoader.ticket = data
@@ -660,19 +670,15 @@ Window {
         }
     }
 
-    Loader {
-        id: propertiesLoader
+    // Properties (W-170): one window per entry, gone once it closes.
+    Component {
+        id: propertiesWindow
 
-        property string path: ""
+        PropertiesWindow {
+            id: shownProperties
 
-        active: false
-        sourceComponent: PropertiesDialog {
-            windowId: root.windowId
-            path: propertiesLoader.path
-            onClosed: {
-                propertiesLoader.active = false
-                root.focusActive()
-            }
+            onRevealRequested: (folder, name) => root.reveal(folder, [name])
+            onClosing: Qt.callLater(shownProperties.destroy)
         }
     }
     Loader {

@@ -47,6 +47,72 @@ pub struct Facts {
     pub owner: String,
     /// The owning group's name, or its number when it has none here.
     pub group: String,
+    /// The owning group's id; `u32::MAX` when unknown.
+    pub group_id: u32,
+    /// The user running Rustphin owns the entry: only then may they give it
+    /// to another of their groups.
+    pub owned_by_user: bool,
+    /// Bytes the entry takes on its disk (allocated blocks); `None` for a
+    /// directory or when unknown.
+    pub on_disk: Option<u64>,
+}
+
+/// What a picture's header says (Properties › Details, W-170).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Picture {
+    /// Width in pixels.
+    pub width: u32,
+    /// Height in pixels.
+    pub height: u32,
+    /// The format's name: "PNG", "JPEG"…
+    pub format: &'static str,
+    /// Colour and channel depth, in words: "colour, 8 bits per channel".
+    pub colour: String,
+}
+
+/// Reads the header of the picture at `path`, never decoding its pixels;
+/// `None` for anything that is not a picture Rustphin reads (PNG, JPEG,
+/// GIF, WebP, BMP). Reads the disk: call from a background thread.
+pub fn picture(path: &Path) -> Option<Picture> {
+    use image::ImageDecoder;
+    let reader = image::ImageReader::open(path)
+        .ok()?
+        .with_guessed_format()
+        .ok()?;
+    let format = match reader.format()? {
+        image::ImageFormat::Png => "PNG",
+        image::ImageFormat::Jpeg => "JPEG",
+        image::ImageFormat::Gif => "GIF",
+        image::ImageFormat::WebP => "WebP",
+        image::ImageFormat::Bmp => "BMP",
+        _ => return None,
+    };
+    let decoder = reader.into_decoder().ok()?;
+    let (width, height) = decoder.dimensions();
+    let colour = decoder.color_type();
+    let channels = u16::from(colour.channel_count());
+    let depth = colour.bits_per_pixel() / channels.max(1);
+    let kind = match (colour.has_color(), colour.has_alpha()) {
+        (true, true) => "colour with transparency",
+        (true, false) => "colour",
+        (false, true) => "greyscale with transparency",
+        (false, false) => "greyscale",
+    };
+    Some(Picture {
+        width,
+        height,
+        format,
+        colour: format!("{kind}, {depth} bits per channel"),
+    })
+}
+
+/// A group the user belongs to: its id and name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Group {
+    /// The group's id.
+    pub id: u32,
+    /// Its name, or its number when it has none here.
+    pub name: String,
 }
 
 /// The size of everything inside a folder.
@@ -91,7 +157,57 @@ pub fn read(path: &Path) -> io::Result<Facts> {
         mode: metadata.permissions().mode() & 0o7777,
         owner: account_name(&account_file("/etc/passwd"), metadata.uid()),
         group: account_name(&account_file("/etc/group"), metadata.gid()),
+        group_id: metadata.gid(),
+        owned_by_user: own_uid(&account_file("/proc/self/status")) == Some(metadata.uid()),
+        on_disk: (kind != Kind::Directory).then(|| metadata.blocks().saturating_mul(512)),
     })
+}
+
+/// The groups the user belongs to, by name, the primary group first: those
+/// a file the user owns can be given to (W-170).
+pub fn user_groups() -> Vec<Group> {
+    groups_of(
+        &account_file("/proc/self/status"),
+        &account_file("/etc/group"),
+    )
+}
+
+/// The groups `status` (the text of `/proc/<pid>/status`) lists, the
+/// effective group first, named from `groups` (the text of `/etc/group`).
+fn groups_of(status: &str, groups: &str) -> Vec<Group> {
+    let field = |key: &str| {
+        status
+            .lines()
+            .find_map(|line| line.strip_prefix(key))
+            .map(|rest| {
+                rest.split_whitespace()
+                    .filter_map(|id| id.parse::<u32>().ok())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
+    // `Gid:` is real, effective, saved, filesystem.
+    let mut ids: Vec<u32> = field("Gid:").into_iter().nth(1).into_iter().collect();
+    for id in field("Groups:") {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids.into_iter()
+        .map(|id| Group {
+            id,
+            name: account_name(groups, id),
+        })
+        .collect()
+}
+
+/// The effective user id `status` (the text of `/proc/<pid>/status`) gives.
+fn own_uid(status: &str) -> Option<u32> {
+    status
+        .lines()
+        .find_map(|line| line.strip_prefix("Uid:"))
+        .and_then(|ids| ids.split_whitespace().nth(1))
+        .and_then(|id| id.parse().ok())
 }
 
 /// The same facts from KDE's administrator helper's description (W-098):
@@ -130,6 +246,10 @@ pub fn described_as_administrator(entry: &crate::admin::AdminEntry) -> Facts {
         mode: entry.permissions,
         owner,
         group,
+        group_id: gid,
+        // As administrator the group is changed by KDE's helper, not here.
+        owned_by_user: false,
+        on_disk: None,
     }
 }
 
@@ -250,6 +370,59 @@ mod tests {
             link_target: None,
             leads_to_directory: false,
         }
+    }
+
+    const STATUS: &str = "Name:\trustphin\nUid:\t1000\t1001\t1000\t1000\nGid:\t100\t1000\t1002\t1003\nGroups:\t4 1000 27 \n";
+    const GROUPS: &str = "adm:x:4:alex\nsudo:x:27:alex\nalex:x:1000:\n";
+
+    /// W-170: the groups offered, the effective group first, then the
+    /// others once each, by name; a group with no name shows its number.
+    #[test]
+    fn the_users_groups_come_from_proc_and_are_named_from_etc_group() {
+        let groups = groups_of(STATUS, GROUPS);
+        let named: Vec<(u32, &str)> = groups.iter().map(|g| (g.id, g.name.as_str())).collect();
+        assert_eq!(named, [(1000, "alex"), (4, "adm"), (27, "sudo")]);
+        assert_eq!(groups_of("Groups:\t5\n", "")[0].name, "5");
+        assert!(groups_of("", GROUPS).is_empty());
+    }
+
+    #[test]
+    fn a_pictures_header_gives_its_size_format_and_colour() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p.png");
+        image::RgbaImage::new(30, 20).save(&path).unwrap();
+        assert_eq!(
+            picture(&path),
+            Some(Picture {
+                width: 30,
+                height: 20,
+                format: "PNG",
+                colour: "colour with transparency, 8 bits per channel".into(),
+            })
+        );
+        // Named like a picture, but not one: nothing.
+        let fake = dir.path().join("fake.png");
+        fs::write(&fake, b"not a picture").unwrap();
+        assert_eq!(picture(&fake), None);
+    }
+
+    #[test]
+    fn the_effective_user_is_the_second_uid() {
+        assert_eq!(own_uid(STATUS), Some(1001));
+        assert_eq!(own_uid("Name: x"), None);
+    }
+
+    #[test]
+    fn a_file_read_knows_its_group_its_owner_and_its_place_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("f");
+        fs::write(&path, vec![1u8; 10_000]).unwrap();
+        let facts = read(&path).unwrap();
+        let metadata = fs::metadata(&path).unwrap();
+        assert_eq!(facts.group_id, metadata.gid());
+        assert!(facts.owned_by_user, "the test made it");
+        assert_eq!(facts.on_disk, Some(metadata.blocks() * 512));
+        assert_eq!(read(dir.path()).unwrap().on_disk, None);
     }
 
     #[test]

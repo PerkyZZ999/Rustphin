@@ -197,6 +197,22 @@ J7–J17 were written for the GPUI interface's minimum-size checks (W-076) and h
 
 | J17 | In a private home/minimum split, show a hidden-only generated folder/trash and use Home/End, Page Up/Down and line keys; focus the hidden-files action, then activate with Enter, Space and pointer. Test location Home/End/literal Space and menu arrows. Restore only a generated fixture to leave an operation notice, then End in the now-empty pane. Finally use a generated large hidden listing to observe real Loading | Each state is bounded, visibly scrollable and named natively. Full heading/count/action are reachable; focused action scrolls into view and showing hidden returns list focus. Inputs/menu keep their own keys, ordinary list End still selects a file. The full empty reason can be read in a 56 px body with notice/Undo/Dismiss. Loading is visible in 85 px split panes and changes to the correct completed count. Never activate another volume or permanently delete anything; loading-only links need not have trash records and are never restored/emptied |
 
+## Properties in tabs (W-170)
+
+Use the mockup scene (`tests/ui/make-mockup-home.sh`) in an isolated session; the test user must belong to a second group.
+
+| # | Steps | Expected |
+|---|---|---|
+| PR1 | Select `IMG_4819.jpg`, Alt+Enter | A window "IMG_4819.jpg — Properties" over the main one, tabs General, Permissions, Checksums, Details; General shows the thumbnail, Opening (Opens with and Change…, Location), Size with On disk, Dates; values start at one column |
+| PR2 | Permissions | Owner "Can view & modify", Group and Others "Can only view" for 0644; Execute unticked; Advanced shows `rw-r--r-- (0644)` |
+| PR3 | Others › Forbidden; Group › another group; Apply | Each changed drop-down is outlined; the footer says "1 change…" then "2 changes wait for Apply."; after Apply the file is `0640` and in the new group, the outlines go, Apply is unavailable, and the main window says "Changed the group of …" |
+| PR4 | Ctrl+Z in the main window | The group is back (the mode is the operation before it) |
+| PR5 | Checksums; type the file's SHA256 in capitals | SHA256 is calculated and "Matches the SHA256 checksum: the file arrived intact." shows with a check icon; Calculate on MD5 gives `md5sum`'s value |
+| PR6 | Details | Picture: 1500 × 1000 pixels (1.5 megapixels), "JPEG, colour, 8 bits per channel"; File: JPEG image `image/jpeg`, size, modified |
+| PR7 | Close; Properties of the folder `Screenshots` | Only General and Permissions; the section is "Location"; size measured; the choices say "content" |
+| PR8 | Properties of `notes.txt`, Change…, type `kate`, Down, Enter | The chooser is titled "Open “Plain text document” files with", has no box and a Use button; afterwards Opens with says Kate, `mimeapps.list` has `text/plain=org.kde.kate.desktop;`, and no Kate was started |
+| PR9 | The `folder-open` button beside Location | A new tab shows the folder with the file selected |
+
 ## Batch rename (S9)
 
 Use two or more files in the fixture. Do not activate a device.
@@ -274,7 +290,7 @@ filename contains a build hash. The child is an ignored test, so run it with
 | M1 | Details (mockups 01, 05, 33) | Heading text and cells share columns (Size ends at 936, Modified starts at 952, Type at 1120); "↑" after the sorted heading; toolbar buttons have only an outline; the path is one string |
 | M2 | Palette with "hid" (04) | 40 px search field on the content fill with a bright outline and ring; no footer |
 | M3 | F2 on one name (07) | Hover fill and bar on the row; field as wide as the name; selection in `selection`; status "Renaming “…”: Enter keeps the new name, Esc cancels." |
-| M4 | Properties (13) | Three equal permission columns; capital labels; checkbox rows 32 px apart |
+| M4 | Properties (40) | A window of its own with the four tabs; sections as panels with a 120 px label column; Permissions as drop-downs with Advanced closed |
 | M5 | Batch rename with a "/" (15) | Segments with icons; Find and Replace side by side; one problem note; new names in red |
 | M6 | Empty, only hidden, filter with no match (25–27) | 32 px icon, heading, text, 32 px button, at 8/8/12 px spacing |
 | M7 | Could not open (28): `chmod 000` a folder in the scene and open it | As N4, laid out like M6 |

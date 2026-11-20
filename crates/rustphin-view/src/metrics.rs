@@ -177,6 +177,16 @@ pub mod size {
     pub const SETTINGS_MIN_HEIGHT: f32 = 360.;
     /// Its page list on the left.
     pub const SETTINGS_NAV: f32 = 216.;
+    /// The Properties window's width when it opens (W-170, D-041).
+    pub const PROPERTIES_WIDTH: f32 = 560.;
+    /// The Properties window's height when it opens.
+    pub const PROPERTIES_HEIGHT: f32 = 680.;
+    /// The Properties window's least width.
+    pub const PROPERTIES_MIN_WIDTH: f32 = 440.;
+    /// The Properties window's least height.
+    pub const PROPERTIES_MIN_HEIGHT: f32 = 480.;
+    /// The label column of a Properties row.
+    pub const PROPERTIES_ROW_LABEL: f32 = 120.;
     /// The search field in its title row.
     pub const SETTINGS_SEARCH: f32 = 240.;
     /// Below this window width the page list becomes a row of tabs.

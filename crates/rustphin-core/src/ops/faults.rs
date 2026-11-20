@@ -300,6 +300,15 @@ impl Fs for FaultFs {
         RealFs.set_mode(path, mode)
     }
 
+    fn group(&self, path: &Path) -> io::Result<u32> {
+        RealFs.group(path)
+    }
+
+    fn set_group(&self, path: &Path, group: u32) -> io::Result<()> {
+        self.plain_step()?;
+        RealFs.set_group(path, group)
+    }
+
     fn sync_directory(&self, path: &Path) -> io::Result<()> {
         self.directory_sync_step()?;
         RealFs.sync_directory(path)

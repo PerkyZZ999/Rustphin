@@ -31,7 +31,7 @@ pub struct ChooserModelRust {
 }
 
 impl qobject::ChooserModel {
-    fn start(self: Pin<&mut Self>, uri: &QString, remember: bool) {
+    fn start(self: Pin<&mut Self>, uri: &QString, remember: bool, choose_only: bool) {
         let Some(path) = qml_path::from_qml(uri) else {
             return;
         };
@@ -51,13 +51,16 @@ impl qobject::ChooserModel {
                 id: app.id,
                 name: app.name,
             };
-            let chooser = AppChooser::new(
+            let mut chooser = AppChooser::new(
                 name,
                 types.mimes.description(&mime),
                 types.applications(&mime).into_iter().map(choice).collect(),
                 types.all_applications().into_iter().map(choice).collect(),
                 remember,
             );
+            if choose_only {
+                chooser = chooser.choosing_default();
+            }
             // The object may be gone if the dialog closed meanwhile.
             let _ = thread.queue(move |mut model| {
                 model.as_mut().rust_mut().state = Some((path, mime, chooser));
@@ -99,12 +102,17 @@ impl qobject::ChooserModel {
     }
 
     fn accept(mut self: Pin<&mut Self>) -> bool {
-        let Some((path, mime, (id, remember))) =
+        let Some((path, mime, (id, remember), open)) =
             self.rust()
                 .state
                 .as_ref()
                 .and_then(|(path, mime, chooser)| {
-                    Some((path.clone(), mime.clone(), chooser.accept()?))
+                    Some((
+                        path.clone(),
+                        mime.clone(),
+                        chooser.accept()?,
+                        chooser.opens_file(),
+                    ))
                 })
         else {
             return false;
@@ -126,7 +134,7 @@ impl qobject::ChooserModel {
                     );
                 }
             }
-            if let Err(error) = rustphin_platform::apps::open_with(&id, &path) {
+            if open && let Err(error) = rustphin_platform::apps::open_with(&id, &path) {
                 crate::hub::say(error.to_string(), true);
             }
         });

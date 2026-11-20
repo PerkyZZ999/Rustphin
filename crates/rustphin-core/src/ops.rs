@@ -156,6 +156,13 @@ pub enum Request {
         /// Permission bits, including any special bits that should remain.
         mode: u32,
     },
+    /// Give `path` to another group (W-170); the owner stays.
+    SetGroup {
+        /// The entry to change.
+        path: PathBuf,
+        /// The group's id.
+        group: u32,
+    },
 }
 
 /// An entry that is in the trash.
@@ -439,6 +446,15 @@ pub enum Change {
         /// The entry right after the change.
         info: FileInfo,
     },
+    /// The owning group was changed.
+    GroupSet {
+        /// The entry.
+        path: PathBuf,
+        /// The group before the change, so it can be undone.
+        previous: u32,
+        /// The entry right after the change.
+        info: FileInfo,
+    },
     /// A folder that was empty after its contents were merged into another
     /// folder by a move, and was removed.
     RemovedEmptyDir {
@@ -576,6 +592,10 @@ pub fn run(
         }
         Request::SetMode { path, mode } => {
             engine.set_mode(path, *mode)?;
+            true
+        }
+        Request::SetGroup { path, group } => {
+            engine.set_group(path, *group)?;
             true
         }
         Request::Extract {
@@ -846,6 +866,23 @@ impl Engine<'_> {
         self.changes.push(Change::ModeSet {
             path: path.to_owned(),
             previous: before.mode,
+            info,
+        });
+        Ok(())
+    }
+
+    /// Gives `path` to group `group`. The group it already has changes nothing.
+    fn set_group(&mut self, path: &Path, group: u32) -> Result<(), OpError> {
+        let previous = self.fs.group(path).map_err(io_error(path))?;
+        if previous == group {
+            return Ok(());
+        }
+        let before = self.fs.info(path).map_err(io_error(path))?;
+        self.fs.set_group(path, group).map_err(io_error(path))?;
+        let info = self.fs.info(path).unwrap_or(before);
+        self.changes.push(Change::GroupSet {
+            path: path.to_owned(),
+            previous,
             info,
         });
         Ok(())

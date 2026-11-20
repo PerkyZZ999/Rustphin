@@ -183,6 +183,7 @@ pub fn activity(request: &Request, undo: bool) -> String {
         Request::Restore { items } => format!("Restoring {}", what(&originals(items))),
         Request::Delete { paths } => format!("Deleting {}", what(paths)),
         Request::SetMode { path, .. } => format!("Changing permissions of {}", folder_name(path)),
+        Request::SetGroup { path, .. } => format!("Changing the group of {}", folder_name(path)),
         Request::Extract { archive, .. } => format!("Extracting {}", folder_name(archive)),
         Request::Compress {
             sources, archive, ..
@@ -230,6 +231,7 @@ pub fn past(request: &Request) -> String {
         }
         Request::Delete { paths } => format!("deleted {}", what(paths)),
         Request::SetMode { path, .. } => format!("changed permissions of {}", folder_name(path)),
+        Request::SetGroup { path, .. } => format!("changed the group of {}", folder_name(path)),
         Request::Extract {
             archive,
             trash_archive: true,

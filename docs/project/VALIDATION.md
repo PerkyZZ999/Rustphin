@@ -1,5 +1,13 @@
 # Validation evidence
 
+### 2026-11-19 — W-170 Properties in tabs
+- **Phase:** 6 Implement (v0.2.0, S13)
+- **Result:** pass
+- **Evidence:** `rust-tc doctor` passed (cargo-deny with the new `sha1` and `sha2`, MIT or Apache-2.0). New tests: core `ops` (a file's group changes to another of the user's groups, comes back on undo, a fault changes nothing, the same group records no change); platform `checksum` (MD5, SHA1, SHA256 and SHA512 of "abc" equal the published vectors; a file larger than a step is read whole; a stop gives no result; a missing file is an error), `properties` (the user's groups from `/proc/self/status` named from `/etc/group`, the effective group first; the effective uid; a file's group, ownership and blocks on disk; a picture's header without decoding, and a fake one refused); view `properties_window` (tabs by kind; Dolphin's choices read from and written to the bits for files and folders, Custom for a mix; Execute; the footer's count; checksum recognition and verdicts; progress; size and Details rows) and `app_chooser` (Change… keeps the choice and opens nothing); `rustphin` `info` (the window is parented so the collector cannot take it; the drop-downs set their index after their model). Mutations through `rust-tc quick` in six places each failed their tests once the groups test's `Gid:` line was given distinct ids (it first survived one). Two bugs were found on screen and fixed with those regression tests: the window vanished when Change… opened the chooser (created with no parent, collected), and every access drop-down read "Can view & modify" (a reassigned model reset the bound index). Scenarios PR1–PR9 replayed in an isolated session with the mockup scene: the four tabs; 0644 read as view & modify / only view / only view; Others Forbidden and group `network` applied, the file `-rw-r----- 640 network`; Ctrl+Z gave the group back; a typed SHA256 calculated and matched, MD5 equal to `md5sum`; Details 1500 × 1000 JPEG (as `file` says); a folder with two tabs and "content" choices; Change… wrote `text/plain=org.kde.kate.desktop;` without starting Kate; the location button opened a tab.
+- **Not verified:** a mismatching or unknown pasted checksum on screen (unit-tested); Stop pressed during a long calculation (no large file used); Properties as administrator (the group is not offered there; facts as before); several Properties windows at once; KWin's title bar (Settings › Appearance) on this window.
+- **Waiver:** none
+- **Follow-up:** "Apply to everything inside" for a folder, from mockup 40's caption, is not built.
+
 ### 2026-11-19 — W-171 An inactive tab's close button; W-172 New › Markdown File
 - **Phase:** 6 Implement (v0.2.0, S13)
 - **Result:** pass

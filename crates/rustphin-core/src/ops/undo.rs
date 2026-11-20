@@ -171,7 +171,9 @@ fn check(fs: &dyn Fs, change: &Change) -> Result<(), UndoError> {
             })?;
             expect_free(fs, &item.original)
         }
-        Change::ModeSet { path, info, .. } => expect_unchanged(fs, path, info),
+        Change::ModeSet { path, info, .. } | Change::GroupSet { path, info, .. } => {
+            expect_unchanged(fs, path, info)
+        }
         Change::RemovedEmptyDir { path, .. } => expect_free(fs, path),
         Change::Restored { original } => match fs.info(original) {
             Ok(_) => Ok(()),
@@ -236,6 +238,14 @@ fn revert(engine: &mut Engine<'_>, change: &Change) -> Result<(), UndoError> {
         } => {
             expect_unchanged(fs, path, info)?;
             fs.set_mode(path, *previous).map_err(io_error(path))
+        }
+        Change::GroupSet {
+            path,
+            previous,
+            info,
+        } => {
+            expect_unchanged(fs, path, info)?;
+            fs.set_group(path, *previous).map_err(io_error(path))
         }
         Change::RemovedEmptyDir { path, mode } => {
             fs.create_dir(path, *mode).map_err(io_error(path))

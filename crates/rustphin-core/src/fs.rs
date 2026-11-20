@@ -232,6 +232,17 @@ pub trait Fs: Send + Sync + 'static {
     fn set_mode(&self, _path: &Path, _mode: u32) -> io::Result<()> {
         Err(io::ErrorKind::Unsupported.into())
     }
+
+    /// The id of the group that owns `path` (following a link, as
+    /// [`Fs::set_group`] does).
+    fn group(&self, _path: &Path) -> io::Result<u32> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+
+    /// Gives `path` to the group with id `group`; the owner stays.
+    fn set_group(&self, _path: &Path, _group: u32) -> io::Result<()> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
 }
 
 /// Keeps a [`Fs::watch`] alive; dropping it ends the watch.
@@ -377,6 +388,14 @@ impl Fs for RealFs {
 
     fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
         fs::set_permissions(path, fs::Permissions::from_mode(mode & 0o7777))
+    }
+
+    fn group(&self, path: &Path) -> io::Result<u32> {
+        Ok(fs::metadata(path)?.gid())
+    }
+
+    fn set_group(&self, path: &Path, group: u32) -> io::Result<()> {
+        std::os::unix::fs::chown(path, None, Some(group))
     }
 
     fn sync_directory(&self, path: &Path) -> io::Result<()> {

@@ -26,9 +26,10 @@ pub mod qobject {
 
     unsafe extern "RustQt" {
         /// Opens the chooser for the file at the `file:` URI `uri`;
-        /// `remember` starts the "always" box ticked.
+        /// `remember` starts the "always" box ticked. With `choose_only`
+        /// (Properties' Change…) it only gives the type a default.
         #[qinvokable]
-        fn start(self: Pin<&mut ChooserModel>, uri: &QString, remember: bool);
+        fn start(self: Pin<&mut ChooserModel>, uri: &QString, remember: bool, choose_only: bool);
         /// The search typed.
         #[qinvokable]
         fn search(self: Pin<&mut ChooserModel>, text: &QString);
